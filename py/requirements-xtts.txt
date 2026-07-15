@@ -1,0 +1,14 @@
+# narova_tts — xtts backend (higher quality, ~1.9GB model, slower).
+# Install ON TOP of requirements.txt.
+#
+# Notes (see LEARNINGS.md):
+#   - Do NOT pin transformers old — keep it newest. xtts_compat.py shims back
+#     the `isin_mps_friendly` helper that transformers 5.x removed.
+#   - torch >= 2.9 needs torchcodec for audio IO (newer TTS __init__ imports
+#     is_torchcodec_available). Keep torchcodec installed alongside torch.
+#   - COQUI_TOS_AGREED=1 is set by the backend at runtime (license gate).
+coqui-tts
+torch>=2.9
+torchaudio
+torchcodec
+transformers

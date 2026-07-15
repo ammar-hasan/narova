@@ -1,0 +1,4 @@
+# narova_tts — default (piper) backend.
+# Zero-config local ONNX voices; the voice model downloads on first use.
+# ffmpeg + ffprobe must be on PATH (installed separately, e.g. `brew install ffmpeg`).
+piper-tts

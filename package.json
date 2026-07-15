@@ -1,0 +1,23 @@
+{
+  "name": "narova",
+  "version": "0.1.0",
+  "description": "A scene script becomes a narrated, captioned, kinetic explainer video.",
+  "bin": {
+    "narova": "bin/narova.js"
+  },
+  "type": "commonjs",
+  "main": "src/pipeline.js",
+  "scripts": {
+    "narova": "node bin/narova.js"
+  },
+  "files": [
+    "bin/",
+    "src/",
+    "SPEC.md",
+    "LEARNINGS.md"
+  ],
+  "engines": {
+    "node": ">=18"
+  },
+  "license": "MIT"
+}

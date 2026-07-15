@@ -1,0 +1,115 @@
+"""TTS backends behind one interface: `synthesize(who, text, out_path) -> Path`.
+
+Two implementations:
+  - PiperBackend: local ONNX voices via the `piper-tts` pip package (PiperVoice).
+    Downloads the voice model on first use.
+  - XttsBackend: coqui-tts XTTS-v2 (higher quality, slower). Imports the
+    transformers shim BEFORE `from TTS.api import TTS`; runs on MPS or CPU.
+
+Heavy deps (piper / TTS / torch) are imported lazily inside each backend's
+constructor so the package stays importable without them installed.
+
+`build_backends()` maps every `who` key to a backend instance, sharing one
+instance per backend type (the XTTS model is loaded once).
+"""
+from __future__ import annotations
+
+import os
+import subprocess
+import sys
+import wave
+from pathlib import Path
+from typing import Protocol
+
+
+class Backend(Protocol):
+    """A backend synthesizes one utterance for one speaker to a raw wav."""
+
+    def synthesize(self, who: str, text: str, out_path: Path) -> Path: ...
+
+
+class PiperBackend:
+    """Local Piper ONNX voices. `speaker` in config is a Piper voice name
+    (e.g. "en_US-ryan-high"); the model is downloaded on first use."""
+
+    def __init__(self, speakers: dict[str, str], data_dir: Path | None = None):
+        from piper import PiperVoice, SynthesisConfig  # lazy
+
+        self._cfg = SynthesisConfig(length_scale=1.06)
+        self._data_dir = data_dir or Path(
+            os.environ.get("NAROVA_PIPER_DIR", Path.home() / ".cache" / "narova" / "piper")
+        )
+        self._data_dir.mkdir(parents=True, exist_ok=True)
+        self._voices = {}
+        for who, name in speakers.items():
+            onnx = self._ensure_voice(name)
+            self._voices[who] = PiperVoice.load(str(onnx))
+
+    def _ensure_voice(self, name: str) -> Path:
+        onnx = self._data_dir / f"{name}.onnx"
+        if not onnx.exists():
+            print(f"[piper] downloading voice {name} -> {self._data_dir}", flush=True)
+            subprocess.run(
+                [sys.executable, "-m", "piper.download_voices", name, "--data-dir", str(self._data_dir)],
+                check=True,
+            )
+        return onnx
+
+    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+        with wave.open(str(out_path), "wb") as wf:
+            self._voices[who].synthesize_wav(text, wf, syn_config=self._cfg)
+        return out_path
+
+
+class XttsBackend:
+    """coqui-tts XTTS-v2. `speaker` in config is a studio speaker name
+    (e.g. "Damien Black"). NEVER use the XTTS `speed` param (LEARNINGS #9) —
+    speed is applied downstream with ffmpeg atempo."""
+
+    def __init__(self, speakers: dict[str, str], device: str | None = None):
+        os.environ["COQUI_TOS_AGREED"] = "1"  # license gate (LEARNINGS #8)
+        from . import xtts_compat  # noqa: F401  shim newest transformers (LEARNINGS #6)
+        import torch
+        from TTS.api import TTS
+
+        self._speakers = dict(speakers)
+        dev = device or os.environ.get(
+            "XTTS_DEVICE", "mps" if torch.backends.mps.is_available() else "cpu"
+        )
+        print(f"[xtts] loading XTTS-v2 on {dev} …", flush=True)
+        self._tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
+        try:
+            self._tts.to(dev)
+        except Exception as e:  # MPS can fail on some ops; fall back to CPU
+            print("[xtts] device fallback cpu:", e, flush=True)
+            self._tts.to("cpu")
+        print("[xtts] speakers:", self._speakers, flush=True)
+
+    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+        self._tts.tts_to_file(
+            text=text, speaker=self._speakers[who], language="en", file_path=str(out_path)
+        )
+        return out_path
+
+
+def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, Backend]:
+    """Map each `who` -> a backend instance, one shared instance per backend
+    type. `voices` is the config's voices block: {who: {backend?, speaker}}."""
+    by_type: dict[str, dict[str, str]] = {}
+    for who, v in voices.items():
+        kind = v.get("backend", default_backend)
+        if kind not in ("piper", "xtts"):
+            raise ValueError(f"voice {who!r}: unknown backend {kind!r} (want piper|xtts)")
+        speaker = v.get("speaker")
+        if not speaker:
+            raise ValueError(f"voice {who!r}: missing 'speaker'")
+        by_type.setdefault(kind, {})[who] = speaker
+
+    instances: dict[str, Backend] = {}
+    for kind, speakers in by_type.items():
+        instances[kind] = PiperBackend(speakers) if kind == "piper" else XttsBackend(speakers)
+
+    router: dict[str, Backend] = {}
+    for who, v in voices.items():
+        router[who] = instances[v.get("backend", default_backend)]
+    return router

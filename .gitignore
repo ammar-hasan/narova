@@ -1,0 +1,34 @@
+# Node
+node_modules/
+npm-debug.log*
+yarn-error.log*
+
+# Python venv + caches
+.venv/
+__pycache__/
+*.pyc
+
+# TTS model + voice caches (downloaded on first use)
+models/
+voices/
+*.onnx
+*.onnx.json
+tts_models/
+.cache/
+.local/share/tts/
+
+# Build output (render, capture, assemble, serve all write here)
+out/
+
+# Captured frames + generated media
+frames/
+*.mp4
+*.wav
+*.mp3
+*.aiff
+*.png
+
+# macOS
+.DS_Store
+
+# reference/ is intentionally tracked (extraction source)
