@@ -53,7 +53,7 @@ export default {
       body: `<div class="s-title">
         <h1 class="display reveal">The Venture Factory</h1>
         <p class="lede cue" data-cue="1">builds itself — safely.</p>
-      </div>`,                                                 // HTML; data-cue="k" reveals on turn k
+      </div>`,                                                 // HTML; data-cue="k" reveals on turn index k (0-based)
       dur: 12,                                                 // fallback duration if audio is absent
     },
     // ...more scenes
@@ -67,8 +67,9 @@ Rules the renderer enforces:
   better than one narrator; a single narrator is just one `who`.
 - `caption` is what shows on screen; `vo` is what's spoken. They are different on purpose —
   big word-synced captions beat putting the full transcript on screen.
-- `body` is HTML. An element with `data-cue="k"` reveals when the voice reaches turn `k`
-  (from the timing track). Un-cued elements reveal on scene entry.
+- `body` is HTML. An element with `data-cue="k"` reveals when the voice reaches the turn
+  with index `k` — a **0-based** index into that scene's `vo` (`data-cue="0"` = first turn).
+  Un-cued elements reveal on scene entry.
 - The base theme (tokens + player/caption/reveal mechanics) is provided; add scene-specific
   styles via `theme` tokens or a referenced CSS file (see `examples/venture-factory/theme.css`).
 
@@ -93,6 +94,7 @@ Voice synthesis runs in a small Python package behind a managed venv. Pick a bac
 
 ```
 narova init <dir>     scaffold a project (config + one scene + theme)
+narova check          validate config fast — no TTS, no Chrome, no writes
 narova render         scenes -> out/player.html, out/record.html, out/narration.json
 narova synth          narration.json -> out/audio/*, out/timings.json   (Python TTS)
 narova build          full pipeline -> out/video.mp4 + out/player.html

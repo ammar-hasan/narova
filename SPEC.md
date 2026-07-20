@@ -97,8 +97,8 @@ export default {
 Rules the renderer enforces:
 - `vo` is an ordered list of `{who, text}` turns (single narrator = one who).
 - `caption` is what shows on screen; `vo` is what's spoken. They are different on purpose.
-- `body` is HTML. Elements with `data-cue="k"` reveal when the voice reaches turn `k`
-  (turn start from the timing track); others reveal on scene entry.
+- `body` is HTML. Elements with `data-cue="k"` reveal when the voice reaches the turn with
+  index `k` — 0-based into `vo`, turn start from the timing track; others reveal on scene entry.
 - The base CSS/theme is provided; authors add scene-specific styles via the theme or inline.
 
 ## CLI

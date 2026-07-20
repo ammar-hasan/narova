@@ -3,7 +3,7 @@
 //
 // Voice mapping vs. the reference script: host A = male (was 'm'), host B = female (was 'f').
 // `caption` is the short on-screen line; `vo` is what's actually spoken. They differ on purpose.
-// Elements with data-cue="k" reveal when the voice reaches turn k; un-cued elements reveal on entry.
+// Elements with data-cue="k" reveal when the voice reaches turn index k (0-based); un-cued elements reveal on entry.
 
 export default {
   title: "The Venture Factory",

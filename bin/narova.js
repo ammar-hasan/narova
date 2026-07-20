@@ -12,6 +12,7 @@ const { synth, inject, build, findPython } = require('../src/pipeline');
 const { serve } = require('../src/serve');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
+const { check } = require('../src/check');
 const fs = require('fs');
 
 const BOOL_FLAGS = new Set(['reuse', 'help', 'h', 'version']);
@@ -58,6 +59,7 @@ Usage: narova <command> [options]
 
 Commands:
   init <dir>            scaffold a project (config + one example scene + theme)
+  check                validate config fast — no TTS, no Chrome, no writes
   render               scenes -> out/player.html, out/record.html, out/narration.json
   synth                narration.json -> out/audio/*, out/timings.json   (Python)
   build                full pipeline -> out/video.mp4 + out/player.html
@@ -90,6 +92,14 @@ async function main() {
       const dir = positionals[1];
       if (!dir) { console.error('usage: narova init <dir>'); process.exit(1); }
       initProject(dir);
+      return;
+    }
+
+    case 'check': {
+      let config;
+      try { ({ config } = await loadResolved(flags)); }
+      catch (e) { console.error(e.message); process.exit(1); }
+      check(config);
       return;
     }
 

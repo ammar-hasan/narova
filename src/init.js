@@ -23,7 +23,7 @@ export default {
         { who: "a", text: "This is narova. You write scenes as plain HTML plus data." },
         { who: "b", text: "And it becomes a narrated, word-synced, kinetic explainer. Let's go." },
       ],
-      // Elements with data-cue="k" reveal when the voice reaches turn k.
+      // Elements with data-cue="k" reveal when the voice reaches turn index k (0-based into vo).
       body: \`<div class="s-title">
         <div class="eyebrow reveal">NAROVA</div>
         <h1 class="display reveal">Scenes to <span class="grad">video</span></h1>
