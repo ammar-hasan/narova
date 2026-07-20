@@ -1,19 +1,19 @@
 'use strict';
-/* Orchestration: render -> synth (Python) -> inject -> capture -> assemble.
- * Keeps the two language boundaries clean (SPEC): Node owns everything except
- * synth, which shells out to the narova_tts Python module. */
+/* Orchestration: synth (Python TTS) -> compose -> hyperframes render.
+ * Language boundary (SPEC): Node owns config, composition, and the HyperFrames
+ * handoff; Python owns TTS + timings only. */
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { ensureDir } = require('./util');
-const { render } = require('./render');
-const { capture } = require('./capture');
-const { assemble } = require('./assemble');
+const { ensureDir, probe } = require('./util');
+const { narration } = require('./schema');
+const { compose } = require('./compose');
+const { runHf } = require('./hf');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
  *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts] [--reuse]
- * It writes <out>/audio/NN.{wav,mp3} and <out>/timings.json. */
+ * It writes <out>/audio/NN.{wav,mp3}, <out>/audio/full.wav and <out>/timings.json. */
 
 const REPO_ROOT = path.resolve(__dirname, '..');
 
@@ -33,6 +33,13 @@ function findPython(projectDir) {
   return 'python3';
 }
 
+/* Write the two Python stage inputs (narration.json + config.resolved.json). */
+function writeStageInputs(config, outDir) {
+  ensureDir(outDir);
+  fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
+  fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(config, null, 2));
+}
+
 function synth(outDir, opts = {}) {
   const py = opts.python || findPython(opts.projectDir);
   const args = ['-m', 'narova_tts',
@@ -50,69 +57,31 @@ function synth(outDir, opts = {}) {
   return { timings };
 }
 
-/* ---- token injection -------------------------------------------------------- */
-
-/* Replace __AUDIO_DATA__ / __TIMINGS_DATA__ in player.html (real audio) and
- * record.html (empty audio) — exactly as reference/pipeline.build_video.py does. */
-function inject(outDir, narration) {
-  const timings = JSON.parse(fs.readFileSync(path.join(outDir, 'timings.json'), 'utf8'));
-  const audioDir = path.join(outDir, 'audio');
-  const audioMap = {};
-  for (const s of narration) {
-    const mp3 = path.join(audioDir, `${String(s.n).padStart(2, '0')}.mp3`);
-    if (fs.existsSync(mp3)) {
-      audioMap[s.id] = 'data:audio/mpeg;base64,' + fs.readFileSync(mp3).toString('base64');
-    }
-  }
-  const tj = JSON.stringify(timings);
-
-  const playerPath = path.join(outDir, 'player.html');
-  const player = fs.readFileSync(playerPath, 'utf8')
-    .replace('__AUDIO_DATA__', JSON.stringify(audioMap))
-    .replace('__TIMINGS_DATA__', tj);
-  fs.writeFileSync(playerPath, player);
-
-  const recordPath = path.join(outDir, 'record.html');
-  const record = fs.readFileSync(recordPath, 'utf8')
-    .replace('__AUDIO_DATA__', '{}')
-    .replace('__TIMINGS_DATA__', tj);
-  fs.writeFileSync(recordPath, record);
-
-  return { timings, audioMap };
-}
-
-/* ---- full build ------------------------------------------------------------- */
+/* ---- full build: synth -> compose -> hyperframes render --------------------- */
 
 function build(config, opts = {}) {
   const outDir = path.resolve(opts.out || 'out');
   ensureDir(outDir);
   const log = opts.log || console.log;
 
-  log('[1/5] render');
-  const r = render(config, outDir);
-  const narration = JSON.parse(fs.readFileSync(r.narration, 'utf8'));
-
-  log(`[2/5] synth${opts.reuse ? ' (--reuse)' : ''}`);
+  log(`[1/3] synth${opts.reuse ? ' (--reuse)' : ''}`);
+  writeStageInputs(config, outDir);
   synth(outDir, { backend: opts.backend, reuse: opts.reuse, projectDir: opts.projectDir, python: opts.python, log });
 
-  log('[3/5] inject audio + timings');
-  const { timings } = inject(outDir, narration);
+  log('[2/3] compose');
+  const c = compose(config, outDir);
 
-  log('[4/5] capture');
-  const sceneIds = config.scenes.map(s => s.id);
-  const framesDir = path.join(outDir, 'frames');
-  return capture(path.join(outDir, 'record.html'), timings, sceneIds, config.size, framesDir,
-    { workers: opts.workers, chrome: opts.chrome, log }).then(({ times, total }) => {
-    log('[5/5] assemble');
-    const sceneNums = narration.map(s => s.n);
-    const res = assemble({
-      framesDir, times, total,
-      audioDir: path.join(outDir, 'audio'), sceneNums, outDir,
-      name: opts.name || 'video.mp4', log,
-    });
-    log(`done -> ${res.mp4}  (${res.seconds.toFixed(1)}s)`);
-    return { ...r, mp4: res.mp4, seconds: res.seconds };
-  });
+  log('[3/3] hyperframes render (first run downloads the CLI — not a hang)');
+  const name = opts.name || 'video.mp4';
+  const args = ['render', '--output', path.join('..', name)];
+  if (opts.fps) args.push('--fps', String(opts.fps));
+  if (opts.quality) args.push('--quality', String(opts.quality));
+  runHf(args, c.dir);
+
+  const mp4 = path.join(outDir, name);
+  const seconds = probe(mp4);
+  log(`done -> ${mp4}  (${seconds.toFixed(1)}s)`);
+  return { mp4, seconds, hf: c.dir };
 }
 
-module.exports = { build, synth, inject, findPython };
+module.exports = { build, synth, writeStageInputs, findPython };

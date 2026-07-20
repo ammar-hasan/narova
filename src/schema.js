@@ -2,7 +2,7 @@
 /* Resolve + validate a project config into the shape the renderer/synth expect. */
 const fs = require('fs');
 const path = require('path');
-const { resolveSize } = require('../util');
+const { resolveSize } = require('./util');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };

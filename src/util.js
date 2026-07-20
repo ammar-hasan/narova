@@ -25,13 +25,6 @@ function which(bin) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
-/* Does this ffmpeg have libass (the subtitles/ass filter)? LEARNINGS #11. */
-function ffmpegHasLibass() {
-  const r = spawnSync('ffmpeg', ['-hide_banner', '-filters'], { encoding: 'utf8' });
-  const txt = (r.stdout || '') + (r.stderr || '');
-  return /(^|\s)ass\s/.test(txt) || /\bsubtitles\b/.test(txt);
-}
-
 function ensureDir(p) { fs.mkdirSync(p, { recursive: true }); return p; }
 
 /* Normalize a config.size ({w,h} | "16:9"|"1:1"|"9:16") into {w,h}. */
@@ -51,4 +44,4 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-module.exports = { sh, probe, which, ffmpegHasLibass, ensureDir, resolveSize, hexToRgba };
+module.exports = { sh, probe, which, ensureDir, resolveSize, hexToRgba };

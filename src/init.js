@@ -18,7 +18,6 @@ export default {
   scenes: [
     {
       id: "title",
-      caption: "A scene script becomes a narrated, captioned video.",
       vo: [
         { who: "a", text: "This is narova. You write scenes as plain HTML plus data." },
         { who: "b", text: "And it becomes a narrated, word-synced, kinetic explainer. Let's go." },
@@ -30,7 +29,6 @@ export default {
         <p class="lede cue" data-cue="1">Word-synced captions. Reactive reveals. Two hosts.</p>
         <div class="hairline reveal"></div>
       </div>\`,
-      dur: 10,
     },
   ],
 };
@@ -43,10 +41,11 @@ A narova project.
 ## Build
 
 \`\`\`bash
-narova render     # -> out/player.html, out/record.html, out/narration.json
+narova check      # validate the config (fast)
 narova synth      # -> out/audio/*, out/timings.json   (needs a Python venv, see below)
-narova build      # full pipeline -> out/video.mp4 + out/player.html
-narova serve      # range server for out/ (seekable video + player)
+narova compose    # -> out/hf/ (a HyperFrames project)
+narova preview    # open HyperFrames Studio to review
+narova build      # full pipeline -> out/video.mp4
 \`\`\`
 
 ## Python venv (for synth)
@@ -71,7 +70,7 @@ function initProject(dir) {
   write('reel.config.mjs', CONFIG);
   write('README.md', README);
   write('.gitignore', GITIGNORE);
-  console.log(`\nNext: cd ${dir} && narova render`);
+  console.log(`\nNext: cd ${dir} && narova check && narova build`);
 }
 
 module.exports = { initProject };

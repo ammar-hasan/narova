@@ -32,6 +32,27 @@ function check(config) {
       }
     }
   }
+  // ids must be unique across the whole assembled composition page — the
+  // HyperFrames producer injects frames by getElementById, and duplicate ids
+  // slip past its lint when they live in different scene bodies.
+  const ids = new Map();
+  for (const s of config.scenes) {
+    const re = /(?<![-\w])id\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
+    let m;
+    const html = s.body.replace(/<!--[\s\S]*?-->/g, '');
+    while ((m = re.exec(html)) !== null) {
+      const id = m[1] ?? m[2];
+      if (ids.has(id)) warnings.push(`duplicate element id "${id}" in scenes "${ids.get(id)}" and "${s.id}" — ids must be page-unique`);
+      else ids.set(id, s.id);
+    }
+  }
+
+  // theme.css animations run on the wall clock — the HyperFrames renderer seeks
+  // frames, so an infinite animation produces nondeterministic output.
+  if (/animation[^;{}]*\binfinite\b/.test(config.themeCss || '')) {
+    warnings.push('theme.css uses "animation: … infinite" — not deterministic under frame rendering; move motion to data-cue/.reveal or drop it');
+  }
+
   for (const w of warnings) console.log(`warn: ${w}`);
 
   const turns = config.scenes.reduce((n, s) => n + s.vo.length, 0);

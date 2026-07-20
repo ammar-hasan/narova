@@ -1,20 +1,19 @@
 #!/usr/bin/env node
 'use strict';
-/* narova CLI — scenes -> narrated, captioned, kinetic explainer video.
- * Zero runtime deps: a tiny arg parser drives render / synth / build / serve /
- * voices / doctor / init. */
+/* narova CLI — a scene script becomes a narrated, captioned video.
+ * narova writes the words and the voice; HyperFrames draws the pictures.
+ * Zero runtime deps: a tiny arg parser drives check / synth / compose / build /
+ * preview / voices / doctor / init. */
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { loadProjectConfig } = require('../src/config');
-const { resolveConfig } = require('../src/render/schema');
-const { render } = require('../src/render');
-const { synth, inject, build, findPython } = require('../src/pipeline');
-const { serve } = require('../src/serve');
+const { resolveConfig } = require('../src/schema');
+const { synth, writeStageInputs, build, findPython } = require('../src/pipeline');
+const { compose } = require('../src/compose');
+const { runHf } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
-const { compose } = require('../src/compose');
-const fs = require('fs');
 
 const BOOL_FLAGS = new Set(['reuse', 'help', 'h', 'version']);
 
@@ -54,32 +53,32 @@ async function loadResolved(flags) {
 
 const outDirOf = (flags, projectDir) => path.resolve(flags.out || path.join(projectDir || '.', 'out'));
 
-const HELP = `narova — a scene script becomes a narrated, captioned, kinetic explainer video
+const HELP = `narova — a scene script becomes a narrated, captioned video
+(narova writes the words and the voice; HyperFrames draws the pictures)
 
 Usage: narova <command> [options]
 
 Commands:
-  init <dir>            scaffold a project (config + one example scene + theme)
-  check                validate config fast — no TTS, no Chrome, no writes
+  init <dir>            scaffold a project (config + one example scene)
+  check                validate config fast — no TTS, no browser, no writes
+  synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> out/hf/ (HyperFrames project)
-  render               scenes -> out/player.html, out/record.html, out/narration.json
-  synth                narration.json -> out/audio/*, out/timings.json   (Python)
-  build                full pipeline -> out/video.mp4 + out/player.html
-  preview | serve      range server for out/ (player + mp4 + landing page)
+  build                synth + compose + hyperframes render -> out/video.mp4
+  preview              compose, then open HyperFrames Studio on out/hf
   voices list|get      list / download TTS voices (delegates to narova_tts)
-  doctor               check ffmpeg, ffprobe, chrome, python venv, libass note
+  doctor               check ffmpeg, ffprobe, python venv, npx hyperframes
 
 Options:
   --backend piper|xtts     TTS backend
   --reuse                  skip synth, reuse out/audio + out/timings.json
-  --workers N              capture parallelism (default 10)
   --tempo N                narration tempo (atempo)
   --size 16:9|1:1|9:16     frame aspect
+  --fps N                  render fps (hyperframes; default 30)
+  --quality draft|standard|high   render quality (hyperframes)
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
   --voice-a <s> --voice-b <s>   override voices
-  --port N                 serve port (default 8080)
 `;
 
 async function main() {
@@ -105,57 +104,47 @@ async function main() {
       return;
     }
 
+    case 'render':
+      console.error('narova render was removed in 0.3.0 — use "narova compose" (generate the HyperFrames project) or "narova build" (full mp4)');
+      process.exit(1);
+      break;
+
+    case 'synth': {
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      writeStageInputs(config, out);
+      synth(out, { backend: flags.backend, reuse: flags.reuse, projectDir });
+      console.log(`synth complete -> ${out}/audio (incl. full.wav), ${out}/timings.json`);
+      return;
+    }
+
     case 'compose': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const r = compose(config, out);
       console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
-      console.log(`  preview: npx hyperframes preview   (in ${path.relative(process.cwd(), r.dir) || '.'})`);
-      return;
-    }
-
-    case 'render': {
-      const { config, projectDir } = await loadResolved(flags);
-      const out = outDirOf(flags, projectDir);
-      const r = render(config, out);
-      console.log(`rendered ${r.scenes} scenes -> ${out}`);
-      console.log(`  player.html · record.html · narration.json · config.resolved.json`);
-      return;
-    }
-
-    case 'synth': {
-      const { config, projectDir } = await loadResolved(flags);
-      const out = outDirOf(flags, projectDir);
-      // render first if narration.json / config.resolved.json are missing.
-      if (!fs.existsSync(path.join(out, 'narration.json'))) render(config, out);
-      synth(out, { backend: flags.backend, reuse: flags.reuse, projectDir });
-      // Inject so player.html/record.html become playable immediately.
-      const narration = JSON.parse(fs.readFileSync(path.join(out, 'narration.json'), 'utf8'));
-      if (!fs.existsSync(path.join(out, 'player.html'))) render(config, out);
-      inject(out, narration);
-      console.log(`synth complete -> ${out}/audio, ${out}/timings.json (injected into player.html)`);
+      console.log(`  preview: narova preview   ·   render: narova build --reuse`);
       return;
     }
 
     case 'build': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
-      await build(config, {
+      build(config, {
         out, projectDir,
         backend: flags.backend, reuse: flags.reuse,
-        workers: flags.workers ? parseInt(flags.workers, 10) : undefined,
+        fps: flags.fps, quality: flags.quality,
       });
       return;
     }
 
-    case 'preview':
-    case 'serve': {
-      const projectDir = flags.project || '.';
+    case 'preview': {
+      const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
-      let title = 'narova';
-      try { const { raw } = await loadProjectConfig(projectDir, flags.config); title = raw.title || title; } catch { /* no config */ }
-      serve(out, { port: flags.port ? parseInt(flags.port, 10) : 8080, title });
-      return; // keep process alive
+      const r = compose(config, out);
+      console.log(`composed -> ${r.dir}; opening HyperFrames Studio (Ctrl-C to stop)`);
+      runHf(['preview'], r.dir);
+      return;
     }
 
     case 'voices': {
