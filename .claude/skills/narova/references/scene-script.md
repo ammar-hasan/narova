@@ -53,7 +53,8 @@ export default {
   caption word is tinted by speaker.
 - **Voices**: piper wants two distinct ONNX voices (e.g. `en_US-ryan-high` /
   `en_US-hfc_female-medium`); xtts wants two of its 58 studio speakers (e.g.
-  `Damien Black` / `Sofia Hellen`). `narova voices list` enumerates them.
+  `Damien Black` / `Sofia Hellen`); qwen wants two of its 9 presets (e.g.
+  `Ryan` / `Serena`). `narova voices list --backend <b>` enumerates them.
 - **Styling**: the base theme (background, chrome, karaoke captions, scene
   classes like `.s-title`, `.display`, `.lede`, `.pane`, `.owners`) is
   provided. Add your own classes via `theme.css`, tune tokens via `theme`.
@@ -63,6 +64,28 @@ export default {
   frames. Static styles are fine; motion belongs to `reveal`/`data-cue`.
 - **Ids**: element ids in bodies must be unique across ALL scenes (they are
   assembled into one page). `check` warns on duplicates.
+
+## Theme from intent (build it on the fly)
+
+The user never provides "theme things". You derive the look from the prompt
+and build it yourself. Rules, in priority order:
+
+1. **Respect what the user gave, verbatim.** A hex code, a brand name, a logo
+   color, "dark", "warm", "playful" — whatever fragment appears in the prompt
+   is law. Never override it, never ask for CSS.
+2. **Derive the rest.** Available tokens: `bg, stage, panel, line, ink, muted,
+   faint, accent, accent-dim, pink, gold, green, red, amber`. Typical mapping:
+   brand/main color → `accent` (+ a darker `accent-dim`); mood → `bg`/`stage`
+   (dark default; lighten for "clean/minimal"); secondary brand colors →
+   `pink`/`gold` slots (they're just extra accents).
+3. **Escalate to `theme.css` only when tokens can't express it** (gradients,
+   custom scene layouts, a display font). Keep it small; no `animation: …
+   infinite`, no hover state (the renderer seeks frames).
+4. **Nothing given → use the base look as-is.** It ships built-in; `theme` is
+   optional.
+
+Give each host a `color` that fits the palette — the active caption word is
+tinted by speaker.
 
 ## Drafting from a prompt (the agent's job)
 

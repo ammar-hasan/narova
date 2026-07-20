@@ -1,0 +1,3 @@
+# Qwen3-TTS backend (Apache 2.0). Pulls torch + soundfile itself.
+# Model (~1.2GB for the default 0.6B CustomVoice) downloads on first synth.
+qwen-tts>=0.1.1

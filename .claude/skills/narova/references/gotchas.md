@@ -23,7 +23,8 @@
   any spoken text changed you'll get stale narration or desync. Visual-only
   edits (body, theme) are exactly what it's for.
 - **First runs download things**: piper fetches a voice per speaker; xtts
-  fetches ~1.9GB once; `npx hyperframes` downloads the CLI once. None of these
+  fetches ~1.9GB once; qwen fetches ~1.2GB once; `npx hyperframes` downloads
+  the CLI once. None of these
   are hangs.
 - **xtts extras**: needs `scripts/setup.sh --xtts`; the license gate needs
   `COQUI_TOS_AGREED=1` in the environment if prompted.

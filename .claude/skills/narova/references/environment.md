@@ -10,7 +10,7 @@ ffprobe, the Python interpreter, whether `narova_tts` imports, and whether
 |------|-----|------------------|
 | Node >= 18 + npx | the CLI (zero npm deps) and the HyperFrames engine | install Node; `npm link` in the repo puts `narova` on PATH |
 | ffmpeg + ffprobe | audio splicing, loudness, duration probes | `brew install ffmpeg` / `apt-get install ffmpeg` |
-| Python 3.10+ venv | the TTS stage (`narova_tts`) | `scripts/setup.sh` in the repo (add `--xtts` for the xtts backend) |
+| Python 3.10+ venv | the TTS stage (`narova_tts`) | `scripts/setup.sh` in the repo (add `--xtts` / `--qwen` for those backends) |
 | HyperFrames CLI | preview (Studio) + render | nothing to install — `npx hyperframes@<pin>` downloads on first use |
 
 Chrome is NOT needed anymore — HyperFrames provisions its own browser.

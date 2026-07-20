@@ -21,7 +21,7 @@ directory or pass `--project`.
 
 ## Flags
 
-- `--backend piper|xtts` — override every voice's TTS backend. Default piper.
+- `--backend piper|xtts|qwen` — override every voice's TTS backend. Default piper.
 - `--reuse` — skip synthesis, reuse existing `out/audio` + `out/timings.json`.
   Use when only `body`/theme changed and `vo` text did not.
 - `--tempo N` — narration speed (pitch-preserving ffmpeg atempo, e.g. 1.18).

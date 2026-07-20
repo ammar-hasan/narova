@@ -72,7 +72,7 @@ Commands:
   doctor               check ffmpeg, ffprobe, python venv, npx hyperframes
 
 Options:
-  --backend piper|xtts     TTS backend
+  --backend piper|xtts|qwen   TTS backend
   --reuse                  skip synth, reuse out/audio + out/timings.json
   --tempo N                narration tempo (atempo)
   --size 16:9|1:1|9:16     frame aspect

@@ -80,9 +80,10 @@ Speech runs in a small Python package inside a managed venv.
 |---------|---------|-------|-------|-------|
 | `piper` | good | fast | default | local ONNX; zero config; downloads a voice on first use |
 | `xtts`  | higher | slower | `scripts/setup.sh --xtts` | coqui-tts on MPS/CPU; ~1.9GB model; 58 studio speakers |
+| `qwen`  | high | slower | `scripts/setup.sh --qwen` | Qwen3-TTS 0.6B (Apache 2.0); 9 preset speakers; MPS/CPU |
 
 Use two clearly different voices. For piper: `en_US-ryan-high` and
-`en_US-hfc_female-medium`. For xtts: e.g. `Damien Black` and `Sofia Hellen`.
+`en_US-hfc_female-medium`. For xtts: e.g. `Damien Black` and `Sofia Hellen`. For qwen: e.g. `Ryan` and `Serena`.
 Give each host a `color` — the active caption word gets that color.
 
 ## CLI
@@ -98,7 +99,7 @@ narova voices         list or download TTS voices
 narova doctor         check ffmpeg, python venv, npx hyperframes
 ```
 
-Common flags: `--backend piper|xtts`, `--reuse` (keep existing audio + timings),
+Common flags: `--backend piper|xtts|qwen`, `--reuse` (keep existing audio + timings),
 `--tempo`, `--size`, `--fps`, `--quality draft|standard|high`, `--out <dir>`.
 
 ## Agent skill

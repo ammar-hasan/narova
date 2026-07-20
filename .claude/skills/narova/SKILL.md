@@ -50,8 +50,10 @@ for a copied one. Run `npm link` there (zero deps, safe), or call
    **before** investing in a script. Fix per `references/environment.md`.
 2. **Draft the scene script from the user's prompt** — read
    `references/scene-script.md`. Two hosts, short turns, 5–10 scenes,
-   `data-cue` on the key visual of most turns. `narova init <dir>` gives a
-   scaffold to start from.
+   `data-cue` on the key visual of most turns. Derive the theme from the
+   prompt's brand/mood/colors (respect any fragment the user gave; build the
+   rest on the fly — never ask for CSS). `narova init <dir>` gives a scaffold
+   to start from.
 3. `narova check` — fast validation (no TTS, no browser, no writes). Exit 0 =
    valid; warnings still print. Run it after **every** config edit.
 4. `narova synth --backend piper` — audio + word timings.

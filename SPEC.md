@@ -10,7 +10,7 @@ word-synced karaoke captions and voice-triggered reveals. Since 0.3.0 the
 render engine is **HyperFrames** (HTML → video, deterministic seek-based
 rendering). narova owns the narration layer:
 
-- two-host neural TTS (piper / xtts, fully local, no API keys),
+- two-host neural TTS (piper / xtts / qwen, fully local, no API keys),
 - word/turn timing derivation, rescaled to the real audio,
 - generating a complete HyperFrames project (composition + timeline + audio).
 
@@ -154,7 +154,7 @@ narova voices list|get     list / download TTS voices
 narova doctor              ffmpeg, ffprobe, python venv, npx hyperframes
 ```
 
-Flags: `--backend piper|xtts`, `--reuse`, `--tempo`, `--size`, `--fps`,
+Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
 `--quality draft|standard|high`, `--out`, `--project`, `--config`,
 `--voice-a`, `--voice-b`.
 
@@ -163,6 +163,9 @@ Flags: `--backend piper|xtts`, `--reuse`, `--tempo`, `--size`, `--fps`,
 - **piper** — default, zero-config, fast; downloads an ONNX voice on first use.
 - **xtts** — coqui-tts + torch + torchcodec; MPS/CPU; ~1.9GB model; 58 studio
   speakers. Gated behind `scripts/setup.sh --xtts`.
+- **qwen** — Qwen3-TTS 0.6B CustomVoice (Apache 2.0); MPS/CPU; ~1.2GB model;
+  9 preset speakers; optional per-voice `lang`. Gated behind
+  `scripts/setup.sh --qwen`. Override the model with `$NAROVA_QWEN_MODEL`.
 - The backend interface (`synthesize(who, text) -> wav`) stays pluggable so
   `elevenlabs`, `kokoro`, or macOS `say` can be added later.
 
