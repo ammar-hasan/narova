@@ -14,7 +14,9 @@
     "bin/",
     "src/",
     "py/",
+    "!py/**/__pycache__",
     "scripts/",
+    ".claude/skills/",
     "SPEC.md",
     "LEARNINGS.md"
   ],

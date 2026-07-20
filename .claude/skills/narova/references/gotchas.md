@@ -4,8 +4,8 @@
 
 - **`caption` ≠ `vo`.** On-screen line vs spoken dialogue. Mirroring the
   transcript on screen is the #1 way to make the output look wrong.
-- **Cues are 0-based turn indexes.** `data-cue="0"` = first turn. Out-of-range
-  or non-numeric cues reveal at scene entry (they don't error) — run
+- **Cues are 0-based turn indexes.** `data-cue="0"` = first turn. A cue that
+  doesn't resolve to a turn reveals at scene entry (it doesn't error) — run
   `narova check`, it warns on exactly this.
 - **Pauses are configured, not punctuated.** Neural TTS pauses inconsistently
   on punctuation; narova splices fixed gaps instead (`timing.gapSentence`,

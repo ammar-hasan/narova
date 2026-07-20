@@ -34,5 +34,5 @@ higher-quality backend), then `narova doctor` to confirm ffmpeg, Chrome, and the
 - `caption` is the short line shown on screen; `vo` is the two-host dialogue that's spoken.
   They differ on purpose — big word-synced captions read better than the full transcript.
 - `vo` turns alternate between host `a` (male) and host `b` (female).
-- Body elements with `data-cue="k"` pop in when the voice reaches turn `k`; un-cued
-  elements reveal on scene entry.
+- Body elements with `data-cue="k"` pop in when the voice reaches turn index `k`
+  (0-based into `vo`); un-cued elements reveal on scene entry.

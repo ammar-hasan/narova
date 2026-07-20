@@ -49,8 +49,8 @@ export default {
   different on purpose — never mirror the transcript into `caption`.
 - **Reveals**: `body` elements with `class="cue" data-cue="k"` pop in when the
   voice reaches turn index `k` (**0-based** into that scene's `vo`). Elements
-  with `class="reveal"` (no cue) animate in on scene entry. An out-of-range or
-  non-numeric cue reveals at scene entry — `narova check` warns about these.
+  with `class="reveal"` (no cue) animate in on scene entry. A cue that doesn't
+  resolve to a turn reveals at scene entry — `narova check` warns about these.
 - **Two hosts**: two voices trading lines — questions, banter, handoffs — read
   far better than one narrator. Give each a distinct `color`; the active
   caption word is tinted by speaker.

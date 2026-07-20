@@ -3,7 +3,7 @@
 # narova from any directory (inside this repo it is auto-discovered already).
 #
 #   scripts/install-skill.sh           # symlink (updates ride along with `git pull`)
-#   scripts/install-skill.sh --copy    # copy instead of symlink
+#   scripts/install-skill.sh --copy    # copy instead of symlink (re-run after repo updates)
 set -euo pipefail
 
 MODE=link
@@ -19,20 +19,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC="$ROOT/.claude/skills/narova"
 DEST="$HOME/.claude/skills/narova"
+MARKER=".narova-skill-source"   # written into copies; records the source repo
 
 [ -d "$SRC" ] || { echo "skill not found at $SRC" >&2; exit 1; }
 mkdir -p "$HOME/.claude/skills"
 
+# Replace anything this installer previously created (a symlink, or a copy
+# carrying our marker); refuse to touch a directory we didn't make.
 if [ -L "$DEST" ]; then
-  rm "$DEST"                       # replacing our own (or a stale) symlink is fine
+  rm "$DEST"
+elif [ -d "$DEST" ] && [ -f "$DEST/$MARKER" ]; then
+  rm -rf "$DEST"
 elif [ -e "$DEST" ]; then
-  echo "refusing to overwrite existing non-symlink $DEST — remove it and re-run" >&2
+  echo "refusing to overwrite $DEST — not created by this installer; remove it and re-run" >&2
   exit 1
 fi
 
 if [ "$MODE" = copy ]; then
   cp -R "$SRC" "$DEST"
-  echo "copied skill -> $DEST (re-run after updating the repo)"
+  printf '%s\n' "$ROOT" > "$DEST/$MARKER"
+  echo "copied skill -> $DEST (source repo recorded in $MARKER; re-run after updating the repo)"
 else
   ln -s "$SRC" "$DEST"
   echo "linked skill -> $DEST -> $SRC"

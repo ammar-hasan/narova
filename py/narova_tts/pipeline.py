@@ -110,7 +110,10 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
         default_backend: str = "piper", reuse: bool = False) -> dict[str, Any]:
     scenes = json.loads(narration_path.read_text())
     config = json.loads(config_path.read_text())
-    timing = {**TIMING_DEFAULTS, **config.get("timing", {})}
+    # The JS resolver serializes unset keys as null (e.g. tempo) — a plain merge
+    # would let None clobber the defaults and crash float() below.
+    timing = {**TIMING_DEFAULTS,
+              **{k: v for k, v in config.get("timing", {}).items() if v is not None}}
 
     audio_dir = out_dir / "audio"
     tmp = out_dir / ".tmp"

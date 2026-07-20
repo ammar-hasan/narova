@@ -1,8 +1,10 @@
 # CLI reference
 
-All commands take `--project <dir>` (default `.`), `--config <file>`, and
-`--out <dir>` (default `<project>/out`). Run from the project directory or pass
-`--project`.
+Project-reading commands (`check`, `render`, `synth`, `build`, `preview`)
+take `--project <dir>` (default `.`) and `--config <file>`; the ones that
+write take `--out <dir>` (default `<project>/out`). `init` takes a positional
+directory instead; `voices` and `doctor` need no config. Run from the project
+directory or pass `--project`.
 
 | Command | Does | Cost |
 |---------|------|------|

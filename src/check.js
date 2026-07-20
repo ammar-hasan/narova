@@ -3,28 +3,32 @@
  * No TTS, no Chrome, no writes — resolveConfig has already thrown on hard
  * errors, so everything here is a warning (exit stays 0). */
 
-/* All data-cue attributes in a body, parsed leniently so we can flag junk. */
+/* All data-cue attributes in a body, parsed leniently so we can flag junk.
+ * HTML comments are stripped first ([data-cue] never matches inside them). */
 function cues(body) {
   const found = [];
-  const re = /data-cue\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g;
+  const re = /(?<![-\w])data-cue\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g;
   let m;
-  while ((m = re.exec(body)) !== null) found.push(m[1] ?? m[2] ?? m[3]);
+  const html = body.replace(/<!--[\s\S]*?-->/g, '');
+  while ((m = re.exec(html)) !== null) found.push(m[1] ?? m[2] ?? m[3]);
   return found;
 }
 
 /* Print warnings + a one-line summary. Returns true (warnings never fail).
- * Cue semantics (player.js paintReveals): data-cue="k" reveals at turns[k],
- * a 0-based turn-start index; anything unresolvable falls back to t=0, so a
- * bad cue reveals at scene entry instead of syncing to a turn. */
+ * Cue semantics (player.js paintReveals): data-cue="k" is coerced with +k and
+ * looked up in turns[], a 0-based turn-start array; anything that doesn't land
+ * on a turn falls back to t=0, i.e. the element reveals at scene entry instead
+ * of syncing to a turn. Mirror that coercion exactly — never warn about a
+ * spelling the player resolves (e.g. " 1 " or "1.0" both sync to turn 1). */
 function check(config) {
   const warnings = [];
   for (const s of config.scenes) {
     for (const raw of cues(s.body)) {
-      const k = /^\d+$/.test(raw) ? parseInt(raw, 10) : NaN;
-      if (Number.isNaN(k)) {
-        warnings.push(`scene "${s.id}": data-cue="${raw}" is not a number — it reveals at scene entry, not on a turn`);
+      const k = +raw;
+      if (!Number.isInteger(k) || k < 0) {
+        warnings.push(`scene "${s.id}": data-cue="${raw}" does not resolve to a turn — it reveals at scene entry`);
       } else if (k >= s.vo.length) {
-        warnings.push(`scene "${s.id}": data-cue="${raw}" but turns are indexed 0..${s.vo.length - 1} — it reveals at scene entry, not on a turn`);
+        warnings.push(`scene "${s.id}": data-cue="${raw}" but turns are indexed 0..${s.vo.length - 1} — it reveals at scene entry`);
       }
     }
   }
