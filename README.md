@@ -115,10 +115,13 @@ built for that loop. Working inside this repo, Claude Code discovers it automati
 narova from anywhere:
 
 ```bash
-scripts/install-skill.sh        # symlink into ~/.claude/skills + npm link the CLI
+scripts/install-skill.sh                   # global: symlink into ~/.claude/skills + npm link the CLI
+scripts/install-skill.sh --project <dir>   # selective: copy into <dir>/.claude/skills (committable —
+                                           # teammates get the skill when they clone the project)
 ```
 
-`--copy` copies instead of symlinking (re-run it after updating the repo).
+`--copy` / `--link` override the default mode (global installs symlink, project installs copy;
+re-run the installer after updating the repo to refresh a copy).
 
 ## How it works
 

@@ -29,9 +29,10 @@ Exit 0 = ready.
 ## Locating the repo / the CLI
 
 If `narova` isn't on PATH (or is an older version): find the repo, then
-re-link. For a symlinked install `readlink ~/.claude/skills/narova` reveals
-it; for a `--copy` install the path is recorded in
-`~/.claude/skills/narova/.narova-skill-source`. From the repo: `npm link`
+re-link. This skill lives in a `.claude/skills/narova` folder (globally under
+`~`, or inside a project). For a symlinked install `readlink` on that folder
+reveals the repo; for a copied install the path is recorded in
+`<skill-folder>/.narova-skill-source`. From the repo: `npm link`
 (safe: zero dependencies), or invoke `node <repo>/bin/narova.js` directly —
 every command works either way.
 

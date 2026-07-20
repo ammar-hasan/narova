@@ -42,8 +42,9 @@ narova --version   # need >= 0.2.0 (0.2.0 added `narova check`)
 If the command is missing, **or** the version is older than 0.2.0, **or**
 `narova check` answers `unknown command: check` (a stale binary on PATH —
 don't mistake its exit 1 for an invalid config): locate the repo and re-link.
-`readlink ~/.claude/skills/narova` reveals it for a symlinked install;
-`cat ~/.claude/skills/narova/.narova-skill-source` for a copied one. Run
+`readlink` on this skill's folder (e.g. `~/.claude/skills/narova`, or the
+project's `.claude/skills/narova`) reveals it for a symlinked install;
+`cat <skill-folder>/.narova-skill-source` for a copied one. Run
 `npm link` there (zero deps, safe), or call `node <repo>/bin/narova.js`
 directly.
 

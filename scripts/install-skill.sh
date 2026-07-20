@@ -1,28 +1,51 @@
 #!/usr/bin/env bash
-# Install the narova agent skill into ~/.claude/skills so Claude Code can use
-# narova from any directory (inside this repo it is auto-discovered already).
+# Install the narova agent skill for Claude Code.
 #
-#   scripts/install-skill.sh           # symlink (updates ride along with `git pull`)
-#   scripts/install-skill.sh --copy    # copy instead of symlink (re-run after repo updates)
+#   scripts/install-skill.sh                     # global (~/.claude/skills), symlinked
+#   scripts/install-skill.sh --copy              # global, copied (re-run after repo updates)
+#   scripts/install-skill.sh --project <dir>     # into <dir>/.claude/skills, copied —
+#                                                #   committable, so teammates get it on clone
+#   scripts/install-skill.sh --project <dir> --link   # project install as a symlink instead
 set -euo pipefail
 
-MODE=link
-for arg in "$@"; do
-  case "$arg" in
-    --copy) MODE=copy ;;
-    -h|--help) echo "usage: scripts/install-skill.sh [--copy]"; exit 0 ;;
-    *) echo "unknown option: $arg (see --help)"; exit 1 ;;
+MODE=""
+PROJECT=""
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --copy|--link)
+      WANT="${1#--}"
+      if [ -n "$MODE" ] && [ "$MODE" != "$WANT" ]; then
+        echo "--copy and --link are mutually exclusive" >&2; exit 1
+      fi
+      MODE="$WANT" ;;
+    --project)
+      [ $# -ge 2 ] || { echo "--project needs a directory" >&2; exit 1; }
+      PROJECT="$2"; shift ;;
+    -h|--help)
+      echo "usage: scripts/install-skill.sh [--copy|--link] [--project <dir>]"; exit 0 ;;
+    *) echo "unknown option: $1 (see --help)"; exit 1 ;;
   esac
+  shift
 done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
 SRC="$ROOT/.claude/skills/narova"
-DEST="$HOME/.claude/skills/narova"
 MARKER=".narova-skill-source"   # written into copies; records the source repo
 
 [ -d "$SRC" ] || { echo "skill not found at $SRC" >&2; exit 1; }
-mkdir -p "$HOME/.claude/skills"
+
+if [ -n "$PROJECT" ]; then
+  [ -d "$PROJECT" ] || { echo "project dir not found: $PROJECT" >&2; exit 1; }
+  DEST_BASE="$(cd "$PROJECT" && pwd)/.claude/skills"
+  # Copy by default: a symlink would dangle for anyone else who clones the project.
+  [ -n "$MODE" ] || MODE=copy
+else
+  DEST_BASE="$HOME/.claude/skills"
+  [ -n "$MODE" ] || MODE=link
+fi
+DEST="$DEST_BASE/narova"
+mkdir -p "$DEST_BASE"
 
 # Replace anything this installer previously created (a symlink, or a copy
 # carrying our marker); refuse to touch a directory we didn't make.
@@ -39,6 +62,7 @@ if [ "$MODE" = copy ]; then
   cp -R "$SRC" "$DEST"
   printf '%s\n' "$ROOT" > "$DEST/$MARKER"
   echo "copied skill -> $DEST (source repo recorded in $MARKER; re-run after updating the repo)"
+  [ -n "$PROJECT" ] && echo "tip: commit $DEST so everyone who clones the project gets the skill"
 else
   ln -s "$SRC" "$DEST"
   echo "linked skill -> $DEST -> $SRC"
@@ -52,4 +76,4 @@ else
   echo "note: npm link failed — use: node $ROOT/bin/narova.js <command>"
 fi
 
-echo "done. New Claude Code sessions can now trigger the narova skill anywhere."
+echo "done. Claude Code sessions can now trigger the narova skill."
