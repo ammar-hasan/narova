@@ -48,18 +48,21 @@ DATA.groups.forEach(function (g, gi) {
 
 // scenes: entry reveals + voice-cued reveals, all as timeline tweens.
 // data-cue="k" = 0-based index into the scene's vo turns; an unresolvable cue
-// falls back to scene entry (same semantics narova check lints).
+// falls back to scene entry. Coercion is +value with an integer test — keep
+// EXACTLY in sync with src/check.js so the lint predicts the runtime.
+// .reveal/.cue without data-cue animate at scene entry; an element with BOTH
+// reveal and data-cue is cue-only (no double tween).
 DATA.scenes.forEach(function (sc) {
   var scene = document.getElementById('scene-' + sc.id);
   if (!scene) return;
-  scene.querySelectorAll('.reveal').forEach(function (el, i) {
+  scene.querySelectorAll('.reveal:not([data-cue]), .cue:not([data-cue])').forEach(function (el, i) {
     tl.fromTo(el, { opacity: 0, y: 10 },
       { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' },
       sc.start + 0.1 + i * 0.1);
   });
   scene.querySelectorAll('[data-cue]').forEach(function (el) {
-    var k = parseInt(el.getAttribute('data-cue'), 10);
-    var local = (k >= 0 && k < sc.turns.length) ? sc.turns[k] : 0;
+    var k = +el.getAttribute('data-cue');
+    var local = (Number.isInteger(k) && k >= 0 && k < sc.turns.length) ? sc.turns[k] : 0;
     tl.fromTo(el, { opacity: 0, y: 16, scale: 0.965 },
       { opacity: 1, y: 0, scale: 1, duration: 0.5, ease: 'back.out(1.4)' },
       sc.start + local);

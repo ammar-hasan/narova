@@ -1,49 +1,55 @@
 'use strict';
-/* Fast config check: summarize a resolved config and lint data-cue references.
- * No TTS, no Chrome, no writes — resolveConfig has already thrown on hard
+/* Fast config check: summarize a resolved config and lint scene bodies.
+ * No TTS, no browser, no writes — resolveConfig has already thrown on hard
  * errors, so everything here is a warning (exit stays 0). */
 
-/* All data-cue attributes in a body, parsed leniently so we can flag junk.
- * HTML comments are stripped first ([data-cue] never matches inside them). */
-function cues(body) {
-  const found = [];
-  const re = /(?<![-\w])data-cue\s*=\s*(?:"([^"]*)"|'([^']*)'|([^\s>"']+))/g;
-  let m;
-  const html = body.replace(/<!--[\s\S]*?-->/g, '');
-  while ((m = re.exec(html)) !== null) found.push(m[1] ?? m[2] ?? m[3]);
-  return found;
+// Ids the generated composition owns (src/compose/html.js + runtime.js).
+const RESERVED_IDS = new Set(['root', 'bg', 'overlay', 'cap-stage', 'progress-bar', 'vo']);
+const RESERVED_PREFIXES = ['scene-', 'capg-', 'capw-'];
+
+/* All opening tags in a body, with HTML comments stripped first — attributes
+ * are only linted inside tags, never in visible prose. */
+function tags(body) {
+  return String(body).replace(/<!--[\s\S]*?-->/g, '').match(/<[a-zA-Z][^>]*>/g) || [];
+}
+
+function attr(tag, name) {
+  const m = new RegExp(`(?<![-\\w])${name}\\s*=\\s*(?:"([^"]*)"|'([^']*)'|([^\\s>"']+))`).exec(tag);
+  return m ? (m[1] ?? m[2] ?? m[3]) : undefined;
 }
 
 /* Print warnings + a one-line summary. Returns true (warnings never fail).
- * Cue semantics (player.js paintReveals): data-cue="k" is coerced with +k and
- * looked up in turns[], a 0-based turn-start array; anything that doesn't land
- * on a turn falls back to t=0, i.e. the element reveals at scene entry instead
- * of syncing to a turn. Mirror that coercion exactly — never warn about a
- * spelling the player resolves (e.g. " 1 " or "1.0" both sync to turn 1). */
+ * Cue semantics (compose/runtime.js): data-cue="k" is coerced with +k and
+ * looked up in turns[] (0-based) when it is a non-negative integer in range;
+ * anything else falls back to scene entry. Mirror that coercion exactly —
+ * never warn about a spelling the runtime resolves. */
 function check(config) {
   const warnings = [];
-  for (const s of config.scenes) {
-    for (const raw of cues(s.body)) {
-      const k = +raw;
-      if (!Number.isInteger(k) || k < 0) {
-        warnings.push(`scene "${s.id}": data-cue="${raw}" does not resolve to a turn — it reveals at scene entry`);
-      } else if (k >= s.vo.length) {
-        warnings.push(`scene "${s.id}": data-cue="${raw}" but turns are indexed 0..${s.vo.length - 1} — it reveals at scene entry`);
-      }
-    }
-  }
-  // ids must be unique across the whole assembled composition page — the
-  // HyperFrames producer injects frames by getElementById, and duplicate ids
-  // slip past its lint when they live in different scene bodies.
   const ids = new Map();
+
   for (const s of config.scenes) {
-    const re = /(?<![-\w])id\s*=\s*(?:"([^"]*)"|'([^']*)')/g;
-    let m;
-    const html = s.body.replace(/<!--[\s\S]*?-->/g, '');
-    while ((m = re.exec(html)) !== null) {
-      const id = m[1] ?? m[2];
-      if (ids.has(id)) warnings.push(`duplicate element id "${id}" in scenes "${ids.get(id)}" and "${s.id}" — ids must be page-unique`);
-      else ids.set(id, s.id);
+    for (const t of tags(s.body)) {
+      // cues
+      if (/(?<![-\w])data-cue\s*=/.test(t)) {
+        const raw = attr(t, 'data-cue');
+        const k = +raw;
+        if (!Number.isInteger(k) || k < 0) {
+          warnings.push(`scene "${s.id}": data-cue="${raw}" does not resolve to a turn — it reveals at scene entry`);
+        } else if (k >= s.vo.length) {
+          warnings.push(`scene "${s.id}": data-cue="${raw}" but turns are indexed 0..${s.vo.length - 1} — it reveals at scene entry`);
+        }
+      } else if (/class\s*=\s*["'][^"']*\bcue\b/.test(t)) {
+        warnings.push(`scene "${s.id}": class="cue" without data-cue — it animates at scene entry, not on a turn`);
+      }
+      // ids: page-unique, and must not collide with generated ids
+      const id = attr(t, 'id');
+      if (id != null) {
+        if (RESERVED_IDS.has(id) || RESERVED_PREFIXES.some(p => id.startsWith(p))) {
+          warnings.push(`scene "${s.id}": element id "${id}" collides with a generated composition id — rename it`);
+        }
+        if (ids.has(id)) warnings.push(`duplicate element id "${id}" in scenes "${ids.get(id)}" and "${s.id}" — ids must be page-unique`);
+        else ids.set(id, s.id);
+      }
     }
   }
 

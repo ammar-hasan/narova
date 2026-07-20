@@ -37,7 +37,10 @@ function doctor(projectDir) {
   const py = findPython(projectDir);
   const ver = pyOk(py);
   add('python', !!ver, ver ? `${py} (${ver})` : `${py} — not runnable`);
-  if (ver) add('narova_tts module', pyHasModule(py), pyHasModule(py) ? 'importable' : 'not importable — run scripts/setup.sh');
+  if (ver) {
+    const hasMod = pyHasModule(py);
+    add('narova_tts module', hasMod, hasMod ? 'importable' : 'not importable — run scripts/setup.sh');
+  }
 
   const npx = which('npx');
   add('npx', !!npx, npx || 'not found — install Node.js >= 18');

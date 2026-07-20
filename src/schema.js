@@ -15,7 +15,14 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   const errs = [];
 
   const title = raw.title || 'narova';
-  const size = resolveSize(overrides.size || raw.size);
+  let size = { w: 1280, h: 720 };
+  try { size = resolveSize(overrides.size || raw.size); }
+  catch (e) { errs.push(`config.size: ${e.message}`); }
+
+  // Scene/voice ids land in element ids, CSS selectors, and getElementById —
+  // anything outside this set breaks the composition silently (or worse,
+  // escapes an attribute).
+  const ID_RE = /^[A-Za-z][A-Za-z0-9_-]*$/;
 
   // theme.css is a FILE reference (scene-layout classes), not a token — pull it out
   // of the token block (else it leaks as `--css:...`) and load its contents.
@@ -27,9 +34,18 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     else themeCss = fs.readFileSync(cssPath, 'utf8');
   }
 
+  // Theme token keys/values are interpolated into the generated stylesheet.
+  Object.entries(themeTokens).forEach(([k, v]) => {
+    if (!ID_RE.test(k)) errs.push(`config.theme.${k}: token name must match ${ID_RE}`);
+    if (/[;{}<]/.test(String(v))) errs.push(`config.theme.${k}: value must not contain ; { } <`);
+  });
+
   const voices = { ...(raw.voices || {}) };
   const voiceIds = Object.keys(voices);
   if (voiceIds.length === 0) errs.push('config.voices: at least one voice required');
+  voiceIds.forEach(id => {
+    if (!ID_RE.test(id)) errs.push(`config.voices.${id}: voice id must match ${ID_RE}`);
+  });
   voiceIds.forEach((id, i) => {
     const v = voices[id] = { ...voices[id] };
     if (!v.color) v.color = DEFAULT_VOICE_COLORS[i % DEFAULT_VOICE_COLORS.length];
@@ -51,6 +67,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     const at = `config.scenes[${i}]`;
     if (!s || typeof s !== 'object') { errs.push(`${at}: not an object`); return; }
     if (!s.id) errs.push(`${at}.id: required`);
+    else if (!ID_RE.test(s.id)) errs.push(`${at}.id: "${s.id}" must match ${ID_RE}`);
     else if (seen.has(s.id)) errs.push(`${at}.id: duplicate "${s.id}"`);
     else seen.add(s.id);
     if (typeof s.body !== 'string') errs.push(`${at}.body: HTML string required`);

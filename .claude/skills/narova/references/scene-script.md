@@ -67,6 +67,8 @@ export default {
 ## Drafting from a prompt (the agent's job)
 
 - 5–10 scenes for a 60–90 second video; one idea per scene.
+- Prefer `var(--muted)` over `var(--faint)` for readable text — faint text
+  trips `npx hyperframes check`'s WCAG contrast warnings.
 - Keep turns short: 1–2 sentences each. Alternate speakers; let one ask, the
   other answer.
 - Put `data-cue` on the visual that illustrates each key turn, so the screen

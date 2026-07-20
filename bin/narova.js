@@ -51,7 +51,10 @@ async function loadResolved(flags) {
   return { config, projectDir: dir };
 }
 
-const outDirOf = (flags, projectDir) => path.resolve(flags.out || path.join(projectDir || '.', 'out'));
+const outDirOf = (flags, projectDir) => {
+  if (flags.out === true) { console.error('--out needs a value'); process.exit(1); }
+  return path.resolve(flags.out || path.join(projectDir || '.', 'out'));
+};
 
 const HELP = `narova — a scene script becomes a narrated, captioned video
 (narova writes the words and the voice; HyperFrames draws the pictures)
@@ -86,7 +89,7 @@ async function main() {
   const cmd = positionals[0];
 
   if (flags.version) { console.log(require('../package.json').version); return; }
-  if (!cmd || flags.help || flags.h || cmd === 'help') { console.log(HELP); return; }
+  if (!cmd || flags.help || flags.h || cmd === 'help' || cmd === '-h') { console.log(HELP); return; }
 
   switch (cmd) {
     case 'init': {
@@ -153,6 +156,7 @@ async function main() {
       const args = ['-m', 'narova_tts', 'voices', sub, ...positionals.slice(2)];
       if (flags.backend) args.push('--backend', flags.backend);
       const r = spawnSync(py, args, { stdio: 'inherit', env: { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') } });
+      if (r.error) { console.error(`voices failed to launch (${py}): ${r.error.message}`); process.exit(1); }
       process.exitCode = r.status || 0;
       return;
     }

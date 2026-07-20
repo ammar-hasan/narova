@@ -52,6 +52,23 @@ test('resolveConfig aggregates every error', () => {
   });
 });
 
+test('resolveConfig rejects unsafe scene/voice ids and theme values', () => {
+  const bad = validRaw();
+  bad.voices['bad id'] = { speaker: 'v3' };
+  bad.scenes[0].id = 'has"quote';
+  bad.theme = { accent: 'red;}</style>' };
+  assert.throws(() => resolveConfig(bad, {}, '.'), err => {
+    assert.match(err.message, /voice id must match/);
+    assert.match(err.message, /"has"quote" must match/);
+    assert.match(err.message, /must not contain/);
+    return true;
+  });
+});
+
+test('resolveConfig reports an unknown size as a config error', () => {
+  assert.throws(() => resolveConfig({ ...validRaw(), size: '4:3' }, {}, '.'), /config\.size: unknown size/);
+});
+
 test('resolveConfig rejects a missing theme.css file', () => {
   const raw = { ...validRaw(), theme: { css: 'no-such-file.css' } };
   assert.throws(() => resolveConfig(raw, {}, '.'), /theme\.css: file not found/);

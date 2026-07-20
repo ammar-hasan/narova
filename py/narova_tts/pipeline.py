@@ -58,7 +58,9 @@ def concat(pieces: list[Path], out: Path, tmp: Path, norm: bool = False) -> None
     and consistent loudness across voices (LEARNINGS #5) — this changes duration,
     which is exactly why the per-scene rescale is required."""
     lst = tmp / "_list.txt"
-    lst.write_text("".join(f"file '{p}'\n" for p in pieces))
+    # concat-demuxer quoting: a ' in the path (e.g. "Ammar's Mac") must be escaped
+    esc = lambda p: str(p).replace("'", "'\\''")
+    lst.write_text("".join(f"file '{esc(p)}'\n" for p in pieces))
     af = ["-af", "loudnorm=I=-16:TP=-1.5:LRA=11"] if norm else []
     sh("ffmpeg", "-y", "-loglevel", "error", "-f", "concat", "-safe", "0", "-i", str(lst),
        *af, "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(out))

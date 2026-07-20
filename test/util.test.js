@@ -3,13 +3,17 @@ const { test } = require('node:test');
 const assert = require('node:assert');
 const { resolveSize, hexToRgba } = require('../src/util');
 
-test('resolveSize handles presets, objects, and junk', () => {
+test('resolveSize handles presets and objects', () => {
   assert.deepEqual(resolveSize('16:9'), { w: 1280, h: 720 });
   assert.deepEqual(resolveSize('1:1'), { w: 1080, h: 1080 });
   assert.deepEqual(resolveSize('9:16'), { w: 720, h: 1280 });
   assert.deepEqual(resolveSize({ w: 100.7, h: 50 }), { w: 100, h: 50 });
   assert.deepEqual(resolveSize(undefined), { w: 1280, h: 720 });
-  assert.deepEqual(resolveSize('4:3'), { w: 1280, h: 720 });
+});
+
+test('resolveSize rejects unknown sizes instead of silently using 16:9', () => {
+  assert.throws(() => resolveSize('4:3'), /unknown size "4:3"/);
+  assert.throws(() => resolveSize({ w: 100 }), /unknown size/);
 });
 
 test('hexToRgba converts and falls back safely', () => {

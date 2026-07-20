@@ -49,7 +49,9 @@ function synth(outDir, opts = {}) {
   if (opts.backend) args.push('--backend', opts.backend);
   if (opts.reuse) args.push('--reuse');
   (opts.log || console.log)(`synth: ${py} ${args.join(' ')}`);
-  const r = spawnSync(py, args, { stdio: 'inherit', cwd: REPO_ROOT, env: { ...process.env, PYTHONPATH: path.join(REPO_ROOT, 'py') } });
+  const pyPath = path.join(REPO_ROOT, 'py') +
+    (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : '');
+  const r = spawnSync(py, args, { stdio: 'inherit', cwd: REPO_ROOT, env: { ...process.env, PYTHONPATH: pyPath } });
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
   if (r.status !== 0) throw new Error(`synth (narova_tts) exited ${r.status}`);
   const timings = path.join(outDir, 'timings.json');
