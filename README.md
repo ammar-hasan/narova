@@ -2,40 +2,45 @@
 
 > Working name — the final package name is still being chosen.
 
-**A scene script becomes a narrated, captioned, kinetic explainer video.**
+**You write a scene script. narova turns it into a narrated video with word-synced captions.**
 
-narova turns a declarative scene script into two things: an interactive, self-contained HTML
-player with word-synced captions and reactive reveals, and a rendered MP4 that is pixel-identical
-to that player. Both carry a two-host neural voiceover. Think "Remotion, but the narration and
-word-synced captions are first-class and automatic, and you write scenes as plain HTML + data
-instead of React." The point of the tool is automatic word-level caption sync to generated
-speech, plus visuals that react to the voiceover.
+You get two things from one script:
 
-## 60-second quickstart
+1. An interactive HTML player. One self-contained file. Captions highlight word by word.
+2. An MP4 video. It looks exactly like the player, frame for frame.
+
+Both have a neural voiceover with two hosts talking to each other.
+Everything runs on your machine. No API keys. No cloud.
+
+Think of it like Remotion, with two differences: the narration and word-synced
+captions are automatic, and you write scenes as plain HTML + data instead of React.
+
+## Quickstart (60 seconds)
 
 ```bash
-git clone <repo-url> narova && cd narova
-npm install                      # Node CLI + deps
-scripts/setup.sh                 # Python venv for TTS (add --xtts for the higher-quality backend)
-narova doctor                   # check ffmpeg, Chrome, venv, voices
+git clone https://github.com/ammar-hasan/narova.git && cd narova
+npm install                      # Node CLI
+scripts/setup.sh                 # Python venv for TTS (add --xtts for higher-quality voices)
+narova doctor                    # checks ffmpeg, Chrome, venv, voices
 
 cd examples/venture-factory
-narova build                    # render + synth + capture + assemble -> out/video.mp4 + out/player.html
-narova serve                    # range-capable server: player, mp4, landing page
+narova build                     # makes out/video.mp4 + out/player.html
+narova serve                     # opens a local server with the player and the mp4
 ```
 
-You need **ffmpeg** and **Google Chrome** installed (`scripts/setup.sh` checks and tells you how).
-The first `build` downloads a voice model; xtts also downloads a ~1.9GB model, once.
+You need **ffmpeg** and **Google Chrome** installed. `scripts/setup.sh` checks
+both and tells you how to get them. The first `build` downloads a voice model.
+With xtts, it downloads a ~1.9GB model once.
 
 ## The scene script
 
-A project is a directory with a `reel.config.mjs` (or `.js` / `.json`) that exports
-`title`, `size`, `voices`, `theme`, `timing`, and `scenes`.
+A project is a folder with a `reel.config.mjs` (or `.js` / `.json`).
+It exports `title`, `size`, `voices`, `theme`, `timing`, and `scenes`.
 
 ```js
 export default {
   title: "The Venture Factory",
-  size: { w: 1280, h: 720 },                 // 16:9 default; 1:1 and 9:16 supported
+  size: { w: 1280, h: 720 },                 // 16:9 default; 1:1 and 9:16 also work
   voices: {
     a: { backend: "xtts", speaker: "Damien Black", color: "#2ee6d6", label: "narrator · A" },
     b: { backend: "xtts", speaker: "Sofia Hellen", color: "#ff7eb6", label: "narrator · B" },
@@ -46,82 +51,86 @@ export default {
     {
       id: "title",
       caption: "A codebase that improves itself — safely.",   // short line shown ON SCREEN
-      vo: [                                                    // the two-host dialogue that's SPOKEN
+      vo: [                                                    // the dialogue that is SPOKEN
         { who: "b", text: "Okay. What if your codebase could just build itself?" },
         { who: "a", text: "That's the Venture Factory. Let me show you." },
       ],
       body: `<div class="s-title">
         <h1 class="display reveal">The Venture Factory</h1>
         <p class="lede cue" data-cue="1">builds itself — safely.</p>
-      </div>`,                                                 // HTML; data-cue="k" reveals on turn index k (0-based)
-      dur: 12,                                                 // fallback duration if audio is absent
+      </div>`,                                                 // HTML; data-cue="1" shows when turn 1 starts (0-based)
+      dur: 12,                                                 // fallback length if there is no audio
     },
     // ...more scenes
   ],
 }
 ```
 
-Rules the renderer enforces:
+The rules:
 
-- `vo` is an ordered list of `{ who, text }` turns. Two hosts (`a`, `b`) trading lines read
-  better than one narrator; a single narrator is just one `who`.
-- `caption` is what shows on screen; `vo` is what's spoken. They are different on purpose —
-  big word-synced captions beat putting the full transcript on screen.
-- `body` is HTML. An element with `data-cue="k"` reveals when the voice reaches the turn
-  with index `k` — a **0-based** index into that scene's `vo` (`data-cue="0"` = first turn).
-  Un-cued elements reveal on scene entry.
-- The base theme (tokens + player/caption/reveal mechanics) is provided; add scene-specific
-  styles via `theme` tokens or a referenced CSS file (see `examples/venture-factory/theme.css`).
+- `vo` is a list of `{ who, text }` turns, in order. Two hosts (`a`, `b`) trading
+  lines sound better than one narrator. One narrator also works: use one `who`.
+- `caption` and `vo` are different on purpose. `caption` is the short line on
+  screen. `vo` is the full spoken text. Big word-synced captions read better
+  than a full transcript on screen.
+- `body` is HTML. An element with `data-cue="k"` stays hidden until the voice
+  reaches turn `k`. The index is **0-based**: `data-cue="0"` means the first turn.
+  Elements without a cue show when the scene starts.
+- The base theme (tokens, player, captions, reveals) is built in. Add your own
+  scene styles with `theme` tokens or a CSS file
+  (see `examples/venture-factory/theme.css`).
 
-See `examples/venture-factory/` for a complete, runnable 14-scene script.
+See `examples/venture-factory/` for a full 14-scene script you can build.
 
-## TTS backends
+## Voices (TTS backends)
 
-Voice synthesis runs in a small Python package behind a managed venv. Pick a backend per voice
-(`voices.a.backend`) or globally with `--backend`.
+Speech runs in a small Python package inside a managed venv.
+Pick a backend per voice (`voices.a.backend`) or for all voices with `--backend`.
 
 | Backend | Quality | Speed | Setup | Notes |
 |---------|---------|-------|-------|-------|
-| `piper` | good | fast | default | local ONNX; zero-config; downloads a voice on first use |
+| `piper` | good | fast | default | local ONNX; zero config; downloads a voice on first use |
 | `xtts`  | higher | slower | `scripts/setup.sh --xtts` | coqui-tts on MPS/CPU; ~1.9GB model; 58 studio speakers |
 
-**Picking voices.** For piper use two distinct ONNX voices, e.g. `en_US-ryan-high` (a) and
-`en_US-hfc_female-medium` (b). For xtts pick two of the 58 studio speakers, e.g. `Damien Black`
-(a) and `Sofia Hellen` (b). Set them per host in `voices`, or override at the CLI with
-`--voice-a` / `--voice-b`. Give each host a `color` so the active caption word is tinted by speaker.
+**Picking voices.** Use two clearly different voices.
+For piper: `en_US-ryan-high` (a) and `en_US-hfc_female-medium` (b).
+For xtts: pick two of the 58 studio speakers, e.g. `Damien Black` and `Sofia Hellen`.
+Set them in `voices`, or override with `--voice-a` / `--voice-b`.
+Give each host a `color` — the active caption word gets that color.
 
 ## CLI
 
 ```
-narova init <dir>     scaffold a project (config + one scene + theme)
-narova check          validate config fast — no TTS, no Chrome, no writes
+narova init <dir>     start a new project (config + one scene + theme)
+narova check          validate the config fast — no TTS, no Chrome, no writes
 narova render         scenes -> out/player.html, out/record.html, out/narration.json
 narova synth          narration.json -> out/audio/*, out/timings.json   (Python TTS)
 narova build          full pipeline -> out/video.mp4 + out/player.html
-narova preview|serve  range server for out/ (player + mp4 + landing page)
-narova voices         list | get (download) TTS voices
-narova doctor         check ffmpeg, chrome, python venv, voices, ffprobe range
+narova preview|serve  local server for out/ (player + mp4 + landing page)
+narova voices         list or download TTS voices
+narova doctor         check ffmpeg, Chrome, python venv, voices
 ```
 
-Common flags: `--backend piper|xtts`, `--reuse` (skip synth, reuse audio+timings),
+Common flags: `--backend piper|xtts`, `--reuse` (keep existing audio + timings),
 `--workers N` (capture parallelism), `--tempo`, `--size 9:16|1:1|16:9`, `--out <dir>`.
 
 ## Agent skill
 
-The repo ships a Claude Code skill (`.claude/skills/narova/`) that teaches AI agents when to
-reach for narova (narration-first video: word-synced captions, two-host voiceover,
-script-to-video) and how to drive the CLI — including `narova check`, a fast config validator
-built for that loop. Working inside this repo, Claude Code discovers it automatically. To use
-narova from anywhere:
+The repo ships a Claude Code skill (`.claude/skills/narova/`). It teaches AI
+agents when to use narova (narration-first video: word-synced captions,
+two-host voiceover, script-to-video) and how to drive the CLI. `narova check`
+exists for that loop: agents can validate a config in under a second.
+
+Inside this repo, Claude Code finds the skill by itself. To use it anywhere:
 
 ```bash
 scripts/install-skill.sh                   # global: symlink into ~/.claude/skills + npm link the CLI
-scripts/install-skill.sh --project <dir>   # selective: copy into <dir>/.claude/skills (committable —
-                                           # teammates get the skill when they clone the project)
+scripts/install-skill.sh --project <dir>   # per project: copy into <dir>/.claude/skills
+                                           # (commit it — teammates get the skill too)
 ```
 
-`--copy` / `--link` override the default mode (global installs symlink, project installs copy;
-re-run the installer after updating the repo to refresh a copy).
+`--copy` / `--link` override the default mode. After a `git pull`, re-run the
+installer to refresh a copied skill (a symlinked one updates by itself).
 
 ## How it works
 
@@ -129,32 +138,32 @@ re-run the installer after updating the repo to refresh a copy).
 scene script (reel.config)
       │
       ▼
-  render      scenes -> player.html + record.html + narration.json          (Node)
+  render      scenes -> player.html + record.html + narration.json           (Node)
       │
       ▼
   synth       narration.json -> per-scene wav + timings.json                 (Python TTS)
-      │        neural speech, sentence-by-sentence, word timing derived by
-      │        word length, then rescaled so timings == real audio duration
+      │        speech is made sentence by sentence; word timings are
+      │        rescaled so they match the real audio length exactly
       ▼
-  capture     headless Chrome screenshots one keyframe per word onset,       (Node + Chrome)
-      │        each frame = the real player at "still time T" (?t=SECONDS)
+  capture     headless Chrome takes one screenshot per word onset            (Node + Chrome)
+      │        each frame = the real player frozen at time T (?t=SECONDS)
       ▼
-  assemble    ffmpeg holds each frame for next_onset − onset, muxes audio    (Node + ffmpeg)
+  assemble    ffmpeg holds each frame until the next word, adds the audio    (Node + ffmpeg)
       │
       ▼
-  out/video.mp4  (pixel-identical to the player)  +  out/player.html
+  out/video.mp4  (same pixels as the player)  +  out/player.html
 ```
 
-The MP4 is captured from the actual player, so what you scrub in the browser is exactly what
-renders. Captions stay locked to the voice because word/turn timestamps are rescaled to the
-real post-processing audio duration.
+The MP4 is captured from the real player. What you scrub in the browser is
+exactly what renders. Captions never drift, because word timestamps are
+rescaled to the final audio length.
 
 ## Learnings
 
-The pipeline encodes a set of hard-won fixes (caption drift after loudnorm, Chrome capture
-hangs, XTTS on a modern stack, HTTP Range for seeking, and more). Read
-[LEARNINGS.md](./LEARNINGS.md) before changing the pipeline. The contract lives in
-[SPEC.md](./SPEC.md).
+The pipeline encodes many hard-won fixes: caption drift after loudness
+normalization, Chrome capture hangs, XTTS on a modern stack, HTTP Range for
+seeking, and more. Read [LEARNINGS.md](./LEARNINGS.md) before changing the
+pipeline. The contract lives in [SPEC.md](./SPEC.md).
 
 ## License
 
