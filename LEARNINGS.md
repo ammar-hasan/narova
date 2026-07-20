@@ -50,36 +50,47 @@ Every one cost time. Encode the fix into the product so it never comes back.
     Model download is ~1.87GB, one-time. 58 built-in studio speakers; pick two distinct ones
     for a two-host duet (we used "Damien Black" / "Sofia Hellen").
 
-## Rendering the MP4 (the clever part)
+## Rendering the MP4 — HISTORICAL (superseded by HyperFrames in 0.3.0)
 
-11. **Homebrew ffmpeg often lacks libass** → the `subtitles`/`ass` filters don't exist.
+> #11–#17 describe the homemade renderer (player + Chrome screenshots + ffmpeg
+> assemble + range server) that 0.3.0 deleted. HyperFrames now owns preview and
+> render. They stay here because they explain WHY the timing rescale (#1) exists
+> and what the old pipeline guaranteed. New rendering learnings: (a) a comment
+> before `<!doctype html>` makes hyperframes lint treat the file as a fragment;
+> (b) a background on the composition ROOT can render black — put it on a
+> full-bleed child; (c) scene clip starts must chain as a cumulative sum of
+> already-rounded durations or the same-track overlap lint trips; (d) CSS
+> `animation: … infinite` and transitions are nondeterministic under seek-based
+> frame rendering — all motion goes on the paused GSAP timeline.
+
+11. *(historical)* **Homebrew ffmpeg often lacks libass** → the `subtitles`/`ass` filters don't exist.
     Don't rely on burning subtitles. Instead we render the MP4 *from the actual HTML player*:
     a deterministic "still at time T" mode (`window.VF_STILL(t)` / `?t=SECONDS`) renders the
     exact frame (captions highlighted to t, cues revealed up to their turn), and we screenshot
     keyframes with headless Chrome. Upside: the MP4 is pixel-identical to the interactive page.
 
-12. **Capture at word onsets, not fixed fps.** The visual only changes when the active caption
+12. *(historical)* **Capture at word onsets, not fixed fps.** The visual only changes when the active caption
     word or a reveal changes — both happen at word onsets. ~700–830 keyframes for a 6-min video
     instead of ~11,000. Each frame held for `next_onset - onset` via ffmpeg concat `duration`.
 
-13. **Headless Chrome hangs after writing the screenshot.** A hung `chrome --screenshot`
+13. *(historical)* **Headless Chrome hangs after writing the screenshot.** A hung `chrome --screenshot`
     subprocess blocks the whole capture pool at 0% CPU forever. **Fix:** `timeout=45` +
     `start_new_session=True` on the subprocess; the PNG is written before it hangs. Then
     re-shoot any missing/zero-byte frames (a bad frame truncates the whole MP4 under `-shortest`).
 
-14. **`-shortest` truncates to the shortest stream.** If the frame-concat total ≠ audio total,
+14. *(historical)* **`-shortest` truncates to the shortest stream.** If the frame-concat total ≠ audio total,
     the MP4 is cut. After the timing rescale (#1) they match; assert it.
 
-15. **Deterministic still render:** in still mode set `html[data-still]` so animations settle
+15. *(historical)* **Deterministic still render:** in still mode set `html[data-still]` so animations settle
     instantly (`.reveal`, `.cue.lit` → final state, no transition) while *un-lit* cues stay
     hidden — that's what makes the reveals reactive in the captured frame.
 
-16. **Scene DOM order:** if you build scenes with `insertBefore(firstChild)` you reverse them;
+16. *(historical)* **Scene DOM order:** if you build scenes with `insertBefore(firstChild)` you reverse them;
     use `appendChild` and z-index the HUD/caption overlay above the scenes.
 
-## Serving
+## Serving — HISTORICAL (HyperFrames Studio owns preview now)
 
-17. **Python's `http.server` has no Range support** → video seeking is broken (returns 200,
+17. *(historical)* **Python's `http.server` has no Range support** → video seeking is broken (returns 200,
     not 206). Ship a tiny range-capable handler (206 + `Accept-Ranges` + `Content-Range`),
     threaded, so browsers can scrub.
 
