@@ -13,6 +13,7 @@ const { serve } = require('../src/serve');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
+const { compose } = require('../src/compose');
 const fs = require('fs');
 
 const BOOL_FLAGS = new Set(['reuse', 'help', 'h', 'version']);
@@ -60,6 +61,7 @@ Usage: narova <command> [options]
 Commands:
   init <dir>            scaffold a project (config + one example scene + theme)
   check                validate config fast — no TTS, no Chrome, no writes
+  compose              timings + audio -> out/hf/ (HyperFrames project)
   render               scenes -> out/player.html, out/record.html, out/narration.json
   synth                narration.json -> out/audio/*, out/timings.json   (Python)
   build                full pipeline -> out/video.mp4 + out/player.html
@@ -100,6 +102,15 @@ async function main() {
       try { ({ config } = await loadResolved(flags)); }
       catch (e) { console.error(e.message); process.exit(1); }
       check(config);
+      return;
+    }
+
+    case 'compose': {
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      const r = compose(config, out);
+      console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
+      console.log(`  preview: npx hyperframes preview   (in ${path.relative(process.cwd(), r.dir) || '.'})`);
       return;
     }
 
