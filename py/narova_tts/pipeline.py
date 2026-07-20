@@ -204,9 +204,10 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
 
 def _verify_total(scenes, timings, audio_dir, tmp) -> float:
     """Assert sum(scene.dur) == duration(concatenated audio) within a few ms
-    (the caption-sync guarantee, LEARNINGS #1 / #14)."""
+    (the caption-sync guarantee, LEARNINGS #1 / #14). The concatenated track is
+    kept as audio/full.wav — it is the narration track of the composition."""
     sum_dur = sum(timings[s["id"]]["dur"] for s in scenes)
-    full = tmp / "_full.wav"
+    full = audio_dir / "full.wav"
     concat([audio_dir / f"{s['n']:02d}.wav" for s in scenes], full, tmp)
     measured = probe(full)
     drift = abs(measured - sum_dur)
