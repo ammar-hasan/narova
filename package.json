@@ -1,7 +1,7 @@
 {
   "name": "narova",
-  "version": "0.2.0",
-  "description": "A scene script becomes a narrated, captioned, kinetic explainer video.",
+  "version": "0.3.0",
+  "description": "A scene script becomes a narrated, captioned video. narova writes the words and the voice; HyperFrames draws the pictures.",
   "bin": {
     "narova": "bin/narova.js"
   },
