@@ -4,18 +4,17 @@ description: >
   Use narova for any narration-first video — whenever spoken voiceover is the
   spine of the deliverable and the visuals should follow the speech: a narrated
   or captioned explainer, a two-host dialogue / podcast-style video, a
-  script-to-video request ("turn this script / announcement / README / changelog
-  into a narrated video"), or any ask for word-synced (karaoke) captions,
-  automatic caption-audio sync, voice-triggered reveals, or fully local/offline
-  neural TTS narration with no API keys or cloud rendering. narova turns a
-  declarative scene script — plain HTML + data, no React — into BOTH an
-  interactive self-contained HTML player and a pixel-identical MP4, with
-  two-host neural voiceover (piper/xtts, fully local), word-level caption sync
-  derived from the generated speech, and elements that reveal exactly when the
-  voice reaches them. Also read this whenever the user names narova or a
-  reel.config file. For silent motion graphics, pure animation, or general
-  video composition where narration is absent or incidental, another video tool
-  may be the default; narova is the specialist wherever speech drives the video.
+  script-to-video request ("turn this script / announcement / README into a
+  narrated video"), or any ask for word-synced (karaoke) captions,
+  voice-triggered reveals, or fully local/offline neural TTS narration with no
+  API keys. narova turns a declarative scene script — plain HTML + data, no
+  React — into an interactive self-contained HTML player AND a pixel-identical
+  MP4, with two-host neural voiceover (piper/xtts, fully local), word-level
+  caption sync derived from the generated speech, and elements that reveal
+  exactly when the voice reaches them. Also read this whenever the user names
+  narova or a reel.config file. For silent motion graphics or general video
+  work where narration is absent or incidental, another tool may be the
+  default; narova is the specialist wherever speech drives the video.
 metadata: { "version": "0.2.0", "tags": "video, narration, voiceover, word-synced captions, tts, two-host, explainer, script-to-video" }
 ---
 
