@@ -10,23 +10,9 @@
   --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;
 }
 
-/* reveals + liveliness */
-.reveal,.cue{opacity:0}
-.reveal{transform:translateY(10px)}
-.cue{transform:translateY(16px) scale(.965)}
-.scene.active .reveal{animation:rise .6s cubic-bezier(.2,.7,.2,1) forwards}
-.scene.active .reveal:nth-child(2){animation-delay:.12s}.scene.active .reveal:nth-child(3){animation-delay:.22s}.scene.active .reveal:nth-child(4){animation-delay:.32s}
-.cue.lit{animation:pop .58s cubic-bezier(.2,.9,.28,1.2) forwards}
-@keyframes rise{to{opacity:1;transform:none}}
-@keyframes pop{0%{opacity:0;transform:translateY(16px) scale(.965)}60%{opacity:1}100%{opacity:1;transform:none;box-shadow:0 0 0 0 rgba(46,230,214,0)}}
-html.static .reveal,html.static .cue{opacity:1;transform:none;animation:none}
-html[data-still] .reveal,html[data-still] .cue.lit{opacity:1!important;transform:none!important;animation:none!important}
-html[data-still] .cap-w{transition:none}
-html[data-still] .stage::after,html[data-still] .spin,html[data-still] .grad{animation-play-state:paused}
-@media(prefers-reduced-motion:reduce){.reveal,.cue{opacity:1;transform:none;animation:none}.spin,.stage::after,.grad{animation:none}}
-
-.grad{background:linear-gradient(92deg,var(--accent),#7ef0ff 40%,var(--pink) 80%,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:220% auto;animation:sheen 6s linear infinite}
-@keyframes sheen{to{background-position:220% center}}
+/* reveals/cues/captions come from the narova base; motion lives on the
+ * generated timeline (0.3.0: no wall-clock CSS animation — the renderer seeks). */
+.grad{background:linear-gradient(92deg,var(--accent),#7ef0ff 40%,var(--pink) 80%,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:220% auto}
 
 /* shared */
 .eyebrow{font-family:var(--mono);font-size:clamp(10px,1.15vw,12px);letter-spacing:.26em;color:var(--accent);text-transform:uppercase}
@@ -45,7 +31,7 @@ html[data-still] .stage::after,html[data-still] .spin,html[data-still] .grad{ani
 .pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:clamp(16px,2.4vw,26px);display:flex;flex-direction:column;gap:12px}
 .pane.center{align-items:center;justify-content:center;text-align:center}
 .loop-chip{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);color:var(--ink);background:#0c1526;border:1px solid var(--line);border-radius:999px;padding:8px 14px;align-self:flex-start}
-.spin{display:inline-block;color:var(--accent);animation:spin 2.2s linear infinite}@keyframes spin{to{transform:rotate(360deg)}}
+.spin{display:inline-block;color:var(--accent)}
 .flags{list-style:none;display:flex;flex-direction:column;gap:9px;margin-top:2px}
 .flags li{font-size:clamp(14px,1.9vw,19px);color:var(--ink);padding-left:26px;position:relative}
 .flags li::before{content:"⚠";position:absolute;left:0;color:var(--amber)}

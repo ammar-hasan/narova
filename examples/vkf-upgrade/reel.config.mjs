@@ -18,7 +18,6 @@ export default {
   scenes: [
     {
       id: "hook",
-      caption: "v3 → v4.4. Your knowledge base goes to work.",
       vo: [
         { who: "b", text: "Heads up — STD-002 just jumped from version three, to four point four." },
         { who: "a", text: "And it's not a patch. In v3 your knowledge base was a filing cabinet. In v4 it works — reads itself back, checks its facts against your code, and blocks secrets before they ship." },
@@ -28,11 +27,9 @@ export default {
         <div class="vk-mega reveal">v3 <span class="gradt">&rarr;</span> v4.4</div>
         <div class="vk-sub reveal">your knowledge base just <span class="gradt">went to work.</span></div>
       </div>`,
-      dur: 13,
     },
     {
       id: "old",
-      caption: "v3 filed your knowledge, then hoped.",
       vo: [
         { who: "a", text: "Rewind to v3. You sorted notes into types and buckets. Tidy. Organized." },
         { who: "b", text: "But that's all it did — sit on a shelf. Nobody promised it was current, or true, or that anyone ever opened it. Write-only archives nobody reads." },
@@ -42,11 +39,9 @@ export default {
         <div class="vk-mega reveal"><span class="vk-mute">v3 filed it —</span><br>then hoped</div>
         <div class="vk-line reveal">organized &nbsp;·&nbsp; <b>passive</b> &nbsp;·&nbsp; unread</div>
       </div>`,
-      dur: 14,
     },
     {
       id: "shift",
-      caption: "v4 wires it into a loop. Three real changes.",
       vo: [
         { who: "b", text: "v4 rips it off the shelf and wires it into a loop. Three changes — all visible in the repo." },
         { who: "a", text: "It gets read back. It becomes real files. And it keeps itself honest. Let's go." },
@@ -59,11 +54,9 @@ export default {
         </div>
         <div class="vk-line cue" data-cue="1">read back &nbsp;·&nbsp; real files &nbsp;·&nbsp; kept honest</div>
       </div>`,
-      dur: 12,
     },
     {
       id: "readback",
-      caption: "01 — It gets read back.",
       vo: [
         { who: "a", text: "Change one — it gets read back. Every note runs a loop: captured from Gmail, Slack, Drive; a human signs off; it's committed; then it comes back as a cited answer, plus a weekly digest." },
         { who: "b", text: "v3 let you dump and forget. v4's rule — if you can't read it back, it isn't knowledge. It's a rumor." },
@@ -81,11 +74,9 @@ export default {
           <span class="vk-node end">read back</span></div>
         <div class="vk-line cue" data-cue="1">a human signs off every entry &nbsp;·&nbsp; cited answers + a weekly digest</div>
       </div>`,
-      dur: 17,
     },
     {
       id: "real",
-      caption: "02 — Real folders. One bar for everyone.",
       vo: [
         { who: "b", text: "Change two — it got real. Those abstract types became six folders you can open: constitution, specs, state, procedural, episodic, identity. Your tools live right in the repo next to them." },
         { who: "a", text: "And one standard now, for every project. v3 let you say we'll get there someday. v4 deleted that line." },
@@ -103,11 +94,9 @@ export default {
           <span class="vk-chip hot">one bar — no tiers</span></div>
         <div class="vk-line cue" data-cue="1">six real folders on disk &nbsp;·&nbsp; tools committed in the repo</div>
       </div>`,
-      dur: 16,
     },
     {
       id: "honest",
-      caption: "03 — Checks itself. Guards itself.",
       vo: [
         { who: "a", text: "Change three — it keeps itself honest. It checks your docs against your real code. Rename a table two sprints back? It catches the stale doc, proposes a fix, and a second agent verifies it — so nothing's made up." },
         { who: "b", text: "And it stops secrets cold. A customer's gate was blocking the word determination — just because it contains termination. Fixed: whole words only, and no A-P-I key slips through." },
@@ -121,11 +110,9 @@ export default {
           <span class="vk-chip hot">secrets blocked</span></div>
         <div class="vk-line cue" data-cue="1">&ldquo;determination&rdquo; &ne; &ldquo;termination&rdquo; — whole-word now &nbsp;·&nbsp; added lines only</div>
       </div>`,
-      dur: 18,
     },
     {
       id: "close",
-      caption: "v4 puts it to work. Run /vkf:validate.",
       vo: [
         { who: "b", text: "v3 filed your knowledge." },
         { who: "a", text: "v4 puts it to work — reads it back, keeps it honest, guards it." },
@@ -139,7 +126,6 @@ export default {
         <div class="vk-cmd cue" data-cue="2">/vkf:validate</div>
         <div class="vk-kicker cue" data-cue="2">see where you stand</div>
       </div>`,
-      dur: 14,
     },
   ],
 };

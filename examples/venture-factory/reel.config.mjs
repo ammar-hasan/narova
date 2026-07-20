@@ -25,8 +25,6 @@ export default {
   scenes: [
     {
       id: "title",
-      dur: 13,
-      caption: "A codebase that improves itself — safely.",
       vo: [
         { who: "b", text: "Okay. What if your codebase could just, build itself? Toward exactly what you asked for." },
         { who: "a", text: "That's the Venture Factory. And no, it isn't magic. There are rules. Come on, I'll show you." },
@@ -40,8 +38,6 @@ export default {
 
     {
       id: "problem",
-      dur: 27,
-      caption: "Agents build fast. Trust is the hard part.",
       vo: [
         { who: "a", text: "So here's the catch. Point a bunch of AI agents at your code, and yeah, they'll build. Fast." },
         { who: "b", text: "Fast is easy. The scary part is trust, right?" },
@@ -61,8 +57,6 @@ export default {
 
     {
       id: "onerule",
-      dur: 12,
-      caption: "The thing being graded can't change its grader.",
       vo: [
         { who: "b", text: "So everything here rests on one rule." },
         { who: "a", text: "The thing being graded can never change its own grader." },
@@ -76,8 +70,6 @@ export default {
 
     {
       id: "owners",
-      dur: 20,
-      caption: "Three owners — nobody grades their own work.",
       vo: [
         { who: "a", text: "The work splits three ways. So nobody grades their own homework." },
         { who: "b", text: "You own the goal. What the product should actually be." },
@@ -94,8 +86,6 @@ export default {
 
     {
       id: "homes",
-      dur: 27,
-      caption: "Two homes. Authority flows one way.",
       vo: [
         { who: "a", text: "It lives in two homes. The Factory is the brain. The goal, the rules, the judge, the history." },
         { who: "b", text: "And the Project is just, the code. Honestly, it's disposable." },
@@ -113,8 +103,6 @@ export default {
 
     {
       id: "planes",
-      dur: 25,
-      caption: "Three roles. Nobody does another one’s job.",
       vo: [
         { who: "b", text: "Inside the factory, three roles run the show. And they never do each other's jobs." },
         { who: "a", text: "The Guide is who you talk to. It preps the work and hands it off. Never builds." },
@@ -133,8 +121,6 @@ export default {
 
     {
       id: "cycle",
-      dur: 28,
-      caption: "One cycle. Three outcomes.",
       vo: [
         { who: "a", text: "The loop is just one move, on repeat. Look at the goal. Pick the biggest gap. Build it. Check it. Write it down." },
         { who: "b", text: "And every result is one of three colors." },
@@ -158,8 +144,6 @@ export default {
 
     {
       id: "loop",
-      dur: 26,
-      caption: "One turn — four clean handoffs.",
       vo: [
         { who: "b", text: "Okay, let's actually watch one turn go by." },
         { who: "a", text: "The Guide hands Control a goal. Control writes a work order, and passes it to Work." },
@@ -182,8 +166,6 @@ export default {
 
     {
       id: "referee",
-      dur: 22,
-      caption: "A sealed judge. A weakened green is a break-in.",
       vo: [
         { who: "a", text: "Let's talk about that judge. Because it's the star." },
         { who: "b", text: "It's sealed. It runs on the real, running product. Not a mock. Same input, same answer, every time." },
@@ -203,8 +185,6 @@ export default {
 
     {
       id: "ledger",
-      dur: 16,
-      caption: "Append-only. Unrecorded means it didn’t happen.",
       vo: [
         { who: "b", text: "Everything that happens gets written down. In a book you can only add to." },
         { who: "a", text: "Nothing gets erased? What if you mess up?" },
@@ -223,8 +203,6 @@ export default {
 
     {
       id: "gates",
-      dur: 27,
-      caption: "The factory waits. You decide.",
       vo: [
         { who: "a", text: "Anything you can't take back. Sealing the judge, pushing, deploying, changing the goal. It stops, and waits for you." },
         { who: "b", text: "It shows up at the Operator Desk. Plain English. Everything you need to decide in a minute." },
@@ -244,8 +222,6 @@ export default {
 
     {
       id: "stack",
-      dur: 28,
-      caption: "It stands on two other standards.",
       vo: [
         { who: "b", text: "Now, the Factory doesn't stand alone. It sits on two standards underneath it." },
         { who: "a", text: "At the bottom, V-K-F. That's what you know. Your constitution. The goal is actually made of that." },
@@ -264,8 +240,6 @@ export default {
 
     {
       id: "dials",
-      dur: 24,
-      caption: "Two dials grow. The structure never changes.",
       vo: [
         { who: "a", text: "And here's the elegant bit. This machine looks the same on day one, and day one-thousand." },
         { who: "b", text: "Only two dials move. Assurance. How much your evidence is worth. You earn that, you can't fake it." },
@@ -281,8 +255,6 @@ export default {
 
     {
       id: "closing",
-      dur: 24,
-      caption: "That’s the Venture Factory.",
       vo: [
         { who: "a", text: "So, that's the Venture Factory." },
         { who: "b", text: "A human sets the goal. A factory of agents drives toward it. A sealed judge keeps everyone honest." },

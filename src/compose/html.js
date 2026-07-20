@@ -47,7 +47,7 @@ ${css}
 <body>
 <div id="root" data-composition-id="main" data-start="0"
      data-width="${size.w}" data-height="${size.h}" data-duration="${fmt(data.total)}">
-  <div id="bg"></div>
+  <div id="bg" class="stage"></div><!-- class="stage" kept so pre-0.3.0 theme.css background rules still apply -->
 ${sceneClips}
   <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(data.total)}" data-track-index="2">
     <div class="capzone"><div id="cap-stage" style="position:relative;height:100%"></div></div>

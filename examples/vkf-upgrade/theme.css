@@ -15,9 +15,7 @@
     radial-gradient(40% 34% at 20% 16%, rgba(139,92,255,.42), transparent 70%),
     radial-gradient(42% 36% at 84% 80%, rgba(255,77,141,.34), transparent 70%),
     radial-gradient(34% 30% at 70% 34%, rgba(255,179,71,.20), transparent 70%) !important;
-  animation:vkdrift 13s ease-in-out infinite alternate !important;
 }
-@keyframes vkdrift{to{transform:translate(4%,-4%) scale(1.15)}}
 .wordmark b{color:#c9b8ff !important}
 .counter{color:#a37bff !important}
 .progress > i{background:var(--grad) !important;box-shadow:0 0 14px #b06bff !important}
@@ -32,8 +30,7 @@
 .vk-wrap{width:100%;max-width:none;display:flex;flex-direction:column;align-items:center;text-align:center;gap:clamp(16px,3vh,34px);padding:0 7%}
 .vk-kicker{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);letter-spacing:.32em;text-transform:uppercase;color:var(--muted)}
 .vk-kicker b{color:#c9b8ff;font-weight:700}
-.gradt{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;background-size:220% auto;animation:vksheen 5s linear infinite}
-@keyframes vksheen{to{background-position:220% center}}
+.gradt{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;background-size:220% auto}
 
 .vk-mega{font-weight:900;line-height:.9;letter-spacing:-.035em;font-size:clamp(48px,10.5vw,132px);text-wrap:balance}
 .vk-sub{font-size:clamp(18px,2.9vw,34px);font-weight:700;color:var(--ink);opacity:.95;text-wrap:balance;max-width:15em}
