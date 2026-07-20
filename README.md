@@ -106,6 +106,20 @@ narova doctor         check ffmpeg, chrome, python venv, voices, ffprobe range
 Common flags: `--backend piper|xtts`, `--reuse` (skip synth, reuse audio+timings),
 `--workers N` (capture parallelism), `--tempo`, `--size 9:16|1:1|16:9`, `--out <dir>`.
 
+## Agent skill
+
+The repo ships a Claude Code skill (`.claude/skills/narova/`) that teaches AI agents when to
+reach for narova (narration-first video: word-synced captions, two-host voiceover,
+script-to-video) and how to drive the CLI — including `narova check`, a fast config validator
+built for that loop. Working inside this repo, Claude Code discovers it automatically. To use
+narova from anywhere:
+
+```bash
+scripts/install-skill.sh        # symlink into ~/.claude/skills + npm link the CLI
+```
+
+`--copy` copies instead of symlinking (re-run it after updating the repo).
+
 ## How it works
 
 ```
