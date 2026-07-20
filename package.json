@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "A scene script becomes a narrated, captioned, kinetic explainer video.",
   "bin": {
     "narova": "bin/narova.js"
@@ -13,6 +13,8 @@
   "files": [
     "bin/",
     "src/",
+    "py/",
+    "scripts/",
     "SPEC.md",
     "LEARNINGS.md"
   ],
