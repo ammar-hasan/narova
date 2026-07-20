@@ -1,0 +1,65 @@
+/* VKF upgrade — bold social theme (square). Loaded on top of narova's base theme.
+   Big kinetic type, gradient energy, one idea per scene. Animation (.reveal/.cue)
+   comes from the base; this file is the LOOK. */
+
+:root{
+  --bg:#08060f; --ink:#ffffff; --muted:#b7abd6; --faint:#6b6288;
+  --grad:linear-gradient(105deg,#8b5cff 0%,#ff4d8d 52%,#ffb347 100%);
+}
+
+/* vivid square stage */
+.stage{background:radial-gradient(125% 100% at 50% -12%, #1c1140 0%, #0b0818 55%, #060409 100%) !important}
+.stage::before{opacity:.045 !important}
+.stage::after{
+  background:
+    radial-gradient(40% 34% at 20% 16%, rgba(139,92,255,.42), transparent 70%),
+    radial-gradient(42% 36% at 84% 80%, rgba(255,77,141,.34), transparent 70%),
+    radial-gradient(34% 30% at 70% 34%, rgba(255,179,71,.20), transparent 70%) !important;
+  animation:vkdrift 13s ease-in-out infinite alternate !important;
+}
+@keyframes vkdrift{to{transform:translate(4%,-4%) scale(1.15)}}
+.wordmark b{color:#c9b8ff !important}
+.counter{color:#a37bff !important}
+.progress > i{background:var(--grad) !important;box-shadow:0 0 14px #b06bff !important}
+
+/* punchy social captions */
+.caption2{font-size:clamp(21px,3.1vw,36px) !important;font-weight:900 !important;letter-spacing:-.01em}
+.cap-w{color:#7a6fa0 !important}
+.cap-w.past{color:#fff !important;opacity:.95 !important}
+.capzone{padding-bottom:clamp(20px,4.5vh,40px) !important}
+
+/* ---- layout ---- */
+.vk-wrap{width:100%;max-width:none;display:flex;flex-direction:column;align-items:center;text-align:center;gap:clamp(16px,3vh,34px);padding:0 7%}
+.vk-kicker{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);letter-spacing:.32em;text-transform:uppercase;color:var(--muted)}
+.vk-kicker b{color:#c9b8ff;font-weight:700}
+.gradt{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;background-size:220% auto;animation:vksheen 5s linear infinite}
+@keyframes vksheen{to{background-position:220% center}}
+
+.vk-mega{font-weight:900;line-height:.9;letter-spacing:-.035em;font-size:clamp(48px,10.5vw,132px);text-wrap:balance}
+.vk-sub{font-size:clamp(18px,2.9vw,34px);font-weight:700;color:var(--ink);opacity:.95;text-wrap:balance;max-width:15em}
+.vk-mute{color:var(--faint)}
+
+/* pillars */
+.vk-pillnum{font-weight:900;font-size:clamp(70px,17vw,220px);line-height:.78;background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent;letter-spacing:-.04em}
+.vk-pillword{font-weight:900;font-size:clamp(44px,10vw,110px);letter-spacing:-.03em;line-height:.95}
+.vk-line{font-family:var(--mono);font-size:clamp(13px,2vw,21px);color:var(--muted);letter-spacing:.01em;text-wrap:balance;max-width:20em}
+.vk-line b{color:#fff}
+
+/* chips + loop flow */
+.vk-chips{display:flex;flex-wrap:wrap;gap:11px;justify-content:center}
+.vk-chip{font-family:var(--mono);font-size:clamp(13px,1.9vw,19px);padding:10px 18px;border-radius:999px;border:1px solid rgba(201,184,255,.32);background:rgba(139,92,255,.12);color:#ece5ff}
+.vk-chip.hot{border-color:transparent;background:var(--grad);color:#150a22;font-weight:800}
+.vk-flow{display:flex;align-items:center;gap:clamp(4px,.9vw,9px);flex-wrap:wrap;justify-content:center}
+.vk-node{font-family:var(--mono);font-size:clamp(11px,1.5vw,16px);padding:8px 13px;border-radius:9px;border:1px solid rgba(201,184,255,.25);color:#dccfff;background:rgba(255,255,255,.02)}
+.vk-node.end{background:var(--grad);color:#150a22;font-weight:800;border-color:transparent;box-shadow:0 6px 26px rgba(255,77,141,.35)}
+.vk-arrow{color:#a37bff;font-weight:700}
+
+/* before / after */
+.vk-vs{display:flex;flex-direction:column;gap:clamp(8px,2vh,18px);align-items:center}
+.vk-old{font-size:clamp(30px,6.4vw,72px);font-weight:800;color:#5b5382;letter-spacing:-.02em}
+.vk-old s{text-decoration-color:#ff4d8d;text-decoration-thickness:3px}
+.vk-old b{color:#8a7fb0}
+.vk-new{font-size:clamp(40px,8.2vw,96px);font-weight:900;letter-spacing:-.03em;line-height:.95}
+
+/* command CTA */
+.vk-cmd{font-family:var(--mono);font-size:clamp(22px,3.6vw,44px);font-weight:800;padding:14px 30px;border-radius:16px;background:var(--grad);color:#160a24;box-shadow:0 14px 48px rgba(139,92,255,.4)}
