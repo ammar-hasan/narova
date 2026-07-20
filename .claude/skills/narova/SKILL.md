@@ -6,74 +6,76 @@ description: >
   or captioned explainer, a two-host dialogue / podcast-style video, a
   script-to-video request ("turn this script / announcement / README into a
   narrated video"), or any ask for word-synced (karaoke) captions,
-  voice-triggered reveals, or fully local/offline neural TTS narration with no
-  API keys. narova turns a declarative scene script — plain HTML + data, no
-  React — into an interactive self-contained HTML player AND a pixel-identical
-  MP4, with two-host neural voiceover (piper/xtts, fully local), word-level
-  caption sync derived from the generated speech, and elements that reveal
-  exactly when the voice reaches them. Also read this whenever the user names
-  narova or a reel.config file. For silent motion graphics or general video
-  work where narration is absent or incidental, another tool may be the
-  default; narova is the specialist wherever speech drives the video.
-metadata: { "version": "0.2.0", "tags": "video, narration, voiceover, word-synced captions, tts, two-host, explainer, script-to-video" }
+  voice-triggered reveals, or fully local neural TTS narration with no API
+  keys. narova goes from a prompt or scene script (plain HTML + data) to a
+  finished MP4: two-host neural voiceover (piper/xtts, local), word-level
+  caption sync derived from the generated speech, elements that reveal exactly
+  when the voice reaches them — rendered through HyperFrames. Also read this
+  whenever the user names narova or a reel.config file. For silent motion
+  graphics or video without narration, plain HyperFrames is the tool; narova
+  is the specialist wherever speech drives the video.
+metadata: { "version": "0.3.0", "tags": "video, narration, voiceover, word-synced captions, tts, two-host, explainer, script-to-video, hyperframes" }
 ---
 
-# narova — script to narrated, captioned, kinetic video
+# narova — prompt to narrated, captioned video
 
 ## The model in one paragraph
 
 You write a **scene script**: a `reel.config.mjs` exporting `voices`, `theme`,
-and `scenes`, where each scene has a short on-screen `caption`, a spoken `vo`
-(an ordered list of `{ who, text }` dialogue turns), and an HTML `body`. narova
-turns that into **two artifacts from one source**: an interactive, self-contained
-`player.html` (word-synced karaoke captions, speaker-colored, reactive reveals)
-and an MP4 that is **pixel-identical** to the player. Speech drives everything:
-captions highlight word-by-word in time with the generated voice, and any body
-element with `data-cue="k"` reveals exactly when the voice reaches turn index
-`k`. All TTS is local (piper by default) — no API keys, no cloud.
+and `scenes`, where each scene has a spoken `vo` (an ordered list of
+`{ who, text }` dialogue turns) and an HTML `body`. narova synthesizes the
+speech locally (piper by default — no API keys), derives word/turn timings,
+and **generates a HyperFrames project** (`out/hf/`) that HyperFrames renders
+to `out/video.mp4`. Speech drives everything: karaoke captions highlight
+word-by-word in the speaker's color, and any body element with `data-cue="k"`
+reveals exactly when the voice reaches turn index `k`.
+**narova writes the words and the voice; HyperFrames draws the pictures.**
 
 ## Find the tool, check the version
 
 ```bash
-narova --version   # need >= 0.2.0 (0.2.0 added `narova check`)
+narova --version   # need >= 0.3.0 (the HyperFrames pipeline)
 ```
 
-If the command is missing, **or** the version is older than 0.2.0, **or**
-`narova check` answers `unknown command: check` (a stale binary on PATH —
-don't mistake its exit 1 for an invalid config): locate the repo and re-link.
-`readlink` on this skill's folder (e.g. `~/.claude/skills/narova`, or the
-project's `.claude/skills/narova`) reveals it for a symlinked install;
-`cat <skill-folder>/.narova-skill-source` for a copied one. Run
-`npm link` there (zero deps, safe), or call `node <repo>/bin/narova.js`
-directly.
+If the command is missing, **or** older than 0.3.0, **or** `narova compose`
+answers `unknown command` (a stale binary on PATH): locate the repo and
+re-link. `readlink` on this skill's folder (e.g. `~/.claude/skills/narova`)
+reveals it for a symlinked install; `cat <skill-folder>/.narova-skill-source`
+for a copied one. Run `npm link` there (zero deps, safe), or call
+`node <repo>/bin/narova.js` directly.
 
-## Workflow
+## Workflow: prompt → video
 
-1. `narova doctor` — verify ffmpeg, Chrome, and the Python venv **before**
-   investing in a script. Fix per `references/environment.md`.
-2. `narova init <dir>` for a scaffold, or write `reel.config.mjs` yourself —
-   read `references/scene-script.md` first.
-3. `narova check` — fast validation (no TTS, no Chrome, no writes). Exit 0 =
+1. `narova doctor` — verify ffmpeg, the Python venv, and `npx hyperframes`
+   **before** investing in a script. Fix per `references/environment.md`.
+2. **Draft the scene script from the user's prompt** — read
+   `references/scene-script.md`. Two hosts, short turns, 5–10 scenes,
+   `data-cue` on the key visual of most turns. `narova init <dir>` gives a
+   scaffold to start from.
+3. `narova check` — fast validation (no TTS, no browser, no writes). Exit 0 =
    valid; warnings still print. Run it after **every** config edit.
-4. `narova render` — cheap preview: writes `out/player.html` (no audio yet)
-   in under a second. Open it to sanity-check layout before paying for synth.
-5. `narova build --backend piper` — full pipeline to `out/video.mp4` +
-   `out/player.html` with embedded narration.
-6. `narova preview` — range-capable server for `out/` (seekable video).
-7. Verify: `ffprobe out/video.mp4` shows a nonzero duration; the player file
-   exists and is self-contained.
+4. `narova synth --backend piper` — audio + word timings.
+5. `narova compose` — generate `out/hf/`. Optionally validate it like any
+   HyperFrames project: `npx hyperframes lint` / `check` / `snapshot --at <t>`
+   in `out/hf`.
+6. `narova preview` — opens HyperFrames Studio; **show the user before
+   rendering**.
+7. `narova build --reuse` — render `out/video.mp4` (reuses the synth from
+   step 4). Verify: `ffprobe out/video.mp4` duration ≈ `out/audio/full.wav`.
 
 ## Hard rules
 
-- **`caption` ≠ `vo`, on purpose.** `caption` is the short line shown on
-  screen; `vo` is the full spoken dialogue. Never paste the transcript into
-  `caption` — big word-synced captions + a richer voiceover is the format.
 - **`data-cue="k"` is a 0-based turn index** into that scene's `vo`
-  (`data-cue="0"` = first turn). A cue that doesn't resolve to a turn
-  (out of range, or not a number) silently reveals at scene entry instead of
-  syncing to a turn — `narova check` warns.
-- **Never edit `out/`** — every file in it is regenerated by the pipeline.
-  Change the config or theme, then re-run.
+  (`data-cue="0"` = first turn). A cue that doesn't resolve reveals at scene
+  entry instead — `narova check` warns.
+- **Never edit `out/` or `out/hf/`** — both are regenerated every run. The
+  reel.config is the single source of truth; change it and re-run.
+- **No `animation: … infinite` (or hover/transition-driven state) in
+  theme.css.** HyperFrames renders by seeking frames; wall-clock CSS motion is
+  nondeterministic. Motion belongs to narova's generated timeline (`reveal` /
+  `data-cue`).
+- **Element ids in scene bodies must be unique across ALL scenes** — the page
+  is assembled into one composition. `check` warns.
 - **Default to piper.** xtts is higher quality but much slower and downloads a
   ~1.9GB model once; only choose it when the user asks for maximum voice
   quality and accepts the wait.
@@ -86,5 +88,9 @@ directly.
 |------------------------------|----------------------------------------------------------|
 | `references/scene-script.md` | write or edit a `reel.config.mjs` (scenes, voices, cues) |
 | `references/cli.md`          | know every command, flag, `out/` artifact, and rough cost |
-| `references/gotchas.md`      | avoid the traps (tempo, --reuse, sync, previewing)       |
-| `references/environment.md`  | fix `doctor` failures: ffmpeg, Chrome, venv, PATH        |
+| `references/gotchas.md`      | avoid the traps (tempo, --reuse, sync, determinism)      |
+| `references/environment.md`  | fix `doctor` failures: ffmpeg, venv, npx hyperframes     |
+
+Related skills: the generated `out/hf/` is a standard HyperFrames composition —
+`hyperframes-core` documents its contract, `hyperframes-cli` its commands.
+narova owns the timeline in that project; treat it as read-only output.

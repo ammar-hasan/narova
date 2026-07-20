@@ -1,8 +1,8 @@
 # Writing the scene script (`reel.config.mjs`)
 
 A project is a directory with a `reel.config.mjs` (also accepted: `.js`, `.json`,
-`.cjs`) exporting one object. Full authority: `SPEC.md` and `README.md` in the
-narova repo; `examples/venture-factory/` is a complete, runnable 14-scene script.
+`.cjs`) exporting one object. Full authority: `SPEC.md` in the narova repo;
+`examples/venture-factory/` is a complete 14-scene script.
 
 ```js
 export default {
@@ -20,7 +20,6 @@ export default {
   scenes: [
     {
       id: "title",                                             // unique per scene
-      caption: "A codebase that improves itself — safely.",    // short line shown ON SCREEN
       vo: [                                                    // the dialogue that is SPOKEN
         { who: "b", text: "Okay. What if your codebase could just build itself?" },
         { who: "a", text: "That's the Venture Factory. Let me show you." },
@@ -29,38 +28,48 @@ export default {
         <h1 class="display reveal">The Venture Factory</h1>
         <p class="lede cue" data-cue="1">builds itself — safely.</p>
       </div>`,
-      dur: 12,                                                 // fallback seconds if audio absent (optional)
     },
   ],
 }
 ```
 
-## Rules the renderer enforces (violations fail `narova check`)
+## Rules the pipeline enforces (violations fail `narova check`)
 
 - `voices` needs at least one entry; every `vo[].who` must name a declared voice.
 - `scenes` non-empty; every scene needs a unique `id`, a `body` HTML string, and
   a non-empty `vo` where each turn has `who` and non-empty `text`.
 - `theme.css`, if set, must exist (relative to the config file).
+- Legacy fields `caption` and `dur` are accepted and **ignored** — do not write
+  them. Scene length always comes from the measured audio.
 
 ## Semantics that matter
 
-- **`caption` vs `vo`**: `caption` is the short on-screen line; `vo` is what is
-  actually spoken and what the karaoke captions render word-by-word. They are
-  different on purpose — never mirror the transcript into `caption`.
 - **Reveals**: `body` elements with `class="cue" data-cue="k"` pop in when the
   voice reaches turn index `k` (**0-based** into that scene's `vo`). Elements
   with `class="reveal"` (no cue) animate in on scene entry. A cue that doesn't
-  resolve to a turn reveals at scene entry — `narova check` warns about these.
+  resolve to a turn reveals at scene entry — `narova check` warns.
 - **Two hosts**: two voices trading lines — questions, banter, handoffs — read
   far better than one narrator. Give each a distinct `color`; the active
   caption word is tinted by speaker.
 - **Voices**: piper wants two distinct ONNX voices (e.g. `en_US-ryan-high` /
   `en_US-hfc_female-medium`); xtts wants two of its 58 studio speakers (e.g.
   `Damien Black` / `Sofia Hellen`). `narova voices list` enumerates them.
-- **Styling**: base theme (player chrome, captions, reveal mechanics) is
-  provided. Add scene-layout classes via `theme.css` and tune tokens via
-  `theme`. Keep bodies plain HTML — no scripts, no external resources; the
-  player must stay self-contained.
-- **`dur`** is only a fallback for the audio-less preview; once synthesized,
-  real audio duration drives everything. Omit it unless you care about the
-  silent preview's pacing.
+- **Styling**: the base theme (background, chrome, karaoke captions, scene
+  classes like `.s-title`, `.display`, `.lede`, `.pane`, `.owners`) is
+  provided. Add your own classes via `theme.css`, tune tokens via `theme`.
+  Keep bodies plain HTML — no scripts, no external resources.
+- **Determinism**: no `animation: … infinite`, no hover effects, no
+  transition-driven state in `theme.css` — HyperFrames renders by seeking
+  frames. Static styles are fine; motion belongs to `reveal`/`data-cue`.
+- **Ids**: element ids in bodies must be unique across ALL scenes (they are
+  assembled into one page). `check` warns on duplicates.
+
+## Drafting from a prompt (the agent's job)
+
+- 5–10 scenes for a 60–90 second video; one idea per scene.
+- Keep turns short: 1–2 sentences each. Alternate speakers; let one ask, the
+  other answer.
+- Put `data-cue` on the visual that illustrates each key turn, so the screen
+  reacts as the point is spoken.
+- Words on screen should be FEWER than words spoken — the karaoke captions
+  already show the transcript word-by-word.
