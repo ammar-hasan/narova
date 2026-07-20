@@ -8,7 +8,10 @@
   "type": "commonjs",
   "main": "src/pipeline.js",
   "scripts": {
-    "narova": "node bin/narova.js"
+    "narova": "node bin/narova.js",
+    "test": "node --test && npm run -s test:py",
+    "test:js": "node --test",
+    "test:py": "PYTHONPATH=py python3 -m unittest discover -s py/tests"
   },
   "files": [
     "bin/",
