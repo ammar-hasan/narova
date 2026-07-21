@@ -69,7 +69,10 @@ DATA.scenes.forEach(function (sc) {
   });
 });
 
-tl.fromTo('#progress-bar', { scaleX: 0 }, { scaleX: 1, duration: DATA.total, ease: 'none' }, 0);
+// progress bar is optional chrome (config.chrome.progress === false omits it)
+if (document.getElementById('progress-bar')) {
+  tl.fromTo('#progress-bar', { scaleX: 0 }, { scaleX: 1, duration: DATA.total, ease: 'none' }, 0);
+}
 tl.to({}, { duration: DATA.total }, 0); // anchor: timeline spans the full video
 window.__timelines['main'] = tl;`;
 }

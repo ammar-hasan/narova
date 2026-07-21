@@ -10,10 +10,22 @@ const DEFAULT_TOKENS = {
   bg: '#080d16', stage: '#0b1120', panel: '#111b2e', line: '#223350', ink: '#eaf1fb',
   muted: '#8595b4', faint: '#5d6d8c', accent: '#2ee6d6', 'accent-dim': '#178f86', pink: '#ff7eb6',
   gold: '#ffd27a', green: '#46d98a', red: '#ff6363', amber: '#ffb454',
+  // Chrome/support tokens — dark defaults; named so nothing below is hardcoded.
+  deep: '#070b13', halo: '#10203a', chip: '#0c1526', capidle: '#5f6f8e',
+  onaccent: '#04140f', track: 'rgba(255,255,255,.06)',
 };
 
-function rootBlock(theme = {}) {
-  const t = { ...DEFAULT_TOKENS, ...theme };
+/* theme.mode: "light" flips the field tokens in one switch — light-brand sites
+ * used to mean overriding #bg with !important and chasing contrast failures.
+ * Accent family stays the user's brand choice; these are the surface/ink tokens. */
+const LIGHT_TOKENS = {
+  bg: '#f7f9fd', stage: '#eef2f9', panel: '#ffffff', line: '#d9e2f0', ink: '#0f1c2e',
+  muted: '#49597a', faint: '#6d7f9c',
+  deep: '#dde5f2', halo: '#e7edf8', chip: '#edf1f8', capidle: '#93a1bb',
+  onaccent: '#ffffff', track: 'rgba(15,28,46,.08)',
+};
+
+function rootBlock(t) {
   const vars = Object.keys(t).map(k => `  --${k}:${t[k]};`).join('\n');
   return `:root{\n${vars}\n  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;\n  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;\n}`;
 }
@@ -41,7 +53,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
  * HyperFrames producer can drop the root element's own background (renders
  * black) even though preview shows it. */
 #bg{position:absolute;inset:0;z-index:0;pointer-events:none;background:
-   radial-gradient(120% 90% at 50% 0%, #10203a 0%, var(--stage) 45%, #070b13 100%)}
+   radial-gradient(120% 90% at 50% 0%, var(--halo) 0%, var(--stage) 45%, var(--deep) 100%)}
 #bg::before{content:"";position:absolute;inset:0;
    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
    background-size:44px 44px;opacity:.05}
@@ -60,7 +72,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .counter{color:var(--accent);opacity:.85}
 .canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
 .scenebody{width:100%;max-width:1000px;display:flex;flex-direction:column;align-items:stretch}
-.progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:rgba(255,255,255,.06);z-index:6}
+.progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--track);z-index:6}
 .progress > i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,var(--accent-dim),var(--accent));box-shadow:0 0 12px var(--accent)}
 
 /* reveals: static baselines only — motion is timeline tweens (runtime.js) */
@@ -76,7 +88,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .spk .eq i{width:3px;background:var(--accent);border-radius:1px}
 .spk .eq i:nth-child(1){height:6px}.spk .eq i:nth-child(2){height:11px}.spk .eq i:nth-child(3){height:8px}
 .caption2{font-size:clamp(17px,2.7vw,30px);font-weight:800;line-height:1.28;letter-spacing:-.01em;text-align:center;max-width:24em;text-wrap:balance}
-.cap-w{display:inline-block;margin:0 .13em;color:#5f6f8e;opacity:.6}
+.cap-w{display:inline-block;margin:0 .13em;color:var(--capidle);opacity:.6}
 .cap-w.past{color:var(--ink);opacity:.9}
 .cap-w.active{opacity:1;transform:translateY(-2px) scale(1.05)}
 
@@ -96,7 +108,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .s-two{display:grid;grid-template-columns:1fr 1fr;gap:clamp(14px,2.4vw,28px);align-items:stretch}
 .pane{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:clamp(16px,2.4vw,26px);display:flex;flex-direction:column;gap:12px}
 .pane.center{align-items:center;justify-content:center;text-align:center}
-.loop-chip{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);color:var(--ink);background:#0c1526;border:1px solid var(--line);border-radius:999px;padding:8px 14px;align-self:flex-start}
+.loop-chip{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);color:var(--ink);background:var(--chip);border:1px solid var(--line);border-radius:999px;padding:8px 14px;align-self:flex-start}
 .spin{display:inline-block;color:var(--accent)}
 .flags{list-style:none;display:flex;flex-direction:column;gap:9px;margin-top:2px}
 .flags li{font-size:clamp(14px,1.9vw,19px);color:var(--ink);padding-left:26px;position:relative}
@@ -115,7 +127,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .owner .owns{font-family:var(--mono);font-size:11px;letter-spacing:.2em;color:var(--faint);text-transform:uppercase}
 .owner .what{font-size:clamp(18px,2.5vw,29px);font-weight:800}
 .owner .gloss{font-size:clamp(11px,1.5vw,14px);color:var(--muted);text-wrap:balance}
-.owner.accent-owner{border-color:var(--accent-dim);box-shadow:inset 0 0 0 1px rgba(46,230,214,.12)}
+.owner.accent-owner{border-color:var(--accent-dim);box-shadow:inset 0 0 0 1px ${hexToRgba(t.accent, 0.12)}}
 .owner.accent-owner .what{color:var(--accent)}.lock{font-size:.7em}
 
 .homes{display:grid;grid-template-columns:1fr auto 1fr;gap:clamp(10px,2vw,20px);align-items:center}
@@ -135,7 +147,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .pnever{font-family:var(--mono);font-size:11px;letter-spacing:.08em;color:var(--red);opacity:.85;border-top:1px solid var(--line);padding-top:8px}
 
 .stepper{display:flex;align-items:center;justify-content:center;flex-wrap:wrap;gap:clamp(6px,1vw,11px);margin-bottom:clamp(16px,2.6vw,26px)}
-.step{font-family:var(--mono);font-size:clamp(12px,1.6vw,16px);background:#0c1526;border:1px solid var(--line);border-radius:8px;padding:8px 13px;color:var(--ink)}
+.step{font-family:var(--mono);font-size:clamp(12px,1.6vw,16px);background:var(--chip);border:1px solid var(--line);border-radius:8px;padding:8px 13px;color:var(--ink)}
 .sep{color:var(--accent);opacity:.7}.loopback{color:var(--accent);font-size:1.4em;margin-left:6px}
 .verdicts{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(10px,2vw,18px)}
 .verdict{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:clamp(14px,2.1vw,22px);border-left-width:4px}
@@ -148,20 +160,20 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .lane{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:clamp(12px,1.8vw,20px) clamp(8px,1.4vw,16px);text-align:center;min-width:0;flex:1;display:flex;flex-direction:column;gap:5px;justify-content:center}
 .lane .ln{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);font-weight:700;letter-spacing:.04em}
 .lane .lr{font-size:clamp(10px,1.25vw,12px);color:var(--muted)}
-.lane.accent-lane{border-color:var(--accent-dim);box-shadow:inset 0 0 0 1px rgba(46,230,214,.14)}
+.lane.accent-lane{border-color:var(--accent-dim);box-shadow:inset 0 0 0 1px ${hexToRgba(t.accent, 0.14)}}
 .lane.accent-lane .ln{color:var(--accent)}
 .conn{display:flex;flex-direction:column;align-items:center;justify-content:center;gap:4px;flex:0 0 auto;padding:0 2px}
-.conn .carr{color:var(--accent);font-size:clamp(12px,1.6vw,17px);text-shadow:0 0 10px rgba(46,230,214,.6)}
+.conn .carr{color:var(--accent);font-size:clamp(12px,1.6vw,17px);text-shadow:0 0 10px ${hexToRgba(t.accent, 0.6)}}
 .conn .clab{font-family:var(--mono);font-size:clamp(8px,1.05vw,11px);letter-spacing:.05em;color:var(--faint)}
 .flow-return{text-align:center;margin-top:clamp(16px,2.4vw,26px);font-family:var(--mono);font-size:clamp(12px,1.6vw,16px);color:var(--muted)}
 .flow-return .ret{color:var(--accent)}.flow-return .okc{color:var(--green)}
 
 /* referee */
-.referee{max-width:38em;margin:0 auto;background:var(--panel);border:1px solid var(--accent-dim);border-radius:16px;padding:clamp(20px,3vw,34px);text-align:center;box-shadow:0 0 60px rgba(46,230,214,.07),inset 0 0 0 1px rgba(46,230,214,.08)}
+.referee{max-width:38em;margin:0 auto;background:var(--panel);border:1px solid var(--accent-dim);border-radius:16px;padding:clamp(20px,3vw,34px);text-align:center;box-shadow:0 0 60px ${hexToRgba(t.accent, 0.07)},inset 0 0 0 1px ${hexToRgba(t.accent, 0.08)}}
 .seal{font-size:clamp(30px,5vw,50px);line-height:1}
 .rtitle{font-size:clamp(18px,2.5vw,25px);font-weight:700;margin:8px 0 16px}
 .rnotes{display:grid;grid-template-columns:1fr 1fr;gap:clamp(10px,2vw,18px)}
-.rnote{background:#0c1526;border:1px solid var(--line);border-radius:10px;padding:14px}
+.rnote{background:var(--chip);border:1px solid var(--line);border-radius:10px;padding:14px}
 .rnote b{display:block;color:var(--accent);font-size:clamp(12px,1.6vw,16px);margin-bottom:4px}
 .rnote span{font-size:clamp(11px,1.4vw,13px);color:var(--muted);text-wrap:balance}
 
@@ -170,7 +182,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .rec.faded{opacity:.5}
 
 .desk{max-width:32em;margin:0 auto;background:var(--panel);border:1px solid var(--line);border-radius:14px;overflow:hidden}
-.desk-tag{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--faint);background:#0c1526;padding:10px 16px;border-bottom:1px solid var(--line)}
+.desk-tag{font-family:var(--mono);font-size:11px;letter-spacing:.22em;color:var(--faint);background:var(--chip);padding:10px 16px;border-bottom:1px solid var(--line)}
 .ask{display:flex;justify-content:space-between;align-items:center;font-size:clamp(13px,1.9vw,18px);padding:13px 16px;border-bottom:1px solid var(--line)}
 .ask:last-child{border-bottom:0}
 .wait{font-family:var(--mono);font-size:11px;letter-spacing:.1em;color:var(--amber);border:1px solid rgba(255,180,84,.35);border-radius:999px;padding:3px 10px}
@@ -182,7 +194,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .layer .ly-nm{font-size:clamp(15px,2vw,21px);font-weight:800}
 .layer .ly-do{font-size:clamp(11px,1.5vw,14px);color:var(--muted)}
 .layer.base{border-color:#3a4a68}
-.layer.top{border-color:var(--accent-dim);box-shadow:0 0 40px rgba(46,230,214,.09),inset 0 0 0 1px rgba(46,230,214,.12)}
+.layer.top{border-color:var(--accent-dim);box-shadow:0 0 40px ${hexToRgba(t.accent, 0.09)},inset 0 0 0 1px ${hexToRgba(t.accent, 0.12)}}
 .layer.top .ly-nm{color:var(--accent)}.layer.top .ly-id{color:var(--accent);opacity:.85}
 
 /* dials */
@@ -191,7 +203,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .dlabel{font-family:var(--mono);font-size:clamp(10px,1.3vw,12px);letter-spacing:.08em;color:var(--muted);margin-bottom:13px}
 .dscale{display:flex;justify-content:space-between;gap:6px}
 .dscale span{flex:1;text-align:center;font-family:var(--mono);font-size:clamp(10px,1.35vw,13px);color:var(--faint);padding:8px 4px;border:1px solid var(--line);border-radius:6px}
-.dscale span.on{color:#04140f;background:var(--accent);border-color:var(--accent);font-weight:700}
+.dscale span.on{color:var(--onaccent);background:var(--accent);border-color:var(--accent);font-weight:700}
 .dcap{font-size:clamp(11px,1.5vw,13px);color:var(--muted);margin-top:11px;text-align:center}
 
 /* closing */
@@ -203,11 +215,14 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 }
 
 /* Full stylesheet for the composition. `extraCss` is the project theme.css,
- * appended last so it can add or override scene-layout classes. */
-function composeCss(theme, voices, size, extraCss = '') {
-  const t = { ...DEFAULT_TOKENS, ...theme };
-  const base = `${rootBlock(theme)}\n${staticCss(size.w, size.h, t)}\n${voiceBlock(voices)}`;
-  return extraCss ? `${base}\n${extraCss}` : base;
+ * appended last so it can add or override scene-layout classes. `mode` is the
+ * theme.mode directive: "light" starts from LIGHT_TOKENS so a light-brand site
+ * is one switch, not a fight against dark defaults. */
+function composeCss(theme, voices, size, extraCss = '', mode = 'dark') {
+  const base = mode === 'light' ? { ...DEFAULT_TOKENS, ...LIGHT_TOKENS } : DEFAULT_TOKENS;
+  const t = { ...base, ...theme };
+  const out = `${rootBlock(t)}\n${staticCss(size.w, size.h, t)}\n${voiceBlock(voices)}`;
+  return extraCss ? `${out}\n${extraCss}` : out;
 }
 
-module.exports = { composeCss, DEFAULT_TOKENS };
+module.exports = { composeCss, DEFAULT_TOKENS, LIGHT_TOKENS };

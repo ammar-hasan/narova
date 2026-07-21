@@ -1,7 +1,7 @@
 # Environment
 
 The CLI is bundled in this skill: `node <skill-dir>/tool/bin/narova.js`.
-There is nothing to install. Run `$NAROVA doctor` first — it checks
+There is nothing to install. Run `doctor` first — it checks
 everything below. Exit 0 = ready.
 
 ## What the machine needs

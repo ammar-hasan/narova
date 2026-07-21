@@ -1,7 +1,11 @@
 # CLI reference
 
-`narova` below means the bundled tool: `node <skill-dir>/tool/bin/narova.js`
-(the `$NAROVA` shorthand from SKILL.md).
+`narova` below means the bundled tool, spelled out in full because agent
+shells do not persist variables between calls:
+
+```bash
+node <skill-dir>/tool/bin/narova.js <command>
+```
 
 Commands read the project from the current folder, or from `--project <dir>`.
 `--config <file>` picks an exact config. Output goes to `<project>/out`, or
@@ -10,12 +14,12 @@ Commands read the project from the current folder, or from `--project <dir>`.
 | Command | Does | Cost |
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites. | instant |
-| `narova check` | validate config, lint cues / ids / theme CSS. No TTS, browser, or writes. Exit 1 if invalid. | instant |
+| `narova check` | validate config, lint cues / ids / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). No TTS, browser, or writes. Exit 1 if invalid. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. | piper: fast; xtts/qwen: slow + one-time 1–2GB model |
-| `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project) | under 1s |
+| `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project). Warns if a detached preview is still serving the old build. | under 1s |
 | `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4` | synth cost + render (~1–2x video length) |
 | `narova preview` | compose, print the Studio URL, then run it in the foreground | runs until Ctrl-C |
-| `narova preview --detach` | compose, keep Studio alive, print URL + PID + log | until `preview --stop` |
+| `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova voices list\|get` | list or download TTS voices | network on `get` |
 | `narova doctor` | check ffmpeg, python, venv, hyperframes. Exit 1 if something is missing. | first run downloads the HyperFrames CLI |
 
@@ -60,6 +64,12 @@ out/
 - Extra checks on the generated page, inside `out/hf`:
   `npx hyperframes lint`, `npx hyperframes check`,
   `npx hyperframes snapshot --at <t1,t2> -o <directory>` (pick word times
-  from timings.json). Snapshot output is `-o` / `--output`, never `--out`.
+  from timings.json). Snapshot `-o` / `--output` takes a **directory** — the
+  frames land inside it — never `--out`. Box-based overlap lint misses
+  oversized display type bleeding over neighbors; the snapshot pass is what
+  catches it.
+- Studio preview does not hot-reload. After any `compose`/`build`, re-run
+  `narova preview --detach` — it restarts the detached server on the new
+  build (same port) instead of failing or serving the old one.
 - Verify the result: mp4 length ≈ `out/audio/full.wav` length (±0.15s):
   `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <file>`

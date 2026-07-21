@@ -13,6 +13,18 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   `speed` option — it is broken (LEARNINGS #9).
 - **No looping CSS animation, hover, or transition state in theme.css.** The
   renderer jumps between frames; those break. `check` warns. Take it seriously.
+- **No invented facts.** A stat, superlative, or market claim in the `vo` that
+  is not in the project's `claims.md` (with a source) does not ship. `check`
+  sniffs for unledgered claims, but the ledger is the real gate
+  (`references/url-to-source.md` §3).
+- **Oversized display type escapes overlap lint.** Big `vw` fonts with
+  `line-height` < 1 paint outside their element box — a giant `RS.1000` can
+  bleed over the eyebrow above it while every box-based check passes. Give
+  display type `line-height >= 1` (or extra margin) and verify with a
+  snapshot frame, not just `npx hyperframes check`.
+- **Light-brand site → `theme.mode: "light"`.** Do not override `#bg` with
+  `!important` and then chase caption/progress/contrast failures — the one
+  switch flips the base palette and chrome tokens; your tokens override it.
 
 ## Running
 
@@ -46,5 +58,15 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   stop it with `narova preview --stop` when review is done. If the default
   browser hits a macOS Local Network permission prompt, open the printed URL
   in Chrome/Chromium manually; the server itself is still usable.
-- **Snapshot uses `-o` / `--output`, not `--out`.** Example:
-  `npx hyperframes snapshot --at 3,9 -o snapshots/review`.
+- **Studio does not hot-reload.** `compose` deletes and recreates `out/hf`,
+  so a preview left running shows the OLD build — or an empty
+  `00:00 / 00:00` canvas that a browser refresh cannot fix. Re-run
+  `narova preview --detach`: it restarts the server on the new build (same
+  port). `compose`/`build` warn when a stale preview is still running.
+- **Snapshots verify; Studio watches.** The reliable visual-QA loop is
+  `npx hyperframes snapshot --at <t1,t2,…> -o snapshots/review` inside
+  `out/hf` plus actually viewing the frames. `-o` takes a **directory**
+  (frames land inside it), not a file path.
+- **Agent shells don't persist variables.** Spell out
+  `node <skill-dir>/tool/bin/narova.js` in every call — a `NAROVA=...`
+  assignment from an earlier call is gone (exit 127).

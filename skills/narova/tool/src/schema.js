@@ -26,12 +26,34 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   // theme.css is a FILE reference (scene-layout classes), not a token — pull it out
   // of the token block (else it leaks as `--css:...`) and load its contents.
-  const { css: cssRef, ...themeTokens } = raw.theme || {};
+  // `mode` is also a directive, not a color token: "light" flips the built-in
+  // palette defaults (compose/css.js); user tokens still override them.
+  const { css: cssRef, mode, ...themeTokens } = raw.theme || {};
   let themeCss = '';
   if (cssRef) {
     const cssPath = path.resolve(baseDir, cssRef);
     if (!fs.existsSync(cssPath)) errs.push(`config.theme.css: file not found: ${cssPath}`);
     else themeCss = fs.readFileSync(cssPath, 'utf8');
+  }
+  const themeMode = mode ?? 'dark';
+  if (themeMode !== 'dark' && themeMode !== 'light') {
+    errs.push(`config.theme.mode: expected "dark" or "light", got ${JSON.stringify(mode)}`);
+  }
+
+  // Chrome (topbar/counter/progress bar) is generated page furniture — on by
+  // default, `chrome: false` removes all of it, an object tunes the pieces.
+  let chrome = { topbar: true, counter: true, progress: true };
+  if (raw.chrome === false) chrome = { topbar: false, counter: false, progress: false };
+  else if (raw.chrome != null) {
+    if (typeof raw.chrome !== 'object' || Array.isArray(raw.chrome)) {
+      errs.push('config.chrome: expected false or an object like { topbar: true, counter: true, progress: true }');
+    } else {
+      for (const [k, v] of Object.entries(raw.chrome)) {
+        if (!(k in chrome)) errs.push(`config.chrome.${k}: unknown key (topbar|counter|progress)`);
+        else if (typeof v !== 'boolean') errs.push(`config.chrome.${k}: must be a boolean`);
+        else chrome[k] = v;
+      }
+    }
   }
 
   // Project media is source, not build output. By convention an assets/
@@ -107,7 +129,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  return { title, size, voices, theme: themeTokens, themeCss, timing, scenes, assetsDir };
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir) };
 }
 
 /* The narration.json contract for the Python TTS stage. */

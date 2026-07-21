@@ -93,6 +93,28 @@ Keep the fixes in the code so they never come back.
     internal buffer). A venv deep in a temp folder fails with
     `Error processing file '.../phontab'`; the same install at a short path
     works. The default `~/.narova/venv` is short on purpose.
+23. **A detached Studio preview serves stale output after `compose`.** Studio
+    holds `out/hf` open; compose deletes and recreates that directory, so the
+    preview shows the old build or an empty `00:00 / 00:00` canvas — and a
+    browser refresh does NOT recover it. Fix: `preview --detach` restarts a
+    running server on the new build (port remembered in `preview.port`), and
+    `compose`/`build` warn when a preview is live. Snapshots are the
+    verification tool; Studio is for watching.
+24. **Light themes need tokenized chrome, not `#bg` overrides.** The base
+    stylesheet hardcoded dark values (`#0c1526` chips, `#5f6f8e` caption idle
+    words, teal `rgba(46,230,214,…)` glows) outside the theme tokens, so a
+    light-brand site meant `!important` on `#bg` plus a cascade of contrast
+    failures. Fix: every surface value is a token (`deep, halo, chip,
+    capidle, onaccent, track`) and `theme.mode: "light"` swaps the set.
+25. **Box-based overlap lint misses oversized display type.** A big `vw`
+    font with `line-height` < 1 paints outside its element box; lint compares
+    boxes, not glyphs, so a giant stat can overlap the eyebrow above it and
+    pass. Verify display type with snapshot frames; keep `line-height >= 1`.
+26. **Grounding needs a gate, not prose.** "Match the source" guidance alone
+    did not stop fabricated stats (an invented hook number, an inflated
+    "leading"/"2,000+"). Fix: a `claims.md` ledger (verbatim / paraphrase /
+    inference + source) is required before synth, and `check` sniffs `vo`
+    for stats/superlatives with no ledger present.
 
 ## The scene model that worked
 

@@ -17,6 +17,11 @@ function escapeHtml(s) {
 function composeDoc(config, size, data, css) {
   const title = escapeHtml(config.title || 'narova');
   const nn = String(data.scenes.length).padStart(2, '0');
+  // Page furniture is optional: chrome:false strips it entirely so the video
+  // doesn't carry the same wordmark/counter/progress look as every other reel.
+  const chrome = config.chrome === false
+    ? { topbar: false, counter: false, progress: false }
+    : { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
 
   const sceneClips = config.scenes.map((s, i) => {
     const sc = data.scenes[i];
@@ -24,9 +29,13 @@ function composeDoc(config, size, data, css) {
     // as difficult to edit in Studio; scenes never overlap, so banding them is
     // deterministic without changing playback.
     const track = Math.floor(i / 3) + 1;
+    const bar = chrome.topbar
+      ? `<div class="topbar"><div class="wordmark"><b>${title}</b></div>${
+        chrome.counter ? `<div class="counter">${String(i + 1).padStart(2, '0')} / ${nn}</div>` : ''}</div>`
+      : '';
     return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
     <div class="chrome">
-      <div class="topbar"><div class="wordmark"><b>${title}</b></div><div class="counter">${String(i + 1).padStart(2, '0')} / ${nn}</div></div>
+      ${bar}
       <div class="canvas"><div class="scenebody">${s.body}</div></div>
     </div>
   </section>`;
@@ -55,7 +64,7 @@ ${css}
 ${sceneClips}
   <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(data.total)}" data-track-index="1000">
     <div class="capzone"><div id="cap-stage" style="position:relative;height:100%"></div></div>
-    <div class="progress"><i id="progress-bar"></i></div>
+    ${chrome.progress ? '<div class="progress"><i id="progress-bar"></i></div>' : ''}
   </section>
   <audio id="vo" src="assets/narration.wav" data-start="0" data-track-index="1001"></audio>
 </div>

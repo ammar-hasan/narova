@@ -109,3 +109,25 @@ test('missing, misplaced, and escaping project assets warn', () => {
   assert.ok(lines.some(l => l.includes('escapes project assets/')), lines.join('\n'));
   assert.ok(!lines.some(l => l.includes('asset not found: assets/ok.svg')), lines.join('\n'));
 });
+
+test('stats and superlatives in the vo warn without a claims.md ledger', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Over 2,000+ products, delivered everywhere.' },
+    { who: 'a', text: 'It is the leading platform in the region.' },
+    { who: 'a', text: 'Just a plain sentence with nothing to check.' },
+  ] }];
+  const lines = run({ ...base(scenes), projectDir: dir });
+  assert.ok(lines.some(l => l.includes('no claims.md ledger')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('2,000+ products')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('leading platform')), lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('plain sentence')), lines.join('\n'));
+});
+
+test('a claims.md ledger in the project dir silences the grounding warning', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# claims\n- "2,000+ products" — verbatim, https://example.com\n');
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Over 2,000+ products.' }] }];
+  const lines = run({ ...base(scenes), projectDir: dir });
+  assert.ok(!lines.some(l => l.includes('claims.md')), lines.join('\n'));
+});

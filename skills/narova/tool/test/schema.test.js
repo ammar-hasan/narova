@@ -92,6 +92,36 @@ test('legacy caption/dur fields are accepted', () => {
   assert.doesNotThrow(() => resolveConfig(raw, {}, '.'));
 });
 
+test('theme.mode defaults to dark, accepts light, rejects junk', () => {
+  assert.equal(resolveConfig(validRaw(), {}, '.').mode, 'dark');
+  assert.equal(resolveConfig({ ...validRaw(), theme: { mode: 'light' } }, {}, '.').mode, 'light');
+  assert.throws(
+    () => resolveConfig({ ...validRaw(), theme: { mode: 'solarized' } }, {}, '.'),
+    /theme\.mode: expected "dark" or "light"/,
+  );
+});
+
+test('theme.mode is a directive, not a color token', () => {
+  const c = resolveConfig({ ...validRaw(), theme: { mode: 'light', accent: '#123456' } }, {}, '.');
+  assert.deepEqual(c.theme, { accent: '#123456' });
+});
+
+test('chrome defaults on, false strips all, object tunes per piece', () => {
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').chrome, { topbar: true, counter: true, progress: true });
+  assert.deepEqual(resolveConfig({ ...validRaw(), chrome: false }, {}, '.').chrome,
+    { topbar: false, counter: false, progress: false });
+  assert.deepEqual(resolveConfig({ ...validRaw(), chrome: { counter: false } }, {}, '.').chrome,
+    { topbar: true, counter: false, progress: true });
+  assert.throws(() => resolveConfig({ ...validRaw(), chrome: { sparkle: true } }, {}, '.'),
+    /chrome\.sparkle: unknown key/);
+  assert.throws(() => resolveConfig({ ...validRaw(), chrome: { topbar: 'yes' } }, {}, '.'),
+    /chrome\.topbar: must be a boolean/);
+});
+
+test('resolveConfig returns the project dir for downstream checks', () => {
+  assert.equal(resolveConfig(validRaw(), {}, '.').projectDir, path.resolve('.'));
+});
+
 test('narration produces the Python contract', () => {
   const c = resolveConfig(validRaw(), {}, '.');
   const n = narration(c);

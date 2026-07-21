@@ -75,3 +75,26 @@ test('the title is HTML-escaped', () => {
 test('scene bodies are embedded verbatim', () => {
   assert.ok(doc().includes('<p class="cue" data-cue="0">x</p>'));
 });
+
+test('chrome is on by default: topbar, counter, progress bar', () => {
+  const h = doc();
+  assert.match(h, /class="topbar"/);
+  assert.match(h, /class="counter"/);
+  assert.match(h, /<div class="progress"><i id="progress-bar"><\/i><\/div>/);
+});
+
+test('chrome:false strips topbar, counter, and progress bar', () => {
+  const h = composeDoc({ ...config, chrome: false }, size, composeData(config, timings), '');
+  assert.ok(!/class="topbar"/.test(h));
+  assert.ok(!/class="counter"/.test(h));
+  assert.ok(!/id="progress-bar"/.test(h));
+});
+
+test('chrome.counter:false keeps a wordmark-only topbar', () => {
+  const schema = { topbar: true, counter: false, progress: true };
+  const h = composeDoc({ ...config, chrome: schema }, size, composeData(config, timings), '');
+  assert.match(h, /class="topbar"/);
+  assert.match(h, /class="wordmark"/);
+  assert.ok(!/class="counter"/.test(h));
+  assert.match(h, /id="progress-bar"/);
+});

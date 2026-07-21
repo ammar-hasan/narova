@@ -26,25 +26,27 @@ when turn `k` starts.
 
 ## The tool is bundled — nothing to install
 
-The full CLI ships inside this skill at `tool/`:
+The full CLI ships inside this skill at `tool/`. Agent shells do NOT persist
+environment variables between calls, so spell the command out every time
+(a `NAROVA=...` assignment will be gone by the next call):
 
 ```bash
-NAROVA="node <this-skill-dir>/tool/bin/narova.js"   # define once; used as $NAROVA below
+node <this-skill-dir>/tool/bin/narova.js <command>
 ```
 
 No install step. No PATH lookup. The first `synth` or `build` creates the
 Python venv at `~/.narova/venv` by itself (one time). Machine needs: Node 18+,
-ffmpeg, Python 3.10+. `$NAROVA doctor` checks all of them. For the
+ffmpeg, Python 3.10+. `... doctor` checks all of them. For the
 higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 (or `--qwen`) once.
 
 ## Workflow: prompt → video
 
-1. `$NAROVA doctor` — check the machine **before** writing a script.
+1. `doctor` — check the machine **before** writing a script.
    Fix problems with `references/environment.md`.
 2. **Create the project, then write the scene script.** In a repository, put
    generated projects under `generated/<descriptive-slug>/`, never loose at
-   the repo root: `$NAROVA init generated/<slug>`. Keep editable source
+   the repo root: `init generated/<slug>`. Keep editable source
    (`reel.config.mjs`, `theme.css`, `assets/`) and ignore `out/`.
    If the prompt names a URL, first read and follow
    `references/url-to-source.md`; classify the page before deciding whether
@@ -55,18 +57,31 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
    hosts by default (one male, one female voice), short turns, 5–10 scenes,
    `data-cue` on the key visual of most turns. Build the theme from the
    classified source evidence or the prompt's mood/colors: keep whatever the
-   user gave, fill in the rest yourself, never ask for CSS.
-   `$NAROVA init <dir>` gives a start.
-3. `$NAROVA check` — fast validation. No TTS, no browser, no writes.
+   user gave, fill in the rest yourself, never ask for CSS. A light-brand
+   site means `theme.mode: "light"` — never fight the dark base with
+   `!important` overrides.
+   `init <dir>` gives a start.
+3. **Ground every claim.** Before synth, write `claims.md` in the project:
+   every stat, number, superlative, or factual assertion in the `vo`, tagged
+   verbatim / paraphrase / inference against a source
+   (`references/url-to-source.md` §Claims ledger). `check` sniffs for
+   unledgered claims — an invented stat is a trust problem, not a polish one.
+4. `check` — fast validation. No TTS, no browser, no writes.
    Exit 0 = valid. Run it after **every** config edit.
-4. `$NAROVA synth` — makes the audio and word timings (piper by default).
-5. `$NAROVA compose` — generates `out/hf/`. Run `npx hyperframes check`
-   inside `out/hf`; use `snapshot --at <t> -o <dir>` for visual checks.
-6. `$NAROVA preview --detach` — keeps HyperFrames Studio alive and prints its
-   exact URL, PID, and log path. Open the printed URL; use
-   `$NAROVA preview --stop` afterward. **Show the user before rendering.**
-7. `$NAROVA build --reuse` — renders `out/video.mp4`, reusing the audio from
-   step 4. Verify: `ffprobe` length of the mp4 ≈ length of `out/audio/full.wav`.
+5. `synth` — makes the audio and word timings (piper by default).
+6. `compose` — generates `out/hf/`. Run `npx hyperframes check`
+   inside `out/hf`, then do the **visual QA pass**: snapshot one frame per
+   scene (times from `out/timings.json`) and actually look at them —
+   `npx hyperframes snapshot --at <t1,t2,…> -o snapshots/review`
+   (`-o` is a **directory**). Overlap lint misses oversized display type
+   bleeding over neighbors; your eyes on real frames are the check.
+7. `preview --detach` — keeps HyperFrames Studio alive and prints its
+   exact URL, PID, and log path. Studio does NOT hot-reload: re-running
+   `preview --detach` restarts it on the new build (compose/build warn if a
+   stale one is running). Snapshots verify; Studio is for watching.
+   **Show the user before rendering.**
+8. `build --reuse` — renders `out/video.mp4`, reusing the audio from
+   step 5. Verify: `ffprobe` length of the mp4 ≈ length of `out/audio/full.wav`.
 
 ## Hard rules
 
@@ -90,6 +105,12 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 - **Two hosts read better than one.** Default cast: one male + one female
   voice, trading questions and answers. One narrator only when the format
   calls for it (a short announcement); more than two only for a real panel.
+- **No invented facts.** Every number, superlative, or market claim in the
+  `vo` must exist in the project's `claims.md` with a source. If you cannot
+  trace it, cut it or say it as opinion.
+- **Light-brand sites get `theme.mode: "light"`.** Do not override `#bg`
+  with `!important` and chase contrast failures — one switch flips the
+  background, captions, and chrome tokens.
 
 ## Revisions: no surprises
 

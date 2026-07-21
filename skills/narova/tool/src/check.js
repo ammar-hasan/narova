@@ -9,6 +9,26 @@ const path = require('path');
 const RESERVED_IDS = new Set(['root', 'bg', 'overlay', 'cap-stage', 'progress-bar', 'vo']);
 const RESERVED_PREFIXES = ['scene-', 'capg-', 'capw-'];
 
+/* Factual-claim sniffing for the grounding rule (references/url-to-source.md
+ * §Claims ledger): a stat or superlative in the voiceover must be traceable to
+ * the source. Heuristic — warnings only, never errors. */
+const CLAIM_PATTERNS = [
+  /\d[\d,.]*\s*(?:%|percent\b|x\b|\+|k\b|million\b|billion\b|users?\b|products?\b|customers?\b|downloads?\b|countries\b)/i,
+  /\b(?:leading|best[- ]in[- ]class|industry[- ]first|world'?s first|largest|most popular|#1|number one|top-rated|half of)\b/i,
+];
+
+function findClaims(config) {
+  const hits = [];
+  for (const s of config.scenes) {
+    s.vo.forEach((t, j) => {
+      if (CLAIM_PATTERNS.some(re => re.test(t.text))) {
+        hits.push(`scene "${s.id}" turn ${j}: "${t.text.length > 90 ? t.text.slice(0, 87) + '…' : t.text}"`);
+      }
+    });
+  }
+  return hits;
+}
+
 /* All opening tags in a body, with HTML comments stripped first — attributes
  * are only linted inside tags, never in visible prose. */
 function tags(body) {
@@ -110,6 +130,21 @@ function check(config) {
   }
   for (const ref of cssUrls(config.themeCss || '')) {
     inspectAssetRef(ref, config, 'theme.css', warnings);
+  }
+
+  // Grounding: stats and superlatives in the vo need a claims ledger tracing
+  // each one to the source (references/url-to-source.md §Claims ledger).
+  const claims = findClaims(config);
+  if (claims.length) {
+    const dir = config.projectDir || '.';
+    const hasLedger = ['claims.md', 'CLAIMS.md'].some(f => fs.existsSync(path.join(dir, f)));
+    if (!hasLedger) {
+      warnings.push(
+        `vo contains ${claims.length} factual claim${claims.length === 1 ? '' : 's'} but the project has no claims.md ledger — ` +
+        'tag each verbatim/paraphrase/inference against the source before synth (references/url-to-source.md):',
+        ...claims.slice(0, 5).map(c => `  ${c}`),
+      );
+    }
   }
 
   for (const w of warnings) console.log(`warn: ${w}`);

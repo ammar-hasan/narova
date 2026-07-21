@@ -54,7 +54,22 @@ function startHfPreview(cwd, { port = 3002, logFile, pidFile } = {}) {
   fs.closeSync(fd);
   child.unref();
   fs.writeFileSync(pid, `${child.pid}\n`);
+  // The port travels with the pid so a later `preview --detach` restart reuses
+  // it without the caller passing --port again.
+  fs.writeFileSync(portFileFor(pid), `${port}\n`);
   return { pid: child.pid, pidFile: pid, logFile: log, url: previewUrl(cwd, port) };
+}
+
+function portFileFor(pidFile) {
+  return pidFile.replace(/\.pid$/, '') + '.port';
+}
+
+/* The port a detached preview was started with, or null if unknown. */
+function previewPort(pidFile) {
+  const f = portFileFor(pidFile);
+  if (!fs.existsSync(f)) return null;
+  const port = Number(fs.readFileSync(f, 'utf8').trim());
+  return Number.isInteger(port) && port > 0 ? port : null;
 }
 
 function stopHfPreview(pidFile) {
@@ -67,7 +82,8 @@ function stopHfPreview(pidFile) {
     if (e.code !== 'ESRCH') throw e;
   }
   fs.rmSync(pidFile, { force: true });
+  fs.rmSync(portFileFor(pidFile), { force: true });
   return true;
 }
 
-module.exports = { HYPERFRAMES_VERSION, runHf, previewUrl, startHfPreview, stopHfPreview };
+module.exports = { HYPERFRAMES_VERSION, runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort };

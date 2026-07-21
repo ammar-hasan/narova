@@ -40,8 +40,9 @@ function runScript({ sceneEls = {} } = {}) {
   };
   const gsap = { timeline: opts => { assert.equal(opts.paused, true, 'timeline must be paused'); return tl; } };
   const capStage = makeNode('div');
+  const progressBar = makeNode('i');
   const document = {
-    getElementById: id => (id === 'cap-stage' ? capStage : sceneEls[id] || null),
+    getElementById: id => (id === 'cap-stage' ? capStage : id === 'progress-bar' ? progressBar : sceneEls[id] || null),
     createElement: makeNode,
     createTextNode: t => ({ text: t }),
   };
@@ -125,6 +126,25 @@ test('full-span anchor + progress bar span the total duration', () => {
   const bar = calls.find(c => c.op === 'fromTo' && c.target === '#progress-bar');
   assert.equal(bar.to.duration, DATA.total);
   assert.equal(bar.to.ease, 'none');
+});
+
+test('chrome.progress === false: no progress tween when the bar is absent', () => {
+  const calls = [];
+  const tl = {
+    set: (target, vars, at) => { calls.push({ op: 'set', target, vars, at }); return tl; },
+    to: (target, vars, at) => { calls.push({ op: 'to', target, vars, at }); return tl; },
+    fromTo: (target, from, to, at) => { calls.push({ op: 'fromTo', target, from, to, at }); return tl; },
+  };
+  const gsap = { timeline: () => tl };
+  const capStage = makeNode('div');
+  const document = {
+    getElementById: id => (id === 'cap-stage' ? capStage : null), // no progress-bar in the DOM
+    createElement: makeNode,
+    createTextNode: t => ({ text: t }),
+  };
+  new Function('window', 'document', 'gsap', 'DATA', runtimeScript())({}, document, gsap, DATA);
+  assert.ok(!calls.some(c => c.target === '#progress-bar'), 'no tween may target a missing progress bar');
+  assert.ok(calls.some(c => c.op === 'to' && c.vars.duration === DATA.total), 'full-span anchor still present');
 });
 
 test('determinism: script contains no clocks, randomness, or infinite repeats', () => {

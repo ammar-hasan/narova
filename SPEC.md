@@ -84,7 +84,8 @@ export default {
     a: { backend: "piper", speaker: "en_US-ryan-high", color: "#2ee6d6", label: "host · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
-  theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional
+  theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional; mode: "light" flips the base palette
+  chrome: { topbar: true, counter: true, progress: true },        // optional; false strips all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   scenes: [
     { id: "title",
@@ -108,6 +109,13 @@ Rules:
   Inline SVG and data URIs are supported; remote render-time dependencies are
   rejected by the authoring workflow and warned by `narova check`.
 - No `animation: ... infinite` in theme.css.
+- `theme.mode` is `"dark"` (default) or `"light"` — a directive, not a color
+  token; `"light"` swaps the built-in surface/ink/chrome-token defaults,
+  which explicit tokens still override.
+- `chrome` is `false` or an object with boolean `topbar` / `counter` /
+  `progress` keys (all default true).
+- Stats and superlatives in `vo` belong in the project's `claims.md` with a
+  source; `check` warns when claim-looking lines have no ledger.
 - Old fields `caption` and `dur` are accepted and ignored.
 
 `narova check` catches all of this.

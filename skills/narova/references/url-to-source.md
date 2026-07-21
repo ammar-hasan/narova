@@ -77,7 +77,33 @@ Cross-check important wording or numbers in two source locations when
 possible. Do not promote an abstract's framing into a stronger conclusion.
 Keep quotations short; explain primarily in original wording.
 
-## 3. Freeze useful assets locally
+## 3. The claims ledger — before any scripting
+
+Every factual assertion the video will make must be traceable to the source.
+Before `synth`, write `claims.md` in the project directory listing each
+claim in the `vo` — every number, superlative, date, comparison, and market
+statement — tagged as one of:
+
+- **verbatim** — exact words from the source. Quote + URL (or saved file).
+- **paraphrase** — faithfully restated, qualifiers intact. Source URL.
+- **inference** — your own conclusion. Either cut it, or phrase it on screen
+  and in the voice as opinion ("we'd bet…"), never as fact.
+
+Rules:
+
+- If a claim is not in the ledger, it does not go in the script. No
+  exceptions for "obvious" marketing lines — "leading", "2,000+ products",
+  "half of Pakistan's kitchens" are exactly the claims that get invented.
+- Numbers keep their qualifiers and scope. "over 2,000 products listed" does
+  not become "2,000+ products sold"; a city-level stat does not become a
+  country-level one.
+- Watch the extractor's summary too: WebFetch-style summaries can themselves
+  inflate ("leading", rounded-up counts). The ledger tags claims against the
+  rendered page / raw HTML, not against a summary.
+- `narova check` sniffs `vo` for stats and superlatives and warns when no
+  `claims.md` exists. Heuristic only — the ledger is the real gate.
+
+## 4. Freeze useful assets locally
 
 Create the project under `generated/<slug>/` when working in a repository.
 Download selected source assets into its source-owned `assets/` directory:
@@ -114,7 +140,7 @@ For a local brand font, add `@font-face` and use a generic fallback only:
 Named fallbacks such as Georgia, Times New Roman, or Roboto can make
 HyperFrames fetch and bundle extra families.
 
-## 4. Translate evidence into a video
+## 5. Translate evidence into a video
 
 - **Brand-led:** match verified palette, typography, shape language, image
   treatment, and spacing. Use real brand assets where they add meaning. The
@@ -128,6 +154,8 @@ HyperFrames fetch and bundle extra families.
 Before synth, verify:
 
 - Source type was classified and the corresponding evidence drove the work.
+- `claims.md` exists and every number, superlative, and factual assertion in
+  the `vo` is in it, tagged verbatim / paraphrase / inference with a source.
 - Names, titles, claims, metrics, authors, and dates match the source.
 - Inference is labeled and limitations have not disappeared.
 - Useful source-native visuals appear; irrelevant publisher chrome does not.

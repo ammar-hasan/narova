@@ -21,7 +21,10 @@ colors, fonts, or imagery, follow `references/url-to-source.md`. Classify it
 first: product/brand site, article, paper, documentation, repository, or
 general page. Do not art-direct or script from a search snippet, WebFetch
 summary, metadata-only synopsis, or memory. Preserve exact names, titles,
-claims, and taglines; never silently “improve” them.
+claims, and taglines; never silently “improve” them. Every stat, superlative,
+or factual assertion you put in the `vo` goes into the project's `claims.md`
+(verbatim / paraphrase / inference + source) before synth — if you cannot
+trace it, cut it.
 
 ### When to ask
 
@@ -64,12 +67,30 @@ result → the problem it attacks → the key idea in plain words → one worked
 example → why it matters. Translate jargon; the moment a term appears, the
 next turn explains it. A questioner/explainer duet shines here.
 
-**Two-host dialogue** (any length) — the default narova shape. Cast
+**Two-host dialogue** (any length) — one narova shape, not THE shape. Cast
 asymmetric roles: one host is the curious questioner (proxies the audience),
 the other the explainer (depth, wit). Questions are scene transitions
 ("So how does it actually work?") — they reset attention. Reactions and
 light banter ("Wait, really?") are the glue, not the payload. Target: two
 friends talking over coffee — not news anchors, not a lecture.
+
+**Single-narrator promo** (30–90s) — the right default for a brand/product
+URL. One confident voice, no duet: hook → what it is → three proof beats →
+CTA. The duet's "what if / let me show you" formula on a brand site reads as
+an ad template; a direct narrator lets the brand's own voice lead.
+
+**Demo walkthrough** (30–120s) — show, then tell. Narration describes what
+the screen is doing while `data-cue` reveals perform it: "Pick a category…
+tap to order… it shows up at your door." Best for products whose UI or
+flow is the proof. Second person, present tense, one action per turn.
+
+**Myth vs fact / contrast** (30–60s) — the questioner states the comfortable
+assumption ("Groceries online means compromise on freshness"), the explainer
+breaks it with evidence. The duet earns its keep here because the tension IS
+the structure. Verdict/contrast layouts (`.verdicts`, `.homes`) carry it.
+
+Pick the shape deliberately per brief. Three videos in a row should not
+share a script formula any more than they share a palette.
 
 ## Script craft: the numbers
 
@@ -117,6 +138,12 @@ prompt gets its own visual language — you are the director, so direct:
   stack or wordmark in `theme.css`, a recurring chip motif, a numbered-act
   convention, a repeated visual rhyme between hook and close. Small,
   deliberate, and it must not loop (`animation: infinite` breaks rendering).
+- **Chrome is optional, and it's part of the look.** The topbar wordmark,
+  NN / NN counter, and progress bar are byte-identical across every narova
+  video — three videos in, they rhyme. Restyle them in `theme.css`, or cut
+  what the video doesn't need: `chrome: false` strips them,
+  `chrome: { counter: false }` keeps a wordmark-only topbar. A brand promo
+  with the brand's own header treatment beats the default topbar.
 - **Self-check before synth:** if this config could become someone else's
   video by swapping only the words, art-direct harder.
 - **Media check before synth:** if the source has useful logos, product
@@ -126,11 +153,11 @@ prompt gets its own visual language — you are the director, so direct:
 
 ## Casting the voices
 
-Default is two hosts, one male + one female (piper `en_US-ryan-high` +
-`en_US-hfc_female-medium`). One voice is right for a single-narrator
-announcement or a very short reel; more than two only when the format needs
-it (a panel). Match the questioner/explainer roles to the voices and keep
-the casting fixed for the whole video — and across revisions.
+The cast follows the shape (§Video shapes): a promo gets one narrator, a
+duet-driven shape gets two hosts, one male + one female (piper
+`en_US-ryan-high` + `en_US-hfc_female-medium`). More than two only when the
+format needs it (a panel). Match the questioner/explainer roles to the
+voices and keep the casting fixed for the whole video — and across revisions.
 
 ## Iterating: no surprises
 
@@ -157,8 +184,12 @@ stays identical, and narova's machinery backs you up:
 
 ## Working with the user
 
-- **Preview before render, always.** Composing is cheap; rendering is the
-  commitment. Show the preview, say what you made and why in two sentences,
+- **Snapshot to verify, preview to watch, render to ship.** Composing is
+  cheap; rendering is the commitment. After `compose`, snapshot one frame
+  per scene and look at them — that is the verification step (layout,
+  overlap, contrast). Studio preview is the live look for the user, and it
+  does not hot-reload: re-run `preview --detach` to restart it on the new
+  build. Show the preview, say what you made and why in two sentences,
   and offer the 2–3 most likely next moves ("shorter? punchier hook?
   different closer?") instead of an open "so what do you think?".
 - Guide wholeheartedly, then get out of the way. Suggest once, don't push.

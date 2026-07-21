@@ -14,9 +14,11 @@ export default {
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
   theme: {
+    mode: "light",                         // "dark" (default) | "light" — flips the base palette
     accent: "#2ee6d6", bg: "#080d16",   // color tokens (optional)
     css: "theme.css",                    // extra CSS file (optional, path relative to config)
   },
+  chrome: { topbar: true, counter: true, progress: true },  // or false to strip all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   scenes: [
     {
@@ -54,7 +56,7 @@ export default {
   word takes that color.
 - **Voices**: piper uses ONNX voice names (`en_US-ryan-high`). xtts has 58
   named speakers (`Damien Black`). qwen has 9 (`Ryan`, `Serena`).
-  List them: `$NAROVA voices list --backend <name>`.
+  List them: `narova voices list --backend <name>`.
 - **Styling**: the base look ships built in (background, top bar, captions,
   progress bar) plus a menu of scene-layout classes (below). Add your own
   classes in `theme.css`. Bodies are plain HTML with no scripts. Inline SVG,
@@ -111,6 +113,11 @@ Don't center a title on every scene — that is the template look. Mix these
   `.referee` (seal + `.rnotes`), `.desk` (`.ask` rows + `.wait` pills).
 
 All sizes scale with `vw`, so the same classes work in 16:9, 1:1, and 9:16.
+- **Oversized type overflows its box.** Big `vw` display fonts with
+  `line-height` < 1 paint outside their element box, so box-based overlap
+  lint does NOT catch them bleeding over eyebrows or captions. Give giant
+  type `line-height >= 1` or extra margin, and always eyeball it in a
+  snapshot before rendering (see `references/gotchas.md`).
 - **Determinism**: no `animation: ... infinite`, no hover effects, no
   transitions-as-state in `theme.css`. The renderer jumps between frames.
   Static styles are fine. Motion comes from `reveal` and `data-cue`.
@@ -127,14 +134,36 @@ The user never writes CSS. You build the look from what they say. In order:
 2. **Otherwise keep what the user gave.** A hex code, a brand name, "dark", "warm",
    "playful" — whatever appears in the prompt stays. Never ask for CSS.
 3. **Fill in the rest.** Tokens: `bg, stage, panel, line, ink, muted, faint,
-   accent, accent-dim, pink, gold, green, red, amber`. Typical mapping:
-   main/brand color → `accent`; mood → `bg` and `stage` (dark by default);
-   extra brand colors → the `pink` / `gold` slots.
-4. **Use `theme.css` only when tokens are not enough** (gradients, custom
+   accent, accent-dim, pink, gold, green, red, amber`, plus the
+   chrome/support tokens `deep, halo, chip, capidle, onaccent, track`.
+   Typical mapping:
+   main/brand color → `accent`; mood → `bg` and `stage`; extra brand colors →
+   the `pink` / `gold` slots.
+4. **Light-brand site → `mode: "light"`.** One switch flips the base palette
+   (white field, dark ink, light caption idle words and progress track); your
+   tokens still override it. Do NOT keep the dark base and fight `#bg` with
+   `!important` — that is how you get white-on-bright-blue cards and
+   accent-as-text contrast failures.
+5. **Use `theme.css` only when tokens are not enough** (gradients, custom
    layouts, a special font). Keep it small.
-5. **Nothing given → use the base look.** `theme` is optional.
+6. **Nothing given → use the base look.** `theme` is optional (dark).
 
 Give each host a `color` that fits the palette.
+
+## Chrome: restyle it or cut it
+
+The generated page furniture — topbar wordmark, `NN / NN` counter, progress
+bar — is identical across every narova video. It is plain CSS (`.topbar`,
+`.wordmark`, `.counter`, `.progress`), so `theme.css` can restyle it. Or cut
+it in the config:
+
+```js
+chrome: false,                              // no topbar, no counter, no progress bar
+chrome: { counter: false },                 // wordmark-only topbar
+chrome: { topbar: false, progress: true },  // minimal: progress only
+```
+
+Omitting `chrome` keeps all three. `narova check` validates the keys.
 
 ## Writing scenes from a prompt
 

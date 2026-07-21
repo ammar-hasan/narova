@@ -21,7 +21,7 @@ function compose(config, outDir) {
 
   const size = config.size;
   const data = composeData(config, timings);
-  const css = composeCss(config.theme || {}, config.voices, size, config.themeCss || '');
+  const css = composeCss(config.theme || {}, config.voices, size, config.themeCss || '', config.mode);
   const html = composeDoc(config, size, data, css);
 
   const hfDir = path.join(outDir, 'hf');

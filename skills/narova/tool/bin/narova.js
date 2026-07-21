@@ -10,7 +10,7 @@ const { loadProjectConfig } = require('../src/config');
 const { resolveConfig } = require('../src/schema');
 const { synth, writeStageInputs, build, findPython } = require('../src/pipeline');
 const { compose } = require('../src/compose');
-const { runHf, previewUrl, startHfPreview, stopHfPreview } = require('../src/hf');
+const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
@@ -55,6 +55,18 @@ const outDirOf = (flags, projectDir) => {
   if (flags.out === true) { console.error('--out needs a value'); process.exit(1); }
   return path.resolve(flags.out || path.join(projectDir || '.', 'out'));
 };
+
+/* Studio serves out/hf from disk and does not hot-reload; compose deletes and
+ * recreates that directory, so a detached preview left running shows the OLD
+ * build (or an empty 00:00 canvas). Warn whenever compose/build replaces the
+ * directory under a live preview. */
+function warnIfPreviewStale(out) {
+  const pid = livePreviewPid(path.join(out, 'preview.pid'));
+  if (pid) {
+    console.error(`note: a detached Studio preview (pid ${pid}) is running and will keep showing the OLD build —`);
+    console.error('      restart it with: narova preview --detach');
+  }
+}
 
 const HELP = `narova — a scene script becomes a narrated, captioned video
 (narova writes the words and the voice; HyperFrames draws the pictures)
@@ -130,6 +142,7 @@ async function main() {
       const r = compose(config, out);
       console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
       console.log(`  preview: narova preview --detach   ·   render: narova build --reuse`);
+      warnIfPreviewStale(out);
       return;
     }
 
@@ -141,6 +154,7 @@ async function main() {
         backend: flags.backend, reuse: flags.reuse,
         fps: flags.fps, quality: flags.quality,
       });
+      warnIfPreviewStale(out);
       return;
     }
 
@@ -155,9 +169,18 @@ async function main() {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const r = compose(config, out);
-      const port = Number(flags.port || 3002);
-      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
       if (flags.detach) {
+        // A live Studio keeps serving the directory compose just replaced, so
+        // re-running preview --detach means "show me the new build": stop the
+        // stale server and start fresh on its port (compose already ran above).
+        const stale = livePreviewPid(pidFile);
+        const rememberedPort = previewPort(pidFile);
+        if (stale) {
+          console.log(`restarting Studio (was pid ${stale}) — detached previews do not hot-reload`);
+          stopHfPreview(pidFile);
+        }
+        const port = Number(flags.port || rememberedPort || 3002);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
         const p = startHfPreview(r.dir, {
           port,
           logFile: path.join(out, 'preview.log'),
@@ -166,6 +189,8 @@ async function main() {
         console.log(`Studio running -> ${p.url}`);
         console.log(`  pid ${p.pid} · log ${p.logFile} · stop: narova preview --stop --project ${projectDir}`);
       } else {
+        const port = Number(flags.port || 3002);
+        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
         console.log(`composed -> ${r.dir}`);
         console.log(`Studio -> ${previewUrl(r.dir, port)} (Ctrl-C to stop)`);
         runHf(['preview', '--port', String(port)], r.dir);
