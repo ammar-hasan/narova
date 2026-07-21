@@ -1,143 +1,134 @@
 # narova
 
-> Working name — the final package name is still being chosen.
+> Working name. The final name is not decided yet.
 
-**You write a scene script. narova turns it into a narrated video with word-synced captions.**
+**You give a prompt or a scene script. narova makes a narrated video.**
 
-One line: **narova writes the words and the voice; HyperFrames draws the pictures.**
+The video has:
 
-- narova makes the speech: two hosts talking, neural voices, word timings.
-- [HyperFrames](https://www.npmjs.com/package/hyperframes) renders the video: real animation, preview studio, mp4 with audio.
-- The captions highlight word by word, in each speaker's color.
-- Elements on screen appear exactly when the voice reaches them.
-- Everything runs on your machine. No API keys. No cloud.
+- Two voices talking to each other (neural TTS, runs on your machine).
+- Captions that light up word by word, in each speaker's color.
+- Elements that appear exactly when the voice reaches them.
+- No API keys. No cloud.
 
-## Quickstart (60 seconds)
+narova makes the speech. [HyperFrames](https://www.npmjs.com/package/hyperframes)
+draws the pictures and renders the mp4.
 
-narova ships as an **agent skill** — the whole tool lives inside
-`skills/narova/`. Nothing to install beyond cloning:
+## narova is a skill
+
+The whole tool lives inside one folder: `skills/narova/`. An AI agent
+(Claude Code, Codex, Cursor, ...) reads it and can build videos for you.
+To install it:
+
+```bash
+npx skills add ammar-hasan/narova
+# or copy skills/narova/ into ~/.claude/skills/
+```
+
+## Quickstart
 
 ```bash
 git clone https://github.com/ammar-hasan/narova.git && cd narova
-npm link                         # optional: puts `narova` on PATH (zero deps)
-narova doctor                    # checks ffmpeg, python, npx hyperframes
+npm link            # optional: gives you the `narova` command
+narova doctor       # checks ffmpeg, python, hyperframes
 
 narova init myreel && cd myreel
-narova build                     # makes out/video.mp4 (first run sets up the TTS venv itself)
-narova preview                   # opens HyperFrames Studio to scrub and review
+narova build        # makes out/video.mp4
+narova preview      # opens HyperFrames Studio to review
 ```
 
-You need **ffmpeg**, **Node.js 18+**, and **Python 3.10+**. The first `build`
-creates the TTS venv (at `~/.narova/venv`), downloads a voice model, and the
-HyperFrames CLI — one-time waits, not hangs. Without `npm link`, use
-`node skills/narova/tool/bin/narova.js` instead of `narova`.
+You need: **ffmpeg**, **Node 18+**, **Python 3.10+**.
+
+The first `build` downloads a few things one time: it creates a Python venv
+at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.
+This can take a minute. It is not stuck.
+
+Without `npm link`, run `node skills/narova/tool/bin/narova.js` instead of `narova`.
 
 ## The scene script
 
-A project is a folder with a `reel.config.mjs` (or `.js` / `.json`).
+A project is a folder with one config file: `reel.config.mjs`.
 
 ```js
 export default {
-  title: "The Venture Factory",
+  title: "My Reel",
   size: "16:9",                              // "16:9" | "1:1" | "9:16"
   voices: {
-    a: { backend: "xtts", speaker: "Damien Black", color: "#2ee6d6", label: "narrator · A" },
-    b: { backend: "xtts", speaker: "Sofia Hellen", color: "#ff7eb6", label: "narrator · B" },
+    a: { backend: "piper", speaker: "en_US-ryan-high",         color: "#2ee6d6", label: "host · A" },
+    b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
-  theme: { accent: "#2ee6d6", bg: "#080d16" },
-  timing: { gapSentence: 0.28, gapTurn: 0.5, lead: 0.16, tail: 0.6, tempo: 1.18 },
+  theme: { accent: "#2ee6d6", bg: "#080d16" },   // optional
+  timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   scenes: [
     {
       id: "title",
-      vo: [                                   // the dialogue that is SPOKEN
-        { who: "b", text: "Okay. What if your codebase could just build itself?" },
-        { who: "a", text: "That's the Venture Factory. Let me show you." },
+      vo: [                                   // what is SPOKEN, in order
+        { who: "a", text: "This is narova." },
+        { who: "b", text: "Scenes in, video out. Let's go." },
       ],
       body: `<div class="s-title">
-        <h1 class="display reveal">The Venture Factory</h1>
-        <p class="lede cue" data-cue="1">builds itself — safely.</p>
-      </div>`,                                // HTML; data-cue="1" shows when turn 1 starts (0-based)
+        <h1 class="display reveal">narova</h1>
+        <p class="lede cue" data-cue="1">scenes in, video out</p>
+      </div>`,
     },
-    // ...more scenes
   ],
 }
 ```
 
 The rules:
 
-- `vo` is a list of `{ who, text }` turns, in order. Two hosts trading lines
-  sound better than one narrator. One narrator also works: use one `who`.
-- `body` is HTML. An element with `data-cue="k"` stays hidden until the voice
-  reaches turn `k` (**0-based**: `data-cue="0"` is the first turn). An element
-  with class `reveal` animates in when the scene starts.
-- Scene length comes from the real audio. You do not set durations.
-- Add your own styles with `theme` tokens or a CSS file (`theme: { css: "theme.css" }`).
-  One rule: no `animation: … infinite` in your CSS — the renderer seeks frames,
-  so wall-clock animations break. `narova check` warns about this.
+- `vo` is the spoken dialogue. Each turn is `{ who, text }`.
+- `body` is HTML for the screen.
+- `data-cue="1"` means: stay hidden until turn 1 starts. Counting starts at 0.
+- `class="reveal"` means: animate in when the scene starts.
+- You never set durations. The real audio decides how long each scene is.
+- Styling is optional. Set colors with `theme`, or add a CSS file with
+  `theme: { css: "theme.css" }`. Do not use `animation: ... infinite` in
+  that CSS. The renderer jumps between frames, so looping animations break.
 
-## Voices (TTS backends)
-
-Speech runs in a small Python package inside a managed venv.
+## Voices
 
 | Backend | Quality | Speed | Setup | Notes |
 |---------|---------|-------|-------|-------|
-| `piper` | good | fast | default | local ONNX; zero config; downloads a voice on first use |
-| `xtts`  | higher | slower | `tool/setup.sh --xtts` | coqui-tts on MPS/CPU; ~1.9GB model; 58 studio speakers |
-| `qwen`  | high | slower | `tool/setup.sh --qwen` | Qwen3-TTS 0.6B (Apache 2.0); 9 preset speakers; MPS/CPU |
+| `piper` | good | fast | none (default) | small local voices |
+| `xtts`  | higher | slow | `skills/narova/tool/setup.sh --xtts` | ~1.9GB model, 58 speakers |
+| `qwen`  | high | slow | `skills/narova/tool/setup.sh --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
 
-Use two clearly different voices. For piper: `en_US-ryan-high` and
-`en_US-hfc_female-medium`. For xtts: e.g. `Damien Black` and `Sofia Hellen`. For qwen: e.g. `Ryan` and `Serena`.
-Give each host a `color` — the active caption word gets that color.
+Pick two voices that sound clearly different. Give each a `color`.
+List voices with `narova voices list --backend <name>`.
 
-## CLI
+## Commands
 
 ```
-narova init <dir>     start a new project (config + one scene)
-narova check          validate the config fast — no TTS, no browser, no writes
-narova synth          Python TTS -> out/audio/*, out/timings.json
-narova compose        timings + audio -> out/hf/ (a HyperFrames project)
-narova build          synth + compose + hyperframes render -> out/video.mp4
-narova preview        open HyperFrames Studio on out/hf
-narova voices         list or download TTS voices
-narova doctor         check ffmpeg, python venv, npx hyperframes
+narova init <dir>     new project
+narova check          validate the config (fast, no side effects)
+narova synth          make the audio + word timings
+narova compose        make the HyperFrames project (out/hf/)
+narova build          synth + compose + render -> out/video.mp4
+narova preview        open HyperFrames Studio
+narova voices         list or download voices
+narova doctor         check your machine
 ```
 
-Common flags: `--backend piper|xtts|qwen`, `--reuse` (keep existing audio + timings),
-`--tempo`, `--size`, `--fps`, `--quality draft|standard|high`, `--out <dir>`.
-
-## Agent skill
-
-narova IS a Claude Code skill — `skills/narova/` contains the docs an
-agent reads AND the full tool (`tool/`). An agent goes from **a prompt to a
-finished video**: it writes the scene script, runs `check`, builds, and shows
-you the preview. To install the skill anywhere:
-
-```bash
-npx skills add ammar-hasan/narova    # cross-agent (Claude Code, Codex, Cursor, ...)
-# or simply copy skills/narova/ into ~/.claude/skills/ (or your agent's skills dir)
-```
+Useful flags: `--backend piper|xtts|qwen`, `--reuse` (keep old audio),
+`--tempo`, `--size`, `--fps`, `--quality draft|standard|high`.
 
 ## How it works
 
 ```
 reel.config.mjs
-      │
-      ▼
-  synth       Python TTS: speech sentence by sentence, word timings      (narova)
-      │        rescaled so they match the real audio length exactly
-      ▼
-  compose     generates a HyperFrames project in out/hf/:                (narova)
-      │        scene clips + karaoke captions + reveals on one
-      │        GSAP timeline, narration as the audio track
-      ▼
-  render      HyperFrames renders the mp4, audio muxed in                (hyperframes)
-      │
-      ▼
+   │
+   ▼  synth      Python makes the speech and the word timings.
+   │             Timings are scaled to match the real audio exactly.
+   ▼  compose    narova writes a HyperFrames project into out/hf/:
+   │             scene clips, karaoke captions, reveals, one timeline.
+   ▼  render     HyperFrames renders the mp4 with the audio inside.
+   │
 out/video.mp4
 ```
 
-`out/` and `out/hf/` are build folders. Never edit them — the reel.config is
-the source of truth, and every build regenerates them.
+`out/` and `out/hf/` are build folders. Never edit them.
+The config file is the only source of truth.
 
 ## Repo layout
 
@@ -145,10 +136,10 @@ the source of truth, and every build regenerates them.
 skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
 examples/          two full sample projects
 SPEC.md            the contract
-LEARNINGS.md       hard-won fixes — read before changing the pipeline
+LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline
 ```
 
-Run the tests with `npm test` (Node + Python, no extra deps).
+Run the tests: `npm test` (no extra deps).
 
 ## License
 

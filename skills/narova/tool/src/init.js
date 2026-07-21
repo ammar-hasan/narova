@@ -36,23 +36,16 @@ export default {
 
 const README = `# My Reel
 
-A narova project.
-
-## Build
+A narova project. Edit \`reel.config.mjs\`, then:
 
 \`\`\`bash
 narova check      # validate the config (fast)
-narova synth      # -> out/audio/*, out/timings.json   (needs a Python venv, see below)
-narova compose    # -> out/hf/ (a HyperFrames project)
+narova build      # -> out/video.mp4
 narova preview    # open HyperFrames Studio to review
-narova build      # full pipeline -> out/video.mp4
 \`\`\`
 
-## Python venv (for synth)
-
-narova shells out to the \`narova_tts\` Python module for TTS. Point it at a venv via
-\`.venv/\` in this project, \`.venv/\` in the narova repo, or \`$NAROVA_PYTHON\`.
-See \`narova doctor\`.
+The first build sets up its own Python venv (~/.narova/venv) and downloads a
+voice model. One-time wait, not a hang. \`narova doctor\` checks the machine.
 `;
 
 const GITIGNORE = `out/\n.venv/\nnode_modules/\n`;

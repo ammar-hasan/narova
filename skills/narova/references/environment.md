@@ -1,43 +1,44 @@
-# Environment & preflight
+# Environment
 
-The CLI is bundled in this skill (`<skill>/tool/bin/narova.js`) — there is no
-install. `$NAROVA doctor` is the single source of truth — run it first; it
-checks ffmpeg, ffprobe, the Python interpreter, whether `narova_tts` imports,
-and whether `npx hyperframes` runs. Exit 0 = ready.
+The CLI is bundled in this skill: `node <skill-dir>/tool/bin/narova.js`.
+There is nothing to install. Run `$NAROVA doctor` first — it checks
+everything below. Exit 0 = ready.
 
-## The pieces
+## What the machine needs
 
-| Need | Why | Fix when missing |
-|------|-----|------------------|
-| Node >= 18 + npx | the CLI (zero npm deps) and the HyperFrames engine | install Node |
-| ffmpeg + ffprobe | audio splicing, loudness, duration probes | `brew install ffmpeg` / `apt-get install ffmpeg` |
+| Need | Why | If missing |
+|------|-----|------------|
+| Node 18+ (with npx) | the CLI and HyperFrames | install Node |
+| ffmpeg + ffprobe | audio work and duration checks | `brew install ffmpeg` |
 | Python 3.10+ | the TTS venv | `brew install python@3.12` (macOS system 3.9 is too old) |
-| TTS venv | the `narova_tts` stage | nothing — first `synth` creates it at `~/.narova/venv`; add backends with `tool/setup.sh --xtts` / `--qwen` |
-| HyperFrames CLI | preview (Studio) + render | nothing — `npx hyperframes@<pin>` downloads on first use |
+| TTS venv | speech synthesis | nothing — the first `synth` creates it at `~/.narova/venv` |
+| HyperFrames CLI | preview + render | nothing — `npx` downloads it on first use |
 
-Chrome is NOT needed anymore — HyperFrames provisions its own browser.
+Chrome is not needed. HyperFrames brings its own browser.
 
-## How narova finds things
+## How the CLI finds Python
 
-- **Python** (`findPython`): `$NAROVA_PYTHON` → `<project>/.venv` →
-  `$NAROVA_VENV` / `~/.narova/venv` → a dev-checkout `.venv` → bare `python3`.
-  The first `synth` runs `tool/setup.sh` automatically when none exists.
-- **`narova_tts` is not pip-installed** — the CLI injects
-  `PYTHONPATH=<skill>/tool/py` when invoking Python. If doctor says "not
-  importable", run `tool/setup.sh` (it installs the *dependencies* into the
-  venv).
-- **HyperFrames** is version-pinned in `src/hf.js` and in every generated
-  `out/hf/package.json`; all calls go through `npx --yes hyperframes@<pin>`.
+Order: `$NAROVA_PYTHON` → `<project>/.venv` → `$NAROVA_VENV` or
+`~/.narova/venv` → a dev checkout `.venv` → plain `python3`.
+If no venv exists, the first `synth` runs `tool/setup.sh` and creates one.
 
-## Invoking the CLI
+`narova_tts` is not pip-installed. The CLI sets `PYTHONPATH=<skill>/tool/py`
+when calling Python. If doctor says "not importable", run `tool/setup.sh`.
 
-`node <skill-dir>/tool/bin/narova.js <command>` — always, no PATH involved.
-Env overrides: `$NAROVA_VENV` (venv path), `$NAROVA_HOME` (default
-`~/.narova`), `$NAROVA_PYTHON` (skip venv discovery entirely).
+HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
+`out/hf/package.json`. All calls go through `npx --yes hyperframes@<pin>`.
 
-## First-run downloads (need network, once)
+## Env overrides
 
-- piper: one small ONNX voice per configured speaker, on first synth.
-- xtts (optional): ~1.9GB model on first synth; deps via
-  `tool/setup.sh --xtts`; set `COQUI_TOS_AGREED=1` if the license gate asks.
-- HyperFrames CLI: downloaded by npx on the first `doctor`/`build`/`preview`.
+- `$NAROVA_VENV` — venv path (default `~/.narova/venv`).
+- `$NAROVA_HOME` — base folder (default `~/.narova`).
+- `$NAROVA_PYTHON` — use this Python, skip venv discovery.
+- `$NAROVA_QWEN_MODEL` — a different Qwen3-TTS model.
+
+## First-run downloads (network, one time each)
+
+- venv: created by the first `synth`.
+- piper: one small voice file per speaker.
+- xtts: ~1.9GB model (`tool/setup.sh --xtts` first; `COQUI_TOS_AGREED=1` if asked).
+- qwen: ~1.2GB model (`tool/setup.sh --qwen` first).
+- HyperFrames CLI: fetched by npx on the first doctor / build / preview.

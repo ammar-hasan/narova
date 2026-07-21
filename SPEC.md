@@ -1,158 +1,161 @@
-# narova — product spec (the contract)
+# narova — the contract
 
-> Working name: **narova**. Tagline: *"A scene script becomes a narrated, captioned video."*
-> One line: **narova writes the words and the voice; HyperFrames draws the pictures.**
+> Working name: **narova**.
+> One line: narova writes the words and the voice. HyperFrames draws the pictures.
 
 ## What it is
 
-A toolkit that turns a **declarative scene script** into a narrated MP4 with
-word-synced karaoke captions and voice-triggered reveals. Since 0.3.0 the
-render engine is **HyperFrames** (HTML → video, deterministic seek-based
-rendering). narova owns the narration layer:
+narova turns a scene script into a narrated mp4. The captions light up word
+by word. Screen elements appear when the voice reaches them.
 
-- two-host neural TTS (piper / xtts / qwen, fully local, no API keys),
-- word/turn timing derivation, rescaled to the real audio,
-- generating a complete HyperFrames project (composition + timeline + audio).
+The work is split in three parts:
 
-The end goal UX: an agent takes a user prompt, writes the scene script, and
-`narova build` produces the video.
+- **Python** (`skills/narova/tool/py/narova_tts`): speech and word timings. Nothing else.
+- **Node** (`skills/narova/tool/src`): config validation and the composition generator.
+- **HyperFrames** (`npx hyperframes@<pin>`): preview, lint, and the final render.
 
-## Non-negotiables (from LEARNINGS.md)
+The goal: an agent takes a user prompt, writes the scene script, and
+`narova build` makes the video.
 
-- Caption timeline MUST equal the actual audio duration (rescale after loudnorm).
-- The generated composition MUST obey the HyperFrames determinism contract:
-  one synchronous paused GSAP timeline, no wall-clock CSS animations, no
-  clocks/randomness/network at render time.
-- Scene clip starts MUST chain exactly (cumulative sum of rounded durations) —
-  HyperFrames lints same-track overlap.
-- XTTS runs on current `transformers` via the shim + torchcodec (never downgrade).
+## Rules that must never break
 
-## Architecture
+- Caption timings must equal the real audio length. Python rescales them
+  after loudnorm (see LEARNINGS #1).
+- The generated page must be deterministic: one paused GSAP timeline, built
+  synchronously. No looping CSS animations. No clocks, randomness, or network
+  calls at render time.
+- Scene clips must chain exactly: `start[i+1] = start[i] + dur[i]`, rounded to
+  3 decimals. HyperFrames rejects overlap on the same track.
+- XTTS runs on current `transformers` through the shim. Never downgrade.
 
-Three layers — keep the boundaries:
+## Layout
 
-- **Python** (`tool/py/narova_tts`, managed venv): **TTS + timings only**.
-  Contract is FROZEN: `narration.json` + `config.resolved.json` in →
-  `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav` (concatenated narration
-  track) + `timings.json` out.
-- **Node** (`tool/src/`, the `narova` CLI): config loading/validation, the
-  **composition generator** (`tool/src/compose/`), and orchestration.
-- **HyperFrames** (via `npx hyperframes@<PIN>`, pinned in `tool/src/hf.js`):
-  preview (Studio), lint/check, and rendering the final MP4 (audio muxed).
-
-**narova ships as an agent skill** — the tool lives inside the skill folder;
-installing the skill IS installing narova. The repo is the dev home.
+narova ships as an agent skill. Installing the skill IS installing narova.
 
 ```
-narova/                          # the repo (dev home)
-├── skills/narova/               # THE PRODUCT — docs + tool in one folder
-│   │                            #   (installable: npx skills add ammar-hasan/narova;
-│   │                            #    .claude/skills/narova symlinks here for in-repo use)
+narova/                          # the repo
+├── skills/narova/               # THE PRODUCT
+│   │                            #   install: npx skills add ammar-hasan/narova
+│   │                            #   (.claude/skills/narova is a symlink here)
 │   ├── SKILL.md  references/    # what an agent reads
-│   └── tool/                    # the bundled CLI
-│       ├── bin/narova.js        # init check synth compose build preview voices doctor
+│   └── tool/                    # the CLI
+│       ├── bin/narova.js        # entry point
 │       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, util
-│       ├── py/narova_tts/       # TTS backends + timing (piper, xtts, qwen)
-│       ├── setup.sh             # venv provisioning (auto-run by first synth)
-│       └── test/                # the tool test suite (npm test runs it)
+│       ├── py/narova_tts/       # TTS backends + timing
+│       ├── setup.sh             # creates the venv (auto-run by first synth)
+│       └── test/                # test suite (npm test)
 └── examples/                    # sample projects
 ```
 
-The TTS venv lives at `~/.narova/venv` ($NAROVA_VENV overrides) — outside the
-skill folder so skill updates never destroy it. The first `synth` creates it
-automatically.
+The venv lives at `~/.narova/venv` (override with `$NAROVA_VENV`). It sits
+outside the skill folder so a skill update cannot delete it. The first
+`synth` creates it.
 
 ## The pipeline
 
 ```
 reel.config.mjs
-   │  narova synth      writes narration.json + config.resolved.json, then Python:
-   │                    per-scene wavs + full.wav + timings.json (rescaled)
+   │  narova synth      Python: per-scene wavs + full.wav + timings.json
    ▼
    │  narova compose    out/hf/: index.html + assets/narration.wav + package.json
    ▼
-   │  narova build      = synth + compose + `npx hyperframes render` -> out/video.mp4
+   │  narova build      synth + compose + `npx hyperframes render`
    ▼
 out/video.mp4
 ```
 
-`out/` and `out/hf/` are build artifacts — regenerated, never hand-edited.
-The reel.config is the single source of truth. (Future work, not built: a
-`--eject` that turns out/hf into a standalone editable HyperFrames project.)
+`out/` and `out/hf/` are build folders. Every run regenerates them. The
+config file is the only source of truth.
 
-## The scene script (author-facing API)
+## The scene script
 
 ```js
-// reel.config.mjs  (or .js / .json / .cjs)
+// reel.config.mjs  (also accepted: .js, .json, .cjs)
 export default {
-  title: "The Venture Factory",
+  title: "My Reel",
   size: "16:9",                           // "16:9" | "1:1" | "9:16" | {w,h}
   voices: {
-    a: { backend: "xtts", speaker: "Damien Black",  color: "#2ee6d6", label: "narrator · A" },
-    b: { backend: "xtts", speaker: "Sofia Hellen",  color: "#ff7eb6", label: "narrator · B" },
+    a: { backend: "piper", speaker: "en_US-ryan-high", color: "#2ee6d6", label: "host · A" },
+    b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
-  theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // tokens + optional CSS file
-  timing: { gapSentence: 0.28, gapTurn: 0.5, lead: 0.16, tail: 0.6, tempo: 1.18 },
+  theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional
+  timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   scenes: [
-    {
-      id: "title",
-      vo: [ { who: "b", text: "Okay. What if your codebase could just build itself?" },
-            { who: "a", text: "That's the Venture Factory. Let me show you." } ],
-      body: `<div class="s-title">...<span class="cue" data-cue="1">...</span></div>`,
-    },
-    // ...
+    { id: "title",
+      vo: [ { who: "a", text: "This is narova." },
+            { who: "b", text: "Scenes in, video out." } ],
+      body: `<div class="s-title"><h1 class="reveal">narova</h1>
+             <p class="cue" data-cue="1">scenes in, video out</p></div>` },
   ],
 }
 ```
 
 Rules:
-- `vo` is an ordered list of `{who, text}` turns (single narrator = one who).
-- `body` is HTML, dropped verbatim into the scene's clip. Elements with
-  `data-cue="k"` reveal when the voice reaches turn index `k` (**0-based**
-  into `vo`); elements with class `reveal` animate in at scene entry;
-  everything else is static.
-- `theme.css` must NOT use `animation: … infinite` (nondeterministic under
-  frame rendering — `narova check` warns).
-- Element ids inside bodies must be unique across ALL scenes (`check` warns).
-- Legacy fields `caption` and `dur` are accepted and ignored (durations come
-  from the measured audio).
 
-## The generated composition (out/hf contract)
+- `vo` is the spoken dialogue, in order. One narrator = one `who`.
+- `body` is HTML, placed into the scene clip as-is.
+- `data-cue="k"`: hidden until turn `k` starts. `k` counts from 0.
+- `class="reveal"` (no cue): animates in when the scene starts.
+- Scene and voice ids must match `[A-Za-z][A-Za-z0-9_-]*`.
+- Element ids in bodies must be unique across all scenes.
+- No `animation: ... infinite` in theme.css.
+- Old fields `caption` and `dur` are accepted and ignored.
 
-- `index.html` — standalone HyperFrames composition:
-  - root `#root` (`data-composition-id="main"`, px-sized, `data-duration` = total),
-  - `#bg` full-bleed background child (never on the root — producer can drop it),
-  - one `<section class="clip scene">` per scene on track 1, starts chained
-    exactly (`start[i+1] = start[i] + dur[i]`, 3-decimal rounding),
-  - one overlay clip (track 2, full span): karaoke captions + progress bar,
-  - `<audio src="assets/narration.wav">` as a direct root child (track 10),
-  - one inlined `DATA` object + a synchronous paused GSAP timeline at
-    `window.__timelines["main"]`.
-- `DATA` shape: `{ total, scenes:[{id,start,dur,turns[]}], groups:[{who,label,start,end,words:[{w,t0,t1}]}] }`
-  — `turns` scene-local, everything else global seconds; `groups` = one caption
-  line per sentence (grouped by the timings `si` index).
-- Karaoke = seek-safe `tl.set(el, {className}, t)` word-state flips
-  (upcoming → active → past); reveals/cues = timeline tweens on the allowlist.
-- `assets/narration.wav` — copy of `out/audio/full.wav`.
-- `package.json` — pins `hyperframes` to the same version as `tool/src/hf.js`.
+`narova check` catches all of this.
 
-## The Python contract (FROZEN)
+## The generated page (out/hf contract)
 
-`timings.json`: `{ <sceneId>: { dur, turns:[sec...], words:[{w,t0,t1,who,si}] } }`
-— all times scene-local seconds, already rescaled to the measured post-loudnorm
-audio. `audio/full.wav` duration equals `sum(dur)` within ~5ms/scene (asserted).
+`index.html` is a standard HyperFrames composition:
+
+- Root `#root`: `data-composition-id="main"`, sized in px, `data-duration` = total.
+- `#bg`: a full-size background child. Never put background on the root —
+  the renderer can drop it (frame turns black).
+- One `<section class="clip scene">` per scene on track 1, starts chained exactly.
+- One overlay clip on track 2, full length: captions + progress bar.
+- `<audio src="assets/narration.wav">` as a direct child of the root, track 10.
+- One inline `DATA` object + one paused GSAP timeline at `window.__timelines["main"]`.
+
+`DATA` shape:
+
+```
+{ total,
+  scenes: [{ id, start, dur, turns[] }],        // turns are scene-local seconds
+  groups: [{ who, label, start, end,            // one caption line per sentence
+             words: [{ w, t0, t1 }] }] }        // global seconds
+```
+
+Captions use `tl.set(el, {className}, t)` per word: upcoming → active → past.
+This is safe when the renderer jumps to any time. Reveals and cues are
+timeline tweens (opacity, y, scale only).
+
+Also in out/hf: `assets/narration.wav` (a copy of `out/audio/full.wav`) and
+`package.json` (pins the hyperframes version from `tool/src/hf.js`).
+
+## The Python contract (frozen)
+
+In: `narration.json` + `config.resolved.json`.
+Out: `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav`, `timings.json`.
+
+`timings.json`:
+
+```
+{ <sceneId>: { dur, turns: [sec...], words: [{ w, t0, t1, who, si }] } }
+```
+
+All times are scene-local seconds, already rescaled to the real audio.
+`full.wav` length equals the sum of all `dur` (asserted, ~5ms per scene).
 
 ## CLI
 
 ```
-narova init <dir>          scaffold a project (config + one example scene)
-narova check               validate config fast (cues, ids, theme animations)
-narova synth [--backend]   Python TTS -> out/audio/*, out/timings.json
-narova compose             -> out/hf/ (HyperFrames project)
-narova build               synth + compose + hyperframes render -> out/video.mp4
-narova preview             compose + HyperFrames Studio
-narova voices list|get     list / download TTS voices
-narova doctor              ffmpeg, ffprobe, python venv, npx hyperframes
+narova init <dir>     new project
+narova check          validate the config (fast, no side effects)
+narova synth          Python TTS -> out/audio/*, out/timings.json
+narova compose        -> out/hf/
+narova build          synth + compose + render -> out/video.mp4
+narova preview        compose + HyperFrames Studio
+narova voices         list or download voices
+narova doctor         check ffmpeg, python, venv, hyperframes
 ```
 
 Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
@@ -161,26 +164,26 @@ Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
 
 ## Backends
 
-- **piper** — default, zero-config, fast; downloads an ONNX voice on first use.
-- **xtts** — coqui-tts + torch + torchcodec; MPS/CPU; ~1.9GB model; 58 studio
-  speakers. Gated behind `tool/setup.sh --xtts`.
-- **qwen** — Qwen3-TTS 0.6B CustomVoice (Apache 2.0); MPS/CPU; ~1.2GB model;
-  9 preset speakers; optional per-voice `lang`. Gated behind
-  `tool/setup.sh --qwen`. Override the model with `$NAROVA_QWEN_MODEL`.
-- The backend interface (`synthesize(who, text) -> wav`) stays pluggable so
-  `elevenlabs`, `kokoro`, or macOS `say` can be added later.
+- **piper** — default. Fast, small, no setup. Downloads a voice on first use.
+- **xtts** — higher quality, slow. ~1.9GB model, 58 speakers.
+  Setup: `tool/setup.sh --xtts`.
+- **qwen** — Qwen3-TTS 0.6B, Apache 2.0. High quality, slow. ~1.2GB model,
+  9 speakers, optional per-voice `lang`. Setup: `tool/setup.sh --qwen`.
+  Change the model with `$NAROVA_QWEN_MODEL`.
+
+The backend interface is one function: `synthesize(who, text) -> wav`.
+New backends plug in there.
 
 ## Status: 0.3.0 shipped
 
-`init && build` produces a synced MP4 via HyperFrames; lint/check pass on
-generated projects; caption sync verified in snapshots; doctor covers the
-toolchain; the skill walks prompt → script → check → synth → compose →
-preview → build; the tool + tests ship inside the skill.
+Build works end to end. Lint and check pass on generated pages. Caption sync
+verified in snapshots. The skill goes prompt → script → check → synth →
+compose → preview → build. The tool and tests ship inside the skill.
 
-## Future work (not built — do not start without deciding to)
+## Future work (decided, not started)
 
-- `--eject`: turn out/hf into a standalone, Studio-editable project.
-- Theme gallery: a few ready-made looks selectable by name.
-- Qwen voice cloning (`speaker: {clone: "sample.wav"}`) and voice design.
-- Vendor GSAP into out/hf/assets for fully offline rendering.
-- npm publish (the skill layout already supports `npx skills add`).
+- `--eject`: make out/hf a standalone project you can edit in Studio.
+- Theme gallery: ready-made looks, picked by name.
+- Qwen voice cloning (`speaker: {clone: "sample.wav"}`).
+- Bundle GSAP into out/hf so rendering works fully offline.
+- Publish to npm.
