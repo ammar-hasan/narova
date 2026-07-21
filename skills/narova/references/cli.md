@@ -1,5 +1,8 @@
 # CLI reference
 
+`narova` below means the bundled tool: `node <skill-dir>/tool/bin/narova.js`
+(the `$NAROVA` shorthand from SKILL.md).
+
 Project-reading commands (`check`, `synth`, `compose`, `build`, `preview`)
 take `--project <dir>` (default `.`) and `--config <file>`; the ones that
 write take `--out <dir>` (default `<project>/out`). `init` takes a positional
@@ -10,7 +13,7 @@ directory or pass `--project`.
 |---------|------|------|
 | `narova init <dir>` | scaffold: config + one example scene + README + .gitignore (never overwrites) | instant |
 | `narova check` | validate config + lint cues/ids/theme animations; no TTS/browser/writes; exit 1 on invalid | instant |
-| `narova synth` | Python TTS → `out/audio/NN.wav`, `out/audio/full.wav`, `out/timings.json` | piper: ~real-time vs narration length; xtts: much slower + one-time ~1.9GB model |
+| `narova synth` | Python TTS → `out/audio/NN.wav`, `out/audio/full.wav`, `out/timings.json`; creates the venv on first run | piper: ~real-time vs narration length; xtts/qwen: slower + one-time 1–2GB model |
 | `narova compose` | timings + audio + config → `out/hf/` (a HyperFrames project) | <1s |
 | `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4` | synth cost + render (~1-2x video length); first run downloads the HyperFrames CLI |
 | `narova preview` | compose, then HyperFrames Studio on `out/hf` | stays alive until Ctrl-C |
@@ -28,7 +31,6 @@ directory or pass `--project`.
 - `--size 16:9|1:1|9:16` — frame aspect override.
 - `--fps N` / `--quality draft|standard|high` — HyperFrames render settings.
 - `--voice-a <s>` / `--voice-b <s>` — map onto the first two declared voices.
-- `--version` — print version (this skill needs >= 0.3.0).
 
 ## What lands in `out/` (all regenerated — never hand-edit)
 

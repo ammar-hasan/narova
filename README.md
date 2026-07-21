@@ -140,12 +140,17 @@ out/video.mp4
 `out/` and `out/hf/` are build folders. Never edit them — the reel.config is
 the source of truth, and every build regenerates them.
 
-## Learnings
+## Repo layout
 
-The pipeline encodes many hard-won fixes: caption drift after loudness
-normalization, XTTS on a modern stack, determinism rules for seek-based
-rendering, and more. Read [LEARNINGS.md](./LEARNINGS.md) before changing the
-pipeline. The contract lives in [SPEC.md](./SPEC.md).
+```
+skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
+examples/          two full sample projects
+scripts/           install-skill.sh (copy/symlink the skill elsewhere)
+SPEC.md            the contract
+LEARNINGS.md       hard-won fixes — read before changing the pipeline
+```
+
+Run the tests with `npm test` (Node + Python, no extra deps).
 
 ## License
 

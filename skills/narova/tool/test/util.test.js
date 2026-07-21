@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { resolveSize, hexToRgba } = require('../skills/narova/tool/src/util');
+const { resolveSize, hexToRgba } = require('../src/util');
 
 test('resolveSize handles presets and objects', () => {
   assert.deepEqual(resolveSize('16:9'), { w: 1280, h: 720 });

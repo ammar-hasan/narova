@@ -9,8 +9,8 @@
   "main": "skills/narova/tool/src/pipeline.js",
   "scripts": {
     "narova": "node skills/narova/tool/bin/narova.js",
-    "test": "node --test && npm run -s test:py",
-    "test:js": "node --test",
+    "test": "npm run -s test:js && npm run -s test:py",
+    "test:js": "node --test 'skills/narova/tool/test/*.test.js'",
     "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests"
   },
   "files": [

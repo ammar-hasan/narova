@@ -54,7 +54,8 @@ narova/                          # the repo (dev home; examples + tests)
 │       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, util
 │       ├── py/narova_tts/       # TTS backends + timing (piper, xtts, qwen)
 │       └── setup.sh             # venv provisioning (auto-run by first synth)
-├── examples/  test/             # sample projects + test suite
+│       └── test/                # the tool test suite (npm test runs it)
+├── examples/                    # sample projects
 └── scripts/install-skill.sh     # copy/symlink the skill elsewhere
 ```
 
@@ -170,11 +171,17 @@ Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
 - The backend interface (`synthesize(who, text) -> wav`) stays pluggable so
   `elevenlabs`, `kokoro`, or macOS `say` can be added later.
 
-## Milestone for 0.3.0 (what "done" means)
+## Status: 0.3.0 shipped
 
-1. `narova init myreel && narova build` produces a synced MP4 via HyperFrames.
-2. `npx hyperframes lint` + `check` pass on every generated out/hf.
-3. Caption sync: word highlight matches the voice in snapshot frames.
-4. `narova doctor` passes on a fresh macOS with ffmpeg + node + python.
-5. The agent skill walks prompt → scene script → check → synth → compose →
-   preview → build.
+`init && build` produces a synced MP4 via HyperFrames; lint/check pass on
+generated projects; caption sync verified in snapshots; doctor covers the
+toolchain; the skill walks prompt → script → check → synth → compose →
+preview → build; the tool + tests ship inside the skill.
+
+## Future work (not built — do not start without deciding to)
+
+- `--eject`: turn out/hf into a standalone, Studio-editable project.
+- Theme gallery: a few ready-made looks selectable by name.
+- Qwen voice cloning (`speaker: {clone: "sample.wav"}`) and voice design.
+- Vendor GSAP into out/hf/assets for fully offline rendering.
+- npm publish (the skill layout already supports `npx skills add`).

@@ -1,8 +1,8 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { composeDoc, escapeHtml } = require('../skills/narova/tool/src/compose/html');
-const { composeData } = require('../skills/narova/tool/src/compose/data');
+const { composeDoc, escapeHtml } = require('../src/compose/html');
+const { composeData } = require('../src/compose/data');
 
 const config = {
   title: 'A <"quoted"> & Title',
