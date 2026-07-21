@@ -1,0 +1,4 @@
+out/
+snapshots/
+.venv/
+node_modules/

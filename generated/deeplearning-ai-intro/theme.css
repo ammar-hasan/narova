@@ -1,0 +1,67 @@
+/* DeepLearning.AI intro theme — tokens live in reel.config.mjs (theme).
+ * This file adds the brand font (Poppins 600, frozen from the site's own
+ * next/font bundle) and the scene layout classes the bodies use.
+ * Static styles only: motion comes from reveal/data-cue, never CSS loops. */
+
+@font-face{
+  font-family:"Poppins";
+  font-style:normal;
+  font-weight:600;
+  font-display:swap;
+  src:url("assets/fonts/poppins-600-latin.woff2") format("woff2");
+}
+
+:root{
+  --sans:"Poppins",sans-serif;
+  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+}
+
+/* shared */
+.eyebrow{font-family:var(--mono);font-size:clamp(10px,1.15vw,12px);letter-spacing:.26em;color:var(--accent);text-transform:uppercase}
+.accent{color:var(--accent)}
+.s-head{font-family:var(--mono);font-size:clamp(11px,1.5vw,15px);letter-spacing:.04em;color:var(--muted);text-align:center;margin-bottom:clamp(14px,2.4vw,24px)}
+.s-head .eyebrow{margin-right:.4em}
+
+/* signature move: the spark — brightened brand orange #ec5329 */
+.spark{color:var(--accent)}
+
+/* the pink→purple→blue gradient straight from the site's "7 million" band */
+.gradpink{background:linear-gradient(92deg,#ff5fc4 0%,#b44df0 45%,#5a6cff 100%);-webkit-background-clip:text;background-clip:text;color:transparent}
+
+/* title / closing */
+.s-title{text-align:center;display:flex;flex-direction:column;align-items:center;gap:clamp(12px,2vw,18px)}
+.display{font-size:clamp(38px,7.4vw,76px);font-weight:600;line-height:1.02;letter-spacing:-.02em;text-wrap:balance}
+.lede{font-size:clamp(14px,2vw,21px);color:var(--muted);max-width:20em;text-wrap:balance}
+.hook-logo{width:clamp(220px,30vw,320px);height:auto}
+.s-close{text-align:center;display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.4vw,22px)}
+.close-line{font-size:clamp(22px,4vw,44px);font-weight:600;line-height:1.12;letter-spacing:-.01em;max-width:18em;text-wrap:balance}
+.sparkline{font-size:clamp(26px,4.8vw,52px)}
+.close-logo{width:clamp(240px,34vw,360px);height:auto}
+.close-tags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+.ctag{font-family:var(--mono);font-size:clamp(10px,1.35vw,13px);letter-spacing:.04em;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px}
+.close-sign{font-size:clamp(16px,2.6vw,26px);font-weight:600;color:var(--accent);letter-spacing:-.01em}
+
+/* big stat */
+.s-center{text-align:center;display:flex;flex-direction:column;align-items:center;gap:clamp(14px,2.6vw,24px)}
+.stat{font-size:clamp(56px,11vw,120px);font-weight:600;letter-spacing:-.03em;line-height:1}
+.stat-cap{font-size:clamp(13px,1.8vw,18px);color:var(--ink);margin-top:2px;text-wrap:balance}
+.crowd-sub{font-family:var(--mono);font-size:clamp(10px,1.3vw,13px);letter-spacing:.05em;color:var(--muted)}
+
+/* cards */
+.planes{display:grid;grid-template-columns:repeat(3,1fr);gap:clamp(12px,2.2vw,22px)}
+.plane{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:clamp(16px,2.3vw,26px);display:flex;flex-direction:column;gap:9px}
+.pname{font-size:clamp(17px,2.3vw,25px);font-weight:600;line-height:1.15}
+.pdesc{font-size:clamp(12px,1.6vw,16px);color:var(--muted);text-wrap:balance;flex:1}
+
+.s-two{display:grid;grid-template-columns:1fr 1fr;gap:clamp(14px,2.4vw,28px);align-items:stretch}
+.pane{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:clamp(18px,2.6vw,30px);display:flex;flex-direction:column;gap:12px}
+.pane.center{align-items:center;justify-content:center;text-align:center}
+.door-tag{font-family:var(--mono);font-size:clamp(10px,1.3vw,13px);letter-spacing:.14em;text-transform:uppercase;color:var(--accent);border:1px solid var(--accent-dim);border-radius:999px;padding:5px 14px}
+
+/* ledger list */
+.ledger{max-width:36em;margin:0 auto;display:flex;flex-direction:column;gap:10px}
+.rec{font-family:var(--sans);font-size:clamp(13px,1.8vw,18px);background:var(--panel);border:1px solid var(--line);border-left:4px solid var(--accent);border-radius:10px;padding:14px 18px}
+.rec b{color:var(--accent);font-weight:600}
+
+/* chrome, lightly branded */
+.wordmark{font-family:"Poppins",sans-serif;font-weight:600;letter-spacing:-.01em}
