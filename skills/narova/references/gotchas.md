@@ -41,3 +41,10 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   behind the pipeline's back.
 - **Render only after the user approves the preview.** (HyperFrames' own
   rule too.)
+- **Do not shell-background foreground preview.** Agent shells may reap it.
+  Use `narova preview --detach`, give the user the printed Studio URL, and
+  stop it with `narova preview --stop` when review is done. If the default
+  browser hits a macOS Local Network permission prompt, open the printed URL
+  in Chrome/Chromium manually; the server itself is still usable.
+- **Snapshot uses `-o` / `--output`, not `--out`.** Example:
+  `npx hyperframes snapshot --at 3,9 -o snapshots/review`.

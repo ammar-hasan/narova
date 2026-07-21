@@ -32,9 +32,10 @@ git clone https://github.com/ammar-hasan/narova.git && cd narova
 npm link            # optional: gives you the `narova` command
 narova doctor       # checks ffmpeg, python, hyperframes
 
-narova init myreel && cd myreel
-narova build        # makes out/video.mp4
-narova preview      # opens HyperFrames Studio to review
+narova init generated/myreel && cd generated/myreel
+narova synth        # makes narration + timings
+narova preview --detach   # keeps Studio alive and prints its review URL
+narova build --reuse      # after approval, makes out/video.mp4
 ```
 
 You need: **ffmpeg**, **Node 18+**, **Python 3.10+**.
@@ -53,6 +54,7 @@ A project is a folder with one config file: `reel.config.mjs`.
 export default {
   title: "My Reel",
   size: "16:9",                              // "16:9" | "1:1" | "9:16"
+  assets: "assets",                          // copied into out/hf/assets/
   voices: {
     a: { backend: "piper", speaker: "en_US-ryan-high",         color: "#2ee6d6", label: "host · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
@@ -85,6 +87,9 @@ The rules:
 - Styling is optional. Set colors with `theme`, or add a CSS file with
   `theme: { css: "theme.css" }`. Do not use `animation: ... infinite` in
   that CSS. The renderer jumps between frames, so looping animations break.
+- Put logos, images, and local fonts in `assets/`; scene HTML and theme CSS
+  reference them as `assets/...`. Inline SVG and small data URIs also work.
+  Remote render-time files do not.
 
 ## Voices
 
@@ -105,7 +110,8 @@ narova check          validate the config (fast, no side effects)
 narova synth          make the audio + word timings
 narova compose        make the HyperFrames project (out/hf/)
 narova build          synth + compose + render -> out/video.mp4
-narova preview        open HyperFrames Studio
+narova preview        open HyperFrames Studio and print its URL
+narova preview --detach   keep Studio alive; stop with preview --stop
 narova voices         list or download voices
 narova doctor         check your machine
 ```
@@ -135,6 +141,7 @@ The config file is the only source of truth.
 ```
 skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
 examples/          sample projects (incl. one built from a plain-language prompt)
+generated/         agent-created projects; source kept, out/ and build/ ignored
 SPEC.md            the contract
 VISION.md          the product vision, mapped to where each point is implemented
 LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline

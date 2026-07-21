@@ -8,7 +8,7 @@ const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
- * Returns { title, size:{w,h}, voices, theme, timing, scenes } and throws on
+ * Returns { title, size:{w,h}, voices, theme, timing, scenes, assetsDir } and throws on
  * anything the pipeline can't render. */
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
@@ -32,6 +32,28 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     const cssPath = path.resolve(baseDir, cssRef);
     if (!fs.existsSync(cssPath)) errs.push(`config.theme.css: file not found: ${cssPath}`);
     else themeCss = fs.readFileSync(cssPath, 'utf8');
+  }
+
+  // Project media is source, not build output. By convention an assets/
+  // directory beside the config is copied into out/hf/assets/. A different
+  // project-local directory can be selected with top-level `assets`.
+  let assetsDir = null;
+  const defaultAssets = path.resolve(baseDir, 'assets');
+  const assetsRef = raw.assets ?? (fs.existsSync(defaultAssets) ? 'assets' : null);
+  if (assetsRef != null) {
+    if (typeof assetsRef !== 'string' || !assetsRef.trim()) {
+      errs.push('config.assets: expected a non-empty project-relative directory path');
+    } else {
+      const candidate = path.resolve(baseDir, assetsRef);
+      const rel = path.relative(path.resolve(baseDir), candidate);
+      if (path.isAbsolute(assetsRef) || !rel || rel.startsWith(`..${path.sep}`) || rel === '..') {
+        errs.push('config.assets: directory must be inside the project');
+      } else if (!fs.existsSync(candidate) || !fs.statSync(candidate).isDirectory()) {
+        errs.push(`config.assets: directory not found: ${candidate}`);
+      } else {
+        assetsDir = candidate;
+      }
+    }
   }
 
   // Theme token keys/values are interpolated into the generated stylesheet.
@@ -85,7 +107,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  return { title, size, voices, theme: themeTokens, themeCss, timing, scenes };
+  return { title, size, voices, theme: themeTokens, themeCss, timing, scenes, assetsDir };
 }
 
 /* The narration.json contract for the Python TTS stage. */

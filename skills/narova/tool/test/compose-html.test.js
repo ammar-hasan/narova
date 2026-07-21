@@ -41,8 +41,24 @@ test('scene clips chain and carry class="clip"', () => {
 
 test('audio is a direct root child without clip class', () => {
   const h = doc();
-  assert.match(h, /<audio id="vo" src="assets\/narration.wav" data-start="0" data-duration="9" data-track-index="10">/);
+  assert.match(h, /<audio id="vo" src="assets\/narration.wav" data-start="0" data-track-index="1001">/);
+  assert.ok(!/<audio[^>]*data-duration=/.test(h), 'HyperFrames infers the intrinsic WAV duration');
   assert.ok(!/<audio[^>]*class=/.test(h));
+});
+
+test('long reels split scene clips across sparse editable tracks', () => {
+  const manyConfig = {
+    ...config,
+    scenes: Array.from({ length: 6 }, (_, i) => ({ id: `s${i}`, body: '<p>x</p>' })),
+  };
+  const manyTimings = Object.fromEntries(manyConfig.scenes.map(s => [s.id, {
+    dur: 1, turns: [0], words: [],
+  }]));
+  const h = composeDoc(manyConfig, size, composeData(manyConfig, manyTimings), '');
+  assert.match(h, /id="scene-s2"[^>]*data-track-index="1"/);
+  assert.match(h, /id="scene-s3"[^>]*data-track-index="2"/);
+  assert.match(h, /id="scene-s5"[^>]*data-track-index="2"/);
+  assert.match(h, /id="overlay"[^>]*data-track-index="1000"/);
 });
 
 test('a </script> inside spoken words cannot break the DATA block', () => {

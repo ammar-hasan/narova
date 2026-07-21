@@ -56,7 +56,10 @@ function ensureVenv(projectDir, log = console.log) {
 function writeStageInputs(config, outDir) {
   ensureDir(outDir);
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
-  fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(config, null, 2));
+  // assetsDir is an absolute Node-side compose path. Python neither needs it
+  // nor should a generated manifest embed a machine-specific path.
+  const { assetsDir: _assetsDir, ...serializableConfig } = config;
+  fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
 }
 
 function synth(outDir, opts = {}) {

@@ -19,6 +19,8 @@ tts_models/
 
 # Build output (render, capture, assemble, serve all write here)
 out/
+renders/
+snapshots/
 
 # Captured frames + generated media
 frames/
@@ -28,6 +30,10 @@ frames/
 *.aiff
 *.png
 
+# Narova generated projects keep editable source, including local source media.
+# generated/.gitignore excludes each project's output and scratch directories.
+!generated/*/assets/
+!generated/*/assets/**
+
 # macOS
 .DS_Store
-

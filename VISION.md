@@ -30,8 +30,14 @@ strengthening · `[ ]` gap.
   `en_US-hfc_female-medium` (female).
 - [x] **The skill decides the creative direction from the prompt** — theme,
   script, scenes, story, structure, mood, pacing are inferred, not asked.
-  `references/scene-script.md` §"Theme: build it from the prompt" +
+  `references/scene-script.md` §"Theme: build it from evidence" +
   §"Writing scenes from a prompt"; `references/prompt-to-video.md`.
+- [x] **Any URL becomes verified source material** — the skill first
+  classifies product/brand sites, articles, papers, docs, repositories, and
+  general pages, then extracts the right factual and visual evidence. Local
+  project `assets/` are copied into the render bundle.
+  `references/url-to-source.md`, `tool/src/schema.js`,
+  `tool/src/compose/index.js`.
 - [x] **Asks the user only when genuinely ambiguous** — intake guidance with
   a short list of decision-critical questions; otherwise the skill decides.
   `references/prompt-to-video.md` §"When to ask".
@@ -67,7 +73,7 @@ strengthening · `[ ]` gap.
 
 ## Proof (all verified on this machine)
 
-- [x] `npm test` exits 0 (52 JS + 12 Python tests).
+- [x] `npm test` exits 0 (62 JS + 12 Python tests).
 - [x] End-to-end: a project written from a plain natural-language prompt
   builds to `out/video.mp4`; `ffprobe` duration ≈ `out/audio/full.wav`
   (±0.15s). See `examples/`.

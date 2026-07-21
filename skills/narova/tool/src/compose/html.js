@@ -20,7 +20,11 @@ function composeDoc(config, size, data, css) {
 
   const sceneClips = config.scenes.map((s, i) => {
     const sc = data.scenes[i];
-    return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="1">
+    // Keep each track at three scenes or fewer. HyperFrames flags denser tracks
+    // as difficult to edit in Studio; scenes never overlap, so banding them is
+    // deterministic without changing playback.
+    const track = Math.floor(i / 3) + 1;
+    return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
     <div class="chrome">
       <div class="topbar"><div class="wordmark"><b>${title}</b></div><div class="counter">${String(i + 1).padStart(2, '0')} / ${nn}</div></div>
       <div class="canvas"><div class="scenebody">${s.body}</div></div>
@@ -49,11 +53,11 @@ ${css}
      data-width="${size.w}" data-height="${size.h}" data-duration="${fmt(data.total)}">
   <div id="bg" class="stage"></div><!-- class="stage" kept so pre-0.3.0 theme.css background rules still apply -->
 ${sceneClips}
-  <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(data.total)}" data-track-index="2">
+  <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(data.total)}" data-track-index="1000">
     <div class="capzone"><div id="cap-stage" style="position:relative;height:100%"></div></div>
     <div class="progress"><i id="progress-bar"></i></div>
   </section>
-  <audio id="vo" src="assets/narration.wav" data-start="0" data-duration="${fmt(data.total)}" data-track-index="10"></audio>
+  <audio id="vo" src="assets/narration.wav" data-start="0" data-track-index="1001"></audio>
 </div>
 <script>
 var DATA = ${dataJson};

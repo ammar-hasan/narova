@@ -79,6 +79,7 @@ config file is the only source of truth.
 export default {
   title: "My Reel",
   size: "16:9",                           // "16:9" | "1:1" | "9:16" | {w,h}
+  assets: "assets",                       // optional; copied into out/hf/assets/
   voices: {
     a: { backend: "piper", speaker: "en_US-ryan-high", color: "#2ee6d6", label: "host · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
@@ -103,6 +104,9 @@ Rules:
 - `class="reveal"` (no cue): animates in when the scene starts.
 - Scene and voice ids must match `[A-Za-z][A-Za-z0-9_-]*`.
 - Element ids in bodies must be unique across all scenes.
+- Project `assets/` are source and are copied into generated `out/hf/assets/`.
+  Inline SVG and data URIs are supported; remote render-time dependencies are
+  rejected by the authoring workflow and warned by `narova check`.
 - No `animation: ... infinite` in theme.css.
 - Old fields `caption` and `dur` are accepted and ignored.
 
@@ -115,9 +119,11 @@ Rules:
 - Root `#root`: `data-composition-id="main"`, sized in px, `data-duration` = total.
 - `#bg`: a full-size background child. Never put background on the root —
   the renderer can drop it (frame turns black).
-- One `<section class="clip scene">` per scene on track 1, starts chained exactly.
-- One overlay clip on track 2, full length: captions + progress bar.
-- `<audio src="assets/narration.wav">` as a direct child of the root, track 10.
+- One `<section class="clip scene">` per scene, starts chained exactly; scene
+  tracks contain at most three clips to keep Studio's timeline readable.
+- One overlay clip on track 1000, full length: captions + progress bar.
+- `<audio src="assets/narration.wav">` as a direct child of the root, track
+  1001; HyperFrames infers its intrinsic duration.
 - One inline `DATA` object + one paused GSAP timeline at `window.__timelines["main"]`.
 
 `DATA` shape:
@@ -133,8 +139,8 @@ Captions use `tl.set(el, {className}, t)` per word: upcoming → active → past
 This is safe when the renderer jumps to any time. Reveals and cues are
 timeline tweens (opacity, y, scale only).
 
-Also in out/hf: `assets/narration.wav` (a copy of `out/audio/full.wav`) and
-`package.json` (pins the hyperframes version from `tool/src/hf.js`).
+Also in out/hf: the copied project `assets/`, `assets/narration.wav` (a copy
+of `out/audio/full.wav`), and `package.json` (pins the HyperFrames version).
 
 ## The Python contract (frozen)
 
@@ -158,7 +164,8 @@ narova check          validate the config (fast, no side effects)
 narova synth          Python TTS -> out/audio/*, out/timings.json
 narova compose        -> out/hf/
 narova build          synth + compose + render -> out/video.mp4
-narova preview        compose + HyperFrames Studio
+narova preview        compose + HyperFrames Studio; prints the exact URL
+narova preview --detach   persistent Studio (PID/log); --stop ends it
 narova voices         list or download voices
 narova doctor         check ffmpeg, python, venv, hyperframes
 ```
@@ -179,7 +186,7 @@ Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.3.0 shipped
+## Status: 0.4.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

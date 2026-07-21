@@ -16,6 +16,13 @@ announce / entertain), format (`16:9` explainer vs `9:16` reel), length,
 mood/brand (words like "playful", "dark", brand colors, a product name).
 Whatever the prompt says or implies is decided — never re-ask it.
 
+**A URL is source material, not a mood hint.** Before choosing copy, claims,
+colors, fonts, or imagery, follow `references/url-to-source.md`. Classify it
+first: product/brand site, article, paper, documentation, repository, or
+general page. Do not art-direct or script from a search snippet, WebFetch
+summary, metadata-only synopsis, or memory. Preserve exact names, titles,
+claims, and taglines; never silently “improve” them.
+
 ### When to ask
 
 Ask only when a gap would change the whole video and you cannot guess it
@@ -86,7 +93,10 @@ The baseline failure mode: every video comes out dark-navy, teal accent,
 centered title card on every scene. That is one video, re-skinned. Each
 prompt gets its own visual language — you are the director, so direct:
 
-- **Palette from the brief.** Derive `theme` tokens from the brand or mood,
+- **Palette from evidence.** For a brand URL, use verified brand tokens. For
+  an article/paper/docs URL, let the subject and source figures lead; publisher
+  chrome is context, not automatically the theme. For a text brief, derive
+  tokens from the stated brand or mood.
   not from habit. A fintech explainer is not a kids' reel is not a security
   postmortem. The stage glows, progress bar, and caption highlights all
   follow the tokens — a warm palette gets a warm stage automatically.
@@ -109,6 +119,10 @@ prompt gets its own visual language — you are the director, so direct:
   deliberate, and it must not loop (`animation: infinite` breaks rendering).
 - **Self-check before synth:** if this config could become someone else's
   video by swapping only the words, art-direct harder.
+- **Media check before synth:** if the source has useful logos, product
+  imagery, figures, diagrams, screenshots, or people and the video uses none
+  of them, revisit the art direction. Use brand assets for brand-led videos;
+  use source figures and subject-native visuals for articles and papers.
 
 ## Casting the voices
 
@@ -135,6 +149,9 @@ stays identical, and narova's machinery backs you up:
   "for flow"; that re-voices them.
 - Before re-rendering, run `narova check` and sanity-check the new shape:
   scene count, word budget, cue targets.
+- Run HyperFrames `check` on the composed project and fix real layout and
+  contrast findings in source. Do not dismiss them as pipeline noise; only the
+  known generated-contract warnings should disappear at the generator level.
 - After the build, tell the user exactly what changed and what provably
   stayed the same. That sentence is the trust this whole tool runs on.
 

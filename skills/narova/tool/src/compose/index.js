@@ -1,8 +1,8 @@
 'use strict';
 /* narova compose: config + out/timings.json + out/audio/full.wav -> out/hf/,
- * a self-contained HyperFrames project (index.html + assets/narration.wav +
- * package.json). Regenerated from scratch every run — reel.config is the
- * single source of truth; out/hf is a build artifact, never hand-edited. */
+ * a self-contained HyperFrames project (index.html + project assets +
+ * narration.wav + package.json). Regenerated from scratch every run — the
+ * config, theme, and project assets are source; out/hf is never hand-edited. */
 const fs = require('fs');
 const path = require('path');
 const { ensureDir } = require('../util');
@@ -24,10 +24,15 @@ function compose(config, outDir) {
   const css = composeCss(config.theme || {}, config.voices, size, config.themeCss || '');
   const html = composeDoc(config, size, data, css);
 
-  const hfDir = ensureDir(path.join(outDir, 'hf'));
-  ensureDir(path.join(hfDir, 'assets'));
+  const hfDir = path.join(outDir, 'hf');
+  // A clean rebuild matters for assets: deleting logo.svg from the source must
+  // not leave a stale copy in the render project.
+  fs.rmSync(hfDir, { recursive: true, force: true });
+  ensureDir(hfDir);
+  const assetsDir = ensureDir(path.join(hfDir, 'assets'));
+  if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
-  fs.copyFileSync(fullWav, path.join(hfDir, 'assets', 'narration.wav'));
+  fs.copyFileSync(fullWav, path.join(assetsDir, 'narration.wav'));
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({
     name: slug(config.title || 'narova'),
     private: true,

@@ -1,21 +1,15 @@
 ---
 name: narova
 description: >
-  Use narova for any narration-first video — when spoken voiceover is the
-  core of the deliverable and the visuals follow the speech: a narrated or
-  captioned explainer, a two-host dialogue / podcast-style video, a
-  script-to-video request ("turn this script / announcement / README into a
-  narrated video"), or any ask for word-synced (karaoke) captions,
-  voice-triggered reveals, or fully local neural TTS narration with no API
-  keys. narova goes from a prompt or scene script (plain HTML + data) to a
-  finished MP4: two-host neural voiceover (piper/xtts/qwen, all local),
-  captions synced word by word to the generated speech, and elements that
-  appear exactly when the voice reaches them — rendered through HyperFrames.
-  The full tool ships inside this skill; nothing to install. Also read this
-  whenever the user names narova or a reel.config file. For silent motion
-  graphics or video without narration, plain HyperFrames is the tool; narova
-  is the specialist wherever speech drives the video.
-metadata: { "version": "0.3.0", "tags": "video, narration, voiceover, word-synced captions, tts, two-host, explainer, script-to-video, hyperframes" }
+  Use narova for narration-first video: narrated or captioned explainers,
+  two-host dialogue, prompt/script/README-to-video, videos sourced from any
+  URL (product site, article, paper, docs, repository, or general page),
+  word-synced karaoke captions, voice-triggered reveals, or local neural TTS
+  with no API keys. It turns a prompt or scene script into an MP4 with local
+  piper/xtts/qwen voiceover, word-level captions, and speech-timed visuals
+  rendered through HyperFrames. The full tool ships inside the skill. Also
+  use whenever the user names narova or a reel.config file. For silent motion
+  graphics without narration, use plain HyperFrames instead.
 ---
 
 # narova — prompt to narrated, captioned video
@@ -48,20 +42,29 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 
 1. `$NAROVA doctor` — check the machine **before** writing a script.
    Fix problems with `references/environment.md`.
-2. **Write the scene script from the user's prompt.** Read
-   `references/prompt-to-video.md` first (intake, script craft, when to ask
-   the user), then `references/scene-script.md` (the config format). Two
+2. **Create the project, then write the scene script.** In a repository, put
+   generated projects under `generated/<descriptive-slug>/`, never loose at
+   the repo root: `$NAROVA init generated/<slug>`. Keep editable source
+   (`reel.config.mjs`, `theme.css`, `assets/`) and ignore `out/`.
+   If the prompt names a URL, first read and follow
+   `references/url-to-source.md`; classify the page before deciding whether
+   brand, editorial, research, or technical evidence should drive the video.
+   A search result or prose page summary is not source evidence. Then read
+   `references/prompt-to-video.md` (intake and
+   script craft) and `references/scene-script.md` (the config format). Two
    hosts by default (one male, one female voice), short turns, 5–10 scenes,
    `data-cue` on the key visual of most turns. Build the theme from the
-   prompt's brand, mood, and colors: keep whatever the user gave, fill in the
-   rest yourself, never ask for CSS. `$NAROVA init <dir>` gives a start.
+   classified source evidence or the prompt's mood/colors: keep whatever the
+   user gave, fill in the rest yourself, never ask for CSS.
+   `$NAROVA init <dir>` gives a start.
 3. `$NAROVA check` — fast validation. No TTS, no browser, no writes.
    Exit 0 = valid. Run it after **every** config edit.
 4. `$NAROVA synth` — makes the audio and word timings (piper by default).
-5. `$NAROVA compose` — generates `out/hf/`. Optional extra checks, run inside
-   `out/hf`: `npx hyperframes lint` / `check` / `snapshot --at <t>`.
-6. `$NAROVA preview` — opens HyperFrames Studio. **Show the user before
-   rendering.**
+5. `$NAROVA compose` — generates `out/hf/`. Run `npx hyperframes check`
+   inside `out/hf`; use `snapshot --at <t> -o <dir>` for visual checks.
+6. `$NAROVA preview --detach` — keeps HyperFrames Studio alive and prints its
+   exact URL, PID, and log path. Open the printed URL; use
+   `$NAROVA preview --stop` afterward. **Show the user before rendering.**
 7. `$NAROVA build --reuse` — renders `out/video.mp4`, reusing the audio from
    step 4. Verify: `ffprobe` length of the mp4 ≈ length of `out/audio/full.wav`.
 
@@ -72,6 +75,10 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
   warns about this.
 - **Never edit `out/` or `out/hf/`.** Every run regenerates them. Change the
   config and run again.
+- **Keep visual source in project `assets/`.** `compose` copies its contents
+  to `out/hf/assets/`; use `src="assets/logo.svg"` or
+  `url("assets/fonts/brand.woff2")`. Inline SVG and small `data:` URIs are
+  also valid. Never depend on a remote URL during preview or render.
 - **No looping CSS motion in theme.css** (`animation: ... infinite`, hover
   effects, transitions as state). The renderer jumps between frames, so those
   break. Motion comes from `reveal` and `data-cue` only.
@@ -98,6 +105,7 @@ changed sentences, so untouched scenes keep their exact audio. Details:
 | Read…                          | to…                                                          |
 |--------------------------------|--------------------------------------------------------------|
 | `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
+| `references/url-to-source.md`   | classify any URL and extract the right factual and visual evidence|
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
 | `references/cli.md`            | see every command, flag, `out/` file, and rough cost         |
 | `references/gotchas.md`        | avoid the traps (tempo, --reuse, sync, determinism)          |

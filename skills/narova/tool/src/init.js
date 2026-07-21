@@ -9,6 +9,7 @@ const CONFIG = `// narova project — see SPEC.md for the full scene API.
 export default {
   title: "My Reel",
   size: "16:9",                         // "16:9" | "1:1" | "9:16"
+  assets: "assets",                     // copied into out/hf/assets/
   voices: {
     a: { backend: "piper", speaker: "en_US-ryan-high",        color: "#2ee6d6", label: "narrator · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "narrator · B" },
@@ -40,8 +41,9 @@ A narova project. Edit \`reel.config.mjs\`, then:
 
 \`\`\`bash
 narova check      # validate the config (fast)
-narova build      # -> out/video.mp4
-narova preview    # open HyperFrames Studio to review
+narova synth      # create narration + timings
+narova preview --detach  # persistent Studio; prints the review URL
+narova build --reuse     # after approval -> out/video.mp4
 \`\`\`
 
 The first build sets up its own Python venv (~/.narova/venv) and downloads a
@@ -60,10 +62,11 @@ function initProject(dir) {
     console.log(`  create ${name}`);
   };
   console.log(`Scaffolding narova project in ${target}`);
+  ensureDir(path.join(target, 'assets'));
   write('reel.config.mjs', CONFIG);
   write('README.md', README);
   write('.gitignore', GITIGNORE);
-  console.log(`\nNext: cd ${dir} && narova check && narova build`);
+  console.log(`\nNext: cd ${dir} && narova check && narova synth && narova preview --detach`);
 }
 
 module.exports = { initProject };

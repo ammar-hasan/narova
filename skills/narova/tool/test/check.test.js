@@ -1,6 +1,9 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { check } = require('../src/check');
 
 /* check() prints via console.log; capture it. */
@@ -12,8 +15,9 @@ function run(config) {
   return lines;
 }
 
-const base = (scenes, themeCss = '') => ({
+const base = (scenes, themeCss = '', assetsDir = null) => ({
   title: 'T', size: { w: 100, h: 100 }, themeCss,
+  assetsDir,
   voices: { a: { backend: 'piper' } },
   scenes,
 });
@@ -73,4 +77,35 @@ test('reserved generated ids warn', () => {
 test('cues inside HTML comments are ignored', () => {
   const lines = run(base([{ id: 's', body: '<!-- <p data-cue="9">x</p> --><p>y</p>', vo: [{ who: 'a', text: 'a' }] }]));
   assert.ok(!lines.some(l => l.startsWith('warn:')), lines.join('\n'));
+});
+
+test('remote scene and theme assets warn', () => {
+  const lines = run(base(
+    [{ id: 's', body: '<img src="https://example.com/hero.jpg">', vo: [{ who: 'a', text: 'a' }] }],
+    '.brand{background:url(https://example.com/font.woff2)}',
+  ));
+  assert.ok(lines.some(l => l.includes('scene "s" src: remote asset')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('theme.css: remote asset')), lines.join('\n'));
+});
+
+test('named fallback fonts warn about extra HyperFrames downloads', () => {
+  const lines = run(base(
+    [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'a' }] }],
+    ':root{--serif:"Brand Serif",Georgia,"Times New Roman",serif}',
+  ));
+  assert.ok(lines.some(l => l.includes('named fallback font')), lines.join('\n'));
+});
+
+test('missing, misplaced, and escaping project assets warn', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-assets-'));
+  fs.writeFileSync(path.join(dir, 'ok.svg'), '<svg/>');
+  const lines = run(base([{
+    id: 's',
+    body: '<img src="logo.svg"><img src="assets/missing.svg"><div style="background:url(assets/../secret.png)"></div><img src="assets/ok.svg">',
+    vo: [{ who: 'a', text: 'a' }],
+  }], '', dir));
+  assert.ok(lines.some(l => l.includes('must live under project assets/')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('asset not found: assets/missing.svg')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('escapes project assets/')), lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('asset not found: assets/ok.svg')), lines.join('\n'));
 });

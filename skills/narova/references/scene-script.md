@@ -8,6 +8,7 @@ the repo. Full example: `examples/venture-factory/` (14 scenes).
 export default {
   title: "The Venture Factory",
   size: "16:9",                     // "16:9" (1280x720) | "1:1" (1080x1080) | "9:16" (720x1280) | {w,h}
+  assets: "assets",                 // optional project-local dir; copied to out/hf/assets/
   voices: {
     a: { backend: "piper", speaker: "en_US-ryan-high",         color: "#2ee6d6", label: "host · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
@@ -56,8 +57,33 @@ export default {
   List them: `$NAROVA voices list --backend <name>`.
 - **Styling**: the base look ships built in (background, top bar, captions,
   progress bar) plus a menu of scene-layout classes (below). Add your own
-  classes in `theme.css`. Bodies are plain HTML — no scripts, no external
-  files.
+  classes in `theme.css`. Bodies are plain HTML with no scripts. Inline SVG,
+  small `data:` URIs, and files from project `assets/` are supported; remote
+  render-time files are not.
+
+## Images, logos, and fonts
+
+Put durable visual source beside the config in `assets/` (or set top-level
+`assets: "another-local-dir"`). `compose` copies the directory contents into
+`out/hf/assets/`, so source and generated paths match:
+
+```html
+<img class="brand-logo reveal" src="assets/logo.svg" alt="">
+<div class="hero cue" data-cue="1"></div>
+```
+
+```css
+@font-face{font-family:"Brand Serif";src:url("assets/fonts/brand.woff2") format("woff2")}
+.hero{background-image:url("assets/hero.webp")}
+```
+
+Prefer an inline SVG for simple marks and local files for photos or fonts.
+Use a `data:` URI only for a genuinely small asset. Do not base64-pack large
+images or fonts into `theme.css`; it makes the source hard to inspect and
+diff. Do not use `http(s)` URLs: `check` warns and offline renders can fail.
+When bundling a brand font, list only that family plus generic fallbacks such
+as `serif` or `sans-serif`; named fallbacks such as Georgia or Times New Roman
+can make HyperFrames fetch additional font families.
 
 ## Built-in scene layouts
 
@@ -90,19 +116,23 @@ All sizes scale with `vw`, so the same classes work in 16:9, 1:1, and 9:16.
   Static styles are fine. Motion comes from `reveal` and `data-cue`.
 - **Ids**: element ids in bodies must be unique across all scenes.
 
-## Theme: build it from the prompt
+## Theme: build it from evidence
 
 The user never writes CSS. You build the look from what they say. In order:
 
-1. **Keep what the user gave.** A hex code, a brand name, "dark", "warm",
+1. **URL given → classify and inspect it first.** Follow `url-to-source.md`.
+   A brand page can drive tokens and typography; an article or paper mainly
+   drives claims, figures, and subject-native visuals. Do not turn publisher
+   chrome into the theme unless the publisher itself is the subject.
+2. **Otherwise keep what the user gave.** A hex code, a brand name, "dark", "warm",
    "playful" — whatever appears in the prompt stays. Never ask for CSS.
-2. **Fill in the rest.** Tokens: `bg, stage, panel, line, ink, muted, faint,
+3. **Fill in the rest.** Tokens: `bg, stage, panel, line, ink, muted, faint,
    accent, accent-dim, pink, gold, green, red, amber`. Typical mapping:
    main/brand color → `accent`; mood → `bg` and `stage` (dark by default);
    extra brand colors → the `pink` / `gold` slots.
-3. **Use `theme.css` only when tokens are not enough** (gradients, custom
+4. **Use `theme.css` only when tokens are not enough** (gradients, custom
    layouts, a special font). Keep it small.
-4. **Nothing given → use the base look.** `theme` is optional.
+5. **Nothing given → use the base look.** `theme` is optional.
 
 Give each host a `color` that fits the palette.
 

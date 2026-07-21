@@ -1,6 +1,9 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
+const fs = require('node:fs');
+const os = require('node:os');
+const path = require('node:path');
 const { resolveConfig, narration } = require('../src/schema');
 
 const validRaw = () => ({
@@ -72,6 +75,14 @@ test('resolveConfig reports an unknown size as a config error', () => {
 test('resolveConfig rejects a missing theme.css file', () => {
   const raw = { ...validRaw(), theme: { css: 'no-such-file.css' } };
   assert.throws(() => resolveConfig(raw, {}, '.'), /theme\.css: file not found/);
+});
+
+test('resolveConfig discovers project assets and rejects unsafe asset paths', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-assets-'));
+  fs.mkdirSync(path.join(dir, 'assets'));
+  assert.equal(resolveConfig(validRaw(), {}, dir).assetsDir, path.join(dir, 'assets'));
+  assert.throws(() => resolveConfig({ ...validRaw(), assets: '../shared' }, {}, dir), /must be inside the project/);
+  assert.throws(() => resolveConfig({ ...validRaw(), assets: 'missing' }, {}, dir), /directory not found/);
 });
 
 test('legacy caption/dur fields are accepted', () => {

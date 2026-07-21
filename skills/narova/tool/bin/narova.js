@@ -10,12 +10,12 @@ const { loadProjectConfig } = require('../src/config');
 const { resolveConfig } = require('../src/schema');
 const { synth, writeStageInputs, build, findPython } = require('../src/pipeline');
 const { compose } = require('../src/compose');
-const { runHf } = require('../src/hf');
+const { runHf, previewUrl, startHfPreview, stopHfPreview } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
 
-const BOOL_FLAGS = new Set(['reuse', 'help', 'h', 'version']);
+const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -78,6 +78,9 @@ Options:
   --size 16:9|1:1|9:16     frame aspect
   --fps N                  render fps (hyperframes; default 30)
   --quality draft|standard|high   render quality (hyperframes)
+  --port N                 Studio port (default 3002)
+  --detach                 keep Studio running and return its URL + pid
+  --stop                   stop a detached Studio preview
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
@@ -126,7 +129,7 @@ async function main() {
       const out = outDirOf(flags, projectDir);
       const r = compose(config, out);
       console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
-      console.log(`  preview: narova preview   ·   render: narova build --reuse`);
+      console.log(`  preview: narova preview --detach   ·   render: narova build --reuse`);
       return;
     }
 
@@ -142,11 +145,31 @@ async function main() {
     }
 
     case 'preview': {
+      const project = path.resolve(flags.project || '.');
+      const previewOut = outDirOf(flags, project);
+      const pidFile = path.join(previewOut, 'preview.pid');
+      if (flags.stop) {
+        console.log(stopHfPreview(pidFile) ? `preview stopped (${pidFile})` : 'no detached preview is running');
+        return;
+      }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const r = compose(config, out);
-      console.log(`composed -> ${r.dir}; opening HyperFrames Studio (Ctrl-C to stop)`);
-      runHf(['preview'], r.dir);
+      const port = Number(flags.port || 3002);
+      if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
+      if (flags.detach) {
+        const p = startHfPreview(r.dir, {
+          port,
+          logFile: path.join(out, 'preview.log'),
+          pidFile,
+        });
+        console.log(`Studio running -> ${p.url}`);
+        console.log(`  pid ${p.pid} · log ${p.logFile} · stop: narova preview --stop --project ${projectDir}`);
+      } else {
+        console.log(`composed -> ${r.dir}`);
+        console.log(`Studio -> ${previewUrl(r.dir, port)} (Ctrl-C to stop)`);
+        runHf(['preview', '--port', String(port)], r.dir);
+      }
       return;
     }
 

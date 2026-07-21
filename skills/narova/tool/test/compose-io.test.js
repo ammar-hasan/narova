@@ -7,6 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { compose } = require('../src/compose');
 const { HYPERFRAMES_VERSION } = require('../src/hf');
+const { writeStageInputs } = require('../src/pipeline');
 
 const config = {
   title: 'IO Test',
@@ -43,6 +44,21 @@ test('compose writes index.html, the audio copy, and a pinned package.json', () 
   assert.equal(pkg.name, 'io-test');
 });
 
+test('compose copies project assets and removes stale generated copies', () => {
+  const out = tmpOut();
+  const projectAssets = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-assets-'));
+  fs.mkdirSync(path.join(projectAssets, 'fonts'));
+  fs.writeFileSync(path.join(projectAssets, 'logo.svg'), '<svg/>');
+  fs.writeFileSync(path.join(projectAssets, 'fonts', 'brand.woff2'), 'font');
+  compose({ ...config, assetsDir: projectAssets }, out);
+  assert.equal(fs.readFileSync(path.join(out, 'hf', 'assets', 'logo.svg'), 'utf8'), '<svg/>');
+  assert.equal(fs.readFileSync(path.join(out, 'hf', 'assets', 'fonts', 'brand.woff2'), 'utf8'), 'font');
+
+  fs.rmSync(path.join(projectAssets, 'logo.svg'));
+  compose({ ...config, assetsDir: projectAssets }, out);
+  assert.ok(!fs.existsSync(path.join(out, 'hf', 'assets', 'logo.svg')));
+});
+
 test('compose is a clean regeneration (second run overwrites)', () => {
   const out = tmpOut();
   compose(config, out);
@@ -56,4 +72,11 @@ test('compose is a clean regeneration (second run overwrites)', () => {
 test('compose without synth outputs fails with the run-synth-first hint', () => {
   const out = tmpOut(false);
   assert.throws(() => compose(config, out), /run `narova synth` first/);
+});
+
+test('Python stage manifests do not leak the machine-local assets path', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-stage-'));
+  writeStageInputs({ ...config, assetsDir: '/machine/private/project/assets' }, out);
+  const resolved = JSON.parse(fs.readFileSync(path.join(out, 'config.resolved.json'), 'utf8'));
+  assert.ok(!Object.hasOwn(resolved, 'assetsDir'));
 });

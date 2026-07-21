@@ -47,6 +47,14 @@ test('init scaffolds a project that passes check; init never overwrites', () => 
   assert.ok(!/^warn:/m.test(c.stdout), 'scaffold must check clean');
   const again = run(['init', proj]);
   assert.match(again.stdout, /skip\s+reel\.config\.mjs \(exists\)/);
+  assert.ok(fs.statSync(path.join(proj, 'assets')).isDirectory());
+});
+
+test('preview --stop is safe when no detached preview exists', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const r = run(['preview', '--stop', '--project', dir]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /no detached preview is running/);
 });
 
 test('check exits 1 with the full error list on an invalid config', () => {
