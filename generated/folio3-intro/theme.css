@@ -1,0 +1,84 @@
+/* Folio3 intro — light, Apple-clean field with the playful three-dot brand mark.
+   Palette sampled from the folio3 logo: red #fe002b, blue #3d7bf6, gold #f9c200. */
+:root{
+  --f3-red:#fe002b;        /* logo red — fills only (dots, tags, CTA, progress) */
+  --f3-blue:#3d7bf6;       /* logo blue — fills only */
+  --f3-gold:#f9c200;       /* logo gold — fills only */
+  --f3-red-ink:#cc0022;    /* darker red for text (AA on white) */
+  --f3-blue-ink:#2159c7;   /* darker blue for text (AA on white) */
+  --f3-ink:#1c1d1f;
+  --f3-muted:#5b5b60;
+  --f3-line:#e7e7ec;
+  --f3-panel:#f7f7f9;
+  --sans:-apple-system,system-ui,sans-serif;
+}
+
+/* clean white stage, generous air */
+.f3-red{color:var(--f3-red-ink)}
+.f3-blue{color:var(--f3-blue-ink)}
+
+.f3-scene{width:100%;height:100%;display:flex;flex-direction:column;justify-content:center;
+  gap:2.4vh;padding:0 8vw;box-sizing:border-box}
+
+/* recurring three-dot brand motif */
+.f3-dots{display:flex;gap:1.1vw;justify-content:center;margin-bottom:1.4vh}
+.f3-dots span{width:1.5vw;height:1.5vw;border-radius:50%;display:inline-block}
+.d-red{background:var(--f3-red)}
+.d-blue{background:var(--f3-blue)}
+.d-gold{background:var(--f3-gold)}
+.d-red.big,.d-blue.big,.d-gold.big{width:2.4vw;height:2.4vw;border-radius:50%;display:inline-block}
+
+/* ---- title ---- */
+.f3-hero{text-align:center}
+.f3-hero .display{font-family:var(--sans);font-weight:800;letter-spacing:-0.03em;
+  font-size:12vw;line-height:1;color:var(--f3-ink)}
+.f3-hero .f3-three{color:var(--f3-red-ink)}
+.f3-hero .lede{font-family:var(--sans);font-weight:600;font-size:3vw;color:var(--f3-ink);
+  margin-top:2vh}
+.f3-sub{font-family:var(--sans);font-weight:500;font-size:1.7vw;color:var(--f3-muted);margin-top:1vh}
+
+/* ---- shared eyebrow ---- */
+.f3-scene .eyebrow{font-family:var(--sans);font-weight:700;letter-spacing:0.22em;
+  font-size:1.25vw;color:var(--f3-muted);text-transform:uppercase}
+
+/* ---- ai-first stack ---- */
+.f3-stack{display:flex;flex-direction:column;gap:1.6vh;max-width:70vw}
+.f3-layer{display:flex;align-items:center;gap:1.6vw;background:var(--f3-panel);
+  border:1px solid var(--f3-line);border-radius:14px;padding:2.4vh 2.4vw}
+.f3-tag{font-family:var(--sans);font-weight:800;letter-spacing:0.04em;font-size:1.5vw;
+  color:#fff;padding:0.7vh 1.1vw;border-radius:8px;white-space:nowrap;min-width:13vw;text-align:center}
+.t-red{background:var(--f3-red)}
+.t-blue{background:var(--f3-blue)}
+.t-gold{background:var(--f3-gold);color:var(--f3-ink)}
+.f3-do{font-family:var(--sans);font-weight:600;font-size:2.1vw;color:var(--f3-ink)}
+
+/* ---- capability chips ---- */
+.f3-chips{display:flex;flex-wrap:wrap;gap:1.4vw;max-width:74vw}
+.f3-chip{font-family:var(--sans);font-weight:700;font-size:2.2vw;color:var(--f3-ink);
+  background:#fff;border:2px solid var(--f3-line);border-radius:999px;padding:1.4vh 2vw}
+.f3-punch{font-family:var(--sans);font-weight:800;font-size:3vw;color:var(--f3-ink);margin-top:1.2vh;letter-spacing:-0.02em}
+
+/* ---- industries ---- */
+.f3-inds{display:flex;gap:3vw}
+.f3-ind{flex:1;background:var(--f3-panel);border:1px solid var(--f3-line);border-radius:16px;
+  padding:4vh 2vw;display:flex;flex-direction:column;align-items:center;gap:2.4vh;text-align:center}
+.f3-in{font-family:var(--sans);font-weight:700;font-size:2.1vw;color:var(--f3-ink);line-height:1.15}
+
+/* ---- big numbers ---- */
+.f3-figs{display:flex;gap:4vw;flex-wrap:wrap}
+.f3-fig{display:flex;flex-direction:column;gap:0.6vh}
+.f3-num{font-family:var(--sans);font-weight:800;font-size:7vw;line-height:1;letter-spacing:-0.03em}
+.f3-num.f3-red{color:var(--f3-red-ink)}
+.f3-num.f3-blue{color:var(--f3-blue-ink)}
+.f3-lab{font-family:var(--sans);font-weight:600;font-size:1.4vw;color:var(--f3-muted);text-transform:uppercase;letter-spacing:0.08em}
+
+/* ---- close ---- */
+.f3-close{text-align:center;display:flex;flex-direction:column;align-items:center;gap:2.2vh}
+.f3-close .close-line{font-family:var(--sans);font-weight:800;font-size:5vw;line-height:1.05;
+  letter-spacing:-0.02em;color:var(--f3-ink)}
+.f3-cta{font-family:var(--sans);font-weight:800;font-size:2.6vw;color:#fff;background:var(--f3-red);
+  border-radius:999px;padding:1.6vh 3vw}
+.f3-close .close-sign{font-family:var(--sans);font-weight:600;font-size:1.5vw;color:var(--f3-muted)}
+
+/* progress bar in brand red */
+.progress .bar,.progress span,.progress i{background:var(--f3-red)}
