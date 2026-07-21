@@ -1,0 +1,105 @@
+/* Bazaar Technologies — LIGHT brand theme, matching bazaartech.com.
+   White / soft-blue field, bright Bazaar blue #02a3fd, warm product-red
+   accent, gold. Display/body = Gotham (real brand TTFs in assets/fonts). */
+
+@font-face{font-family:"Gotham";src:url("assets/fonts/GothamBook.ttf") format("truetype");font-weight:400;font-style:normal}
+@font-face{font-family:"Gotham";src:url("assets/fonts/GothamBold.ttf") format("truetype");font-weight:700;font-style:normal}
+@font-face{font-family:"Gotham";src:url("assets/fonts/GothamLight.ttf") format("truetype");font-weight:300;font-style:normal}
+
+:root{
+  --bg:#f4f9ff;
+  --stage:#eaf3ff;
+  --panel:#ffffff;
+  --line:#d3e5fb;
+  --ink:#0a1450;
+  --muted:#465a8f;
+  --faint:#7183b0;
+  --accent:#0a6ad6;       /* text-safe blue */
+  --accent-dim:#02a3fd;   /* bright brand blue for fills/glows */
+  --pink:#c9271c;         /* warm product red (text-safe) */
+  --gold:#e6a017;
+  --red:#d6342a;
+  --sans:"Gotham",sans-serif;
+  --serif:"Gotham",sans-serif;
+}
+
+/* ---- light brand backdrop (overrides the base dark #bg) ---- */
+#bg{background:
+   radial-gradient(120% 85% at 50% 110%, rgba(2,163,253,.16), transparent 55%),
+   radial-gradient(80% 55% at 88% -8%, rgba(230,160,23,.10), transparent 55%),
+   linear-gradient(180deg,#fbfdff 0%,#eaf3ff 100%) !important}
+#bg::before{opacity:.5 !important}       /* faint blue grid on white */
+#bg::after{background:
+   radial-gradient(34% 34% at 22% 16%, rgba(2,163,253,.10), transparent 70%),
+   radial-gradient(38% 38% at 82% 84%, rgba(226,58,42,.06), transparent 70%) !important}
+
+/* topbar + captions on white */
+.wordmark b{color:var(--muted)}
+.counter{color:var(--accent);opacity:1}
+.progress{background:rgba(10,27,180,.10)}
+.cap-w{color:#6b7aa0;opacity:.7}
+.cap-w.past{color:var(--ink);opacity:.95}
+
+/* ---- typography ---- */
+.display{font-family:var(--sans);font-weight:700;letter-spacing:.005em;line-height:.98;color:var(--ink)}
+.lede{color:var(--muted);font-weight:300}
+.eyebrow{font-family:var(--sans);font-weight:700;letter-spacing:.28em;text-transform:uppercase;color:var(--accent);font-size:1.15vw}
+.grad{
+  background:linear-gradient(92deg,#02a3fd,#0a1bb4 55%,#e23a2a);
+  -webkit-background-clip:text;background-clip:text;color:transparent;
+}
+
+/* ---- brand wordmark ---- */
+.wm{width:32vw;max-width:560px;filter:drop-shadow(0 10px 26px rgba(2,163,253,.28))}
+
+/* ---- floating grocery objects (cutouts designed for white) ---- */
+.objects{position:absolute;inset:0;pointer-events:none;overflow:hidden}
+.obj{position:absolute;filter:drop-shadow(0 16px 30px rgba(10,20,80,.18))}
+.o-tl{top:8%;left:-2%;width:20vw;transform:rotate(-8deg)}
+.o-tr{top:5%;right:-2%;width:22vw;transform:rotate(7deg)}
+.o-br{bottom:-3%;right:3%;width:24vw;transform:rotate(-4deg)}
+.o-bl{bottom:-5%;left:1%;width:19vw;transform:rotate(6deg)}
+
+/* ---- pill chips ---- */
+.tags{display:flex;gap:1vw;flex-wrap:wrap;justify-content:center;margin-top:1.4vw}
+.tag{
+  font-family:var(--sans);font-weight:700;
+  background:#02a3fd;color:#fff;border-radius:.7vw;
+  padding:.7vw 1.2vw;font-size:1.45vw;letter-spacing:.01em;
+  box-shadow:0 10px 22px rgba(2,163,253,.28);
+}
+.tag.gold{background:#ffcf29;color:#0a1450}
+.tag.red{background:#e23a2a;color:#fff;box-shadow:0 10px 22px rgba(226,58,42,.28)}
+.tag.ghost{background:#fff;color:var(--accent);border:.14vw solid var(--line);box-shadow:none}
+
+/* ---- app split (no boxes — open, clean) ---- */
+.app-split{display:grid;grid-template-columns:1.05fr .95fr;gap:2vw;align-items:center;width:80vw;margin-inline:auto}
+.app-copy{display:flex;flex-direction:column;gap:1vw}
+.phone{
+  width:23vw;margin-inline:auto;border-radius:2.4vw;overflow:hidden;
+  box-shadow:0 26px 60px rgba(10,20,80,.24), 0 0 0 .5vw rgba(2,163,253,.10);
+  background:#fff;
+}
+.phone img{display:block;width:100%}
+
+/* ---- big price stat (app banner style: blue RS. + red 1000) ---- */
+.rs-line{font-family:var(--sans);font-weight:700;font-size:2.1vw;color:var(--accent);letter-spacing:.22em;text-transform:uppercase;text-align:center}
+.rs-num{font-family:var(--sans);font-weight:700;font-size:13vw;line-height:1;color:#0a74d6;letter-spacing:-.01em;text-align:center}
+.rs-num .under{color:#d6342a}
+
+/* ---- two feature cards (light) ---- */
+.duo{display:grid;grid-template-columns:1fr 1fr;gap:1.6vw;width:74vw;margin-inline:auto}
+.card{
+  background:#fff;border:.14vw solid var(--line);border-radius:1.2vw;padding:2vw 1.8vw;
+  box-shadow:0 14px 34px rgba(10,20,80,.08);
+}
+.card.blue{background:linear-gradient(180deg,#0a5ecc,#0a2e86);border-color:transparent;box-shadow:0 16px 36px rgba(2,163,253,.28)}
+.card .pill{display:inline-block;margin-bottom:.9vw;font-size:1vw;font-weight:700;letter-spacing:.2em;text-transform:uppercase;color:var(--accent)}
+.card.blue .pill{color:#e6f2ff}
+.card .k{font-family:var(--sans);font-weight:700;color:var(--ink);font-size:2vw;letter-spacing:.01em}
+.card.blue .k{color:#fff}
+.card .v{color:var(--muted);font-weight:300;font-size:1.3vw;margin-top:.6vw;line-height:1.35}
+.card.blue .v{color:#ffffff}
+
+/* ---- close url chip ---- */
+.url{font-family:var(--sans);font-weight:700;color:var(--accent);font-size:2vw;letter-spacing:.02em;margin-top:.4vw}
