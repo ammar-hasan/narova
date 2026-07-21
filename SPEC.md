@@ -31,20 +31,20 @@ The end goal UX: an agent takes a user prompt, writes the scene script, and
 
 Three layers — keep the boundaries:
 
-- **Python** (`py/narova_tts`, managed venv): **TTS + timings only**.
+- **Python** (`tool/py/narova_tts`, managed venv): **TTS + timings only**.
   Contract is FROZEN: `narration.json` + `config.resolved.json` in →
   `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav` (concatenated narration
   track) + `timings.json` out.
-- **Node** (`src/`, the `narova` CLI): config loading/validation, the
-  **composition generator** (`src/compose/`), and orchestration.
-- **HyperFrames** (via `npx hyperframes@<PIN>`, pinned in `src/hf.js`):
+- **Node** (`tool/src/`, the `narova` CLI): config loading/validation, the
+  **composition generator** (`tool/src/compose/`), and orchestration.
+- **HyperFrames** (via `npx hyperframes@<PIN>`, pinned in `tool/src/hf.js`):
   preview (Studio), lint/check, and rendering the final MP4 (audio muxed).
 
 **narova ships as an agent skill** — the tool lives inside the skill folder;
 installing the skill IS installing narova. The repo is the dev home.
 
 ```
-narova/                          # the repo (dev home; examples + tests)
+narova/                          # the repo (dev home)
 ├── skills/narova/               # THE PRODUCT — docs + tool in one folder
 │   │                            #   (installable: npx skills add ammar-hasan/narova;
 │   │                            #    .claude/skills/narova symlinks here for in-repo use)
@@ -53,7 +53,7 @@ narova/                          # the repo (dev home; examples + tests)
 │       ├── bin/narova.js        # init check synth compose build preview voices doctor
 │       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, util
 │       ├── py/narova_tts/       # TTS backends + timing (piper, xtts, qwen)
-│       └── setup.sh             # venv provisioning (auto-run by first synth)
+│       ├── setup.sh             # venv provisioning (auto-run by first synth)
 │       └── test/                # the tool test suite (npm test runs it)
 └── examples/                    # sample projects
 ```
@@ -134,7 +134,7 @@ Rules:
 - Karaoke = seek-safe `tl.set(el, {className}, t)` word-state flips
   (upcoming → active → past); reveals/cues = timeline tweens on the allowlist.
 - `assets/narration.wav` — copy of `out/audio/full.wav`.
-- `package.json` — pins `hyperframes` to the same version as `src/hf.js`.
+- `package.json` — pins `hyperframes` to the same version as `tool/src/hf.js`.
 
 ## The Python contract (FROZEN)
 
@@ -163,10 +163,10 @@ Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
 
 - **piper** — default, zero-config, fast; downloads an ONNX voice on first use.
 - **xtts** — coqui-tts + torch + torchcodec; MPS/CPU; ~1.9GB model; 58 studio
-  speakers. Gated behind `scripts/setup.sh --xtts`.
+  speakers. Gated behind `tool/setup.sh --xtts`.
 - **qwen** — Qwen3-TTS 0.6B CustomVoice (Apache 2.0); MPS/CPU; ~1.2GB model;
   9 preset speakers; optional per-voice `lang`. Gated behind
-  `scripts/setup.sh --qwen`. Override the model with `$NAROVA_QWEN_MODEL`.
+  `tool/setup.sh --qwen`. Override the model with `$NAROVA_QWEN_MODEL`.
 - The backend interface (`synthesize(who, text) -> wav`) stays pluggable so
   `elevenlabs`, `kokoro`, or macOS `say` can be added later.
 
