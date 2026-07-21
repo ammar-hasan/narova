@@ -55,9 +55,36 @@ export default {
   named speakers (`Damien Black`). qwen has 9 (`Ryan`, `Serena`).
   List them: `$NAROVA voices list --backend <name>`.
 - **Styling**: the base look ships built in (background, top bar, captions,
-  and scene classes like `.s-title`, `.display`, `.lede`, `.pane`). Add your
-  own classes in `theme.css`. Bodies are plain HTML — no scripts, no external
+  progress bar) plus a menu of scene-layout classes (below). Add your own
+  classes in `theme.css`. Bodies are plain HTML — no scripts, no external
   files.
+
+## Built-in scene layouts
+
+Don't center a title on every scene — that is the template look. Mix these
+(videography judgment: `references/prompt-to-video.md` §Videography):
+
+- **Title/closing**: `.s-title` + `.display` + `.lede`; `.s-close` +
+  `.close-line` + `.close-tags` + `.close-sign`.
+- **Cards / split**: `.s-two` grid of `.pane` (`.pane.center` centers
+  inside); `.owners` (3-up people/roles); `.planes` (3-up named cards with
+  `.pname`/`.pdesc`/`.pnever`).
+- **Big number**: `.stat` (+`.pct`) with `.stat-cap` — a single damning or
+  delightful metric filling the screen.
+- **Quote**: `.s-center` + `.bigquote` + `.small` attribution.
+- **Process**: `.stepper` (`.step` + `.sep`); `.flow` of `.lane` connected
+  by `.conn` (`.carr` arrow, `.clab` label); `.stack` of `.layer`
+  (`.ly-id`/`.ly-nm`/`.ly-do`).
+- **Verdicts**: `.verdicts` grid of `.verdict.green|red|amber` with
+  `.vname`/`.vact`.
+- **Lists**: `.flags` (warning bullets); `.ledger` of `.rec`.
+- **Tuning/comparison**: `.dials` of `.dial` (`.dscale span.on` marks the
+  setting); `.homes` two-way compare with `.authority` between.
+- **Furniture**: `.eyebrow`, `.s-head`, `.s-foot` (`.ok`/`.warn`),
+  `.hairline`, `.grad` (gradient text), `.accent`, `.loop-chip`, `.badge`,
+  `.referee` (seal + `.rnotes`), `.desk` (`.ask` rows + `.wait` pills).
+
+All sizes scale with `vw`, so the same classes work in 16:9, 1:1, and 9:16.
 - **Determinism**: no `animation: ... infinite`, no hover effects, no
   transitions-as-state in `theme.css`. The renderer jumps between frames.
   Static styles are fine. Motion comes from `reveal` and `data-cue`.

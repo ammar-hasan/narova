@@ -32,6 +32,8 @@ HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
 
 - `$NAROVA_VENV` — venv path (default `~/.narova/venv`).
 - `$NAROVA_HOME` — base folder (default `~/.narova`).
+- `$NAROVA_CACHE` — sentence synthesis cache (default
+  `~/.narova/cache/sentences`). Delete it to force fresh voices everywhere.
 - `$NAROVA_PYTHON` — use this Python, skip venv discovery.
 - `$NAROVA_QWEN_MODEL` — a different Qwen3-TTS model.
 

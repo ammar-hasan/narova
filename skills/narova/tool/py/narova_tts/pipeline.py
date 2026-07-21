@@ -10,8 +10,11 @@ captions drift behind the voice. See `rescale_timings()` and the final assertion
 """
 from __future__ import annotations
 
+import hashlib
 import json
+import os
 import re
+import shutil
 import subprocess
 from pathlib import Path
 from typing import Any
@@ -20,6 +23,16 @@ from .backends import build_backends
 
 RATE = 22050          # output sample rate (Piper-native; XTTS is resampled to it)
 FADE = 0.012          # ~12ms fade at each sentence edge, or you get clicks (LEARNINGS #4)
+
+# Sentence-level synthesis cache (iteration consistency): a processed sentence
+# wav is kept keyed by backend+speaker+text+tempo, so re-running synth after an
+# edit re-synthesizes ONLY the changed sentences. Unchanged scenes come out
+# byte-identical — revisions never surprise the user. Outside the project on
+# purpose (out/ is a build folder; the cache must survive it being deleted).
+CACHE_DIR = Path(
+    os.environ.get("NAROVA_CACHE")
+    or Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova")) / "cache" / "sentences"
+)
 
 # timing defaults if the config omits them (seconds)
 TIMING_DEFAULTS = {
@@ -92,10 +105,24 @@ def rescale_timings(t: dict[str, Any], actual: float) -> dict[str, Any]:
 
 # ---- sentence synthesis (raw voice -> tempo + fades + resample) --------------
 
-def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float) -> float:
+def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float) -> str:
+    """Stable identity of one synthesized sentence. Bump v1 when the processing
+    chain (rate/fades/atempo) changes so old entries are naturally abandoned."""
+    h = hashlib.sha1()
+    h.update(f"v1|{kind}|{speaker}|{tempo}|{RATE}|{FADE}|{text}".encode("utf-8"))
+    return h.hexdigest()
+
+
+def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,
+                   cache_key: str | None = None) -> float:
     """Synthesize one sentence, speed via atempo (pitch-preserving; NEVER the XTTS
     speed param, LEARNINGS #9), then fade the edges. Returns the MEASURED duration
-    of the processed clip — word timing is distributed across this real value."""
+    of the processed clip — word timing is distributed across this real value.
+    With cache_key, a hit skips TTS + processing entirely (byte-identical copy)."""
+    cached = CACHE_DIR / f"{cache_key}.wav" if cache_key else None
+    if cached is not None and cached.exists():
+        shutil.copyfile(cached, out)
+        return probe(out)
     raw = tmp / "_raw.wav"
     backend.synthesize(who, text, raw)
     d = probe(raw) / tempo                 # duration on the post-tempo timeline
@@ -103,7 +130,11 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
     sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(raw),
        "-af", f"atempo={tempo},afade=t=in:st=0:d={FADE},afade=t=out:st={fo}:d={FADE}",
        "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(out))
-    return probe(out)
+    dur = probe(out)
+    if cached is not None:
+        CACHE_DIR.mkdir(parents=True, exist_ok=True)
+        shutil.copyfile(out, cached)
+    return dur
 
 
 # ---- main pipeline ------------------------------------------------------------
@@ -149,6 +180,10 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
     tail = timing["tail"]
     tempo = float(timing["tempo"])
 
+    # Cache identity per voice: backend kind + speaker name + (below) sentence text.
+    voice_kind = {who: v.get("backend", default_backend) for who, v in voices.items()}
+    voice_speaker = {who: v.get("speaker", who) for who, v in voices.items()}
+
     sil = {}
     for name, d in (("s", gap_sentence), ("t", gap_turn), ("lead", lead), ("tail", tail)):
         sil[name] = tmp / f"sil_{name}.wav"
@@ -174,7 +209,9 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
                     pieces.append(sil["s"])
                     clock += gap_sentence
                 w = tmp / f"{nn}_{si:03d}.wav"
-                d = synth_sentence(router[who], who, sent, tmp, w, tempo)
+                key = sentence_cache_key(voice_kind.get(who, default_backend),
+                                         voice_speaker.get(who, who), sent, tempo)
+                d = synth_sentence(router[who], who, sent, tmp, w, tempo, cache_key=key)
                 pieces.append(w)
                 # distribute words across the sentence's real duration, weighted by length
                 toks = sent.split()

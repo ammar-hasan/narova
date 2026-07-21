@@ -64,6 +64,11 @@ reel.config.mjs
 out/video.mp4
 ```
 
+synth caches every processed sentence (`~/.narova/cache/sentences/`, keyed by
+backend + speaker + text + tempo) so a revision re-synthesizes only the
+changed sentences — untouched scenes keep byte-identical audio. This is the
+iteration-consistency contract.
+
 `out/` and `out/hf/` are build folders. Every run regenerates them. The
 config file is the only source of truth.
 

@@ -1,0 +1,6 @@
+/* backlog-graveyard — signature look: warm newsprint on espresso.
+ * Static styles only (no looping animation — it breaks the renderer). */
+:root { --sans: "Avenir Next", "Trebuchet MS", "Segoe UI", system-ui, sans-serif; }
+.verdicts { grid-template-columns: 1fr 1fr; }   /* two verdicts, not three */
+.stat { color: var(--accent); }                 /* brand coral, not alarm red */
+.bigquote { font-style: italic; }

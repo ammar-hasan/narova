@@ -50,7 +50,10 @@ out/
 
 - Edit visuals: change config → `check` → `compose` → `preview`.
 - Re-render after visual edits: `build --reuse` (skips TTS).
-- Changed any spoken text: full `build`.
+- Changed any spoken text: full `build`. The sentence cache
+  (`~/.narova/cache/sentences/`) re-synthesizes ONLY the changed sentences —
+  untouched scenes keep byte-identical audio. This is the iteration
+  consistency guarantee; don't reword lines the user didn't ask you to touch.
 - Extra checks on the generated page, inside `out/hf`:
   `npx hyperframes lint`, `npx hyperframes check`,
   `npx hyperframes snapshot --at <t1,t2>` (pick word times from timings.json).

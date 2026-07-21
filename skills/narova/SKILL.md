@@ -49,7 +49,9 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 1. `$NAROVA doctor` — check the machine **before** writing a script.
    Fix problems with `references/environment.md`.
 2. **Write the scene script from the user's prompt.** Read
-   `references/scene-script.md` first. Two hosts, short turns, 5–10 scenes,
+   `references/prompt-to-video.md` first (intake, script craft, when to ask
+   the user), then `references/scene-script.md` (the config format). Two
+   hosts by default (one male, one female voice), short turns, 5–10 scenes,
    `data-cue` on the key visual of most turns. Build the theme from the
    prompt's brand, mood, and colors: keep whatever the user gave, fill in the
    rest yourself, never ask for CSS. `$NAROVA init <dir>` gives a start.
@@ -78,16 +80,28 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 - **Default to piper.** It is fast, good for iteration. Offer `--backend qwen`
   or `xtts` for the final render when the user wants richer voices. Both are
   slow and download a 1–2GB model once.
-- **Two hosts read better than one.** Let them trade questions and answers.
+- **Two hosts read better than one.** Default cast: one male + one female
+  voice, trading questions and answers. One narrator only when the format
+  calls for it (a short announcement); more than two only for a real panel.
+
+## Revisions: no surprises
+
+A revision changes only what the user asked for — everything else stays
+byte-identical. Keep scene ids, voices, timing, and theme stable; edit
+surgically. Visual-only edit → `build --reuse` (audio replayed untouched).
+Spoken-text edit → plain `build`: the sentence cache re-synthesizes ONLY the
+changed sentences, so untouched scenes keep their exact audio. Details:
+`references/prompt-to-video.md` §Iterating.
 
 ## Read it to…
 
-| Read…                        | to…                                                       |
-|------------------------------|-----------------------------------------------------------|
-| `references/scene-script.md` | write a `reel.config.mjs` (scenes, cues, voices, theme)   |
-| `references/cli.md`          | see every command, flag, `out/` file, and rough cost      |
-| `references/gotchas.md`      | avoid the traps (tempo, --reuse, sync, determinism)       |
-| `references/environment.md`  | fix `doctor` failures: ffmpeg, python, venv, hyperframes  |
+| Read…                          | to…                                                          |
+|--------------------------------|--------------------------------------------------------------|
+| `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
+| `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
+| `references/cli.md`            | see every command, flag, `out/` file, and rough cost         |
+| `references/gotchas.md`        | avoid the traps (tempo, --reuse, sync, determinism)          |
+| `references/environment.md`    | fix `doctor` failures: ffmpeg, python, venv, hyperframes     |
 
 Related skills: `out/hf/` is a normal HyperFrames composition.
 `hyperframes-core` documents its format; `hyperframes-cli` its commands.

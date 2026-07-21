@@ -28,8 +28,10 @@ function voiceBlock(voices = {}) {
 }
 
 /* Static composition CSS. W/H are the exact pixel frame size — the root MUST be
- * px-sized or HyperFrames renders a collapsed frame (silent failure). */
-function staticCss(W, H) {
+ * px-sized or HyperFrames renders a collapsed frame (silent failure).
+ * `t` is the merged theme tokens: the background glows derive from them so a
+ * custom palette never gets the default teal/pink stage lights. */
+function staticCss(W, H, t = DEFAULT_TOKENS) {
   return `*{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
@@ -44,9 +46,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
    background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
    background-size:44px 44px;opacity:.05}
 #bg::after{content:"";position:absolute;inset:-30%;
-   background:radial-gradient(38% 38% at 28% 18%, rgba(46,230,214,.13), transparent 70%),
-              radial-gradient(42% 42% at 78% 82%, rgba(255,126,182,.10), transparent 70%),
-              radial-gradient(36% 36% at 62% 40%, rgba(255,210,122,.06), transparent 70%)}
+   background:radial-gradient(38% 38% at 28% 18%, ${hexToRgba(t.accent, 0.13)}, transparent 70%),
+              radial-gradient(42% 42% at 78% 82%, ${hexToRgba(t.pink, 0.10)}, transparent 70%),
+              radial-gradient(36% 36% at 62% 40%, ${hexToRgba(t.gold, 0.06)}, transparent 70%)}
 
 /* clips */
 .scene{position:absolute;inset:0;z-index:1}
@@ -203,7 +205,8 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 /* Full stylesheet for the composition. `extraCss` is the project theme.css,
  * appended last so it can add or override scene-layout classes. */
 function composeCss(theme, voices, size, extraCss = '') {
-  const base = `${rootBlock(theme)}\n${staticCss(size.w, size.h)}\n${voiceBlock(voices)}`;
+  const t = { ...DEFAULT_TOKENS, ...theme };
+  const base = `${rootBlock(theme)}\n${staticCss(size.w, size.h, t)}\n${voiceBlock(voices)}`;
   return extraCss ? `${base}\n${extraCss}` : base;
 }
 

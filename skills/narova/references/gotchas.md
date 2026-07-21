@@ -19,6 +19,12 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
 - **`--reuse` only when the spoken text did not change.** It replays the old
   audio and timings. Use it for visual-only edits (body, theme). If any `vo`
   text changed, run a full `build`.
+- **Spoken-text edits re-voice only the changed sentences.** synth caches
+  each processed sentence (backend + speaker + text + tempo) at
+  `~/.narova/cache/sentences/`. Untouched scenes are byte-identical across
+  runs — so never "improve" lines the user didn't ask you to change; that
+  re-voices them. Voice/tempo changes invalidate the cache: everything is
+  re-synthesized.
 - **First runs download things.** The first `synth` creates the venv at
   `~/.narova/venv`. piper gets a voice per speaker. xtts gets ~1.9GB once.
   qwen gets ~1.2GB once. `npx hyperframes` gets the CLI once. None of these

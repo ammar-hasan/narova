@@ -15,7 +15,7 @@ const { runHf } = require('./hf');
  *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts|qwen] [--reuse]
  * It writes <out>/audio/NN.{wav,mp3}, <out>/audio/full.wav and <out>/timings.json. */
 
-// The tool root: .claude/skills/narova/tool (bin/, src/, py/, setup.sh).
+// The tool root: <skill>/tool (bin/, src/, py/, setup.sh) — wherever the skill is installed.
 const TOOL_ROOT = path.resolve(__dirname, '..');
 // Default venv home. Lives OUTSIDE the skill folder — skill dirs get replaced
 // on updates, a venv must survive that.

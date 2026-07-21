@@ -134,8 +134,9 @@ The config file is the only source of truth.
 
 ```
 skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
-examples/          two full sample projects
+examples/          sample projects (incl. one built from a plain-language prompt)
 SPEC.md            the contract
+VISION.md          the product vision, mapped to where each point is implemented
 LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline
 ```
 
