@@ -113,9 +113,8 @@ finished video**: it writes the scene script, runs `check`, builds, and shows
 you the preview. To install the skill anywhere:
 
 ```bash
-npx skills add ammar-hasan/narova          # cross-agent (Claude Code, Codex, Cursor, ...)
-scripts/install-skill.sh                   # or: symlink into ~/.claude/skills + npm link the CLI
-scripts/install-skill.sh --project <dir>   # or: copy into <dir>/.claude/skills
+npx skills add ammar-hasan/narova    # cross-agent (Claude Code, Codex, Cursor, ...)
+# or simply copy skills/narova/ into ~/.claude/skills/ (or your agent's skills dir)
 ```
 
 ## How it works
@@ -145,7 +144,6 @@ the source of truth, and every build regenerates them.
 ```
 skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
 examples/          two full sample projects
-scripts/           install-skill.sh (copy/symlink the skill elsewhere)
 SPEC.md            the contract
 LEARNINGS.md       hard-won fixes — read before changing the pipeline
 ```

@@ -16,7 +16,6 @@
   "files": [
     "skills/",
     ".claude/",
-    "scripts/",
     "SPEC.md",
     "LEARNINGS.md"
   ],

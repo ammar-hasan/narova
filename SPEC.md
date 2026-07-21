@@ -55,8 +55,7 @@ narova/                          # the repo (dev home; examples + tests)
 │       ├── py/narova_tts/       # TTS backends + timing (piper, xtts, qwen)
 │       └── setup.sh             # venv provisioning (auto-run by first synth)
 │       └── test/                # the tool test suite (npm test runs it)
-├── examples/                    # sample projects
-└── scripts/install-skill.sh     # copy/symlink the skill elsewhere
+└── examples/                    # sample projects
 ```
 
 The TTS venv lives at `~/.narova/venv` ($NAROVA_VENV overrides) — outside the
