@@ -32,7 +32,9 @@ function livePreviewPid(pidFile) {
     return pid;
   } catch (e) {
     if (e.code !== 'ESRCH') return pid;
+    // Process is gone: clear both its pid and its remembered-port sidecar.
     fs.rmSync(pidFile, { force: true });
+    fs.rmSync(portFileFor(pidFile), { force: true });
     return null;
   }
 }

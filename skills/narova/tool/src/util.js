@@ -36,7 +36,11 @@ function resolveSize(size) {
     if (presets[size]) return presets[size];
     throw new Error(`unknown size "${size}" — use 16:9, 1:1, 9:16, or {w,h}`);
   }
-  if (size.w && size.h) return { w: size.w | 0, h: size.h | 0 };
+  if (size.w && size.h) {
+    const w = size.w | 0, h = size.h | 0;
+    if (w > 0 && h > 0) return { w, h };
+    throw new Error(`invalid size ${JSON.stringify(size)} — width and height must be positive`);
+  }
   throw new Error(`unknown size ${JSON.stringify(size)} — use 16:9, 1:1, 9:16, or {w,h}`);
 }
 

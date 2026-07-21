@@ -27,8 +27,11 @@ function parseArgs(argv) {
       if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
       const key = a.slice(2);
       if (BOOL_FLAGS.has(key)) { flags[key] = true; continue; }
+      // Every remaining flag expects a value; a bare `--tempo` must error, not
+      // silently resolve to `true` (Number(true)===1, "true" -> hyperframes).
       const nxt = argv[i + 1];
-      if (nxt != null && !nxt.startsWith('--')) { flags[key] = nxt; i++; } else { flags[key] = true; }
+      if (nxt != null && !nxt.startsWith('--')) { flags[key] = nxt; i++; }
+      else { console.error(`--${key} needs a value`); process.exit(1); }
     } else positionals.push(a);
   }
   return { positionals, flags };
@@ -51,10 +54,8 @@ async function loadResolved(flags) {
   return { config, projectDir: dir };
 }
 
-const outDirOf = (flags, projectDir) => {
-  if (flags.out === true) { console.error('--out needs a value'); process.exit(1); }
-  return path.resolve(flags.out || path.join(projectDir || '.', 'out'));
-};
+const outDirOf = (flags, projectDir) =>
+  path.resolve(flags.out || path.join(projectDir || '.', 'out'));
 
 /* Studio serves out/hf from disk and does not hot-reload; compose deletes and
  * recreates that directory, so a detached preview left running shows the OLD

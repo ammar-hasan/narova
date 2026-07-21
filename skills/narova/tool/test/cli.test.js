@@ -75,3 +75,12 @@ test('bare --out errors instead of resolving "true"', () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr, /--out needs a value/);
 });
+
+test('any bare value-flag errors instead of resolving to true', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const r = run(['check', '--project', proj, '--tempo']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--tempo needs a value/);
+});

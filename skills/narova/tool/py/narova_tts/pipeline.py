@@ -34,12 +34,15 @@ CACHE_DIR = Path(
     or Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova")) / "cache" / "sentences"
 )
 
-# timing defaults if the config omits them (seconds)
+# Fallback timing if the config omits a key (seconds). The JS resolver
+# (src/schema.js DEFAULT_TIMING) is authoritative and always sends the gaps, so
+# these only apply when narova_tts is run standalone — keep them mirrored to it.
+# tempo is the exception: JS defaults it to null on purpose so this value wins.
 TIMING_DEFAULTS = {
-    "gapSentence": 0.28,
-    "gapTurn": 0.5,
+    "gapSentence": 0.24,
+    "gapTurn": 0.44,
     "lead": 0.16,
-    "tail": 0.6,
+    "tail": 0.58,
     "tempo": 1.18,
 }
 

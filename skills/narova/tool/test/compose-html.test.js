@@ -84,7 +84,9 @@ test('chrome is on by default: topbar, counter, progress bar', () => {
 });
 
 test('chrome:false strips topbar, counter, and progress bar', () => {
-  const h = composeDoc({ ...config, chrome: false }, size, composeData(config, timings), '');
+  // resolveConfig turns `chrome:false` into this explicit all-off object.
+  const off = { topbar: false, counter: false, progress: false };
+  const h = composeDoc({ ...config, chrome: off }, size, composeData(config, timings), '');
   assert.ok(!/class="topbar"/.test(h));
   assert.ok(!/class="counter"/.test(h));
   assert.ok(!/id="progress-bar"/.test(h));

@@ -14,6 +14,7 @@ test('resolveSize handles presets and objects', () => {
 test('resolveSize rejects unknown sizes instead of silently using 16:9', () => {
   assert.throws(() => resolveSize('4:3'), /unknown size "4:3"/);
   assert.throws(() => resolveSize({ w: 100 }), /unknown size/);
+  assert.throws(() => resolveSize({ w: -5, h: 10 }), /must be positive/);
 });
 
 test('hexToRgba converts and falls back safely', () => {

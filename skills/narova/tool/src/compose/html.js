@@ -17,11 +17,10 @@ function escapeHtml(s) {
 function composeDoc(config, size, data, css) {
   const title = escapeHtml(config.title || 'narova');
   const nn = String(data.scenes.length).padStart(2, '0');
-  // Page furniture is optional: chrome:false strips it entirely so the video
-  // doesn't carry the same wordmark/counter/progress look as every other reel.
-  const chrome = config.chrome === false
-    ? { topbar: false, counter: false, progress: false }
-    : { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
+  // Page furniture is optional. resolveConfig has already turned `chrome:false`
+  // into an explicit { topbar:false, counter:false, progress:false } object, so
+  // here we only merge that resolved object over the all-on default.
+  const chrome = { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
 
   const sceneClips = config.scenes.map((s, i) => {
     const sc = data.scenes[i];
