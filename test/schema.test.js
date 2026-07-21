@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { resolveConfig, narration } = require('../src/schema');
+const { resolveConfig, narration } = require('../skills/narova/tool/src/schema');
 
 const validRaw = () => ({
   title: 'T',

@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { check } = require('../src/check');
+const { check } = require('../skills/narova/tool/src/check');
 
 /* check() prints via console.log; capture it. */
 function run(config) {

@@ -12,25 +12,44 @@ const { runHf } = require('./hf');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
- *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts] [--reuse]
+ *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts|qwen] [--reuse]
  * It writes <out>/audio/NN.{wav,mp3}, <out>/audio/full.wav and <out>/timings.json. */
 
-const REPO_ROOT = path.resolve(__dirname, '..');
+// The tool root: .claude/skills/narova/tool (bin/, src/, py/, setup.sh).
+const TOOL_ROOT = path.resolve(__dirname, '..');
+// Default venv home. Lives OUTSIDE the skill folder — skill dirs get replaced
+// on updates, a venv must survive that.
+const VENV_HOME = process.env.NAROVA_VENV
+  || path.join(process.env.NAROVA_HOME || path.join(require('os').homedir(), '.narova'), 'venv');
 
-/* Locate the managed venv python: $NAROVA_PYTHON, then .venv in the project,
- * then .venv in the narova repo, then bare python3. */
-function findPython(projectDir) {
+/* Venv candidates, in order. Returns the first that exists, else null. */
+function findVenvPython(projectDir) {
   const cands = [
     process.env.NAROVA_PYTHON,
     projectDir && path.join(projectDir, '.venv', 'bin', 'python'),
-    path.join(REPO_ROOT, '.venv', 'bin', 'python'),
-    'python3',
+    path.join(VENV_HOME, 'bin', 'python'),
+    path.join(TOOL_ROOT, '..', '..', '..', '.venv', 'bin', 'python'),  // dev checkout root (repo/skills/narova/tool)
+    path.join(TOOL_ROOT, '.venv', 'bin', 'python'),
   ].filter(Boolean);
-  for (const c of cands) {
-    if (c === 'python3') return c;
-    if (fs.existsSync(c)) return c;
+  for (const c of cands) if (fs.existsSync(c)) return c;
+  return null;
+}
+
+function findPython(projectDir) {
+  return findVenvPython(projectDir) || 'python3';
+}
+
+/* First-run self-provisioning: no venv anywhere -> run the bundled setup.sh
+ * (creates the venv at VENV_HOME and installs the piper deps). */
+function ensureVenv(projectDir, log = console.log) {
+  if (findVenvPython(projectDir)) return;
+  log(`no TTS venv found — creating one at ${VENV_HOME} (one-time, piper backend)`);
+  const r = spawnSync('bash', [path.join(TOOL_ROOT, 'setup.sh')], {
+    stdio: 'inherit', env: { ...process.env, NAROVA_VENV: VENV_HOME },
+  });
+  if (r.error || r.status !== 0) {
+    throw new Error(`setup.sh failed — run it manually: bash ${path.join(TOOL_ROOT, 'setup.sh')}`);
   }
-  return 'python3';
 }
 
 /* Write the two Python stage inputs (narration.json + config.resolved.json). */
@@ -41,6 +60,7 @@ function writeStageInputs(config, outDir) {
 }
 
 function synth(outDir, opts = {}) {
+  if (!opts.python) ensureVenv(opts.projectDir, opts.log);
   const py = opts.python || findPython(opts.projectDir);
   const args = ['-m', 'narova_tts',
     '--narration', path.join(outDir, 'narration.json'),
@@ -49,9 +69,9 @@ function synth(outDir, opts = {}) {
   if (opts.backend) args.push('--backend', opts.backend);
   if (opts.reuse) args.push('--reuse');
   (opts.log || console.log)(`synth: ${py} ${args.join(' ')}`);
-  const pyPath = path.join(REPO_ROOT, 'py') +
+  const pyPath = path.join(TOOL_ROOT, 'py') +
     (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : '');
-  const r = spawnSync(py, args, { stdio: 'inherit', cwd: REPO_ROOT, env: { ...process.env, PYTHONPATH: pyPath } });
+  const r = spawnSync(py, args, { stdio: 'inherit', cwd: TOOL_ROOT, env: { ...process.env, PYTHONPATH: pyPath } });
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
   if (r.status !== 0) throw new Error(`synth (narova_tts) exited ${r.status}`);
   const timings = path.join(outDir, 'timings.json');
@@ -86,4 +106,4 @@ function build(config, opts = {}) {
   return { mp4, seconds, hf: c.dir };
 }
 
-module.exports = { build, synth, writeStageInputs, findPython };
+module.exports = { build, synth, writeStageInputs, findPython, ensureVenv, TOOL_ROOT };

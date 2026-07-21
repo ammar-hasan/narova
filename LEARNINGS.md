@@ -104,6 +104,10 @@ Every one cost time. Encode the fix into the product so it never comes back.
     relative filename.
 21. macOS `say` `--data-format` conflicts with `.aiff` output — omit it (only relevant if you
     keep a `say` backend as the zero-dep fallback).
+22. **espeak-ng (inside piper) breaks on long install paths** (~160-char internal buffer):
+    a venv deep in a temp dir fails with `Error processing file '.../phontab'` while the
+    identical install at a short path works. Keep the TTS venv somewhere short — the
+    default `~/.narova/venv` is safe.
 
 ## The scene model that worked
 

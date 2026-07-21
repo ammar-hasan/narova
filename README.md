@@ -14,20 +14,23 @@ One line: **narova writes the words and the voice; HyperFrames draws the picture
 
 ## Quickstart (60 seconds)
 
+narova ships as an **agent skill** — the whole tool lives inside
+`skills/narova/`. Nothing to install beyond cloning:
+
 ```bash
 git clone https://github.com/ammar-hasan/narova.git && cd narova
-npm install                      # Node CLI
-scripts/setup.sh                 # Python venv for TTS (add --xtts for higher-quality voices)
+npm link                         # optional: puts `narova` on PATH (zero deps)
 narova doctor                    # checks ffmpeg, python, npx hyperframes
 
 narova init myreel && cd myreel
-narova build                     # makes out/video.mp4
+narova build                     # makes out/video.mp4 (first run sets up the TTS venv itself)
 narova preview                   # opens HyperFrames Studio to scrub and review
 ```
 
-You need **ffmpeg** and **Node.js 18+**. `scripts/setup.sh` checks and tells
-you how to get them. The first `build` downloads a voice model and the
-HyperFrames CLI — that is a one-time wait, not a hang.
+You need **ffmpeg**, **Node.js 18+**, and **Python 3.10+**. The first `build`
+creates the TTS venv (at `~/.narova/venv`), downloads a voice model, and the
+HyperFrames CLI — one-time waits, not hangs. Without `npm link`, use
+`node skills/narova/tool/bin/narova.js` instead of `narova`.
 
 ## The scene script
 
@@ -79,8 +82,8 @@ Speech runs in a small Python package inside a managed venv.
 | Backend | Quality | Speed | Setup | Notes |
 |---------|---------|-------|-------|-------|
 | `piper` | good | fast | default | local ONNX; zero config; downloads a voice on first use |
-| `xtts`  | higher | slower | `scripts/setup.sh --xtts` | coqui-tts on MPS/CPU; ~1.9GB model; 58 studio speakers |
-| `qwen`  | high | slower | `scripts/setup.sh --qwen` | Qwen3-TTS 0.6B (Apache 2.0); 9 preset speakers; MPS/CPU |
+| `xtts`  | higher | slower | `tool/setup.sh --xtts` | coqui-tts on MPS/CPU; ~1.9GB model; 58 studio speakers |
+| `qwen`  | high | slower | `tool/setup.sh --qwen` | Qwen3-TTS 0.6B (Apache 2.0); 9 preset speakers; MPS/CPU |
 
 Use two clearly different voices. For piper: `en_US-ryan-high` and
 `en_US-hfc_female-medium`. For xtts: e.g. `Damien Black` and `Sofia Hellen`. For qwen: e.g. `Ryan` and `Serena`.
@@ -104,13 +107,15 @@ Common flags: `--backend piper|xtts|qwen`, `--reuse` (keep existing audio + timi
 
 ## Agent skill
 
-The repo ships a Claude Code skill (`.claude/skills/narova/`). With it, an
-agent can go from **a prompt to a finished video**: it writes the scene script,
-runs `check`, builds, and shows you the preview. To install it anywhere:
+narova IS a Claude Code skill — `skills/narova/` contains the docs an
+agent reads AND the full tool (`tool/`). An agent goes from **a prompt to a
+finished video**: it writes the scene script, runs `check`, builds, and shows
+you the preview. To install the skill anywhere:
 
 ```bash
-scripts/install-skill.sh                   # global: symlink into ~/.claude/skills + npm link the CLI
-scripts/install-skill.sh --project <dir>   # per project: copy into <dir>/.claude/skills
+npx skills add ammar-hasan/narova          # cross-agent (Claude Code, Codex, Cursor, ...)
+scripts/install-skill.sh                   # or: symlink into ~/.claude/skills + npm link the CLI
+scripts/install-skill.sh --project <dir>   # or: copy into <dir>/.claude/skills
 ```
 
 ## How it works

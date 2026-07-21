@@ -1,0 +1,8 @@
+{
+  "name": "narova",
+  "version": "0.3.0",
+  "description": "narova bundled tool — the CLI that ships inside the agent skill.",
+  "private": true,
+  "type": "commonjs",
+  "bin": { "narova": "bin/narova.js" }
+}

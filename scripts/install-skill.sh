@@ -30,7 +30,7 @@ done
 
 SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-SRC="$ROOT/.claude/skills/narova"
+SRC="$ROOT/skills/narova"
 MARKER=".narova-skill-source"   # written into copies; records the source repo
 
 [ -d "$SRC" ] || { echo "skill not found at $SRC" >&2; exit 1; }
@@ -73,7 +73,7 @@ fi
 if (cd "$ROOT" && npm link --silent >/dev/null 2>&1); then
   echo "narova CLI linked onto PATH (narova --version: $(narova --version 2>/dev/null || echo '?'))"
 else
-  echo "note: npm link failed — use: node $ROOT/bin/narova.js <command>"
+  echo "note: npm link failed — use: node $SRC/tool/bin/narova.js <command>"
 fi
 
 echo "done. Claude Code sessions can now trigger the narova skill."

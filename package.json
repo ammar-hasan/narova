@@ -3,23 +3,20 @@
   "version": "0.3.0",
   "description": "A scene script becomes a narrated, captioned video. narova writes the words and the voice; HyperFrames draws the pictures.",
   "bin": {
-    "narova": "bin/narova.js"
+    "narova": "skills/narova/tool/bin/narova.js"
   },
   "type": "commonjs",
-  "main": "src/pipeline.js",
+  "main": "skills/narova/tool/src/pipeline.js",
   "scripts": {
-    "narova": "node bin/narova.js",
+    "narova": "node skills/narova/tool/bin/narova.js",
     "test": "node --test && npm run -s test:py",
     "test:js": "node --test",
-    "test:py": "PYTHONPATH=py python3 -m unittest discover -s py/tests"
+    "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests"
   },
   "files": [
-    "bin/",
-    "src/",
-    "py/",
-    "!py/**/__pycache__",
+    "skills/",
+    ".claude/",
     "scripts/",
-    ".claude/skills/",
     "SPEC.md",
     "LEARNINGS.md"
   ],

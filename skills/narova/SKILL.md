@@ -31,18 +31,19 @@ word-by-word in the speaker's color, and any body element with `data-cue="k"`
 reveals exactly when the voice reaches turn index `k`.
 **narova writes the words and the voice; HyperFrames draws the pictures.**
 
-## Find the tool, check the version
+## The tool is bundled — nothing to install
+
+The whole narova CLI ships inside this skill at `tool/`. Invoke it as:
 
 ```bash
-narova --version   # need >= 0.3.0 (the HyperFrames pipeline)
+NAROVA="node <this-skill-dir>/tool/bin/narova.js"   # define once, use everywhere
 ```
 
-If the command is missing, **or** older than 0.3.0, **or** `narova compose`
-answers `unknown command` (a stale binary on PATH): locate the repo and
-re-link. `readlink` on this skill's folder (e.g. `~/.claude/skills/narova`)
-reveals it for a symlinked install; `cat <skill-folder>/.narova-skill-source`
-for a copied one. Run `npm link` there (zero deps, safe), or call
-`node <repo>/bin/narova.js` directly.
+There is no install step and nothing to look for on PATH. On the first
+`synth`/`build`, the CLI creates its Python venv automatically at
+`~/.narova/venv` (piper backend, one-time). System needs: Node 18+, ffmpeg,
+python3.10+ — `$NAROVA doctor` checks all of them. For the higher-quality
+backends run `bash <this-skill-dir>/tool/setup.sh --xtts` / `--qwen` once.
 
 ## Workflow: prompt → video
 

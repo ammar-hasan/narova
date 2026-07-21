@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { composeData, r3 } = require('../src/compose/data');
+const { composeData, r3 } = require('../skills/narova/tool/src/compose/data');
 
 const config = {
   voices: { a: { label: 'host A' }, b: { label: 'host B' } },

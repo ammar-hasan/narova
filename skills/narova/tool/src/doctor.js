@@ -39,7 +39,7 @@ function doctor(projectDir) {
   add('python', !!ver, ver ? `${py} (${ver})` : `${py} — not runnable`);
   if (ver) {
     const hasMod = pyHasModule(py);
-    add('narova_tts module', hasMod, hasMod ? 'importable' : 'not importable — run scripts/setup.sh');
+    add('narova_tts module', hasMod, hasMod ? 'importable' : 'not importable — run <skill>/tool/setup.sh (or just `narova synth` — it self-provisions)');
   }
 
   const npx = which('npx');

@@ -1,9 +1,13 @@
 #!/usr/bin/env bash
 # narova setup — bootstrap the Python venv used by the `synth` (TTS) stage.
 #
-#   scripts/setup.sh           # piper backend (default, fast, zero-config)
-#   scripts/setup.sh --xtts    # also install the xtts backend (~1.9GB model on first synth)
-#   scripts/setup.sh --qwen    # also install the Qwen3-TTS backend (~1.2GB model on first synth)
+#   tool/setup.sh              # piper backend (default, fast, zero-config)
+#   tool/setup.sh --xtts       # also install the xtts backend (~1.9GB model on first synth)
+#   tool/setup.sh --qwen       # also install the Qwen3-TTS backend (~1.2GB model on first synth)
+#
+# Venv location: $NAROVA_VENV, else ~/.narova/venv (outside the skill folder,
+# so skill updates never destroy it). The CLI runs this automatically on the
+# first synth if no venv exists.
 #
 # Idempotent: safe to re-run. macOS (arm64) friendly. Node deps and the CLI are
 # installed separately with `npm install`; this script only wires the Python side.
@@ -16,18 +20,17 @@ for arg in "$@"; do
     --xtts) WITH_XTTS=1 ;;
     --qwen) WITH_QWEN=1 ;;
     -h|--help)
-      echo "usage: scripts/setup.sh [--xtts] [--qwen]"; exit 0 ;;
+      echo "usage: tool/setup.sh [--xtts] [--qwen]"; exit 0 ;;
     *) echo "unknown option: $arg (see --help)"; exit 1 ;;
   esac
 done
 
-# Resolve repo root from this script's location (works from any cwd).
-SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
-ROOT="$(cd "$SCRIPT_DIR/.." && pwd)"
-VENV="$ROOT/.venv"
-REQ="$ROOT/py/requirements.txt"
-REQ_XTTS="$ROOT/py/requirements-xtts.txt"
-REQ_QWEN="$ROOT/py/requirements-qwen.txt"
+# Resolve the tool root from this script's location (works from any cwd).
+TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+VENV="${NAROVA_VENV:-${NAROVA_HOME:-$HOME/.narova}/venv}"
+REQ="$TOOL/py/requirements.txt"
+REQ_XTTS="$TOOL/py/requirements-xtts.txt"
+REQ_QWEN="$TOOL/py/requirements-qwen.txt"
 
 say()  { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 ok()   { printf '  \033[1;32m✓\033[0m %s\n' "$*"; }
@@ -74,10 +77,11 @@ esac
 
 say "Python virtual environment"
 if [ -d "$VENV" ]; then
-  ok "reusing existing venv at .venv"
+  ok "reusing existing venv at $VENV"
 else
+  mkdir -p "$(dirname "$VENV")"
   "$PY" -m venv "$VENV"
-  ok "created venv at .venv (python $PYVER)"
+  ok "created venv at $VENV (python $PYVER)"
 fi
 # shellcheck disable=SC1091
 source "$VENV/bin/activate"
@@ -106,5 +110,5 @@ else
 fi
 
 say "Done"
-echo "  Verify the toolchain:  narova doctor"
-echo "  Start a project:       narova init myreel && cd myreel && narova build"
+echo "  venv: $VENV"
+echo "  Verify the toolchain with the narova doctor command."

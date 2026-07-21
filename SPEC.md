@@ -40,26 +40,27 @@ Three layers — keep the boundaries:
 - **HyperFrames** (via `npx hyperframes@<PIN>`, pinned in `src/hf.js`):
   preview (Studio), lint/check, and rendering the final MP4 (audio muxed).
 
+**narova ships as an agent skill** — the tool lives inside the skill folder;
+installing the skill IS installing narova. The repo is the dev home.
+
 ```
-narova/
-├── bin/narova.js           # CLI: init check synth compose build preview voices doctor
-├── src/
-│   ├── config.js           # find/load reel.config.{mjs,js,json,cjs}
-│   ├── schema.js           # resolveConfig + narration() (Python contract producer)
-│   ├── check.js            # fast validation + cue/id/animation lints
-│   ├── compose/            # timings + audio + config -> out/hf/ HyperFrames project
-│   │   ├── data.js         # scene-local -> global time DATA
-│   │   ├── css.js          # static styling (tokens, captions, scene classes)
-│   │   ├── html.js         # document skeleton (root, clips, overlay, audio)
-│   │   └── runtime.js      # the synchronous timeline-builder script
-│   ├── hf.js               # HYPERFRAMES_VERSION pin + runHf()
-│   ├── pipeline.js         # writeStageInputs + synth (Python spawn) + build
-│   ├── doctor.js  init.js  util.js
-├── py/narova_tts/          # TTS backends + timing (piper, xtts, rescale, atempo, fades)
-├── examples/               # runnable sample projects
-├── scripts/                # setup.sh (venv), install-skill.sh
-└── .claude/skills/narova/  # the agent skill (prompt -> video workflow)
+narova/                          # the repo (dev home; examples + tests)
+├── skills/narova/               # THE PRODUCT — docs + tool in one folder
+│   │                            #   (installable: npx skills add ammar-hasan/narova;
+│   │                            #    .claude/skills/narova symlinks here for in-repo use)
+│   ├── SKILL.md  references/    # what an agent reads
+│   └── tool/                    # the bundled CLI
+│       ├── bin/narova.js        # init check synth compose build preview voices doctor
+│       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, util
+│       ├── py/narova_tts/       # TTS backends + timing (piper, xtts, qwen)
+│       └── setup.sh             # venv provisioning (auto-run by first synth)
+├── examples/  test/             # sample projects + test suite
+└── scripts/install-skill.sh     # copy/symlink the skill elsewhere
 ```
+
+The TTS venv lives at `~/.narova/venv` ($NAROVA_VENV overrides) — outside the
+skill folder so skill updates never destroy it. The first `synth` creates it
+automatically.
 
 ## The pipeline
 
