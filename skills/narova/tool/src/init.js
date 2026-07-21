@@ -6,6 +6,7 @@ const path = require('path');
 const { ensureDir } = require('./util');
 
 const CONFIG = `// narova project — see SPEC.md for the full scene API.
+// This scaffold is a starting point: replacing it wholesale is the normal flow.
 export default {
   title: "My Reel",
   size: "16:9",                         // "16:9" | "1:1" | "9:16"

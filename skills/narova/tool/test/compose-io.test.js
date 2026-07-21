@@ -7,7 +7,7 @@ const os = require('node:os');
 const path = require('node:path');
 const { compose } = require('../src/compose');
 const { HYPERFRAMES_VERSION } = require('../src/hf');
-const { writeStageInputs } = require('../src/pipeline');
+const { writeStageInputs, resolveReuse } = require('../src/pipeline');
 
 const config = {
   title: 'IO Test',
@@ -79,4 +79,14 @@ test('Python stage manifests do not leak the machine-local assets path', () => {
   writeStageInputs({ ...config, assetsDir: '/machine/private/project/assets' }, out);
   const resolved = JSON.parse(fs.readFileSync(path.join(out, 'config.resolved.json'), 'utf8'));
   assert.ok(!Object.hasOwn(resolved, 'assetsDir'));
+});
+
+test('--reuse holds only while the spoken text is unchanged', () => {
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-reuse-'));
+  assert.equal(resolveReuse(config, out, true), false, 'no previous synth -> full synth');
+  writeStageInputs(config, out);                      // what the last synth consumed
+  assert.equal(resolveReuse(config, out, true), true, 'same vo -> reuse the audio');
+  const edited = { ...config, scenes: [{ ...config.scenes[0], vo: [{ who: 'a', text: 'Changed.' }] }] };
+  assert.equal(resolveReuse(edited, out, true), false, 'changed vo -> force a full synth');
+  assert.equal(resolveReuse(config, out, false), false, '--reuse not requested -> never reuse');
 });

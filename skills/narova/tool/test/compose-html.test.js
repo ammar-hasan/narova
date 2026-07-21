@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { composeDoc, escapeHtml } = require('../src/compose/html');
+const { composeDoc, escapeHtml, namespaceIds } = require('../src/compose/html');
 const { composeData } = require('../src/compose/data');
 
 const config = {
@@ -74,6 +74,41 @@ test('the title is HTML-escaped', () => {
 
 test('scene bodies are embedded verbatim', () => {
   assert.ok(doc().includes('<p class="cue" data-cue="0">x</p>'));
+});
+
+test('body ids are namespaced per scene so SVG defs can repeat across scenes', () => {
+  const svg = '<svg><defs><linearGradient id="grad"><stop offset="0"/></linearGradient></defs>' +
+    '<rect fill="url(#grad)"/></svg>';
+  const dup = {
+    ...config,
+    scenes: [
+      { id: 'one', body: svg },
+      { id: 'two', body: svg },
+    ],
+  };
+  const dupTimings = Object.fromEntries(dup.scenes.map(s => [s.id, timings.s1]));
+  const h = composeDoc(dup, size, composeData(dup, dupTimings), '');
+  assert.match(h, /id="one--grad"/);
+  assert.match(h, /id="two--grad"/);
+  assert.match(h, /url\(#one--grad\)/);
+  assert.match(h, /url\(#two--grad\)/);
+  assert.ok(!/(?<!-)id="grad"/.test(h), 'the bare id must not survive');
+});
+
+test('namespacing rewrites href, for, and aria token-list references', () => {
+  const body = '<svg><defs><symbol id="ic"></symbol></defs><use href="#ic" xlink:href="#ic"/></svg>' +
+    '<label for="fld">L</label><input id="fld" aria-describedby="fld note">' +
+    '<p id="note">n</p>';
+  const h = composeDoc({ ...config, scenes: [{ id: 'sc', body }] }, size,
+    composeData({ ...config, scenes: [{ id: 'sc', body }] }, { sc: timings.s1 }), '');
+  assert.match(h, /href="#sc--ic"/);
+  assert.match(h, /xlink:href="#sc--ic"/);
+  assert.match(h, /for="sc--fld"/);
+  assert.match(h, /aria-describedby="sc--fld sc--note"/);
+});
+
+test('a body without ids passes through byte-identical', () => {
+  assert.equal(namespaceIds('<p class="x">no ids here</p>', 's1'), '<p class="x">no ids here</p>');
 });
 
 test('chrome is on by default: topbar, counter, progress bar', () => {

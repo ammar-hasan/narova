@@ -22,13 +22,33 @@ const DATA = {
   ],
 };
 
-/* Minimal DOM + GSAP stubs. */
-function makeNode(tag) {
-  return {
+/* Minimal DOM + GSAP stubs. `attrs` backs get/has/set/removeAttribute;
+ * classList is derived from className. */
+function makeNode(tag, attrs = {}) {
+  const node = {
     tag, className: '', id: '', children: [], textContent: '',
+    attrs: { ...attrs },
+    parentNode: null,
+    namespaceURI: 'http://www.w3.org/1999/xhtml',
     set innerHTML(v) { this._innerHTML = v; }, get innerHTML() { return this._innerHTML || ''; },
-    appendChild(c) { this.children.push(c); return c; },
+    appendChild(c) { c.parentNode = node; this.children.push(c); return c; },
+    insertBefore(c, ref) {
+      c.parentNode = node;
+      const i = this.children.indexOf(ref);
+      this.children.splice(i < 0 ? this.children.length : i, 0, c);
+      return c;
+    },
+    getAttribute(n) { return n in node.attrs ? node.attrs[n] : null; },
+    hasAttribute(n) { return n in node.attrs; },
+    setAttribute(n, v) { node.attrs[n] = String(v); },
+    removeAttribute(n) { delete node.attrs[n]; },
   };
+  node.classList = {
+    contains: c => node.className.split(/\s+/).includes(c),
+    add: c => { if (!node.classList.contains(c)) node.className = (node.className + ' ' + c).trim(); },
+    remove: c => { node.className = node.className.split(/\s+/).filter(x => x && x !== c).join(' '); },
+  };
+  return node;
 }
 
 function runScript({ sceneEls = {} } = {}) {
@@ -44,6 +64,7 @@ function runScript({ sceneEls = {} } = {}) {
   const document = {
     getElementById: id => (id === 'cap-stage' ? capStage : id === 'progress-bar' ? progressBar : sceneEls[id] || null),
     createElement: makeNode,
+    createElementNS: (ns, tag) => { const n = makeNode(tag); n.namespaceURI = ns; return n; },
     createTextNode: t => ({ text: t }),
   };
   const window = {};
@@ -51,9 +72,11 @@ function runScript({ sceneEls = {} } = {}) {
   return { calls, window, capStage, tl };
 }
 
-/* A scene element whose querySelectorAll returns canned nodes per selector. */
-function sceneEl(bySelector) {
-  return { querySelectorAll: sel => bySelector[sel] || [] };
+/* A scene element whose querySelectorAll returns canned nodes for the runtime's
+ * single animation-target selector. */
+const TARGET_SELECTOR = '.reveal, .cue, [data-cue], [data-grow], [data-draw], [data-count]';
+function sceneEl(targets = []) {
+  return { querySelectorAll: sel => (sel === TARGET_SELECTOR ? targets : []) };
 }
 
 test('registers one paused timeline under __timelines.main', () => {
@@ -86,10 +109,9 @@ test('caption groups toggle opacity at start/end; last group never hides', () =>
 });
 
 test('cue tween lands at sceneStart + turns[k]; scene-local turns globalized', () => {
-  const cue = makeNode('p');
-  cue.getAttribute = () => '0';
+  const cue = makeNode('p', { 'data-cue': '0' });
   const { calls } = runScript({
-    sceneEls: { 'scene-s2': sceneEl({ '[data-cue]': [cue] }) },
+    sceneEls: { 'scene-s2': sceneEl([cue]) },
   });
   const tw = calls.find(c => c.op === 'fromTo' && c.target === cue);
   assert.equal(tw.at, 5 + 0.16);
@@ -97,27 +119,81 @@ test('cue tween lands at sceneStart + turns[k]; scene-local turns globalized', (
 
 test('unresolvable cue falls back to scene entry (check.js parity)', () => {
   for (const raw of ['9', '-1', 'nope', '1.5']) {
-    const cue = makeNode('p');
-    cue.getAttribute = () => raw;
-    const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl({ '[data-cue]': [cue] }) } });
+    const cue = makeNode('p', { 'data-cue': raw });
+    const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([cue]) } });
     const tw = calls.find(c => c.op === 'fromTo' && c.target === cue);
     assert.equal(tw.at, 0, `data-cue="${raw}" must reveal at scene entry`);
   }
   // "1.0" coerces to integer 1 -> resolves to turn 1, NOT scene entry
-  const cue = makeNode('p');
-  cue.getAttribute = () => '1.0';
-  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl({ '[data-cue]': [cue] }) } });
+  const cue = makeNode('p', { 'data-cue': '1.0' });
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([cue]) } });
   assert.equal(calls.find(c => c.op === 'fromTo' && c.target === cue).at, 2.5);
 });
 
-test('reveal/cue-without-attr animate at scene entry; no double tween with data-cue', () => {
+test('reveal/cue-class without data-cue animates at scene entry; no double tween', () => {
   const reveal = makeNode('h1');
+  reveal.className = 'reveal';
   const { calls } = runScript({
-    sceneEls: { 'scene-s1': sceneEl({ '.reveal:not([data-cue]), .cue:not([data-cue])': [reveal] }) },
+    sceneEls: { 'scene-s1': sceneEl([reveal]) },
   });
   const tw = calls.filter(c => c.op === 'fromTo' && c.target === reveal);
   assert.equal(tw.length, 1);
   assert.ok(Math.abs(tw[0].at - 0.1) < 1e-9);   // sc.start + 0.1
+});
+
+test('data-delay nudges both cue and entry triggers', () => {
+  const cued = makeNode('p', { 'data-cue': '1', 'data-delay': '0.35' });
+  const late = makeNode('p', { 'data-delay': '0.5' });
+  late.className = 'reveal';
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([cued, late]) } });
+  assert.equal(calls.find(c => c.op === 'fromTo' && c.target === cued).at, 2.5 + 0.35);
+  assert.ok(Math.abs(calls.find(c => c.op === 'fromTo' && c.target === late).at - 0.6) < 1e-9);
+});
+
+test('data-grow tweens scaleX 0 -> 1 from the left origin', () => {
+  const bar = makeNode('div', { 'data-grow': '' });
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([bar]) } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === bar);
+  assert.equal(tw.from.scaleX, 0);
+  assert.equal(tw.to.scaleX, 1);
+  assert.equal(tw.from.transformOrigin, 'left center');
+});
+
+test('data-draw walks the stroke dash over the path length', () => {
+  const path = makeNode('path', { 'data-draw': '' });
+  path.getTotalLength = () => 123;
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([path]) } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === path);
+  assert.equal(tw.from.strokeDashoffset, 123);
+  assert.equal(tw.to.strokeDashoffset, 0);
+});
+
+test('data-count steps textContent 0 -> target as seek-safe sets', () => {
+  const stat = makeNode('span', { 'data-count': '20', 'data-count-suffix': '%' });
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([stat]) } });
+  const sets = calls.filter(c => c.op === 'set' && c.target === stat && 'textContent' in c.vars);
+  assert.equal(sets.length, 21);                     // 0..20 inclusive
+  assert.equal(sets[0].vars.textContent, '0%');
+  assert.equal(sets.at(-1).vars.textContent, '20%');
+  assert.ok(sets.every((c, i) => i === 0 || c.at > sets[i - 1].at), 'steps advance in time');
+});
+
+test('an SVG transform carrier is wrapped: the tween targets the wrapper', () => {
+  const marker = makeNode('g', { transform: 'translate(100,60)', 'data-cue': '1' });
+  marker.namespaceURI = 'http://www.w3.org/2000/svg';
+  marker.className = 'cue';
+  const svg = makeNode('svg');
+  svg.appendChild(marker);
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([marker]) } });
+  assert.ok(!calls.some(c => c.target === marker), 'no tween may touch the transform carrier');
+  const wrap = svg.children[0];
+  assert.equal(wrap.tag, 'g');
+  assert.equal(wrap.children[0], marker);
+  assert.equal(wrap.getAttribute('data-cue'), '1', 'cue moves to the wrapper');
+  assert.ok(wrap.classList.contains('cue'));
+  assert.ok(!marker.hasAttribute('data-cue'), 'carrier keeps only its transform');
+  assert.equal(marker.getAttribute('transform'), 'translate(100,60)');
+  assert.equal(calls.find(c => c.op === 'fromTo' && c.target === wrap).at, 2.5);
 });
 
 test('full-span anchor + progress bar span the total duration', () => {
@@ -140,6 +216,7 @@ test('chrome.progress === false: no progress tween when the bar is absent', () =
   const document = {
     getElementById: id => (id === 'cap-stage' ? capStage : null), // no progress-bar in the DOM
     createElement: makeNode,
+    createElementNS: (ns, tag) => makeNode(tag),
     createTextNode: t => ({ text: t }),
   };
   new Function('window', 'document', 'gsap', 'DATA', runtimeScript())({}, document, gsap, DATA);
@@ -150,6 +227,6 @@ test('chrome.progress === false: no progress tween when the bar is absent', () =
 test('determinism: script contains no clocks, randomness, or infinite repeats', () => {
   const src = runtimeScript();
   for (const banned of ['Date.now', 'performance.now', 'Math.random', 'repeat: -1', 'repeat:-1', 'setTimeout', 'requestAnimationFrame', 'fetch(']) {
-    assert.ok(!src.includes(banned), `generated runtime must not contain ${banned}`);
+    assert.ok(!src.includes(banned), `generated runtime must not contain ${src.includes(banned) ? banned : ''}`);
   }
 });

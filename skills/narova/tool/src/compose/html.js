@@ -12,6 +12,30 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
+/* Every scene body lands on ONE page, so a hand-authored global-id rule would
+ * make reusable SVG (gradient/filter <defs>, symbols) impossible across
+ * scenes. Instead, compose namespaces each body's ids to `<sceneId>--<id>` and
+ * rewrites the body's own fragment references to match: url(#…), href="#…",
+ * for="…", and aria-labelledby/describedby token lists. Bodies without ids
+ * pass through byte-identical. Ids stay unique WITHIN a scene — check.js lints
+ * that. */
+function namespaceIds(body, sceneId) {
+  const src = String(body);
+  const ids = [...new Set([...src.matchAll(/(?<![-\w])id\s*=\s*(?:"([^"\s]+)"|'([^'\s]+)')/g)]
+    .map(m => m[1] ?? m[2]))];
+  if (!ids.length) return src;
+  const alt = ids.map(s => s.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')).join('|');
+  const ns = (m, pre, id, post) => pre + sceneId + '--' + id + post;
+  return src
+    .replace(new RegExp(`(?<![-\\w])(id\\s*=\\s*["'])(${alt})(["'])`, 'g'), ns)
+    .replace(new RegExp(`(url\\(#)(${alt})(\\))`, 'g'), ns)
+    .replace(new RegExp(`((?:xlink:)?href\\s*=\\s*["']#)(${alt})(["'])`, 'g'), ns)
+    .replace(new RegExp(`(?<![-\\w])(for\\s*=\\s*["'])(${alt})(["'])`, 'g'), ns)
+    .replace(/(aria-(?:labelledby|describedby)\s*=\s*["'])([^"']*)(["'])/g,
+      (m, pre, val, post) => pre + val.split(/\s+/)
+        .map(tok => (ids.includes(tok) ? `${sceneId}--${tok}` : tok)).join(' ') + post);
+}
+
 /* Full index.html for the generated project. `data` is composeData() output,
  * `css` the composeCss() stylesheet. */
 function composeDoc(config, size, data, css) {
@@ -35,7 +59,7 @@ function composeDoc(config, size, data, css) {
     return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
     <div class="chrome">
       ${bar}
-      <div class="canvas"><div class="scenebody">${s.body}</div></div>
+      <div class="canvas"><div class="scenebody">${namespaceIds(s.body, s.id)}</div></div>
     </div>
   </section>`;
   }).join('\n');
@@ -76,4 +100,4 @@ ${runtimeScript()}
 `;
 }
 
-module.exports = { composeDoc, escapeHtml };
+module.exports = { composeDoc, escapeHtml, namespaceIds };

@@ -109,12 +109,17 @@ narova init <dir>     new project
 narova check          validate the config (fast, no side effects)
 narova synth          make the audio + word timings
 narova compose        make the HyperFrames project (out/hf/)
+narova shots          snapshot one QA frame per scene
 narova build          synth + compose + render -> out/video.mp4
 narova preview        open HyperFrames Studio and print its URL
 narova preview --detach   keep Studio alive; stop with preview --stop
 narova voices         list or download voices
 narova doctor         check your machine
 ```
+
+Commands find the project from any folder inside it (they walk up to the
+nearest `reel.config.*`). `check` also prints an estimated narration length,
+so a target duration can be tuned before any audio exists.
 
 Useful flags: `--backend piper|xtts|qwen`, `--reuse` (keep old audio),
 `--tempo`, `--size`, `--fps`, `--quality draft|standard|high`.

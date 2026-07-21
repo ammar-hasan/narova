@@ -5,11 +5,13 @@
  * Zero runtime deps: a tiny arg parser drives check / synth / compose / build /
  * preview / voices / doctor / init. */
 const path = require('path');
+const fs = require('fs');
 const { spawnSync } = require('child_process');
 const { loadProjectConfig } = require('../src/config');
 const { resolveConfig } = require('../src/schema');
-const { synth, writeStageInputs, build, findPython } = require('../src/pipeline');
+const { synth, writeStageInputs, build, findPython, resolveReuse } = require('../src/pipeline');
 const { compose } = require('../src/compose');
+const { composeData } = require('../src/compose/data');
 const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
@@ -58,15 +60,37 @@ const outDirOf = (flags, projectDir) =>
   path.resolve(flags.out || path.join(projectDir || '.', 'out'));
 
 /* Studio serves out/hf from disk and does not hot-reload; compose deletes and
- * recreates that directory, so a detached preview left running shows the OLD
- * build (or an empty 00:00 canvas). Warn whenever compose/build replaces the
- * directory under a live preview. */
-function warnIfPreviewStale(out) {
-  const pid = livePreviewPid(path.join(out, 'preview.pid'));
-  if (pid) {
-    console.error(`note: a detached Studio preview (pid ${pid}) is running and will keep showing the OLD build —`);
-    console.error('      restart it with: narova preview --detach');
+ * recreates that directory, so a detached preview left running would keep
+ * showing the OLD build (or an empty 00:00 canvas). Instead of just warning,
+ * restart it on the new build — the review URL the user has open starts
+ * serving fresh frames. */
+function refreshPreviewIfLive(out) {
+  const pidFile = path.join(out, 'preview.pid');
+  const pid = livePreviewPid(pidFile);
+  if (!pid) return;
+  const port = previewPort(pidFile) || 3002;
+  try {
+    stopHfPreview(pidFile);
+    const p = startHfPreview(path.join(out, 'hf'), {
+      port, logFile: path.join(out, 'preview.log'), pidFile,
+    });
+    console.log(`Studio restarted on the new build -> ${p.url}  (pid ${p.pid}; stop: narova preview --stop)`);
+  } catch (e) {
+    console.error(`note: could not restart the detached preview (${e.message}) — restart it yourself: narova preview --detach`);
   }
+}
+
+const fmtTime = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+
+/* Print when each scene starts — the QA timeline for snapshots and review. */
+function printSceneTable(config, out) {
+  const timings = JSON.parse(fs.readFileSync(path.join(out, 'timings.json'), 'utf8'));
+  const data = composeData(config, timings);
+  console.log('scene starts:');
+  for (const sc of data.scenes) {
+    console.log(`  ${fmtTime(sc.start)}  ${sc.id}  (${sc.dur.toFixed(1)}s)`);
+  }
+  console.log(`  ${fmtTime(data.total)}  end`);
 }
 
 const HELP = `narova — a scene script becomes a narrated, captioned video
@@ -79,18 +103,25 @@ Commands:
   check                validate config fast — no TTS, no browser, no writes
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> out/hf/ (HyperFrames project)
+  shots                snapshot one QA frame per scene into out/hf/snapshots/
   build                synth + compose + hyperframes render -> out/video.mp4
   preview              compose, then open HyperFrames Studio on out/hf
   voices list|get      list / download TTS voices (delegates to narova_tts)
   doctor               check ffmpeg, ffprobe, python venv, npx hyperframes
 
+Commands find the project from the current folder OR any parent folder, so
+they work from inside out/ and out/hf too. A detached Studio preview is
+restarted automatically whenever compose/build replaces out/hf.
+
 Options:
   --backend piper|xtts|qwen   TTS backend
   --reuse                  skip synth, reuse out/audio + out/timings.json
+                           (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)
   --size 16:9|1:1|9:16     frame aspect
   --fps N                  render fps (hyperframes; default 30)
   --quality draft|standard|high   render quality (hyperframes)
+  --at t1,t2,...           shots: explicit frame times (default: mid-scene)
   --port N                 Studio port (default 3002)
   --detach                 keep Studio running and return its URL + pid
   --stop                   stop a detached Studio preview
@@ -131,8 +162,9 @@ async function main() {
     case 'synth': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
+      const reuse = resolveReuse(config, out, flags.reuse);
       writeStageInputs(config, out);
-      synth(out, { backend: flags.backend, reuse: flags.reuse, projectDir });
+      synth(out, { backend: flags.backend, reuse, projectDir });
       console.log(`synth complete -> ${out}/audio (incl. full.wav), ${out}/timings.json`);
       return;
     }
@@ -142,8 +174,37 @@ async function main() {
       const out = outDirOf(flags, projectDir);
       const r = compose(config, out);
       console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
-      console.log(`  preview: narova preview --detach   ·   render: narova build --reuse`);
-      warnIfPreviewStale(out);
+      printSceneTable(config, out);
+      console.log(`  qa: narova shots   ·   preview: narova preview --detach   ·   render: narova build --reuse`);
+      refreshPreviewIfLive(out);
+      return;
+    }
+
+    case 'shots': {
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      const timingsPath = path.join(out, 'timings.json');
+      const hfDir = path.join(out, 'hf');
+      if (!fs.existsSync(timingsPath)) {
+        console.error('shots needs out/timings.json — run `narova synth` first');
+        process.exit(1);
+      }
+      if (!fs.existsSync(path.join(hfDir, 'index.html'))) {
+        console.error('shots needs out/hf/index.html — run `narova compose` first');
+        process.exit(1);
+      }
+      const data = composeData(config, JSON.parse(fs.readFileSync(timingsPath, 'utf8')));
+      // One QA frame per scene, mid-scene by default; --at t1,t2 overrides.
+      const times = flags.at
+        ? String(flags.at).split(',').map(Number)
+        : data.scenes.map(sc => Math.round((sc.start + sc.dur / 2) * 10) / 10);
+      if (times.some(t => !Number.isFinite(t))) {
+        console.error('--at needs comma-separated seconds, e.g. --at 0.8,6.2,14');
+        process.exit(1);
+      }
+      runHf(['snapshot', '--at', times.join(','), '-o', 'snapshots/review'], hfDir);
+      console.log(`frames -> ${path.join(hfDir, 'snapshots', 'review')}  (${times.length} @ ${times.join(', ')})`);
+      console.log('look at every frame — lint misses glyph bleed and chrome collisions; your eyes are the check');
       return;
     }
 
@@ -155,7 +216,7 @@ async function main() {
         backend: flags.backend, reuse: flags.reuse,
         fps: flags.fps, quality: flags.quality,
       });
-      warnIfPreviewStale(out);
+      refreshPreviewIfLive(out);
       return;
     }
 

@@ -103,8 +103,15 @@ Rules:
 - `body` is HTML, placed into the scene clip as-is.
 - `data-cue="k"`: hidden until turn `k` starts. `k` counts from 0.
 - `class="reveal"` (no cue): animates in when the scene starts.
+- Timeline animators: `data-grow` (scaleX 0→1 from the left), `data-draw`
+  (SVG stroke-dash self-draw), `data-count="N"` (+ optional
+  `data-count-suffix`), `data-delay="s"` (added to the cue/entry trigger).
 - Scene and voice ids must match `[A-Za-z][A-Za-z0-9_-]*`.
-- Element ids in bodies must be unique across all scenes.
+- Element ids in bodies are namespaced per scene at compose
+  (`<sceneId>--<id>`; the body's own `url(#…)` / `href="#…"` / `for` /
+  aria references are rewritten). Ids must be unique only within one scene,
+  so reusable SVG `<defs>` can repeat across scenes. theme.css must not use
+  `#id` selectors for body elements (`check` warns).
 - Project `assets/` are source and are copied into generated `out/hf/assets/`.
   Inline SVG and data URIs are supported; remote render-time dependencies are
   rejected by the authoring workflow and warned by `narova check`.
@@ -145,7 +152,12 @@ Rules:
 
 Captions use `tl.set(el, {className}, t)` per word: upcoming → active → past.
 This is safe when the renderer jumps to any time. Reveals and cues are
-timeline tweens (opacity, y, scale only).
+timeline tweens (opacity, y, scale); `data-grow`/`data-draw` are property
+tweens (scaleX, stroke-dashoffset); `data-count` is stepped `tl.set` on
+textContent. An animated SVG element carrying a `transform` attribute is
+wrapped in a fresh `<g>` at load and the tween targets the wrapper, so the
+attribute survives GSAP's CSS transform. The canvas reserves the caption
+band's height; the content column is `var(--colw, 1000px)`.
 
 Also in out/hf: the copied project `assets/`, `assets/narration.wav` (a copy
 of `out/audio/full.wav`), and `package.json` (pins the HyperFrames version).
@@ -168,9 +180,11 @@ All times are scene-local seconds, already rescaled to the real audio.
 
 ```
 narova init <dir>     new project
-narova check          validate the config (fast, no side effects)
+narova check          validate the config (fast, no side effects); prints an
+                      estimated narration length for target-duration tuning
 narova synth          Python TTS -> out/audio/*, out/timings.json
-narova compose        -> out/hf/
+narova compose        -> out/hf/; prints per-scene start times
+narova shots          snapshot one QA frame per scene -> out/hf/snapshots/
 narova build          synth + compose + render -> out/video.mp4
 narova preview        compose + HyperFrames Studio; prints the exact URL
 narova preview --detach   persistent Studio (PID/log); --stop ends it
@@ -178,9 +192,14 @@ narova voices         list or download voices
 narova doctor         check ffmpeg, python, venv, hyperframes
 ```
 
-Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
-`--quality draft|standard|high`, `--out`, `--project`, `--config`,
-`--voice-a`, `--voice-b`.
+Commands find the config by walking up from the current directory, so they
+work from inside `out/` and `out/hf`. A detached Studio preview left running
+is restarted automatically whenever `compose`/`build` replaces `out/hf`.
+
+Flags: `--backend piper|xtts|qwen`, `--reuse` (ignored automatically when the
+spoken text changed since the last synth), `--tempo`, `--size`, `--fps`,
+`--quality draft|standard|high`, `--at` (shots), `--out`, `--project`,
+`--config`, `--voice-a`, `--voice-b`.
 
 ## Backends
 
@@ -194,7 +213,7 @@ Flags: `--backend piper|xtts|qwen`, `--reuse`, `--tempo`, `--size`, `--fps`,
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.4.0 shipped
+## Status: 0.6.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

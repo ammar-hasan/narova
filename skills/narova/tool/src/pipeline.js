@@ -62,6 +62,27 @@ function writeStageInputs(config, outDir) {
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
 }
 
+/* `--reuse` replays the previous synth's audio + timings. If the spoken text
+ * changed since that synth, replaying would silently ship stale audio — so
+ * compare the current narration against the one the last synth consumed
+ * (narration.json, written before the Python stage runs) and force a full
+ * synth on any difference. Voice/backend/tempo changes with unchanged text
+ * still replay old audio by design — run a full build to re-voice. */
+function resolveReuse(config, outDir, requested, log = console.log) {
+  if (!requested) return false;
+  const prev = path.join(outDir, 'narration.json');
+  if (!fs.existsSync(prev)) {
+    log('note: --reuse but no previous synth found — running a full synth');
+    return false;
+  }
+  try {
+    const before = JSON.parse(fs.readFileSync(prev, 'utf8'));
+    if (JSON.stringify(before) === JSON.stringify(narration(config))) return true;
+  } catch { /* unreadable manifest — safest is a full synth */ }
+  log('note: the spoken text changed since the last synth — ignoring --reuse and re-synthesizing');
+  return false;
+}
+
 function synth(outDir, opts = {}) {
   if (!opts.python) ensureVenv(opts.projectDir, opts.log);
   const py = opts.python || findPython(opts.projectDir);
@@ -89,9 +110,13 @@ function build(config, opts = {}) {
   ensureDir(outDir);
   const log = opts.log || console.log;
 
-  log(`[1/3] synth${opts.reuse ? ' (--reuse)' : ''}`);
+  const reuse = resolveReuse(config, outDir, opts.reuse, log);
+  log(`[1/3] synth${reuse ? ' (--reuse)' : ''}`);
   writeStageInputs(config, outDir);
-  synth(outDir, { backend: opts.backend, reuse: opts.reuse, projectDir: opts.projectDir, python: opts.python, log });
+  synth(outDir, {
+    backend: opts.backend, reuse,
+    projectDir: opts.projectDir, python: opts.python, log,
+  });
 
   log('[2/3] compose');
   const c = compose(config, outDir);
@@ -109,4 +134,4 @@ function build(config, opts = {}) {
   return { mp4, seconds, hf: c.dir };
 }
 
-module.exports = { build, synth, writeStageInputs, findPython, ensureVenv, TOOL_ROOT };
+module.exports = { build, synth, writeStageInputs, resolveReuse, findPython, ensureVenv, TOOL_ROOT };

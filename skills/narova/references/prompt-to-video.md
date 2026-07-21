@@ -99,7 +99,10 @@ share a script formula any more than they share a palette.
   narration keeps engagement even in education — don't slow to a crawl; add
   scene breaks instead.
 - **Length → words**: 30s ≈ 60–80 words · 60s ≈ 130–160 · 90s ≈ 200–240 ·
-  2min ≈ 260–300. Count the words in your `vo` before you synth.
+  2min ≈ 260–300. Count the words in your `vo` before you synth — `narova
+  check` prints the estimated narration length (word count × tempo plus the
+  fixed gaps), so tune words and `timing.tempo` against the user's target
+  duration before any audio exists, not after measuring three renders.
 - **Turns are short**: 1–3 sentences each. Long monologue turns kill the
   conversational rhythm. If a sentence needs a breath mid-way, split it.
 - **Write for the ear**: second person, contractions, plain words. Read it
@@ -107,6 +110,11 @@ share a script formula any more than they share a palette.
 - **Show, don't tell**: never narrate what the screen already shows; the
   `body` carries the visual, `vo` carries the meaning. Fewer words on screen
   than spoken — the captions already show the transcript.
+- **Framing is a choice; own it.** On contested topics, accurate claims can
+  still add up to a one-sided story. Ledger the major perspectives
+  (`references/url-to-source.md` §3), attribute contested assertions to
+  their claimants, and re-read the finished `vo` asking "whose framing is
+  this?" No lint catches bias — this read is the gate.
 
 ## Videography: never ship the template
 
@@ -169,7 +177,10 @@ stays identical, and narova's machinery backs you up:
   same theme. Edit surgically — the exact turn or body the user named,
   nothing "improved" alongside.
 - **Visual-only edit** (body HTML, theme, cues): `narova build --reuse` —
-  audio and timings are replayed untouched.
+  audio and timings are replayed untouched. `--reuse` is guarded: if the
+  spoken text did change, it is ignored with a note and the changed
+  sentences re-synthesize, so picking the wrong command cannot ship stale
+  audio.
 - **Spoken-text edit**: plain `narova build`. The sentence cache
   (`~/.narova/cache/sentences/`) re-synthesizes ONLY the changed sentences —
   untouched scenes come out byte-identical. Never reword unchanged lines
@@ -185,13 +196,14 @@ stays identical, and narova's machinery backs you up:
 ## Working with the user
 
 - **Snapshot to verify, preview to watch, render to ship.** Composing is
-  cheap; rendering is the commitment. After `compose`, snapshot one frame
-  per scene and look at them — that is the verification step (layout,
-  overlap, contrast). Studio preview is the live look for the user, and it
-  does not hot-reload: re-run `preview --detach` to restart it on the new
-  build. Show the preview, say what you made and why in two sentences,
-  and offer the 2–3 most likely next moves ("shorter? punchier hook?
-  different closer?") instead of an open "so what do you think?".
+  cheap; rendering is the commitment. After `compose` (which prints every
+  scene's start time), run `narova shots` and look at one frame per scene —
+  that is the verification step (layout, overlap, contrast, framing).
+  Studio preview is the live look for the user; it does not hot-reload, so
+  `compose`/`build` restart a live detached preview on the new build
+  automatically. Show the preview, say what you made and why in two
+  sentences, and offer the 2–3 most likely next moves ("shorter? punchier
+  hook? different closer?") instead of an open "so what do you think?".
 - Guide wholeheartedly, then get out of the way. Suggest once, don't push.
   When the user gives a direction, that's the direction.
 - Celebrate the artifact, not yourself. "Here's your video" beats "I did X".

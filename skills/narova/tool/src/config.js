@@ -7,13 +7,20 @@ const { pathToFileURL } = require('url');
 
 const CANDIDATES = ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs'];
 
+/* Locate the config from `dir`, walking UP toward the filesystem root if it is
+ * not there. Commands are often run from a subdirectory (e.g. out/hf after a
+ * hyperframes call); the project is the nearest ancestor holding a config. */
 function findConfig(dir) {
-  const d = path.resolve(dir || '.');
-  for (const name of CANDIDATES) {
-    const p = path.join(d, name);
-    if (fs.existsSync(p)) return p;
+  let d = path.resolve(dir || '.');
+  for (;;) {
+    for (const name of CANDIDATES) {
+      const p = path.join(d, name);
+      if (fs.existsSync(p)) return p;
+    }
+    const parent = path.dirname(d);
+    if (parent === d) return null;
+    d = parent;
   }
-  return null;
 }
 
 async function loadConfigFile(file) {
@@ -40,7 +47,7 @@ async function loadProjectConfig(projectDir, explicitFile) {
     ? path.resolve(explicitFile)
     : findConfig(projectDir);
   if (!file || !fs.existsSync(file)) {
-    throw new Error(`No config found. Expected one of ${CANDIDATES.join(', ')} in ${path.resolve(projectDir || '.')}`);
+    throw new Error(`No config found. Expected one of ${CANDIDATES.join(', ')} in ${path.resolve(projectDir || '.')} or any parent directory`);
   }
   const raw = await loadConfigFile(file);
   return { raw, file, dir: path.dirname(file) };

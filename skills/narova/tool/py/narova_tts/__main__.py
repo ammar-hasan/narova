@@ -19,10 +19,22 @@ from pathlib import Path
 
 from .pipeline import run
 
-# A few well-known starter voices per backend. `list` stays lightweight (no model
-# load, no network); XTTS ships 58 studio speakers built into the cached model.
+# Well-known starter voices per backend, with a spread of genders/accents so a
+# multi-host cast can sound distinct without the heavy backends. `list` stays
+# lightweight (no model load, no network); XTTS ships 58 studio speakers built
+# into the cached model.
 KNOWN_VOICES = {
-    "piper": ["en_US-ryan-high", "en_US-hfc_female-medium", "en_US-lessac-medium"],
+    "piper": [
+        "en_US-ryan-high",           # male, energetic
+        "en_US-hfc_female-medium",   # female
+        "en_US-hfc_male-medium",     # male
+        "en_US-amy-medium",          # female, warm
+        "en_US-joe-medium",          # male, neutral
+        "en_US-kristin-medium",      # female, conversational
+        "en_US-lessac-medium",       # male, narrator
+        "en_US-libritts_r-medium",   # male, audiobook
+        "en_GB-alan-medium",         # male, British
+    ],
     "xtts": ["Damien Black", "Sofia Hellen", "Craig Gutsy", "Alison Dietlinde"],
     # Qwen3-TTS CustomVoice presets (all 9): first five suit English well;
     # Dylan/Uncle_Fu are Chinese-flavored, Ono_Anna Japanese, Sohee Korean.

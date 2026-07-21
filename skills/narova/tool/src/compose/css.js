@@ -70,8 +70,12 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .topbar{display:flex;justify-content:space-between;align-items:flex-start;font-family:var(--mono);font-size:clamp(9px,1.15vw,12px);letter-spacing:.14em;color:var(--faint)}
 .wordmark b{color:var(--muted);font-weight:600}
 .counter{color:var(--accent);opacity:.85}
-.canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0}
-.scenebody{width:100%;max-width:1000px;display:flex;flex-direction:column;align-items:stretch}
+/* The caption band is an absolute overlay at the bottom; the canvas reserves
+ * its height so vertically-centered content never slides underneath it.
+ * --colw widens the content column for wide infographics/maps
+ * (theme: { colw: "1180px" }) without touching this stylesheet. */
+.canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding-bottom:clamp(84px,15vh,170px)}
+.scenebody{width:100%;max-width:var(--colw,1000px);display:flex;flex-direction:column;align-items:stretch}
 .progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--track);z-index:6}
 .progress > i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,var(--accent-dim),var(--accent));box-shadow:0 0 12px var(--accent)}
 

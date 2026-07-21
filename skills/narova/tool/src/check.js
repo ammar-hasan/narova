@@ -5,10 +5,6 @@
 const fs = require('fs');
 const path = require('path');
 
-// Ids the generated composition owns (src/compose/html.js + runtime.js).
-const RESERVED_IDS = new Set(['root', 'bg', 'overlay', 'cap-stage', 'progress-bar', 'vo']);
-const RESERVED_PREFIXES = ['scene-', 'capg-', 'capw-'];
-
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
  * the source. Heuristic — warnings only, never errors. */
@@ -72,6 +68,33 @@ function inspectAssetRef(ref, config, at, warnings) {
   }
 }
 
+/* Rough narration-length estimate so a target duration ("about 2 minutes") can
+ * be tuned BEFORE synth: piper at ~1.1–1.2 tempo speaks near 170 wpm base
+ * (calibrated against real builds; 647 words at 1.12 ≈ 231s actual), scaled
+ * by tempo (matching the narova_tts default of 1.18 when unset), plus the
+ * fixed per-turn/scene gaps the pipeline inserts. Word timing is computed,
+ * not measured — this is a planning number, not a promise. */
+function estimateSeconds(config) {
+  const timing = config.timing || {};
+  const tempo = timing.tempo || 1.18;
+  const wps = (170 * tempo) / 60;
+  const lead = timing.lead ?? 0.16, tail = timing.tail ?? 0.58;
+  const gapS = timing.gapSentence ?? 0.24, gapT = timing.gapTurn ?? 0.44;
+  let total = 0;
+  for (const s of config.scenes) {
+    total += lead + tail;
+    s.vo.forEach((t, i) => {
+      total += t.text.trim().split(/\s+/).length / wps + gapS + (i ? gapT : 0);
+    });
+  }
+  return total;
+}
+
+function fmtDuration(sec) {
+  const s = Math.round(sec);
+  return s >= 60 ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s` : `${s}s`;
+}
+
 /* Print warnings + a one-line summary. Returns true (warnings never fail).
  * Cue semantics (compose/runtime.js): data-cue="k" is coerced with +k and
  * looked up in turns[] (0-based) when it is a non-negative integer in range;
@@ -79,9 +102,10 @@ function inspectAssetRef(ref, config, at, warnings) {
  * never warn about a spelling the runtime resolves. */
 function check(config) {
   const warnings = [];
-  const ids = new Map();
+  const bodyIds = new Set();
 
   for (const s of config.scenes) {
+    const sceneIds = new Set();
     for (const t of tags(s.body)) {
       // Render-time network makes frames non-reproducible. Project media belongs
       // in assets/ (copied by compose) or in a small data URI / inline SVG.
@@ -105,14 +129,24 @@ function check(config) {
       } else if (/class\s*=\s*["'][^"']*\bcue\b/.test(t)) {
         warnings.push(`scene "${s.id}": class="cue" without data-cue — it animates at scene entry, not on a turn`);
       }
-      // ids: page-unique, and must not collide with generated ids
+      // data-* animator values must parse (the runtime ignores ones that don't)
+      const delay = attr(t, 'data-delay');
+      if (delay != null && !Number.isFinite(+delay)) {
+        warnings.push(`scene "${s.id}": data-delay="${delay}" is not a number of seconds`);
+      }
+      const count = attr(t, 'data-count');
+      if (count != null && !Number.isFinite(parseFloat(count))) {
+        warnings.push(`scene "${s.id}": data-count="${count}" is not numeric — the runtime skips it`);
+      }
+      // ids: compose namespaces them per scene (<sceneId>--<id>), so reuse ACROSS
+      // scenes is fine (reusable SVG defs); a duplicate WITHIN one scene still
+      // makes its own fragment references ambiguous.
       const id = attr(t, 'id');
       if (id != null) {
-        if (RESERVED_IDS.has(id) || RESERVED_PREFIXES.some(p => id.startsWith(p))) {
-          warnings.push(`scene "${s.id}": element id "${id}" collides with a generated composition id — rename it`);
-        }
-        if (ids.has(id)) warnings.push(`duplicate element id "${id}" in scenes "${ids.get(id)}" and "${s.id}" — ids must be page-unique`);
-        else ids.set(id, s.id);
+        bodyIds.add(id);
+        if (sceneIds.has(id)) {
+          warnings.push(`scene "${s.id}": duplicate id "${id}" within the scene — its url(#…) / href="#…" references become ambiguous`);
+        } else sceneIds.add(id);
       }
     }
     for (const ref of cssUrls(s.body)) {
@@ -130,6 +164,13 @@ function check(config) {
   }
   for (const ref of cssUrls(config.themeCss || '')) {
     inspectAssetRef(ref, config, 'theme.css', warnings);
+  }
+  // compose namespaces body ids to <sceneId>--<id>, so a #id selector in
+  // theme.css silently stops matching. Style bodies with classes instead.
+  for (const id of bodyIds) {
+    if (new RegExp(`#${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![-\\w])`).test(config.themeCss || '')) {
+      warnings.push(`theme.css targets #${id}, but compose renames body ids to <scene>--${id} — use a class selector instead`);
+    }
   }
 
   // Grounding: stats and superlatives in the vo need a claims ledger tracing
@@ -153,7 +194,9 @@ function check(config) {
   const words = config.scenes.reduce((n, s) =>
     n + s.vo.reduce((m, t) => m + t.text.trim().split(/\s+/).length, 0), 0);
   const backends = [...new Set(Object.values(config.voices).map(v => v.backend))].join('+');
-  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns, ~${words} words (${config.size.w}x${config.size.h}, ${backends})`);
+  const est = fmtDuration(estimateSeconds(config));
+  const tempo = (config.timing && config.timing.tempo) || 1.18;
+  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
   return true;
 }
 

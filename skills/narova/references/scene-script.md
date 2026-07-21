@@ -56,12 +56,69 @@ export default {
   word takes that color.
 - **Voices**: piper uses ONNX voice names (`en_US-ryan-high`). xtts has 58
   named speakers (`Damien Black`). qwen has 9 (`Ryan`, `Serena`).
-  List them: `narova voices list --backend <name>`.
+  List them: `narova voices list --backend piper` shows a spread of starter
+  voices (male/female, US/UK); `narova voices get <name> --backend piper`
+  downloads any voice from the piper catalog
+  (github.com/rhasspy/piper/blob/master/VOICES.md) — you are not limited to
+  the listed ones.
 - **Styling**: the base look ships built in (background, top bar, captions,
   progress bar) plus a menu of scene-layout classes (below). Add your own
   classes in `theme.css`. Bodies are plain HTML with no scripts. Inline SVG,
   small `data:` URIs, and files from project `assets/` are supported; remote
   render-time files are not.
+
+## Motion
+
+All motion lives on the render timeline (a paused GSAP timeline the renderer
+seeks through) — never wall-clock CSS. The vocabulary:
+
+- `class="reveal"` — fade + small slide-up at scene entry. Elements without
+  `data-cue` stagger in DOM order, 0.1s apart.
+- `class="cue" data-cue="k"` — fade + slide + scale when turn `k` starts.
+- `data-delay="0.3"` — seconds added to either trigger, for ordering within a
+  turn or a tighter/looser stagger.
+- `data-grow` — the element scales horizontally 0→full (transform origin left)
+  at its trigger. Author the bar at full width; combine with `data-cue` to
+  grow on a spoken beat.
+- `data-draw` — an SVG `path`/`line`/`polyline`/`circle` draws itself
+  (stroke-dash walk) at its trigger. Put it on the path element itself.
+- `data-count="42"` — the element's text counts 0→42 over ~0.9s as stepped
+  timeline sets (seek-safe). Optional `data-count-suffix="%"`; one decimal is
+  kept when the target has one (`data-count="4.5"`). Pair with
+  `class="cue" data-cue="k"` so the element is hidden until the count starts.
+
+Example — a stat that counts up when the host says the number:
+
+```html
+<div class="stat cue" data-cue="2" data-count="21" data-count-suffix="%">0%</div>
+```
+
+SVG notes:
+
+- **Reveals on transformed SVG groups are safe.** `class="reveal"` on a
+  `<g transform="translate(x,y)">` used to teleport the group to the origin
+  (GSAP's transform replaces the attribute). The runtime now detects this and
+  tweens an auto-created wrapper `<g>` instead — write the natural markup.
+- **Ids can repeat across scenes.** Compose namespaces each body's ids to
+  `<sceneId>--<id>` and rewrites the body's own `url(#…)`, `href="#…"`,
+  `for="…"`, and `aria-labelledby/describedby` references, so one inline SVG
+  with gradient/filter `<defs>` can be pasted into every scene. Keep ids
+  unique within a single scene, and style with classes — a `#id` selector in
+  `theme.css` will not match after namespacing (`check` warns).
+
+## Layout: the safe area
+
+- Scenes center content in a fixed frame with a topbar above and the caption
+  band overlaid at the bottom. The canvas reserves the caption band's height,
+  but nothing auto-fits: **cap the height of tall visuals** (maps, big SVGs)
+  yourself — a full-bleed map can still reach the topbar. `narova shots` +
+  eyeballs is the verification step.
+- The content column defaults to 1000px wide. Wide infographics and maps can
+  widen it with a theme token: `theme: { colw: "1180px" }`.
+- Box-based overlap lint misses glyphs that paint outside their box (big
+  display type, map markers). Trust snapshot frames, not `0 layout issues`.
+- HyperFrames contrast lint may flag decorative glyphs (flag emblems, icons)
+  as if they were text. Those are warnings, not errors — judge by eye.
 
 ## Images, logos, and fonts
 
@@ -120,8 +177,10 @@ All sizes scale with `vw`, so the same classes work in 16:9, 1:1, and 9:16.
   snapshot before rendering (see `references/gotchas.md`).
 - **Determinism**: no `animation: ... infinite`, no hover effects, no
   transitions-as-state in `theme.css`. The renderer jumps between frames.
-  Static styles are fine. Motion comes from `reveal` and `data-cue`.
-- **Ids**: element ids in bodies must be unique across all scenes.
+  Static styles are fine. Motion comes from the timeline: `reveal`,
+  `data-cue`, and the `data-*` animators (§Motion).
+- **Ids**: reuse freely across scenes — compose namespaces them per scene.
+  Keep them unique within one scene; style with classes, not `#id`.
 
 ## Theme: build it from evidence
 
@@ -135,7 +194,9 @@ The user never writes CSS. You build the look from what they say. In order:
    "playful" — whatever appears in the prompt stays. Never ask for CSS.
 3. **Fill in the rest.** Tokens: `bg, stage, panel, line, ink, muted, faint,
    accent, accent-dim, pink, gold, green, red, amber`, plus the
-   chrome/support tokens `deep, halo, chip, capidle, onaccent, track`.
+   chrome/support tokens `deep, halo, chip, capidle, onaccent, track` and
+   `colw` (content-column max-width, default `1000px` — widen for maps and
+   dense infographics).
    Typical mapping:
    main/brand color → `accent`; mood → `bg` and `stage`; extra brand colors →
    the `pink` / `gold` slots.

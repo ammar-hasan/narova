@@ -103,6 +103,24 @@ Rules:
 - `narova check` sniffs `vo` for stats and superlatives and warns when no
   `claims.md` exists. Heuristic only — the ledger is the real gate.
 
+### Sourcing is checkable; balance is not
+
+A ledger full of accurate-but-one-sided claims passes every check and still
+ships a biased video. When the topic is contested — politics, conflicts,
+disputes, competing products — the ledger must cover the major perspectives,
+not just the loudest one:
+
+- For each side's key claim, find a source and ledger it the same way. If a
+  perspective's claim cannot be sourced, say so in the video or leave the
+  perspective out entirely — never fill the gap with unsourced sympathy.
+- Give opposing facts comparable screen time and comparable wording. "X
+  struck Y" and "Y struck X" should get the same grammatical dignity.
+- Attribute contested assertions to their claimant ("the US says…", "Iran
+  denies…") instead of stating them as settled fact.
+- Before synth, re-read the `vo` top to bottom and ask: whose framing is
+  this? If the answer is one side's, rewrite. No tool flags this — the
+  strongest signal is your own read of the script and the snapshot frames.
+
 ## 4. Freeze useful assets locally
 
 Create the project under `generated/<slug>/` when working in a repository.

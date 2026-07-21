@@ -67,6 +67,43 @@ test('check exits 1 with the full error list on an invalid config', () => {
   assert.match(r.stderr, /body: HTML string required/);
 });
 
+test('commands work from a subdirectory (config discovered by walking up)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const nested = path.join(proj, 'out', 'hf');
+  fs.mkdirSync(nested, { recursive: true });
+  const r = run(['check'], { cwd: nested });
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^ok: /m);
+});
+
+test('compose prints the scene start table for QA', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const out = path.join(proj, 'out');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(out, 'audio', 'full.wav'), 'RIFFfake');
+  fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify({
+    title: { dur: 3, turns: [0.16], words: [{ w: 'Hi.', t0: 0.16, t1: 0.9, who: 'a', si: 0 }] },
+  }));
+  const r = run(['compose', '--project', proj]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /scene starts:/);
+  assert.match(r.stdout, /00:00\.0 {2}title {2}\(3\.0s\)/);
+  assert.match(r.stdout, /narova shots/);
+});
+
+test('shots without synth exits 1 with the run-synth hint', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const r = run(['shots', '--project', proj]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /narova synth/);
+});
+
 test('bare --out errors instead of resolving "true"', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
   const proj = path.join(dir, 'p');

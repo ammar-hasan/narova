@@ -60,28 +60,32 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
    user gave, fill in the rest yourself, never ask for CSS. A light-brand
    site means `theme.mode: "light"` — never fight the dark base with
    `!important` overrides.
-   `init <dir>` gives a start.
+   `init <dir>` gives a start — the scaffold is a starting point, so
+   replacing `reel.config.mjs` wholesale with your own is the normal flow.
 3. **Ground every claim.** Before synth, write `claims.md` in the project:
    every stat, number, superlative, or factual assertion in the `vo`, tagged
    verbatim / paraphrase / inference against a source
    (`references/url-to-source.md` §Claims ledger). `check` sniffs for
    unledgered claims — an invented stat is a trust problem, not a polish one.
 4. `check` — fast validation. No TTS, no browser, no writes.
-   Exit 0 = valid. Run it after **every** config edit.
+   Exit 0 = valid. Run it after **every** config edit. The `ok:` line also
+   prints an **estimated narration length** — if the user gave a target
+   duration, tune word count and `timing.tempo` here, before any audio exists.
 5. `synth` — makes the audio and word timings (piper by default).
-6. `compose` — generates `out/hf/`. Run `npx hyperframes check`
-   inside `out/hf`, then do the **visual QA pass**: snapshot one frame per
-   scene (times from `out/timings.json`) and actually look at them —
-   `npx hyperframes snapshot --at <t1,t2,…> -o snapshots/review`
-   (`-o` is a **directory**). Overlap lint misses oversized display type
-   bleeding over neighbors; your eyes on real frames are the check.
+6. `compose` — generates `out/hf/` and prints the per-scene start times.
+   Run `npx hyperframes check` inside `out/hf`, then do the **visual QA
+   pass**: `narova shots` snapshots one frame per scene into
+   `out/hf/snapshots/review/` — actually look at them. Overlap lint misses
+   oversized display type bleeding over neighbors and content sliding under
+   the topbar/caption band; your eyes on real frames are the check.
 7. `preview --detach` — keeps HyperFrames Studio alive and prints its
-   exact URL, PID, and log path. Studio does NOT hot-reload: re-running
-   `preview --detach` restarts it on the new build (compose/build warn if a
-   stale one is running). Snapshots verify; Studio is for watching.
+   exact URL, PID, and log path. Studio does NOT hot-reload, so `compose` and
+   `build` **restart a live detached preview automatically** on the new build
+   (same port). Snapshots verify; Studio is for watching.
    **Show the user before rendering.**
 8. `build --reuse` — renders `out/video.mp4`, reusing the audio from
-   step 5. Verify: `ffprobe` length of the mp4 ≈ length of `out/audio/full.wav`.
+   step 5. (`--reuse` is ignored automatically if the spoken text changed.)
+   Verify: `ffprobe` length of the mp4 ≈ length of `out/audio/full.wav`.
 
 ## Hard rules
 
@@ -96,18 +100,33 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
   also valid. Never depend on a remote URL during preview or render.
 - **No looping CSS motion in theme.css** (`animation: ... infinite`, hover
   effects, transitions as state). The renderer jumps between frames, so those
-  break. Motion comes from `reveal` and `data-cue` only.
-- **Element ids in bodies must be unique across ALL scenes.** They end up on
-  one page. `check` warns.
+  break. Motion comes from the timeline: `reveal`/`data-cue` entrances plus
+  the `data-*` animators — `data-grow` (bar grows horizontally), `data-draw`
+  (SVG path draws itself), `data-count="42"` (number counts up, optional
+  `data-count-suffix="%"`), `data-delay="0.3"` (nudge any trigger).
+  Details: `references/scene-script.md` §Motion.
+- **Ids are namespaced per scene at compose** (`<sceneId>--<id>`), so reusable
+  SVG (gradient/filter `<defs>`, `<symbol>`) can repeat the same ids in every
+  scene — `url(#…)`, `href="#…"`, `for`, and aria references are rewritten to
+  match. Keep ids unique WITHIN one scene, and style with classes, never `#id`
+  selectors in theme.css (`check` warns). Reveal/cue on an SVG element with a
+  `transform` attribute is safe: the runtime wraps it and tweens the wrapper.
 - **Default to piper.** It is fast, good for iteration. Offer `--backend qwen`
   or `xtts` for the final render when the user wants richer voices. Both are
-  slow and download a 1–2GB model once.
+  slow and download a 1–2GB model once. `narova voices list --backend piper`
+  shows a spread of starter voices; `narova voices get <name> --backend piper`
+  downloads any voice from the piper catalog.
 - **Two hosts read better than one.** Default cast: one male + one female
   voice, trading questions and answers. One narrator only when the format
   calls for it (a short announcement); more than two only for a real panel.
 - **No invented facts.** Every number, superlative, or market claim in the
   `vo` must exist in the project's `claims.md` with a source. If you cannot
   trace it, cut it or say it as opinion.
+- **Sourcing is checked; balance is not.** `check` gates claims against the
+  ledger, but it cannot see a one-sided narrative built from sourced claims.
+  For contested topics (politics, conflicts, disputes), ledger the major
+  perspectives and re-read the script for framing before synth — balance is
+  the author's job (`references/url-to-source.md` §3).
 - **Light-brand sites get `theme.mode: "light"`.** Do not override `#bg`
   with `!important` and chase contrast failures — one switch flips the
   background, captions, and chrome tokens.
@@ -116,9 +135,11 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 
 A revision changes only what the user asked for — everything else stays
 byte-identical. Keep scene ids, voices, timing, and theme stable; edit
-surgically. Visual-only edit → `build --reuse` (audio replayed untouched).
-Spoken-text edit → plain `build`: the sentence cache re-synthesizes ONLY the
-changed sentences, so untouched scenes keep their exact audio. Details:
+surgically. Visual-only edit → `build --reuse` (audio replayed untouched;
+if the `vo` text did change, `--reuse` is ignored with a note and the
+changed sentences re-synthesize). Spoken-text edit → plain `build`: the
+sentence cache re-synthesizes ONLY the changed sentences, so untouched
+scenes keep their exact audio. Details:
 `references/prompt-to-video.md` §Iterating.
 
 ## Read it to…

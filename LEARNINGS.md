@@ -116,6 +116,55 @@ Keep the fixes in the code so they never come back.
     inference + source) is required before synth, and `check` sniffs `vo`
     for stats/superlatives with no ledger present.
 
+## Usability fixes (0.6.0, from a real customer session)
+
+27. **GSAP tweens destroy SVG `transform` attributes.** A `.reveal`/`.cue` on
+    `<g transform="translate(x,y)">` renders the group at the origin — GSAP's
+    CSS transform replaces the presentation attribute. Fix: at load, the
+    runtime wraps any animated SVG element carrying `transform` in a fresh
+    `<g>`, moves the animation classes/attrs to the wrapper, and tweens that
+    (`shieldSvgTransform` in compose/runtime.js).
+28. **Entrance-only motion limited infographics.** There was no way to grow a
+    bar, draw a path, or count a number. Fix: timeline animators `data-grow`
+    (scaleX tween), `data-draw` (stroke-dashoffset tween), `data-count`
+    (stepped `tl.set` on textContent — a callback-driven tween is NOT used
+    because seeks suppress events), plus `data-delay` to control stagger.
+    All seek-safe; CSS animation stays banned.
+29. **Page-wide id uniqueness blocked reusable SVG.** Gradient `<defs>` ids
+    collided across scenes on the single page, forcing flat fills. Fix:
+    compose namespaces every body id to `<sceneId>--<id>` and rewrites the
+    body's own `url(#…)` / `href="#…"` / `for` / aria references
+    (compose/html.js `namespaceIds`). Ids must be unique only within a scene;
+    theme.css `#id` selectors silently stop matching, so `check` warns on them.
+30. **Fixed chrome + no auto-fit = manual collisions.** Tall scenes slid under
+    the topbar/caption band while box-lint reported 0 issues. Fix: the canvas
+    reserves the caption band height (`padding-bottom:clamp(84px,15vh,170px)`)
+    and the column width is a token (`--colw`, default 1000px). There is still
+    no auto-fit — cap tall visuals by hand and trust `narova shots` frames,
+    not lint. Contrast lint also false-positives on decorative glyphs.
+31. **`--reuse` correctness was author-tracked.** Stale audio shipped if you
+    reused after editing `vo`. Fix: `resolveReuse()` compares the new
+    narration against the `narration.json` the last synth consumed and
+    silently upgrades to a full synth on any difference.
+32. **cwd broke commands.** Running narova from `out/hf` (after a hyperframes
+    `cd`) failed with "No config found". Fix: `findConfig` walks up to the
+    nearest ancestor holding a `reel.config.*`.
+33. **Stale detached previews needed manual restarts.** Studio serves the
+    deleted `out/hf` (LEARNINGS #23). Fix: `compose`/`build` now restart a
+    live detached preview on the new build automatically (same port); the
+    warning is only a fallback if the restart fails.
+34. **Duration was emergent, not targetable.** Length was unknown until audio
+    existed. Fix: `narova check` prints an estimated narration length
+    (~170 wpm × tempo + fixed gaps, calibrated against real piper builds)
+    so word count/tempo can be tuned to a target duration before synth.
+35. **The piper starter list read as "3 voices".** Any piper catalog voice
+    works via `voices get`; the list now shows a spread of 9 (gender/accent)
+    so multi-host casts don't reach for the heavy backends by default.
+36. **Sourcing was gated, framing was not.** A one-sided narrative of sourced
+    claims passed every check. Fix is procedural, not code: `claims.md` must
+    cover the major perspectives on contested topics, and the script gets a
+    "whose framing is this?" read before synth (url-to-source.md §3).
+
 ## The scene model that worked
 
 - Big word-synced captions + a richer voiceover. Do not put the transcript

@@ -36,12 +36,39 @@ test('out-of-range and junk cues warn', () => {
   assert.match(warns[1], /data-cue="nope"/);
 });
 
-test('duplicate element ids across scenes warn', () => {
-  const lines = run(base([
+test('ids may repeat across scenes (compose namespaces them); within-scene duplicates warn', () => {
+  const across = run(base([
     { id: 'one', body: '<p id="hero">x</p>', vo: [{ who: 'a', text: 'a' }] },
     { id: 'two', body: '<div id="hero">y</div>', vo: [{ who: 'a', text: 'b' }] },
   ]));
-  assert.ok(lines.some(l => l.includes('duplicate element id "hero"')), lines.join('\n'));
+  assert.ok(!across.some(l => l.startsWith('warn:')), across.join('\n'));
+  const within = run(base([
+    { id: 'one', body: '<p id="hero">x</p><div id="hero">y</div>', vo: [{ who: 'a', text: 'a' }] },
+  ]));
+  assert.ok(within.some(l => l.includes('duplicate id "hero" within the scene')), within.join('\n'));
+});
+
+test('the ok line carries a narration-length estimate', () => {
+  const lines = run(base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'one two three four five six seven eight nine ten' }] }]));
+  assert.match(lines.find(l => l.startsWith('ok:')), /≈\d+s narration \(est\. at tempo 1\.18\)/);
+});
+
+test('non-numeric data-delay / data-count warn', () => {
+  const lines = run(base([{
+    id: 's',
+    body: '<p data-delay="soon">x</p><span data-count="lots">0</span>',
+    vo: [{ who: 'a', text: 'a' }],
+  }]));
+  assert.ok(lines.some(l => l.includes('data-delay="soon" is not a number')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('data-count="lots" is not numeric')), lines.join('\n'));
+});
+
+test('a theme.css #id selector warns (compose namespaces body ids)', () => {
+  const lines = run(base(
+    [{ id: 's', body: '<p id="hero">x</p>', vo: [{ who: 'a', text: 'a' }] }],
+    '#hero{color:red}',
+  ));
+  assert.ok(lines.some(l => l.includes('theme.css targets #hero')), lines.join('\n'));
 });
 
 test('infinite CSS animation in theme.css warns', () => {
@@ -68,10 +95,9 @@ test('class="cue" without data-cue warns', () => {
   assert.ok(lines.some(l => l.includes('without data-cue')), lines.join('\n'));
 });
 
-test('reserved generated ids warn', () => {
+test('ids that collide with generated composition ids are safe (namespaced at compose)', () => {
   const lines = run(base([{ id: 's', body: '<div id="cap-stage">x</div><div id="scene-intro">y</div>', vo: [{ who: 'a', text: 'a' }] }]));
-  const warns = lines.filter(l => l.includes('collides with a generated composition id'));
-  assert.equal(warns.length, 2);
+  assert.ok(!lines.some(l => l.startsWith('warn:')), lines.join('\n'));
 });
 
 test('cues inside HTML comments are ignored', () => {
