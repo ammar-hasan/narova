@@ -4,6 +4,11 @@
 
 **You give a prompt or a scene script. narova makes a narrated video.**
 
+<div align="center">
+  <video src="assets/narova-skill-reel.mp4" width="100%" controls playsinline title="Narova — prompt, voice, motion"></video>
+  <p><a href="assets/narova-skill-reel.mp4">Watch the 30-second Narova overview</a></p>
+</div>
+
 The video has:
 
 - Two voices talking to each other (neural TTS, runs on your machine).
