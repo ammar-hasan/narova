@@ -185,7 +185,10 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
 
     # Cache identity per voice: backend kind + speaker name + (below) sentence text.
     voice_kind = {who: v.get("backend", default_backend) for who, v in voices.items()}
-    voice_speaker = {who: v.get("speaker", who) for who, v in voices.items()}
+    # instruct participates in the cache identity so a changed delivery
+    # direction re-synthesizes instead of serving stale audio
+    voice_speaker = {who: v.get("speaker", who) + ("|" + v["instruct"] if v.get("instruct") else "")
+                     for who, v in voices.items()}
 
     sil = {}
     for name, d in (("s", gap_sentence), ("t", gap_turn), ("lead", lead), ("tail", tail)):
