@@ -89,9 +89,11 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   the venv: `NAROVA_SETUP_PYTHON=python3.12 bash tool/setup.sh --qwen`
   (move `~/.narova/venv` aside first).
 - **Voice-clone sample paths must be absolute.** The synth process does not
-  run in the project directory, so a relative `speaker: "voice/me.wav"`
-  silently falls back to being treated as a studio speaker name (and
-  errors). Use the absolute path.
+  run in the project directory, so a relative `speaker: "voice/me.wav"` can't
+  be found. Any `speaker` ending in a clone extension (wav/mp3/flac/m4a) is
+  treated as a sample path and validated: a relative or missing path now
+  errors loudly ("must be an ABSOLUTE path" / "clone sample not found")
+  instead of falling through to a studio-name lookup. Use the absolute path.
 - **Post-processing the render with ffmpeg concat needs `setsar=1`.** The
   rendered mp4 carries a non-square sample aspect ratio (e.g. 6401:6400);
   concat with freshly scaled clips fails with "parameters do not match"

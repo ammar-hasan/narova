@@ -75,8 +75,8 @@ function runScript({ sceneEls = {} } = {}) {
 /* A scene element whose querySelectorAll returns canned nodes for the runtime's
  * single animation-target selector. */
 const TARGET_SELECTOR = '.reveal, .cue, [data-cue], [data-grow], [data-draw], [data-count]';
-function sceneEl(targets = []) {
-  return { querySelectorAll: sel => (sel === TARGET_SELECTOR ? targets : []) };
+function sceneEl(targets = [], drifts = []) {
+  return { querySelectorAll: sel => (sel === TARGET_SELECTOR ? targets : sel === '[data-drift]' ? drifts : []) };
 }
 
 test('registers one paused timeline under __timelines.main', () => {
@@ -176,6 +176,44 @@ test('data-count steps textContent 0 -> target as seek-safe sets', () => {
   assert.equal(sets[0].vars.textContent, '0%');
   assert.equal(sets.at(-1).vars.textContent, '20%');
   assert.ok(sets.every((c, i) => i === 0 || c.at > sets[i - 1].at), 'steps advance in time');
+});
+
+test('data-drift="pano" sweeps background-position across the whole scene', () => {
+  const img = makeNode('div', { 'data-drift': 'pano' });
+  const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([], [img]) } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === img);
+  assert.equal(tw.from.backgroundPosition, '0% 50%');
+  assert.equal(tw.to.backgroundPosition, '100% 50%');
+  assert.equal(tw.to.duration, 5);     // sc.dur
+  assert.equal(tw.to.ease, 'none');
+  assert.equal(tw.at, 0);              // sc.start
+});
+
+test('data-drift Ken Burns modes tween transform over the whole scene', () => {
+  const pin = makeNode('img', { 'data-drift': 'in' });     // default push-in
+  const pan = makeNode('img', { 'data-drift': 'left' });   // lateral pan
+  const { calls } = runScript({ sceneEls: { 'scene-s2': sceneEl([], [pin, pan]) } });
+  const a = calls.find(c => c.op === 'fromTo' && c.target === pin);
+  assert.equal(a.from.scale, 1.0);
+  assert.equal(a.to.scale, 1.10);
+  assert.equal(a.to.duration, 4);      // s2 dur — spans the scene
+  assert.equal(a.to.ease, 'none');
+  assert.equal(a.at, 5);               // s2 start
+  const b = calls.find(c => c.op === 'fromTo' && c.target === pan);
+  assert.equal(b.from.xPercent, 4.5);
+  assert.equal(b.to.xPercent, -4.5);
+});
+
+test('scene transition: scenes after the first fade up from dark; the first does not', () => {
+  const s1 = sceneEl(), s2 = sceneEl();
+  const { calls } = runScript({ sceneEls: { 'scene-s1': s1, 'scene-s2': s2 } });
+  const fade = calls.find(c => c.op === 'fromTo' && c.target === s2 && c.from.opacity === 0);
+  assert.ok(fade, 'scene 2 fades up from opacity 0');
+  assert.equal(fade.to.opacity, 1);
+  assert.equal(fade.to.duration, 0.7);
+  assert.equal(fade.at, 5);            // s2 start
+  assert.ok(!calls.some(c => c.op === 'fromTo' && c.target === s1),
+    'the first scene (start 0) must not fade');
 });
 
 test('an SVG transform carrier is wrapped: the tween targets the wrapper', () => {

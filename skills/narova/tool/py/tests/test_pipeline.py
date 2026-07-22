@@ -8,7 +8,14 @@ from pathlib import Path
 from unittest import mock
 
 from narova_tts import pipeline
-from narova_tts.pipeline import rescale_timings, sentence_cache_key, sentences, synth_sentence
+from narova_tts.backends import XttsBackend
+from narova_tts.pipeline import (
+    rescale_timings,
+    sentence_cache_key,
+    sentences,
+    synth_sentence,
+    voice_cache_speaker,
+)
 
 
 class TestRescaleTimings(unittest.TestCase):
@@ -137,6 +144,63 @@ class TestSynthSentenceCache(unittest.TestCase):
         synth_sentence(be, "a", "Hello.", self.tmp, self.tmp / "out.wav", 1.12)
         self.assertEqual(be.calls, 1)
         self.assertFalse((self.tmp / "cache").exists())
+
+
+class TestVoiceCacheSpeaker(unittest.TestCase):
+    """A qwen delivery `instruct` is part of the cache identity, so changing
+    the direction re-synthesizes rather than serving stale audio."""
+
+    def test_speaker_only_when_no_instruct(self):
+        self.assertEqual(voice_cache_speaker({"speaker": "Ryan"}, "a"), "Ryan")
+
+    def test_missing_speaker_falls_back_to_who(self):
+        self.assertEqual(voice_cache_speaker({}, "narrator"), "narrator")
+
+    def test_instruct_changes_the_cache_key(self):
+        flat = voice_cache_speaker({"speaker": "Ryan"}, "a")
+        warm = voice_cache_speaker({"speaker": "Ryan", "instruct": "warm, energetic"}, "a")
+        self.assertNotEqual(flat, warm)
+        self.assertNotEqual(
+            sentence_cache_key("qwen", flat, "Hi.", 1.12),
+            sentence_cache_key("qwen", warm, "Hi.", 1.12),
+        )
+
+
+class TestXttsCloneSpeaker(unittest.TestCase):
+    """XttsBackend.synthesize routes a studio name to `speaker` and an absolute
+    audio path to `speaker_wav` (voice cloning), failing loudly on a bad path."""
+
+    def backend(self, speaker: str) -> XttsBackend:
+        # bypass __init__ (loads torch/TTS); we only exercise synthesize's routing
+        b = XttsBackend.__new__(XttsBackend)
+        b._speakers = {"a": speaker}
+        b._tts = mock.Mock()
+        return b
+
+    def test_studio_name_uses_speaker(self):
+        b = self.backend("Damien Black")
+        b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+        _, kw = b._tts.tts_to_file.call_args
+        self.assertEqual(kw["speaker"], "Damien Black")
+        self.assertNotIn("speaker_wav", kw)
+
+    def test_absolute_existing_path_clones_the_voice(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            b = self.backend(f.name)
+            b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+            _, kw = b._tts.tts_to_file.call_args
+            self.assertEqual(kw["speaker_wav"], f.name)
+            self.assertNotIn("speaker", kw)
+
+    def test_relative_clone_path_raises_clearly(self):
+        b = self.backend("voice/me.wav")
+        with self.assertRaisesRegex(ValueError, "ABSOLUTE"):
+            b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+
+    def test_missing_clone_sample_raises_clearly(self):
+        b = self.backend("/nope/missing.wav")
+        with self.assertRaisesRegex(ValueError, "not found"):
+            b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
 
 
 if __name__ == "__main__":
