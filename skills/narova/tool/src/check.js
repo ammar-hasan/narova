@@ -129,6 +129,13 @@ function check(config) {
       } else if (/class\s*=\s*["'][^"']*\bcue\b/.test(t)) {
         warnings.push(`scene "${s.id}": class="cue" without data-cue — it animates at scene entry, not on a turn`);
       }
+      // data-drift owns the element's transform for the whole scene; a reveal
+      // or cue on the SAME element tweens transform too and the two fight.
+      // Put the reveal/cue on a wrapper (compose/runtime.js).
+      if (/(?<![-\w])data-drift\s*=/.test(t) &&
+          (/(?<![-\w])data-cue\s*=/.test(t) || /class\s*=\s*["'][^"']*\b(?:reveal|cue)\b/.test(t))) {
+        warnings.push(`scene "${s.id}": data-drift="${attr(t, 'data-drift')}" on the same element as .reveal/.cue — both drive transform and fight; move the reveal/cue to a wrapper`);
+      }
       // data-* animator values must parse (the runtime ignores ones that don't)
       const delay = attr(t, 'data-delay');
       if (delay != null && !Number.isFinite(+delay)) {

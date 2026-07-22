@@ -85,6 +85,8 @@ class XttsBackend:
             self._tts.to("cpu")
         print("[xtts] speakers:", self._speakers, flush=True)
 
+    CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
+
     def synthesize(self, who: str, text: str, out_path: Path) -> Path:
         # `speaker` may be a studio speaker name OR an ABSOLUTE path to a
         # short clean recording (wav/mp3/flac/m4a) — XTTS then clones that
@@ -92,7 +94,16 @@ class XttsBackend:
         spk = self._speakers[who]
         kw: dict = {}
         p = Path(spk)
-        if p.suffix.lower() in (".wav", ".mp3", ".flac", ".m4a") and p.exists():
+        if p.suffix.lower() in self.CLONE_EXTS:
+            # It reads as a clone sample. Fail loudly rather than fall through
+            # to a studio-name lookup (which raises an opaque XTTS error).
+            if not p.is_absolute():
+                raise ValueError(
+                    f"voice {who!r}: clone sample {spk!r} must be an ABSOLUTE path "
+                    f"— synth does not run in the project dir"
+                )
+            if not p.exists():
+                raise ValueError(f"voice {who!r}: clone sample not found: {spk}")
             kw["speaker_wav"] = str(p)
         else:
             kw["speaker"] = spk

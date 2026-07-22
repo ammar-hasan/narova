@@ -63,6 +63,24 @@ test('non-numeric data-delay / data-count warn', () => {
   assert.ok(lines.some(l => l.includes('data-count="lots" is not numeric')), lines.join('\n'));
 });
 
+test('data-drift on the same element as a reveal/cue warns; on a wrapper it does not', () => {
+  const clash = run(base([{
+    id: 's',
+    body: '<img data-drift="in" class="reveal"><div data-drift="left" data-cue="0">x</div>',
+    vo: [{ who: 'a', text: 'a' }],
+  }]));
+  const warns = clash.filter(l => l.startsWith('warn:') && l.includes('data-drift'));
+  assert.equal(warns.length, 2, clash.join('\n'));
+  assert.match(warns[0], /data-drift="in".*reveal\/\.cue/);
+
+  const ok = run(base([{
+    id: 's',
+    body: '<div class="reveal"><img data-drift="in"></div>',
+    vo: [{ who: 'a', text: 'a' }],
+  }]));
+  assert.ok(!ok.some(l => l.startsWith('warn:') && l.includes('data-drift')), ok.join('\n'));
+});
+
 test('a theme.css #id selector warns (compose namespaces body ids)', () => {
   const lines = run(base(
     [{ id: 's', body: '<p id="hero">x</p>', vo: [{ who: 'a', text: 'a' }] }],
