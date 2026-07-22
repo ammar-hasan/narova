@@ -86,8 +86,18 @@ class XttsBackend:
         print("[xtts] speakers:", self._speakers, flush=True)
 
     def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+        # `speaker` may be a studio speaker name OR an ABSOLUTE path to a
+        # short clean recording (wav/mp3/flac/m4a) — XTTS then clones that
+        # voice. (Absolute because synth does not run in the project dir.)
+        spk = self._speakers[who]
+        kw: dict = {}
+        p = Path(spk)
+        if p.suffix.lower() in (".wav", ".mp3", ".flac", ".m4a") and p.exists():
+            kw["speaker_wav"] = str(p)
+        else:
+            kw["speaker"] = spk
         self._tts.tts_to_file(
-            text=text, speaker=self._speakers[who], language="en", file_path=str(out_path)
+            text=text, language="en", file_path=str(out_path), **kw
         )
         return out_path
 
@@ -101,12 +111,13 @@ class QwenBackend:
     MODEL = os.environ.get("NAROVA_QWEN_MODEL", "Qwen/Qwen3-TTS-12Hz-0.6B-CustomVoice")
 
     def __init__(self, speakers: dict[str, str], langs: dict[str, str] | None = None,
-                 device: str | None = None):
+                 instructs: dict[str, str] | None = None, device: str | None = None):
         import torch  # lazy
         from qwen_tts import Qwen3TTSModel
 
         self._speakers = dict(speakers)
         self._langs = dict(langs or {})
+        self._instructs = dict(instructs or {})
         dev = device or os.environ.get(
             "QWEN_TTS_DEVICE", "mps" if torch.backends.mps.is_available() else "cpu"
         )
@@ -123,6 +134,7 @@ class QwenBackend:
 
         wavs, sr = self._model.generate_custom_voice(
             text=text, speaker=self._speakers[who], language=self._langs.get(who),
+            instruct=self._instructs.get(who),
         )
         sf.write(str(out_path), wavs[0], sr)
         return out_path
@@ -148,7 +160,8 @@ def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, B
     for kind, speakers in by_type.items():
         if kind == "qwen":
             langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
-            instances[kind] = QwenBackend(speakers, langs)
+            instructs = {who: voices[who]["instruct"] for who in speakers if voices[who].get("instruct")}
+            instances[kind] = QwenBackend(speakers, langs, instructs)
         else:
             instances[kind] = BACKENDS[kind](speakers)
 

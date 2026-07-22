@@ -134,6 +134,34 @@ DATA.scenes.forEach(function (sc) {
       }
     }
   });
+  // data-drift: slow Ken Burns tween spanning the whole scene. Values:
+  // "in" (push-in), "out" (pull-back), "left"/"right" (wide panorama pan),
+  // "up" (tilt-up sweep), "pano" (background-position sweep across an
+  // ultra-wide image). Put it on media elements only (an <img> inside an
+  // overflow-hidden pane, or a full-bleed background div) and never on an
+  // element that also has .reveal/.cue — those tween transform channels of
+  // their own; put the cue on a wrapper.
+  scene.querySelectorAll('[data-drift]').forEach(function (el) {
+    var mode = el.getAttribute('data-drift');
+    if (mode === 'pano') {
+      tl.fromTo(el, { backgroundPosition: '0% 50%' },
+        { backgroundPosition: '100% 50%', duration: sc.dur, ease: 'none' }, sc.start);
+      return;
+    }
+    var from = { scale: 1.0, xPercent: 0, yPercent: 0 }, to = { scale: 1.10, xPercent: 0, yPercent: 0 };
+    if (mode === 'out') { from = { scale: 1.14, xPercent: 0, yPercent: 0 }; to = { scale: 1.0, xPercent: 0, yPercent: 0 }; }
+    else if (mode === 'left') { from = { scale: 1.15, xPercent: 4.5, yPercent: 0 }; to = { scale: 1.15, xPercent: -4.5, yPercent: 0 }; }
+    else if (mode === 'right') { from = { scale: 1.15, xPercent: -4.5, yPercent: 0 }; to = { scale: 1.15, xPercent: 4.5, yPercent: 0 }; }
+    else if (mode === 'up') { from = { scale: 1.16, xPercent: 0, yPercent: 3.6 }; to = { scale: 1.16, xPercent: 0, yPercent: -3.6 }; }
+    to.duration = sc.dur;
+    to.ease = 'none';
+    tl.fromTo(el, from, to, sc.start);
+  });
+  // scene transition: every scene after the first fades up from dark over
+  // its first beats — a deterministic dip-to-black cut.
+  if (sc.start > 0.01) {
+    tl.fromTo(scene, { opacity: 0 }, { opacity: 1, duration: 0.7, ease: 'power1.out' }, sc.start);
+  }
 });
 
 // progress bar is optional chrome (config.chrome.progress === false omits it)

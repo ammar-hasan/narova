@@ -29,6 +29,14 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   is not in the project's `claims.md` (with a source) does not ship. `check`
   sniffs for unledgered claims, but the ledger is the real gate
   (`references/url-to-source.md` §3).
+- **Qwen runs away on spelled-out numbers.** "Fourteen to twenty-seven
+  degrees" can synthesize as 45 seconds of drone for four words. Write
+  digits ("14 to 27 degrees", "8,611 meters") — qwen reads them naturally
+  and they look better in captions too. Scan `out/timings.json` for
+  sentences whose seconds-per-word exceeds ~0.9: that's a runaway.
+- **XTTS (incl. cloned voices) stretches very short sentences.** "Hello
+  everyone!" or "So keep it simple." can come out drawn and unnatural.
+  Merge short bursts into longer flowing sentences before synth.
 - **Oversized display type escapes overlap lint.** Big `vw` fonts with
   `line-height` < 1 paint outside their element box — a giant `RS.1000` can
   bleed over the eyebrow above it while every box-based check passes. Give
@@ -76,6 +84,18 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   for a multi-host panel without the heavy xtts/qwen backends.
 - **xtts extras**: install with `tool/setup.sh --xtts`. If a license prompt
   appears, set `COQUI_TOS_AGREED=1`.
+- **qwen needs Python ≥ 3.10.** On a machine whose default python3 is 3.9,
+  `setup.sh --qwen` fails resolving deps. Install a newer python and rebuild
+  the venv: `NAROVA_SETUP_PYTHON=python3.12 bash tool/setup.sh --qwen`
+  (move `~/.narova/venv` aside first).
+- **Voice-clone sample paths must be absolute.** The synth process does not
+  run in the project directory, so a relative `speaker: "voice/me.wav"`
+  silently falls back to being treated as a studio speaker name (and
+  errors). Use the absolute path.
+- **Post-processing the render with ffmpeg concat needs `setsar=1`.** The
+  rendered mp4 carries a non-square sample aspect ratio (e.g. 6401:6400);
+  concat with freshly scaled clips fails with "parameters do not match"
+  until every video chain ends in `setsar=1`.
 - **Word timing is computed, not measured.** Speech is made per sentence and
   words are spread by length. Good for karaoke captions. Do not chase
   per-word perfection.

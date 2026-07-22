@@ -51,11 +51,27 @@ export default {
   `k` counts from 0. A cue that does not match a turn appears at scene start —
   `check` warns.
 - **Reveals**: `class="reveal"` (no cue) animates in at scene start.
+- **Photo motion**: `data-drift="in|out|left|right|up|pano"` on a media
+  element (an `<img>` inside an overflow-hidden pane, or a full-bleed
+  background div) gives it a slow Ken Burns move spanning the whole scene:
+  push-in, pull-back, wide lateral pan, tilt-up sweep. `pano` sweeps
+  `background-position` across an ultra-wide panorama image edge to edge.
+  Never combine `data-drift` with `.reveal`/`.cue` on the SAME element —
+  those tween transform channels of their own; put the cue on a wrapper.
+- **Transitions**: every scene after the first fades up from dark over its
+  first 0.7 s automatically (a deterministic dip-to-black cut).
 - **Two hosts**: voices trading lines — question, answer, handoff — sound much
   better than one narrator. Give each a different `color`; the active caption
   word takes that color.
 - **Voices**: piper uses ONNX voice names (`en_US-ryan-high`). xtts has 58
   named speakers (`Damien Black`). qwen has 9 (`Ryan`, `Serena`).
+  Voice cloning (xtts): `speaker` may instead be an ABSOLUTE path to a short
+  clean recording (wav/mp3/flac/m4a, ~15–30 s) — the voice is cloned from
+  it; re-record under a NEW filename (the cache keys on the path), and clone
+  only a voice whose owner has consented. Delivery direction (qwen): an
+  optional per-voice `instruct` string directs the performance (e.g.
+  `instruct: "warm, energetic travel vlogger, never flat"`); changing it
+  re-synthesizes that voice's lines.
   List them: `narova voices list --backend piper` shows a spread of starter
   voices (male/female, US/UK); `narova voices get <name> --backend piper`
   downloads any voice from the piper catalog
