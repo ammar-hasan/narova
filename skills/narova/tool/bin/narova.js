@@ -114,7 +114,7 @@ they work from inside out/ and out/hf too. A detached Studio preview is
 restarted automatically whenever compose/build replaces out/hf.
 
 Options:
-  --backend piper|xtts|qwen   TTS backend
+  --backend piper|xtts|qwen|chatterbox   TTS backend (chatterbox = voice cloning)
   --reuse                  skip synth, reuse out/audio + out/timings.json
                            (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)

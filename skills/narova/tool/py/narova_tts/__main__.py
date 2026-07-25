@@ -40,6 +40,8 @@ KNOWN_VOICES = {
     # Dylan/Uncle_Fu are Chinese-flavored, Ono_Anna Japanese, Sohee Korean.
     "qwen": ["Ryan", "Serena", "Vivian", "Eric", "Aiden",
              "Dylan", "Uncle_Fu", "Ono_Anna", "Sohee"],
+    # chatterbox has no preset voices — it clones from a recording.
+    "chatterbox": [],
 }
 
 
@@ -47,7 +49,7 @@ def _voices(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="narova_tts voices", description="list / get TTS voices")
     ap.add_argument("sub", nargs="?", default="list", choices=["list", "get"])
     ap.add_argument("name", nargs="?", help="voice to get (piper only)")
-    ap.add_argument("--backend", default="piper", choices=["piper", "xtts", "qwen"])
+    ap.add_argument("--backend", default="piper", choices=["piper", "xtts", "qwen", "chatterbox"])
     args = ap.parse_args(argv)
 
     if args.sub == "list":
@@ -57,6 +59,9 @@ def _voices(argv: list[str]) -> int:
             print("… + 58 studio speakers built into the cached XTTS-v2 model", file=sys.stderr)
         elif args.backend == "qwen":
             print("… all 9 CustomVoice presets; voice cloning/design not wired into narova yet", file=sys.stderr)
+        elif args.backend == "chatterbox":
+            print("chatterbox has no preset voices — clone your own: set a voice's "
+                  "`speaker` to an ABSOLUTE path to a clean 10–20s recording.", file=sys.stderr)
         else:
             print("… more at https://github.com/rhasspy/piper/blob/master/VOICES.md", file=sys.stderr)
         return 0
@@ -88,7 +93,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--narration", required=True, type=Path, help="path to narration.json")
     ap.add_argument("--config", required=True, type=Path, help="path to config JSON (voices, timing)")
     ap.add_argument("--out", required=True, type=Path, help="output directory")
-    ap.add_argument("--backend", default="piper", choices=["piper", "xtts", "qwen"],
+    ap.add_argument("--backend", default="piper", choices=["piper", "xtts", "qwen", "chatterbox"],
                     help="default backend; per-voice config.backend overrides it")
     ap.add_argument("--reuse", action="store_true",
                     help="skip synth; rescale existing timings to existing audio")
