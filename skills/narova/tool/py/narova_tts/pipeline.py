@@ -116,18 +116,43 @@ def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float) -> str:
     return h.hexdigest()
 
 
-def voice_cache_speaker(v: dict, who: str) -> str:
+def _clone_sample_cache_identity(kind: str | None, speaker: str) -> str:
+    """Include clone recording contents in the cache identity. A path alone is
+    insufficient: users commonly replace a take in place, and serving sentences
+    cloned from the previous file would be both stale and surprising."""
+    if kind not in {"xtts", "chatterbox"}:
+        return speaker
+    sample = Path(speaker)
+    if sample.suffix.lower() not in {".wav", ".mp3", ".flac", ".m4a"}:
+        return speaker
+    if not sample.is_absolute():
+        return f"{speaker}|sample=invalid-relative"
+    digest = hashlib.sha1()
+    try:
+        with sample.open("rb") as f:
+            for chunk in iter(lambda: f.read(1024 * 1024), b""):
+                digest.update(chunk)
+    except OSError as e:
+        # Force a miss so the backend reports the actual missing/unreadable-file
+        # error instead of silently using a cache entry from an earlier run.
+        return f"{speaker}|sample-error={type(e).__name__}"
+    return f"{speaker}|sample-sha1={digest.hexdigest()}"
+
+
+def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None) -> str:
     """The speaker fragment of a voice's cache identity: its speaker plus any
     delivery direction — qwen's `instruct`, or chatterbox's `exaggeration` /
     `cfg_weight` — so a changed direction re-synthesizes instead of serving
     stale audio."""
-    spk = v.get("speaker", who)
+    kind = effective_backend or v.get("backend")
+    spk = _clone_sample_cache_identity(kind, v.get("speaker", who))
+    parts = [spk]
     if v.get("instruct"):
-        return f"{spk}|{v['instruct']}"
-    if v.get("backend") == "chatterbox" and (
+        parts.append(v["instruct"])
+    if kind == "chatterbox" and (
             v.get("exaggeration") is not None or v.get("cfg_weight") is not None):
-        return f"{spk}|exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}"
-    return spk
+        parts.append(f"exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}")
+    return "|".join(parts)
 
 
 def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,
@@ -199,7 +224,10 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
 
     # Cache identity per voice: backend kind + speaker name + (below) sentence text.
     voice_kind = {who: v.get("backend", default_backend) for who, v in voices.items()}
-    voice_speaker = {who: voice_cache_speaker(v, who) for who, v in voices.items()}
+    voice_speaker = {
+        who: voice_cache_speaker(v, who, voice_kind[who])
+        for who, v in voices.items()
+    }
 
     sil = {}
     for name, d in (("s", gap_sentence), ("t", gap_turn), ("lead", lead), ("tail", tail)):

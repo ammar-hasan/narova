@@ -176,6 +176,23 @@ class TestVoiceCacheSpeaker(unittest.TestCase):
             sentence_cache_key("chatterbox", tuned, "Hi.", 1.12),
         )
 
+    def test_default_chatterbox_backend_includes_delivery_params(self):
+        base = voice_cache_speaker({"speaker": "/abs/ref.wav"}, "a", "chatterbox")
+        tuned = voice_cache_speaker(
+            {"speaker": "/abs/ref.wav", "cfg_weight": 0.3}, "a", "chatterbox")
+        self.assertNotEqual(base, tuned)
+
+    def test_changed_clone_recording_changes_cache_identity(self):
+        with tempfile.TemporaryDirectory() as d:
+            sample = Path(d) / "voice.wav"
+            sample.write_bytes(b"first take")
+            first = voice_cache_speaker(
+                {"backend": "chatterbox", "speaker": str(sample)}, "a")
+            sample.write_bytes(b"second take")
+            second = voice_cache_speaker(
+                {"backend": "chatterbox", "speaker": str(sample)}, "a")
+        self.assertNotEqual(first, second)
+
 
 class TestXttsCloneSpeaker(unittest.TestCase):
     """XttsBackend.synthesize routes a studio name to `speaker` and an absolute
@@ -305,6 +322,19 @@ class TestChatterboxBackend(unittest.TestCase):
         with tempfile.NamedTemporaryFile(suffix=".wav") as f:
             with self.assertRaisesRegex(RuntimeError, "setup.sh --chatterbox"):
                 ChatterboxBackend({"a": f.name}, venv_python=Path("/nope/python"))
+
+    def test_rejects_invalid_delivery_params_before_startup(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            for values, message in [
+                ({"exaggerations": {"a": 0.1}}, "exaggeration"),
+                ({"cfg_weights": {"a": 1.1}}, "cfg_weight"),
+                ({"cfg_weights": {"a": "high"}}, "cfg_weight"),
+                ({"exaggerations": {"a": True}}, "exaggeration"),
+            ]:
+                with self.subTest(values=values):
+                    with self.assertRaisesRegex(ValueError, message):
+                        ChatterboxBackend(
+                            {"a": f.name}, venv_python=Path("/nope/python"), **values)
 
 
 if __name__ == "__main__":

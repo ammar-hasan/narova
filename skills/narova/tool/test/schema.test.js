@@ -38,6 +38,40 @@ test('resolveConfig applies CLI overrides', () => {
   assert.equal(c.timing.tempo, 1.3);
 });
 
+test('resolveConfig validates chatterbox clone settings before synth', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-chatterbox-'));
+  const sample = path.join(dir, 'voice.wav');
+  fs.writeFileSync(sample, 'sample');
+  const raw = validRaw();
+  raw.voices.a = {
+    backend: 'chatterbox',
+    speaker: sample,
+    exaggeration: 0.7,
+    cfg_weight: 0.3,
+  };
+  assert.doesNotThrow(() => resolveConfig(raw, {}, dir));
+
+  for (const [key, value] of [
+    ['exaggeration', 0.1],
+    ['exaggeration', 'high'],
+    ['cfg_weight', 1.1],
+  ]) {
+    const bad = validRaw();
+    bad.voices.a = { backend: 'chatterbox', speaker: sample, [key]: value };
+    assert.throws(() => resolveConfig(bad, {}, dir), new RegExp(`voices\\.a\\.${key}`));
+  }
+});
+
+test('resolveConfig rejects invalid chatterbox paths and unknown backends', () => {
+  const relative = validRaw();
+  relative.voices.a = { backend: 'chatterbox', speaker: 'voice.wav' };
+  assert.throws(() => resolveConfig(relative, {}, '.'), /absolute clone-recording path/);
+
+  const unknown = validRaw();
+  unknown.voices.a.backend = 'chatty';
+  assert.throws(() => resolveConfig(unknown, {}, '.'), /unknown backend "chatty"/);
+});
+
 test('resolveConfig aggregates every error', () => {
   const bad = {
     voices: {},

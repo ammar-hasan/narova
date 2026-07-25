@@ -20,12 +20,16 @@ instance per backend type (each model is loaded once).
 from __future__ import annotations
 
 import json
+import math
 import os
 import subprocess
 import sys
 import wave
 from pathlib import Path
 from typing import Protocol
+
+
+CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
 
 
 def chatterbox_python() -> Path:
@@ -101,8 +105,6 @@ class XttsBackend:
             self._tts.to("cpu")
         print("[xtts] speakers:", self._speakers, flush=True)
 
-    CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
-
     def synthesize(self, who: str, text: str, out_path: Path) -> Path:
         # `speaker` may be a studio speaker name OR an ABSOLUTE path to a
         # short clean recording (wav/mp3/flac/m4a) — XTTS then clones that
@@ -110,7 +112,7 @@ class XttsBackend:
         spk = self._speakers[who]
         kw: dict = {}
         p = Path(spk)
-        if p.suffix.lower() in self.CLONE_EXTS:
+        if p.suffix.lower() in CLONE_EXTS:
             # It reads as a clone sample. Fail loudly rather than fall through
             # to a studio-name lookup (which raises an opaque XTTS error).
             if not p.is_absolute():
@@ -120,6 +122,8 @@ class XttsBackend:
                 )
             if not p.exists():
                 raise ValueError(f"voice {who!r}: clone sample not found: {spk}")
+            if not p.is_file():
+                raise ValueError(f"voice {who!r}: clone sample is not a file: {spk}")
             kw["speaker_wav"] = str(p)
         else:
             kw["speaker"] = spk
@@ -174,27 +178,29 @@ class ChatterboxBackend:
     delivery. Runs the model in an isolated venv via a persistent subprocess
     worker; this class only speaks the stdio JSON protocol (no torch here)."""
 
-    CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
-
     def __init__(self, speakers: dict[str, str],
                  exaggerations: dict[str, float] | None = None,
                  cfg_weights: dict[str, float] | None = None,
                  venv_python: Path | None = None):
         self._speakers = dict(speakers)
-        self._exg = dict(exaggerations or {})
-        self._cfgw = dict(cfg_weights or {})
+        self._exg = self._validate_delivery(
+            exaggerations or {}, "exaggeration", 0.25, 2.0)
+        self._cfgw = self._validate_delivery(
+            cfg_weights or {}, "cfg_weight", 0.0, 1.0)
         for who, spk in self._speakers.items():
             p = Path(spk)
-            if p.suffix.lower() not in self.CLONE_EXTS:
+            if p.suffix.lower() not in CLONE_EXTS:
                 raise ValueError(
                     f"voice {who!r}: chatterbox clones from a recording — `speaker` "
-                    f"must be a {'/'.join(self.CLONE_EXTS)} path, got {spk!r}")
+                    f"must be a {'/'.join(CLONE_EXTS)} path, got {spk!r}")
             if not p.is_absolute():
                 raise ValueError(
                     f"voice {who!r}: clone sample {spk!r} must be an ABSOLUTE path "
                     f"— synth does not run in the project dir")
             if not p.exists():
                 raise ValueError(f"voice {who!r}: clone sample not found: {spk}")
+            if not p.is_file():
+                raise ValueError(f"voice {who!r}: clone sample is not a file: {spk}")
 
         py = Path(venv_python) if venv_python else chatterbox_python()
         if not py.exists():
@@ -213,13 +219,34 @@ class ChatterboxBackend:
             raise RuntimeError(f"chatterbox worker failed to start: {ready}")
         print("[chatterbox] speakers:", self._speakers, flush=True)
 
+    @staticmethod
+    def _validate_delivery(values: dict[str, float], name: str,
+                           minimum: float, maximum: float) -> dict[str, float]:
+        normalized = {}
+        for who, value in values.items():
+            if isinstance(value, bool) or not isinstance(value, (int, float)):
+                raise ValueError(
+                    f"voice {who!r}: chatterbox {name} must be a number "
+                    f"from {minimum} to {maximum}, got {value!r}")
+            number = float(value)
+            if not math.isfinite(number) or not minimum <= number <= maximum:
+                raise ValueError(
+                    f"voice {who!r}: chatterbox {name} must be from "
+                    f"{minimum} to {maximum}, got {value!r}")
+            normalized[who] = number
+        return normalized
+
     def _recv(self) -> dict:
         line = self._proc.stdout.readline()
         if not line:
             raise RuntimeError(
                 "chatterbox worker exited unexpectedly (see its log above) — "
                 "check the chatterbox venv: bash <skill>/tool/setup.sh --chatterbox")
-        return json.loads(line)
+        try:
+            return json.loads(line)
+        except json.JSONDecodeError as e:
+            raise RuntimeError(
+                f"chatterbox worker returned an invalid response: {line.rstrip()!r}") from e
 
     def synthesize(self, who: str, text: str, out_path: Path) -> Path:
         req = {"text": text, "out": str(out_path), "ref": self._speakers[who]}
@@ -227,8 +254,13 @@ class ChatterboxBackend:
             req["exaggeration"] = self._exg[who]
         if who in self._cfgw:
             req["cfg_weight"] = self._cfgw[who]
-        self._proc.stdin.write(json.dumps(req) + "\n")
-        self._proc.stdin.flush()
+        try:
+            self._proc.stdin.write(json.dumps(req) + "\n")
+            self._proc.stdin.flush()
+        except (BrokenPipeError, OSError) as e:
+            raise RuntimeError(
+                "chatterbox worker exited unexpectedly (see its log above) — "
+                "check the chatterbox venv: bash <skill>/tool/setup.sh --chatterbox") from e
         resp = self._recv()
         if not resp.get("ok"):
             raise RuntimeError(f"chatterbox synth failed for {who!r}: {resp.get('error')}")
@@ -243,8 +275,14 @@ class ChatterboxBackend:
                 pass
             try:
                 proc.wait(timeout=5)
-            except Exception:
+            except subprocess.TimeoutExpired:
                 proc.kill()
+                try:
+                    proc.wait(timeout=5)
+                except Exception:
+                    pass
+            except Exception:
+                pass
 
     def __del__(self):
         self.close()

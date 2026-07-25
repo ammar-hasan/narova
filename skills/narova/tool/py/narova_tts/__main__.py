@@ -67,6 +67,10 @@ def _voices(argv: list[str]) -> int:
         return 0
 
     # get
+    if args.backend == "chatterbox":
+        print("chatterbox has no downloadable preset voices — set `speaker` to an "
+              "ABSOLUTE path to a clean 10–20s recording.", file=sys.stderr)
+        return 2
     if args.backend != "piper":
         print(f"{args.backend} speakers are built into the model — nothing to download", file=sys.stderr)
         return 0

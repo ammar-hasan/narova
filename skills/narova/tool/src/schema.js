@@ -6,6 +6,7 @@ const { resolveSize } = require('./util');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
+const TTS_BACKENDS = new Set(['piper', 'xtts', 'qwen', 'chatterbox']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
  * Returns { title, size:{w,h}, voices, theme, timing, scenes, assetsDir } and throws on
@@ -100,6 +101,25 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (overrides.voiceA && voiceIds[0]) voices[voiceIds[0]].speaker = overrides.voiceA;
   if (overrides.voiceB && voiceIds[1]) voices[voiceIds[1]].speaker = overrides.voiceB;
   if (overrides.backend) voiceIds.forEach(id => { voices[id].backend = overrides.backend; });
+  voiceIds.forEach(id => {
+    const v = voices[id];
+    const at = `config.voices.${id}`;
+    if (!TTS_BACKENDS.has(v.backend)) {
+      errs.push(`${at}.backend: unknown backend ${JSON.stringify(v.backend)} (piper|xtts|qwen|chatterbox)`);
+    }
+    if (v.backend !== 'chatterbox') return;
+    if (typeof v.speaker !== 'string' || !path.isAbsolute(v.speaker)) {
+      errs.push(`${at}.speaker: chatterbox requires an absolute clone-recording path`);
+    } else if (!fs.existsSync(v.speaker) || !fs.statSync(v.speaker).isFile()) {
+      errs.push(`${at}.speaker: clone recording not found: ${v.speaker}`);
+    }
+    for (const [key, min, max] of [['exaggeration', 0.25, 2.0], ['cfg_weight', 0.0, 1.0]]) {
+      const value = v[key];
+      if (value != null && (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max)) {
+        errs.push(`${at}.${key}: must be a number from ${min} to ${max}`);
+      }
+    }
+  });
 
   const timing = { ...DEFAULT_TIMING, ...(raw.timing || {}) };
   if (overrides.tempo != null) timing.tempo = Number(overrides.tempo);
