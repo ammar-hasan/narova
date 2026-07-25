@@ -36,6 +36,9 @@ HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
   `~/.narova/cache/sentences`). Delete it to force fresh voices everywhere.
 - `$NAROVA_PYTHON` — use this Python, skip venv discovery.
 - `$NAROVA_QWEN_MODEL` — a different Qwen3-TTS model.
+- `$NAROVA_CHATTERBOX_VENV` — the isolated chatterbox venv (default
+  `~/.narova/venv-chatterbox`). Chatterbox needs its own venv because its
+  torch/transformers pins conflict with the other backends.
 
 ## First-run downloads (network, one time each)
 
@@ -43,4 +46,5 @@ HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
 - piper: one small voice file per speaker.
 - xtts: ~1.9GB model (`tool/setup.sh --xtts` first; `COQUI_TOS_AGREED=1` if asked).
 - qwen: ~1.2GB model (`tool/setup.sh --qwen` first).
+- chatterbox: separate venv + ~1GB model (`tool/setup.sh --chatterbox` first).
 - HyperFrames CLI: fetched by npx on the first doctor / build / preview.

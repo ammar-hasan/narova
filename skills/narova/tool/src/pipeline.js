@@ -12,7 +12,7 @@ const { runHf } = require('./hf');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
- *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts|qwen] [--reuse]
+ *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts|qwen|chatterbox] [--reuse]
  * It writes <out>/audio/NN.{wav,mp3}, <out>/audio/full.wav and <out>/timings.json. */
 
 // The tool root: <skill>/tool (bin/, src/, py/, setup.sh) — wherever the skill is installed.

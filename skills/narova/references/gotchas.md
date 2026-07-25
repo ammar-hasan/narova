@@ -75,8 +75,8 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   re-synthesized.
 - **First runs download things.** The first `synth` creates the venv at
   `~/.narova/venv`. piper gets a voice per speaker. xtts gets ~1.9GB once.
-  qwen gets ~1.2GB once. `npx hyperframes` gets the CLI once. None of these
-  are hangs.
+  qwen gets ~1.2GB once. chatterbox gets ~1GB once (in its own venv). `npx
+  hyperframes` gets the CLI once. None of these are hangs.
 - **piper has far more than the default two voices.** `narova voices list
   --backend piper` shows a starter spread; `narova voices get <name>
   --backend piper` downloads any voice from the piper catalog
@@ -84,6 +84,15 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   for a multi-host panel without the heavy xtts/qwen backends.
 - **xtts extras**: install with `tool/setup.sh --xtts`. If a license prompt
   appears, set `COQUI_TOS_AGREED=1`.
+- **chatterbox is voice cloning, in its own venv.** Install once with
+  `tool/setup.sh --chatterbox`. It hard-pins torch==2.6 / transformers==5.2,
+  which conflict with xtts/qwen, so it gets a SEPARATE venv
+  (`~/.narova/venv-chatterbox`, override `$NAROVA_CHATTERBOX_VENV`) and narova
+  drives it as a subprocess. Set the voice's `speaker` to an ABSOLUTE path to a
+  clean 10–20s recording. Optional per-voice `exaggeration` / `cfg_weight`. If
+  synth errors with "chatterbox venv not found", you skipped the `--chatterbox`
+  setup. It is the slowest backend — expect ~4× xtts — but the sentence cache
+  spares unchanged lines.
 - **qwen needs Python ≥ 3.10.** On a machine whose default python3 is 3.9,
   `setup.sh --qwen` fails resolving deps. Install a newer python and rebuild
   the venv: `NAROVA_SETUP_PYTHON=python3.12 bash tool/setup.sh --qwen`

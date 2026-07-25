@@ -38,7 +38,8 @@ No install step. No PATH lookup. The first `synth` or `build` creates the
 Python venv at `~/.narova/venv` by itself (one time). Machine needs: Node 18+,
 ffmpeg, Python 3.10+. `... doctor` checks all of them. For the
 higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
-(or `--qwen`) once.
+(or `--qwen`) once. To clone a specific voice from a recording, install the
+chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
 
 ## Workflow: prompt → video
 
@@ -116,6 +117,13 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
   slow and download a 1–2GB model once. `narova voices list --backend piper`
   shows a spread of starter voices; `narova voices get <name> --backend piper`
   downloads any voice from the piper catalog.
+- **Clone a specific voice with `--backend chatterbox`.** Set a voice's
+  `speaker` to an ABSOLUTE path to a clean 10–20s recording; chatterbox speaks
+  in that voice. Install once with `tool/setup.sh --chatterbox` (isolated
+  venv — its torch/transformers pins conflict with xtts/qwen, so it runs as a
+  subprocess). Optional per-voice `exaggeration` (0.25–2.0) and `cfg_weight`
+  (0.0–1.0, lower = slower/more expressive). Slowest backend — the sentence
+  cache still keeps unchanged lines from re-synthesizing.
 - **Two hosts read better than one.** Default cast: one male + one female
   voice, trading questions and answers. One narrator only when the format
   calls for it (a short announcement); more than two only for a real panel.

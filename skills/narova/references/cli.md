@@ -17,7 +17,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. Exit 1 if invalid. | instant |
-| `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. | piper: fast; xtts/qwen: slow + one-time 1–2GB model |
+| `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. | piper: fast; xtts/qwen/chatterbox: slow + one-time 1–2GB model |
 | `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project), and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) into `out/hf/snapshots/review/` via `hyperframes snapshot`. `--at t1,t2,…` picks explicit times (see the scene table from `compose`). | seconds (opens a browser) |
 | `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4`. Restarts a live detached preview afterwards. | synth cost + render (~1–2x video length) |
@@ -30,7 +30,9 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 
 ## Flags
 
-- `--backend piper|xtts|qwen` — TTS backend for all voices. Default piper.
+- `--backend piper|xtts|qwen|chatterbox` — TTS backend for all voices. Default
+  piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
+  path to a clean 10–20s recording (install once: `tool/setup.sh --chatterbox`).
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
   Meant for visual-only edits; if the spoken text changed since the last
   synth, `--reuse` is ignored with a note and a full synth runs instead.

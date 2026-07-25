@@ -117,11 +117,17 @@ def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float) -> str:
 
 
 def voice_cache_speaker(v: dict, who: str) -> str:
-    """The speaker fragment of a voice's cache identity: its speaker plus (for
-    qwen) the delivery `instruct`, so a changed direction re-synthesizes
-    instead of serving stale audio."""
+    """The speaker fragment of a voice's cache identity: its speaker plus any
+    delivery direction — qwen's `instruct`, or chatterbox's `exaggeration` /
+    `cfg_weight` — so a changed direction re-synthesizes instead of serving
+    stale audio."""
     spk = v.get("speaker", who)
-    return f"{spk}|{v['instruct']}" if v.get("instruct") else spk
+    if v.get("instruct"):
+        return f"{spk}|{v['instruct']}"
+    if v.get("backend") == "chatterbox" and (
+            v.get("exaggeration") is not None or v.get("cfg_weight") is not None):
+        return f"{spk}|exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}"
+    return spk
 
 
 def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,

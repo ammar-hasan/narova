@@ -2,13 +2,14 @@
 
 Run: PYTHONPATH=py python3 -m unittest discover -s py/tests -v
 (no heavy TTS deps needed — backends import lazily)."""
+import json
 import tempfile
 import unittest
 from pathlib import Path
 from unittest import mock
 
 from narova_tts import pipeline
-from narova_tts.backends import XttsBackend
+from narova_tts.backends import ChatterboxBackend, XttsBackend
 from narova_tts.pipeline import (
     rescale_timings,
     sentence_cache_key,
@@ -165,6 +166,16 @@ class TestVoiceCacheSpeaker(unittest.TestCase):
             sentence_cache_key("qwen", warm, "Hi.", 1.12),
         )
 
+    def test_chatterbox_delivery_params_change_cache_key(self):
+        base = voice_cache_speaker({"backend": "chatterbox", "speaker": "/abs/ref.wav"}, "a")
+        tuned = voice_cache_speaker(
+            {"backend": "chatterbox", "speaker": "/abs/ref.wav", "exaggeration": 0.7}, "a")
+        self.assertNotEqual(base, tuned)
+        self.assertNotEqual(
+            sentence_cache_key("chatterbox", base, "Hi.", 1.12),
+            sentence_cache_key("chatterbox", tuned, "Hi.", 1.12),
+        )
+
 
 class TestXttsCloneSpeaker(unittest.TestCase):
     """XttsBackend.synthesize routes a studio name to `speaker` and an absolute
@@ -201,6 +212,99 @@ class TestXttsCloneSpeaker(unittest.TestCase):
         b = self.backend("/nope/missing.wav")
         with self.assertRaisesRegex(ValueError, "not found"):
             b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+
+
+class _FakeProc:
+    """Stand-in for the chatterbox worker subprocess: records requests written
+    to stdin and replays queued JSON responses on stdout.readline()."""
+
+    def __init__(self, responses):
+        self._responses = list(responses)
+        self.written = []
+        outer = self
+
+        class _Stdin:
+            def write(self, s): outer.written.append(s)
+            def flush(self): pass
+            def close(self): pass
+
+        class _Stdout:
+            def readline(self):
+                if not outer._responses:
+                    return ""  # EOF — worker died
+                return json.dumps(outer._responses.pop(0)) + "\n"
+
+        self.stdin = _Stdin()
+        self.stdout = _Stdout()
+
+    def poll(self):
+        return None
+
+    def wait(self, timeout=None):
+        return 0
+
+    def kill(self):
+        pass
+
+
+class TestChatterboxBackend(unittest.TestCase):
+    """ChatterboxBackend.synthesize speaks a line-delimited JSON protocol to the
+    worker; __init__ validates the clone sample path before spawning anything."""
+
+    def backend(self, speaker, responses):
+        # bypass __init__ (spawns a subprocess); exercise only synthesize's protocol
+        b = ChatterboxBackend.__new__(ChatterboxBackend)
+        b._speakers = {"a": speaker}
+        b._exg = {}
+        b._cfgw = {}
+        b._proc = _FakeProc(responses)
+        return b
+
+    def test_synthesize_sends_request_and_returns_out(self):
+        b = self.backend("/abs/ref.wav", [{"ok": True}])
+        out = b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+        self.assertEqual(out, Path("/tmp/o.wav"))
+        req = json.loads(b._proc.written[0])
+        self.assertEqual(req["ref"], "/abs/ref.wav")
+        self.assertEqual(req["text"], "Hi.")
+        self.assertEqual(req["out"], "/tmp/o.wav")
+        self.assertNotIn("exaggeration", req)
+
+    def test_delivery_params_are_forwarded(self):
+        b = self.backend("/abs/ref.wav", [{"ok": True}])
+        b._exg = {"a": 0.7}
+        b._cfgw = {"a": 0.3}
+        b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+        req = json.loads(b._proc.written[0])
+        self.assertEqual(req["exaggeration"], 0.7)
+        self.assertEqual(req["cfg_weight"], 0.3)
+
+    def test_worker_error_raises(self):
+        b = self.backend("/abs/ref.wav", [{"ok": False, "error": "boom"}])
+        with self.assertRaisesRegex(RuntimeError, "boom"):
+            b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+
+    def test_worker_death_raises_clearly(self):
+        b = self.backend("/abs/ref.wav", [])  # readline -> "" (EOF)
+        with self.assertRaisesRegex(RuntimeError, "exited unexpectedly"):
+            b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+
+    def test_rejects_non_path_speaker(self):
+        with self.assertRaisesRegex(ValueError, "clones from a recording"):
+            ChatterboxBackend({"a": "Ryan"})
+
+    def test_rejects_relative_clone_path(self):
+        with self.assertRaisesRegex(ValueError, "ABSOLUTE"):
+            ChatterboxBackend({"a": "ref.wav"})
+
+    def test_rejects_missing_clone_sample(self):
+        with self.assertRaisesRegex(ValueError, "not found"):
+            ChatterboxBackend({"a": "/nope/missing.wav"})
+
+    def test_missing_venv_raises_with_setup_hint(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            with self.assertRaisesRegex(RuntimeError, "setup.sh --chatterbox"):
+                ChatterboxBackend({"a": f.name}, venv_python=Path("/nope/python"))
 
 
 if __name__ == "__main__":

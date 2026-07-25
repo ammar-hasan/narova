@@ -1,25 +1,41 @@
 """TTS backends behind one interface: `synthesize(who, text, out_path) -> Path`.
 
-Two implementations:
+Implementations:
   - PiperBackend: local ONNX voices via the `piper-tts` pip package (PiperVoice).
     Downloads the voice model on first use.
   - XttsBackend: coqui-tts XTTS-v2 (higher quality, slower). Imports the
     transformers shim BEFORE `from TTS.api import TTS`; runs on MPS or CPU.
+  - QwenBackend: Qwen3-TTS CustomVoice presets.
+  - ChatterboxBackend: Resemble AI Chatterbox for voice CLONING from a
+    recording. It hard-pins torch==2.6 / transformers==5.2, which conflict with
+    the other backends, so it lives in an ISOLATED venv and is driven as a
+    subprocess worker (chatterbox_worker.py) — this class holds only stdlib.
 
 Heavy deps (piper / TTS / torch) are imported lazily inside each backend's
 constructor so the package stays importable without them installed.
 
 `build_backends()` maps every `who` key to a backend instance, sharing one
-instance per backend type (the XTTS model is loaded once).
+instance per backend type (each model is loaded once).
 """
 from __future__ import annotations
 
+import json
 import os
 import subprocess
 import sys
 import wave
 from pathlib import Path
 from typing import Protocol
+
+
+def chatterbox_python() -> Path:
+    """The Python of the isolated chatterbox venv (created by
+    `setup.sh --chatterbox`). Mirrors setup.sh's default location."""
+    env = os.environ.get("NAROVA_CHATTERBOX_VENV")
+    if env:
+        return Path(env) / "bin" / "python"
+    home = Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova"))
+    return home / "venv-chatterbox" / "bin" / "python"
 
 
 class Backend(Protocol):
@@ -151,7 +167,91 @@ class QwenBackend:
         return out_path
 
 
-BACKENDS = {"piper": PiperBackend, "xtts": XttsBackend, "qwen": QwenBackend}
+class ChatterboxBackend:
+    """Resemble AI Chatterbox — voice CLONING from a recording. `speaker` in
+    config is an ABSOLUTE path to a short clean sample (10–20s). Optional
+    per-voice `exaggeration` (0.25–2.0) and `cfg_weight` (0.0–1.0) tune
+    delivery. Runs the model in an isolated venv via a persistent subprocess
+    worker; this class only speaks the stdio JSON protocol (no torch here)."""
+
+    CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
+
+    def __init__(self, speakers: dict[str, str],
+                 exaggerations: dict[str, float] | None = None,
+                 cfg_weights: dict[str, float] | None = None,
+                 venv_python: Path | None = None):
+        self._speakers = dict(speakers)
+        self._exg = dict(exaggerations or {})
+        self._cfgw = dict(cfg_weights or {})
+        for who, spk in self._speakers.items():
+            p = Path(spk)
+            if p.suffix.lower() not in self.CLONE_EXTS:
+                raise ValueError(
+                    f"voice {who!r}: chatterbox clones from a recording — `speaker` "
+                    f"must be a {'/'.join(self.CLONE_EXTS)} path, got {spk!r}")
+            if not p.is_absolute():
+                raise ValueError(
+                    f"voice {who!r}: clone sample {spk!r} must be an ABSOLUTE path "
+                    f"— synth does not run in the project dir")
+            if not p.exists():
+                raise ValueError(f"voice {who!r}: clone sample not found: {spk}")
+
+        py = Path(venv_python) if venv_python else chatterbox_python()
+        if not py.exists():
+            raise RuntimeError(
+                f"chatterbox venv not found at {py} — install it once with:\n"
+                f"  bash <skill>/tool/setup.sh --chatterbox")
+        worker = Path(__file__).with_name("chatterbox_worker.py")
+        print(f"[chatterbox] starting worker: {py} {worker.name}", flush=True)
+        # stderr inherits the parent's (worker logs/progress reach the console);
+        # stdout is the JSON protocol channel.
+        self._proc = subprocess.Popen(
+            [str(py), str(worker)],
+            stdin=subprocess.PIPE, stdout=subprocess.PIPE, text=True, bufsize=1)
+        ready = self._recv()
+        if not ready.get("ready"):
+            raise RuntimeError(f"chatterbox worker failed to start: {ready}")
+        print("[chatterbox] speakers:", self._speakers, flush=True)
+
+    def _recv(self) -> dict:
+        line = self._proc.stdout.readline()
+        if not line:
+            raise RuntimeError(
+                "chatterbox worker exited unexpectedly (see its log above) — "
+                "check the chatterbox venv: bash <skill>/tool/setup.sh --chatterbox")
+        return json.loads(line)
+
+    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+        req = {"text": text, "out": str(out_path), "ref": self._speakers[who]}
+        if who in self._exg:
+            req["exaggeration"] = self._exg[who]
+        if who in self._cfgw:
+            req["cfg_weight"] = self._cfgw[who]
+        self._proc.stdin.write(json.dumps(req) + "\n")
+        self._proc.stdin.flush()
+        resp = self._recv()
+        if not resp.get("ok"):
+            raise RuntimeError(f"chatterbox synth failed for {who!r}: {resp.get('error')}")
+        return out_path
+
+    def close(self) -> None:
+        proc = getattr(self, "_proc", None)
+        if proc and proc.poll() is None:
+            try:
+                proc.stdin.close()
+            except Exception:
+                pass
+            try:
+                proc.wait(timeout=5)
+            except Exception:
+                proc.kill()
+
+    def __del__(self):
+        self.close()
+
+
+BACKENDS = {"piper": PiperBackend, "xtts": XttsBackend, "qwen": QwenBackend,
+            "chatterbox": ChatterboxBackend}
 
 
 def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, Backend]:
@@ -173,6 +273,12 @@ def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, B
             langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
             instructs = {who: voices[who]["instruct"] for who in speakers if voices[who].get("instruct")}
             instances[kind] = QwenBackend(speakers, langs, instructs)
+        elif kind == "chatterbox":
+            exg = {who: voices[who]["exaggeration"] for who in speakers
+                   if voices[who].get("exaggeration") is not None}
+            cfgw = {who: voices[who]["cfg_weight"] for who in speakers
+                    if voices[who].get("cfg_weight") is not None}
+            instances[kind] = ChatterboxBackend(speakers, exg, cfgw)
         else:
             instances[kind] = BACKENDS[kind](speakers)
 

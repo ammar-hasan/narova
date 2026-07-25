@@ -4,10 +4,16 @@
 #   tool/setup.sh              # piper backend (default, fast, zero-config)
 #   tool/setup.sh --xtts       # also install the xtts backend (~1.9GB model on first synth)
 #   tool/setup.sh --qwen       # also install the Qwen3-TTS backend (~1.2GB model on first synth)
+#   tool/setup.sh --chatterbox # also install the chatterbox backend (voice cloning; SEPARATE venv)
 #
 # Venv location: $NAROVA_VENV, else ~/.narova/venv (outside the skill folder,
 # so skill updates never destroy it). The CLI runs this automatically on the
 # first synth if no venv exists.
+#
+# chatterbox is special: it hard-pins torch==2.6 / transformers==5.2, which
+# conflict with xtts/qwen, so it gets its OWN venv at
+# $NAROVA_CHATTERBOX_VENV (else ~/.narova/venv-chatterbox) and narova drives it
+# as a subprocess. It does not touch the main venv.
 #
 # Idempotent: safe to re-run. macOS (arm64) friendly. Node deps and the CLI are
 # installed separately with `npm install`; this script only wires the Python side.
@@ -15,12 +21,14 @@ set -euo pipefail
 
 WITH_XTTS=0
 WITH_QWEN=0
+WITH_CHATTERBOX=0
 for arg in "$@"; do
   case "$arg" in
     --xtts) WITH_XTTS=1 ;;
     --qwen) WITH_QWEN=1 ;;
+    --chatterbox) WITH_CHATTERBOX=1 ;;
     -h|--help)
-      echo "usage: tool/setup.sh [--xtts] [--qwen]"; exit 0 ;;
+      echo "usage: tool/setup.sh [--xtts] [--qwen] [--chatterbox]"; exit 0 ;;
     *) echo "unknown option: $arg (see --help)"; exit 1 ;;
   esac
 done
@@ -31,6 +39,8 @@ VENV="${NAROVA_VENV:-${NAROVA_HOME:-$HOME/.narova}/venv}"
 REQ="$TOOL/py/requirements.txt"
 REQ_XTTS="$TOOL/py/requirements-xtts.txt"
 REQ_QWEN="$TOOL/py/requirements-qwen.txt"
+REQ_CHATTERBOX="$TOOL/py/requirements-chatterbox.txt"
+CB_VENV="${NAROVA_CHATTERBOX_VENV:-${NAROVA_HOME:-$HOME/.narova}/venv-chatterbox}"
 
 say()  { printf '\n\033[1;36m▶ %s\033[0m\n' "$*"; }
 ok()   { printf '  \033[1;32m✓\033[0m %s\n' "$*"; }
@@ -109,6 +119,24 @@ else
   echo "  (skip qwen — re-run with --qwen for that backend)"
 fi
 
+if [ "$WITH_CHATTERBOX" = "1" ]; then
+  # Isolated venv: chatterbox's torch/transformers pins conflict with the main venv.
+  say "Installing chatterbox backend deps into a SEPARATE venv ($CB_VENV)"
+  if [ -d "$CB_VENV" ]; then
+    ok "reusing chatterbox venv at $CB_VENV"
+  else
+    mkdir -p "$(dirname "$CB_VENV")"
+    "$PY" -m venv "$CB_VENV"
+    ok "created chatterbox venv at $CB_VENV"
+  fi
+  "$CB_VENV/bin/python" -m pip install --quiet --upgrade pip
+  "$CB_VENV/bin/python" -m pip install -r "$REQ_CHATTERBOX"
+  ok "chatterbox deps installed (model downloads on first synth, ~1GB, one-time)"
+else
+  echo "  (skip chatterbox — re-run with --chatterbox for that backend)"
+fi
+
 say "Done"
 echo "  venv: $VENV"
+[ "$WITH_CHATTERBOX" = "1" ] && echo "  chatterbox venv: $CB_VENV"
 echo "  Verify the toolchain with the narova doctor command."
