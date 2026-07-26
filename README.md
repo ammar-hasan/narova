@@ -31,9 +31,11 @@ prompts, scripts, and any URL into narrated, captioned video. Rendered on your m
 narova is a **skill** — the whole product lives in `skills/narova/`, and any agent
 that reads skills can use it:
 
+[![skills.sh](https://skills.sh/b/ammar-hasan/narova)](https://skills.sh/ammar-hasan/narova)
+
 ```bash
-npx skills add ammar-hasan/narova
-# or copy skills/narova/ into ~/.claude/skills/
+npx skills add ammar-hasan/narova -g
+# when there's a new version: npx skills update narova -g
 ```
 
 ## Quickstart
