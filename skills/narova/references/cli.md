@@ -54,7 +54,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 - `--at t1,t2,…` — `shots`: explicit frame times in seconds.
 - `--port N` — Studio port (default 3002).
 - `--detach` / `preview --stop` — start or stop persistent Studio.
-- `--voice-a <s>`, `--voice-b <s>` — replace the first two voices.
+- `--voice-a <s>`, `--voice-b <s>` — replace the first two voices (add more voices directly in the config).
 
 ## What lands in `out/` (never edit — regenerated every run)
 

@@ -115,7 +115,7 @@ The rules:
 | `qwen`  | high | slow | `skills/narova/tool/setup.sh --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
 | `chatterbox` | voice cloning | slowest | `skills/narova/tool/setup.sh --chatterbox` | `speaker` = absolute path to a 10–20s recording; own venv, ~1GB model |
 
-Pick two voices that sound clearly different. Give each a `color`.
+Pick voices that sound clearly different. Give each a `color`.
 List voices with `narova voices list --backend <name>`.
 
 ## Commands

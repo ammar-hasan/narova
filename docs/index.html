@@ -46,21 +46,41 @@
     <canvas id="gl" aria-hidden="true"></canvas>
     <div class="hero-fallback" aria-hidden="true"></div>
     <div class="hero-inner">
-      <p class="kicker reveal-line">The narration-first video skill</p>
-      <h1 class="hero-title" id="heroTitle">
-        <span class="ht-line">You write a prompt.</span>
-        <span class="ht-line grad">narova makes the video.</span>
-      </h1>
-      <p class="hero-sub reveal-line">A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
-        prompts, scripts, and any URL into narrated, captioned video. Rendered on your machine.</p>
-      <div class="cta-row reveal-line">
-        <button class="install magnetic" id="copyInstall" data-hover aria-label="Copy install command">
-          <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova</code>
-          <span class="copy-label" id="copyLabel">copy</span>
-        </button>
-        <a class="btn-ghost magnetic" href="https://github.com/ammar-hasan/narova" data-hover>★ Star on GitHub</a>
+      <div class="hero-layout">
+        <div class="hero-text">
+          <p class="kicker reveal-line">The narration-first video skill</p>
+          <h1 class="hero-title" id="heroTitle">
+            <span class="ht-line">Prompt in.</span>
+            <span class="ht-line grad">Narrated video out.</span>
+          </h1>
+          <p class="hero-sub reveal-line">A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
+            prompts, scripts, and any URL into narrated, captioned video. Rendered on your machine.</p>
+          <div class="cta-row reveal-line">
+            <button class="install magnetic" id="copyInstall" data-hover aria-label="Copy install command">
+              <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova</code>
+              <span class="copy-label" id="copyLabel">copy</span>
+            </button>
+            <a class="btn-ghost magnetic" href="https://github.com/ammar-hasan/narova" data-hover>★ Star on GitHub</a>
+          </div>
+        </div>
+        <div class="hero-mockup reveal-line" aria-hidden="true">
+          <div class="phone-frame">
+            <div class="phone-notch"></div>
+            <div class="phone-screen">
+              <div class="phone-scene">
+                <div class="phone-cap">
+                  <span class="phone-cap-w active" style="color:var(--cyan)">narova</span>
+                  <span class="phone-cap-w">turns</span>
+                  <span class="phone-cap-w">prompts</span>
+                  <span class="phone-cap-w">into</span>
+                  <span class="phone-cap-w">video</span>
+                </div>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <div class="karaoke" id="karaoke" aria-label="Live demo: word-synced captions in two voices"></div>
+      <div class="karaoke" id="karaoke" aria-label="Live demo: word-synced captions, multi-voice narration"></div>
       <p class="trust reveal-line">MIT licensed&nbsp;&nbsp;·&nbsp;&nbsp;No API keys&nbsp;&nbsp;·&nbsp;&nbsp;100% local</p>
     </div>
     <div class="scroll-hint" aria-hidden="true"><span></span></div>
@@ -97,9 +117,9 @@
         <div class="wave-bars" aria-hidden="true">
           <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
         </div>
-        <h3>Two voices, one conversation</h3>
-        <p>Neural TTS dialogue — piper, XTTS, or Qwen voices — synthesized on your machine.
-           Give each speaker a color; narova writes the banter and the timing.</p>
+        <h3>Your voice, your way</h3>
+        <p>Neural TTS narration — piper, XTTS, Qwen, or cloned chatterbox voices — synthesized on your machine.
+           One narrator, a full panel, or no voice at all. Give each speaker a color; the captions follow.</p>
       </article>
 
       <article class="card tilt" data-hover>

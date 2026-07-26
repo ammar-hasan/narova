@@ -2,7 +2,7 @@
 name: narova
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
-  two-host dialogue, prompt/script/README-to-video, videos sourced from any
+  multi-host dialogue (0 to N narrators), prompt/script/README-to-video, videos sourced from any
   URL (product site, article, paper, docs, repository, or general page),
   word-synced karaoke captions, voice-triggered reveals, music beds and
   sound effects, per-platform exports (TikTok/Reels/Shorts/LinkedIn/X),
@@ -128,7 +128,7 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
   subprocess). Optional per-voice `exaggeration` (0.25–2.0) and `cfg_weight`
   (0.0–1.0, lower = slower/more expressive). Slowest backend — the sentence
   cache still keeps unchanged lines from re-synthesizing.
-- **Two hosts read better than one.** Default cast: one male + one female
+- **Two hosts read better than one (but 0 to N are supported).** Default cast: one male + one female
   voice, trading questions and answers. One narrator only when the format
   calls for it (a short announcement); more than two only for a real panel.
 - **No invented facts.** Every number, superlative, or market claim in the

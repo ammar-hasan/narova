@@ -146,7 +146,7 @@ Options:
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
-  --voice-a <s> --voice-b <s>   override voices
+  --voice-a <s> --voice-b <s>   override the first two voices (add more in config)
 `;
 
 async function main() {

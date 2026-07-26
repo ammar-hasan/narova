@@ -28,7 +28,7 @@ export default {
       body: \`<div class="s-title">
         <div class="eyebrow reveal">NAROVA</div>
         <h1 class="display reveal">Scenes to <span class="grad">video</span></h1>
-        <p class="lede cue" data-cue="1">Word-synced captions. Reactive reveals. Two hosts.</p>
+        <p class="lede cue" data-cue="1">Word-synced captions. Reactive reveals. Two hosts by default — add more, use one, or go host-free.</p>
         <div class="hairline reveal"></div>
       </div>\`,
     },

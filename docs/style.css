@@ -117,7 +117,7 @@ code { font-family: var(--mono); }
   min-height: 100svh;
   display: flex; flex-direction: column; align-items: center; justify-content: center;
   text-align: center;
-  padding: 120px 24px 80px;
+  padding: 100px 24px 60px;
   overflow: hidden;
 }
 #gl {
@@ -133,7 +133,107 @@ code { font-family: var(--mono); }
     radial-gradient(70% 60% at 55% 85%, rgba(242,65,138,0.15), transparent 70%),
     var(--bg);
 }
-.hero-inner { position: relative; z-index: 2; max-width: 980px; width: 100%; }
+.hero-inner { position: relative; z-index: 2; max-width: 1100px; width: 100%; }
+
+.hero-layout {
+  display: flex; align-items: center; gap: 60px;
+  margin-bottom: 40px;
+}
+.hero-text { flex: 1; text-align: left; }
+.hero-text .kicker { text-align: left; }
+.hero-text .hero-sub { margin: 0 0 38px; }
+.hero-text .cta-row { justify-content: flex-start; }
+.hero-mockup { flex: 0 0 280px; display: flex; justify-content: center; }
+
+@media (max-width: 860px) {
+  .hero-layout { flex-direction: column; gap: 0; text-align: center; }
+  .hero-text { text-align: center; }
+  .hero-text .kicker { text-align: center; }
+  .hero-text .hero-sub { margin: 0 auto 38px; }
+  .hero-text .cta-row { justify-content: center; }
+  .hero-mockup { display: none; }
+}
+
+/* Phone mockup — communicates "this makes videos" at a glance */
+.phone-frame {
+  position: relative;
+  width: 200px; height: 356px;
+  background: #0d0416;
+  border: 3px solid #2a1a47;
+  border-radius: 32px;
+  padding: 12px 6px;
+  box-shadow: 0 0 60px rgba(214,249,76,0.15), 0 0 120px rgba(79,217,232,0.08);
+  overflow: hidden;
+}
+.phone-notch {
+  position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+  width: 80px; height: 22px;
+  background: #1a0b2e;
+  border-radius: 0 0 14px 14px;
+  z-index: 2;
+}
+.phone-screen {
+  width: 100%; height: 100%;
+  border-radius: 22px;
+  background: linear-gradient(180deg, #12061d 0%, #1a0b2e 100%);
+  display: flex; align-items: center; justify-content: center;
+  overflow: hidden;
+  position: relative;
+}
+/* Subtle grid lines — video editor feel */
+.phone-screen::before {
+  content: "";
+  position: absolute; inset: 0;
+  background-image:
+    linear-gradient(rgba(245,241,255,0.04) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(245,241,255,0.04) 1px, transparent 1px);
+  background-size: 28px 28px;
+}
+/* Play button pulse */
+.phone-screen::after {
+  content: "";
+  position: absolute;
+  width: 44px; height: 44px;
+  border-radius: 50%;
+  border: 2px solid rgba(214,249,76,0.5);
+  top: 50%; left: 50%;
+  transform: translate(-50%, -50%);
+  animation: playPulse 2.2s ease-out infinite;
+  z-index: 3;
+}
+@keyframes playPulse {
+  0% { box-shadow: 0 0 0 0 rgba(214,249,76,0.4); }
+  100% { box-shadow: 0 0 0 28px rgba(214,249,76,0); }
+}
+.phone-screen::after {
+  /* Play triangle */
+  background:
+    linear-gradient(135deg, transparent 50%, rgba(214,249,76,0.85) 50%) 59% 50% / 33% 33% no-repeat;
+}
+.phone-scene {
+  position: relative; z-index: 1;
+  padding: 20px 14px 50px;
+  width: 100%;
+}
+.phone-cap {
+  display: flex; flex-wrap: wrap; gap: 6px;
+  justify-content: center;
+  font-family: var(--mono);
+  font-size: 13px; font-weight: 700;
+}
+.phone-cap-w {
+  display: inline-block;
+  padding: 3px 8px;
+  border-radius: 6px;
+  color: rgba(245,241,255,0.32);
+  background: rgba(245,241,255,0.04);
+  transition: color 1.5s, background 1.5s, box-shadow 1.5s;
+}
+.phone-cap-w.active {
+  color: var(--cyan);
+  background: rgba(79,217,232,0.12);
+  box-shadow: 0 0 14px rgba(79,217,232,0.25);
+}
 
 .kicker {
   font-size: 13px; font-weight: 700;
