@@ -165,7 +165,7 @@ test('scene with clip renders a muted, looping video behind chrome', () => {
   const cliptimings = Object.fromEntries(clipCfg.scenes.map(s => [s.id, timings[s.id] || timings.s1]));
   const h = composeDoc(clipCfg, size, composeData(clipCfg, cliptimings), '');
   // s1 has a clip; s2 doesn't.
-  assert.match(h, /<video class="broll" src="assets\/clip-s1\.mp4" autoplay loop muted playsinline>/);
+  assert.match(h, /<video class="clip broll" src="assets\/clip-s1\.mp4" data-start="0" data-duration="5" muted loop playsinline preload="auto">/);
   assert.ok(!h.includes('clip-s2'), 'scene 2 has no clip');
   // video appears before chrome div inside the scene section.
   const s1Chunk = h.slice(h.indexOf('id="scene-s1"'));

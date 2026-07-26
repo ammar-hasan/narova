@@ -55,7 +55,7 @@ function composeDoc(config, size, data, css) {
         chrome.counter ? `<div class="counter">${String(i + 1).padStart(2, '0')} / ${nn}</div>` : ''}</div>`
       : '';
     const broll = s.clip
-      ? `<video class="broll" src="assets/clip-${escapeHtml(s.id)}${escapeHtml(path.extname(s.clip))}" autoplay loop muted playsinline></video>`
+      ? `<video class="clip broll" src="assets/clip-${escapeHtml(s.id)}${escapeHtml(path.extname(s.clip))}" data-start="0" data-duration="${fmt(sc.dur)}" muted loop playsinline preload="auto"></video>`
       : '';
     return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
     ${broll}
