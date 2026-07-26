@@ -99,54 +99,74 @@ why. The user should only need to say "yes" or tweak one thing.
   no series for a 30s clip).
 - Make the user run commands or read docs to understand your suggestion.
 
-**After intake**, proceed to step 1.
+**After intake**, write a short summary of the key decisions (engine, voice
+names, narrator count, theme mode, accent color, platform/dimensions,
+target length, music, caption style) as a comment block at the top of
+`reel.config.mjs` when you create it in step 2. Proceed to step 1.
 
 ### 1 — Check the environment
 
 `doctor` — check the machine **before** writing a script.
 Fix problems with `references/environment.md`.
-2. **Create the project, then write the scene script.** In a repository, put
-   generated projects under `generated/<descriptive-slug>/`, never loose at
-   the repo root: `init generated/<slug>`. Keep editable source
-   (`reel.config.mjs`, `theme.css`, `assets/`) and ignore `out/`.
+
+### 2 — Create the project & write the scene script
+
+In a repository, put generated projects under `generated/<descriptive-slug>/`,
+never loose at the repo root: `init generated/<slug>`. `init` creates a
+minimal `reel.config.mjs` + `theme.css` skeleton — replacing it wholesale
+with your own is the normal flow. Keep editable source
+(`reel.config.mjs`, `theme.css`, `assets/`) and ignore `out/`.
    If the prompt names a URL, first run `ingest <url>` for the mechanical
    pass (images into `assets/`, page screenshot, `sources.md` entry,
    `claims.md` skeleton), then read and follow
    `references/url-to-source.md`; classify the page before deciding whether
    brand, editorial, research, or technical evidence should drive the video.
    A search result or prose page summary is not source evidence. Then read
-    `references/prompt-to-video.md` (intake and
-    script craft) and `references/scene-script.md` (the config format).
-    Use the voice/engine/count decisions from the intake step. Short turns,
+   `references/prompt-to-video.md` (intake and
+   script craft) and `references/scene-script.md` (the config format).
+   Use the voice/engine/count decisions from the intake step. Short turns,
    `data-cue` on the key visual of most turns. Build the theme from the
    classified source evidence or the prompt's mood/colors: keep whatever the
-   user gave, fill in the rest yourself, never ask for CSS. A light-brand
-   site means `theme.mode: "light"` — never fight the dark base with
-   `!important` overrides.
-   `init <dir>` gives a start — the scaffold is a starting point, so
-   replacing `reel.config.mjs` wholesale with your own is the normal flow.
-3. **Ground every claim.** Before synth, write `claims.md` in the project:
+   user gave, fill in the rest yourself, never ask for CSS.
+   Set `theme.mode` based on the intake decision (see Hard Rules).
+
+### 3 — Ground every claim
+
+Before synth, write `claims.md` in the project:
    every stat, number, superlative, or factual assertion in the `vo`, tagged
    verbatim / paraphrase / inference against a source
    (`references/url-to-source.md` §Claims ledger). `check` sniffs for
    unledgered claims — an invented stat is a trust problem, not a polish one.
-4. `check` — fast validation. No TTS, no browser, no writes.
+
+### 4 — `check` — fast validation
+
+No TTS, no browser, no writes.
    Exit 0 = valid. Run it after **every** config edit. The `ok:` line also
    prints an **estimated narration length** — if the user gave a target
    duration, tune word count and `timing.tempo` here, before any audio exists.
-5. `synth` — makes the audio and word timings (piper by default).
-6. `compose` — generates `out/hf/` and prints the per-scene start times.
+
+### 5 — `synth` — audio & word timings
+
+### 6 — `compose` — generate HyperFrames project
+
+Generates `out/hf/` and prints the per-scene start times.
    Run `npx hyperframes check` inside `out/hf`, then do the **visual QA
    pass**: `narova shots` snapshots one frame per scene into
    `out/hf/snapshots/review/` — actually look at them. Overlap lint misses
    oversized display type bleeding over neighbors and content sliding under
    the topbar/caption band; your eyes on real frames are the check.
-7. `preview --detach` — keeps HyperFrames Studio alive and prints its
+
+### 7 — `preview` — show before rendering
+
+`preview --detach` keeps HyperFrames Studio alive and prints its
    exact URL, PID, and log path. Studio does NOT hot-reload, so `compose` and
    `build` **restart a live detached preview automatically** on the new build
    (same port). Snapshots verify; Studio is for watching.
    **Show the user before rendering.**
-8. `build --reuse` — renders `out/video.mp4`, reusing the audio from
+
+### 8 — `build` — render the MP4
+
+`build --reuse` renders `out/video.mp4`, reusing the audio from
    step 5. (`--reuse` is ignored automatically if the spoken text changed.)
    Verify: `ffprobe` length of the mp4 ≈ length of `out/audio/full.wav`.
 
@@ -175,10 +195,11 @@ Fix problems with `references/environment.md`.
   selectors in theme.css (`check` warns). Reveal/cue on an SVG element with a
   `transform` attribute is safe: the runtime wraps it and tweens the wrapper.
 - **Default to piper unless the intake step chose otherwise.** It is fast, good
-  or `xtts` for the final render when the user wants richer voices. Both are
-  slow and download a 1–2GB model once. `narova voices list --backend piper`
-  shows a spread of starter voices; `narova voices get <name> --backend piper`
-  downloads any voice from the piper catalog.
+  for most videos. Switch to `xtts` or `qwen` for the final render when the
+  user wants richer voices. Both are slow and download a 1–2GB model once.
+  `narova voices list --backend piper` shows a spread of starter voices;
+  `narova voices get <name> --backend piper` downloads any voice from the
+  piper catalog.
 - **Clone a specific voice with `--backend chatterbox`.** Set a voice's
   `speaker` to an ABSOLUTE path to a clean 10–20s recording; chatterbox speaks
   in that voice. Install once with `tool/setup.sh --chatterbox` (isolated
@@ -186,12 +207,10 @@ Fix problems with `references/environment.md`.
   subprocess). Optional per-voice `exaggeration` (0.25–2.0) and `cfg_weight`
   (0.0–1.0, lower = slower/more expressive). Slowest backend — the sentence
   cache still keeps unchanged lines from re-synthesizing.
-- **Two hosts read better than one (but 0 to N are supported).** Default cast: one male + one female
-  voice, trading questions and answers. One narrator only when the format
-  calls for it (a short announcement); more than two only for a real panel.
-- **No invented facts.** Every number, superlative, or market claim in the
-  `vo` must exist in the project's `claims.md` with a source. If you cannot
-  trace it, cut it or say it as opinion.
+- **0 to N narrators are supported.** The intake step chooses the right count
+  for this specific video. A dialogue (typically one male + one female
+  voice trading turns) adds energy for social clips; a single narrator is
+  cleaner for explainers and monologues. More than two only for a real panel.
 - **Sourcing is checked; balance is not.** `check` gates claims against the
   ledger, but it cannot see a one-sided narrative built from sourced claims.
   For contested topics (politics, conflicts, disputes), ledger the major
