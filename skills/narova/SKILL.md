@@ -45,36 +45,34 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
 
 ## Workflow: prompt → video
 
-### 0 — INTAKE: Ask before you write
+### 0 — INTAKE: Ask about what the prompt left out
 
-**Never silently assume.** The user's prompt may be a single sentence.
-Every unasked decision becomes a surprise in the output. Ask, then write.
+**Never silently assume.** A one-sentence prompt is missing most of what
+narova needs to produce the right video. Your job is to spot the gaps and
+ask — not to fill them with guesses.
 
-**Must-ask questions (ask these before writing a single line of config):**
+**The rule:** for every narova parameter below, if the prompt doesn't
+already answer it AND choosing differently would change the video, ask.
+If the parameter doesn't matter for this particular video, skip it.
 
-| Question | Why | Default if user defers |
-|----------|-----|------------------------|
-| Which TTS engine? piper (fast, small), xtts (rich, 1.9GB), qwen (high quality, Apache 2.0), or chatterbox (voice cloning)? | Drives voice quality, speed, and whether a model download is needed | piper |
-| How many narrators? 0 (captions only, silent), 1 (monologue), 2 (dialogue), or N (panel)? | Shapes the entire script structure | 2 |
-| Which specific voices? (e.g. "en_US-ryan-high" for male, "en_US-hfc_female-medium" for female) | `narova voices list --backend <name>` shows options | ryan-high + hfc_female-medium |
-| Do you want to clone a voice? If so, provide a 10–20s clean recording. | chatterbox needs a sample; the user must supply it | No |
-| Which platform? tiktok, reels, shorts, linkedin, x, or custom? | Picks frame size + duration band | User must choose or say "no preference" (then 16:9, no duration lint) |
+**What narova can vary (scan the prompt against this):**
+- **Voice:** TTS engine (piper/xtts/qwen/chatterbox), number of narrators (0–N), specific speaker names, voice cloning from a sample
+- **Format:** platform (tiktok/reels/shorts/linkedin/x), target duration, aspect ratio
+- **Audio:** background music, spot sound effects, forced word alignment
+- **Look:** light/dark mode, accent color, mood/palette, transitions between scenes, hand-drawn annotations (`data-mark`)
+- **Motion:** caption preset (karaoke/slam/pop/rise), keyword emphasis, b‑roll video clips behind scenes
+- **Structure:** hook A/B variants, series episodes (`series: {part, total}`), scene count
+- **Source:** URL to pull facts/imagery from (`narova ingest <url>`), claims ledger
 
-**Ask-when-relevant questions (ask if the prompt doesn't already imply the answer):**
-
-| Question | When to ask |
-|----------|-------------|
-| Target duration? (e.g. "about 30 seconds") | User hasn't mentioned length |
-| Music bed? (background track, ducked under narration) | Prompt doesn't mention audio beyond voice |
-| Light or dark theme? (dark by default; `theme.mode: "light"` for light-brand sites) | Prompt names a brand/product with a light visual identity |
-| Any specific colors or mood? (accent color, palette direction) | Prompt is vague about visuals |
-| Hook variants for A/B testing? | User is optimizing for social media reach |
-
-**Present choices, don't interrogate.** Group related questions together.
-Offer the defaults explicitly so the user can just say "defaults are fine."
-If the user's prompt is detailed ("make a 30s TikTok about X with a female narrator"),
-fill in the rest with defaults and ask only: "I'll use piper TTS, dark theme,
-one female narrator — confirm or adjust?"
+**How to ask:**
+- Group related gaps into one message — don't fire 8 questions one by one.
+- Offer the defaults so the user can just say "defaults."
+- If the prompt is detailed, state what you inferred and ask only for
+  confirmation: *"I'll use piper TTS, male voice, 16:9, dark theme — ok?"*
+- Skip parameters the prompt already nailed. Don't ask "which platform?"
+  when they said "make a TikTok."
+- Don't ask about arcane features (alignment, b‑roll, series) unless the
+  prompt hints at them; mention them only when they'd lift the output.
 
 **After intake**, proceed to step 1.
 
