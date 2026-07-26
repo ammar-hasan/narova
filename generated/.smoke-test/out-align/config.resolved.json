@@ -1,0 +1,57 @@
+{
+  "title": "narova — Aligned",
+  "size": {
+    "w": 1280,
+    "h": 720
+  },
+  "voices": {
+    "a": {
+      "backend": "piper",
+      "speaker": "en_US-ryan-high",
+      "color": "#2ee6d6",
+      "label": "narrator"
+    }
+  },
+  "theme": {},
+  "mode": "dark",
+  "chrome": {
+    "topbar": true,
+    "counter": true,
+    "progress": true
+  },
+  "themeCss": "",
+  "timing": {
+    "gapSentence": 0.24,
+    "gapTurn": 0.44,
+    "lead": 0.16,
+    "tail": 0.58,
+    "tempo": null
+  },
+  "scenes": [
+    {
+      "id": "title",
+      "vo": [
+        {
+          "who": "a",
+          "text": "This video uses forced word alignment. Every word timing is measured from the audio, not estimated from word count."
+        }
+      ],
+      "body": "<div class=\"s-title\"><h1 class=\"reveal\">Aligned</h1><p class=\"lede cue\" data-cue=\"0\">Whisper-measured word timings</p></div>",
+      "dur": 6
+    }
+  ],
+  "projectDir": "/Users/ammarhasan/Work/narova/generated/.smoke-test",
+  "platform": null,
+  "music": null,
+  "sfx": [],
+  "captions": {
+    "preset": "karaoke",
+    "emphasis": []
+  },
+  "align": {
+    "engine": "auto"
+  },
+  "variants": [],
+  "variant": null,
+  "series": null
+}

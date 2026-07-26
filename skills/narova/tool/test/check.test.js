@@ -268,3 +268,20 @@ test('saveable: last scene with an image is silent', () => {
   ]));
   assert.ok(!lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
 });
+
+// -- HyperFrames reserved class names --
+
+test('body elements using HyperFrames-reserved class names warn', () => {
+  const lines = run(base([
+    { id: 's', body: '<section class="scene hook"><div class="progress"></div></section>', vo: [{ who: 'a', text: 'a' }] },
+  ]));
+  assert.ok(lines.some(l => l.includes('reserved name "scene"')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('reserved name "progress"')), lines.join('\n'));
+});
+
+test('body elements without reserved class names are silent', () => {
+  const lines = run(base([
+    { id: 's', body: '<section class="story-scene hook-scene"><div class="bar"></div></section>', vo: [{ who: 'a', text: 'a' }] },
+  ]));
+  assert.ok(!lines.some(l => l.includes('reserved name')), lines.join('\n'));
+});

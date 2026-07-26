@@ -105,6 +105,10 @@ const SCENE_TRANSITIONS = new Set(['fade', 'wipe', 'slide', 'zoom']);
  * exactly. */
 const MARK_KINDS = new Set(['underline', 'circle', 'box', 'highlight']);
 
+/* HyperFrames-reserved class names — if used in body HTML they collide with
+ * the generated composition structure and silently break layout. */
+const HF_RESERVED_CLASSES = new Set(['scene', 'clip', 'chrome', 'overlay', 'canvas', 'scenebody', 'capzone', 'progress', 'topbar', 'wordmark', 'counter', 'cap-stage', 'cap-group', 'spk', 'cap-w', 'caption2', 'marklayer']);
+
 /* Hook enforcement (§Hook doctrine in the skill references).
  * Viral video mechanics in 2026: muted autoplay is 80%+, hooks are measured at
  * 2s, the first syllable must land within ~200ms. Scene 1 is the hook. */
@@ -198,6 +202,16 @@ function check(config) {
         const kind = attr(t, 'data-mark');
         if (!MARK_KINDS.has(kind)) {
           warnings.push(`scene "${s.id}": data-mark="${kind}" is not a known mark (valid: underline, circle, box, highlight) — the runtime ignores it`);
+        }
+      }
+      // HyperFrames-reserved class names collide with the generated composition
+      // and break layout silently — warn on any body element that uses one.
+      const classVal = attr(t, 'class');
+      if (classVal) {
+        const names = classVal.split(/\s+/);
+        const hits = names.filter(n => HF_RESERVED_CLASSES.has(n));
+        if (hits.length) {
+          warnings.push(`scene "${s.id}": class="${classVal}" uses HyperFrames-reserved name${hits.length > 1 ? 's' : ''} ${hits.map(c => `"${c}"`).join(', ')} — rename to avoid silent layout breakage`);
         }
       }
       // ids: compose namespaces them per scene (<sceneId>--<id>), so reuse ACROSS

@@ -1,0 +1,12 @@
+[
+  {
+    "n": 1,
+    "id": "title",
+    "segments": [
+      {
+        "who": "a",
+        "text": "This video uses forced word alignment. Every word timing is measured from the audio, not estimated from word count."
+      }
+    ]
+  }
+]
