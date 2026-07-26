@@ -65,11 +65,40 @@ test('resolveConfig validates chatterbox clone settings before synth', () => {
 test('resolveConfig rejects invalid chatterbox paths and unknown backends', () => {
   const relative = validRaw();
   relative.voices.a = { backend: 'chatterbox', speaker: 'voice.wav' };
-  assert.throws(() => resolveConfig(relative, {}, '.'), /absolute clone-recording path/);
+  assert.throws(() => resolveConfig(relative, {}, '.'), /not a saved voice sample/);
 
   const unknown = validRaw();
   unknown.voices.a.backend = 'chatty';
   assert.throws(() => resolveConfig(unknown, {}, '.'), /unknown backend "chatty"/);
+});
+
+test('chatterbox speaker resolves named samples from ~/.narova/samples/', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-schema-samples-'));
+  const samplesDir = path.join(dir, 'samples');
+  fs.mkdirSync(samplesDir);
+  // Create a fake sample wav.
+  const wav = path.join(samplesDir, 'my-voice.wav');
+  fs.writeFileSync(wav, Buffer.alloc(44));
+
+  // Override NAROVA_HOME so SAMPLES_DIR points to our temp dir.
+  const prev = process.env.NAROVA_HOME;
+  process.env.NAROVA_HOME = dir;
+  // Clear the require cache so util re-reads SAMPLES_DIR.
+  delete require.cache[require.resolve('../src/util')];
+  delete require.cache[require.resolve('../src/schema')];
+  const { resolveConfig: r2 } = require('../src/schema');
+
+  const raw = validRaw();
+  raw.voices.a = { backend: 'chatterbox', speaker: 'my-voice' };
+  const c = r2(raw, {}, '.');
+  assert.equal(c.voices.a.speaker, wav, 'speaker should resolve to the absolute sample path');
+
+  // Restore
+  if (prev != null) process.env.NAROVA_HOME = prev; else delete process.env.NAROVA_HOME;
+  delete require.cache[require.resolve('../src/util')];
+  delete require.cache[require.resolve('../src/schema')];
+  require('../src/util');
+  require('../src/schema');
 });
 
 test('resolveConfig aggregates every error', () => {

@@ -2,6 +2,8 @@
 /* Shared helpers: process runners, ffprobe, path/size helpers. */
 const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
+const os = require('os');
+const path = require('path');
 
 /* Run a command, inheriting stderr, throwing on failure. */
 function sh(cmd, args, opts = {}) {
@@ -63,4 +65,24 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-module.exports = { sh, probe, which, ensureDir, resolveSize, hexToRgba, PLATFORMS };
+const NAROVA_HOME = process.env.NAROVA_HOME || path.join(os.homedir(), '.narova');
+const SAMPLES_DIR = path.join(NAROVA_HOME, 'samples');
+const SAMPLE_EXTS = ['.wav', '.mp3', '.flac', '.m4a'];
+
+/* Resolve a chatterbox voice-cloning speaker reference to an absolute path.
+ * Absolute paths pass through. Relative names are looked up in
+ * ~/.narova/samples/ with common audio extensions. Returns null when no
+ * sample matches. */
+function resolveVoiceSample(speaker) {
+  if (!speaker || typeof speaker !== 'string') return null;
+  if (path.isAbsolute(speaker)) return speaker;
+  for (const ext of SAMPLE_EXTS) {
+    const candidate = path.join(SAMPLES_DIR, speaker + ext);
+    if (fs.existsSync(candidate)) return candidate;
+  }
+  const asIs = path.join(SAMPLES_DIR, speaker);
+  if (fs.existsSync(asIs)) return asIs;
+  return null;
+}
+
+module.exports = { sh, probe, which, ensureDir, resolveSize, hexToRgba, PLATFORMS, resolveVoiceSample, SAMPLES_DIR };

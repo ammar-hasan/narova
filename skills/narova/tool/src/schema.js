@@ -2,7 +2,7 @@
 /* Resolve + validate a project config into the shape the renderer/synth expect. */
 const fs = require('fs');
 const path = require('path');
-const { resolveSize, PLATFORMS } = require('./util');
+const { resolveSize, PLATFORMS, resolveVoiceSample } = require('./util');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
@@ -119,10 +119,18 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       errs.push(`${at}.backend: unknown backend ${JSON.stringify(v.backend)} (piper|xtts|qwen|chatterbox)`);
     }
     if (v.backend !== 'chatterbox') return;
-    if (typeof v.speaker !== 'string' || !path.isAbsolute(v.speaker)) {
-      errs.push(`${at}.speaker: chatterbox requires an absolute clone-recording path`);
-    } else if (!fs.existsSync(v.speaker) || !fs.statSync(v.speaker).isFile()) {
-      errs.push(`${at}.speaker: clone recording not found: ${v.speaker}`);
+    const resolved = resolveVoiceSample(v.speaker);
+    if (!resolved) {
+      if (v.speaker && !path.isAbsolute(v.speaker)) {
+        errs.push(`${at}.speaker: "${v.speaker}" is not a saved voice sample — use "narova voice sample add <file>" first, or provide an absolute path to a 10–20s recording`);
+      } else {
+        errs.push(`${at}.speaker: chatterbox requires a clone-recording path — use "narova voice sample add <file>" or set an absolute path`);
+      }
+    } else if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      errs.push(`${at}.speaker: clone recording not found: ${resolved}`);
+    } else {
+      // Store the resolved absolute path so the Python stage never sees a name.
+      v.speaker = resolved;
     }
     for (const [key, min, max] of [['exaggeration', 0.25, 2.0], ['cfg_weight', 0.0, 1.0]]) {
       const value = v[key];

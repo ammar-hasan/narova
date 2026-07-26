@@ -18,6 +18,7 @@ const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
 const { ingest } = require('../src/ingest');
+const { addSample, removeSample, listSamples } = require('../src/samples');
 
 const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants']);
 
@@ -115,6 +116,9 @@ Commands:
   build                synth + compose + hyperframes render -> out/video.mp4
   preview              compose, then open HyperFrames Studio on out/hf
   voices list|get      list / download TTS voices (delegates to narova_tts)
+  voice sample add <file> <name>   save a clone sample for chatterbox
+  voice sample list                list saved clone samples
+  voice sample remove <name>       remove a saved clone sample
   doctor               check ffmpeg, ffprobe, python venv, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
@@ -335,6 +339,64 @@ async function main() {
       if (r.error) { console.error(`voices failed to launch (${py}): ${r.error.message}`); process.exit(1); }
       process.exitCode = r.status || 0;
       return;
+    }
+
+    case 'voice': {
+      const sub = positionals[1];
+      if (!sub || sub === 'help') {
+        console.log('narova voice sample — manage clone recordings for the chatterbox backend\n');
+        console.log('  voice sample add <file> <name>     save <file> as a named clone sample');
+        console.log('  voice sample list                  list saved clone samples');
+        console.log('  voice sample remove <name>         remove a saved clone sample\n');
+        console.log('After adding a sample, use chatterbox by name in reel.config:');
+        console.log('  voices: { a: { backend: "chatterbox", speaker: "my-voice" } }\n');
+        console.log(`Samples live in ~/.narova/samples/`);
+        return;
+      }
+      if (sub !== 'sample') { console.error('unknown voice subcommand — use "voice sample"'); process.exit(1); }
+      const action = positionals[2];
+      try {
+        switch (action) {
+          case 'add': {
+            const file = positionals[3];
+            const name = positionals[4];
+            if (!file) { console.error('usage: narova voice sample add <file> <name>'); process.exit(1); }
+            const dest = addSample(file, name || path.basename(file, path.extname(file)));
+            console.log(`sample "${path.basename(dest, path.extname(dest))}" saved -> ${dest}`);
+            console.log('\nUse it in reel.config:');
+            console.log(`  voices: { a: { backend: "chatterbox", speaker: "${path.basename(dest, path.extname(dest))}" } }`);
+            return;
+          }
+          case 'list': {
+            const samples = listSamples();
+            if (samples.length === 0) {
+              console.log('No voice samples saved yet.\n');
+              console.log('Add one: narova voice sample add <path-to-audio> my-voice');
+              console.log('(chatterbox needs 10–20s of clean speech — .wav, .mp3, .flac, or .m4a)');
+            } else {
+              console.log(`Voice samples (${samples.length}):\n`);
+              for (const s of samples) {
+                console.log(`  ${s.name.padEnd(20)} ${(s.size / 1024).toFixed(0).padStart(5)} KB  ${s.ext}`);
+              }
+              console.log(`\nUse by name: speaker: "${samples[0].name}"`);
+            }
+            return;
+          }
+          case 'remove': {
+            const name = positionals[3];
+            if (!name) { console.error('usage: narova voice sample remove <name>'); process.exit(1); }
+            const removed = removeSample(name);
+            console.log(`removed sample "${path.basename(removed, path.extname(removed))}"`);
+            return;
+          }
+          default:
+            console.error('unknown action — use add, list, or remove');
+            process.exit(1);
+        }
+      } catch (e) {
+        console.error(`error: ${e.message}`);
+        process.exit(1);
+      }
     }
 
     case 'doctor': {
