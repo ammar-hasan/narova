@@ -214,18 +214,21 @@ test('unknown platform is a config error', () => {
     /config\.platform: unknown platform "myspace"/);
 });
 
-test('music resolves file to absolute with defaults; bad music throws', () => {
-  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-music-'));
+test('bed resolves file to absolute with defaults; legacy music key also accepted', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-bed-'));
   fs.writeFileSync(path.join(dir, 'bed.mp3'), 'fake');
-  const c = resolveConfig({ ...validRaw(), music: { file: 'bed.mp3' } }, {}, dir);
-  assert.deepEqual(c.music, { file: path.join(dir, 'bed.mp3'), volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 });
-  assert.equal(resolveConfig(validRaw(), {}, '.').music, null);
-  assert.throws(() => resolveConfig({ ...validRaw(), music: 'bed.mp3' }, {}, dir),
-    /config\.music: expected an object/);
-  assert.throws(() => resolveConfig({ ...validRaw(), music: { file: 'missing.mp3' } }, {}, dir),
-    /config\.music\.file: not found/);
-  assert.throws(() => resolveConfig({ ...validRaw(), music: { file: 'bed.mp3', volume: -1 } }, {}, dir),
-    /config\.music\.volume: must be a non-negative number/);
+  const c = resolveConfig({ ...validRaw(), bed: { file: 'bed.mp3' } }, {}, dir);
+  assert.deepEqual(c.bed, { file: path.join(dir, 'bed.mp3'), volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 });
+  // Legacy music key maps to bed.
+  const c2 = resolveConfig({ ...validRaw(), music: { file: 'bed.mp3' } }, {}, dir);
+  assert.deepEqual(c2.bed, { file: path.join(dir, 'bed.mp3'), volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 });
+  assert.equal(resolveConfig(validRaw(), {}, '.').bed, null);
+  assert.throws(() => resolveConfig({ ...validRaw(), bed: 'bed.mp3' }, {}, dir),
+    /config\.bed: expected an object/);
+  assert.throws(() => resolveConfig({ ...validRaw(), bed: { file: 'missing.mp3' } }, {}, dir),
+    /config\.bed\.file: not found/);
+  assert.throws(() => resolveConfig({ ...validRaw(), bed: { file: 'bed.mp3', volume: -1 } }, {}, dir),
+    /config\.bed\.volume: must be a non-negative number/);
 });
 
 test('sfx entries anchor to scenes; bad anchors/files throw', () => {

@@ -90,7 +90,7 @@ export default {
   platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint
   captions: { preset: "karaoke",          // optional: karaoke|slam|pop|rise
               emphasis: ["narova"] },     //   words auto-highlighted in every caption line
-  music: { file: "assets/bed.mp3", volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 },  // optional music bed
+  bed: { file: "assets/ambient.mp3", volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 },  // optional background bed (legacy key: music)
   sfx: [ { file: "assets/pop.wav", scene: "title", at: 0.5, volume: 0.8 } ],   // optional spot SFX
   align: false,                           // true | { engine: "auto"|"faster-whisper"|"whisper-cpp" } — measured word timings
   variants: [ { id: "cold-open",          // optional hook variants for A/B tests (narova build --variants)
@@ -140,7 +140,7 @@ Rules:
 - `platform` picks the frame size when `size` is unset (`--size` beats the
   preset) and makes `check` warn when the estimated narration length falls
   outside the platform's target duration band.
-- `music` and `sfx` are mixed into the narration track by the synth stage
+- `bed` and `sfx` are mixed into the narration track by the synth stage
   (`references/audio.md`). SFX anchor to `scene` + scene-local `at`, or to
   the global timeline when `scene` is omitted. Files are resolved relative
   to the project. Music changes do not require re-synthesis.
@@ -187,14 +187,14 @@ attribute survives GSAP's CSS transform. The canvas reserves the caption
 band's height; the content column is `var(--colw, 1000px)`.
 
 Also in out/hf: the copied project `assets/`, `assets/narration.wav` (a copy
-of `out/audio/mix.wav` when a music/SFX mix was made, else
+of `out/audio/mix.wav` when a bed/SFX mix was made, else
 `out/audio/full.wav`), and `package.json` (pins the HyperFrames version).
 
 ## The Python contract (frozen)
 
 In: `narration.json` + `config.resolved.json`.
 Out: `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav`, `timings.json`, and
-`audio/mix.wav` when `music`/`sfx` is configured (full.wav + music bed + spot
+`audio/mix.wav` when `bed`/`sfx` is configured (full.wav + background bed + spot
 SFX, same duration; narration is NOT re-loudnorm'd).
 
 `timings.json`:
@@ -264,7 +264,7 @@ Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
 compose → preview → build. The tool and tests ship inside the skill.
 
-Since 0.6.0: music bed + spot SFX mixing, forced word alignment (optional),
+Since 0.6.0: background bed + spot SFX mixing, forced word alignment (optional),
 caption style presets + keyword emphasis, per-scene transitions, `data-mark`
 annotations, `--platform` presets with duration-band lint, SRT/VTT caption
 export, hook-variant builds (`--variant`/`--variants`), `narova ingest <url>`,

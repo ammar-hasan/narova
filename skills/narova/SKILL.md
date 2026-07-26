@@ -1,11 +1,11 @@
 ---
 name: narova
-version: 0.7.2
+version: 0.7.3
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
   multi-host dialogue (0 to N narrators), prompt/script/README-to-video, videos sourced from any
   URL (product site, article, paper, docs, repository, or general page),
-  word-synced karaoke captions, voice-triggered reveals, music beds and
+  word-synced karaoke captions, voice-triggered reveals, background beds and
   sound effects, per-platform exports (TikTok/Reels/Shorts/LinkedIn/X),
   SRT/VTT sidecar captions, hook A/B variants, or local neural TTS
   with no API keys. It turns a prompt or scene script into an MP4 with local
@@ -84,7 +84,7 @@ why. The user should only need to say "yes" or tweak one thing.
   motion graphics, 1 for monologue, 2 for dialogue), which concrete
   voices fit the tone (warm, energetic, authoritative, calm)
 - **Format:** platform dimensions + duration band, target length
-- **Audio:** background music (always worth suggesting — it lifts
+- **Audio:** background bed (always worth suggesting — it lifts
   production value dramatically), sound effects for key moments
 - **Look:** light/dark mode, accent color from brand/prompt, mood,
   caption animation style (slam for punchy, karaoke for explainers),
@@ -109,7 +109,7 @@ why. The user should only need to say "yes" or tweak one thing.
 
 **After intake**, write a short summary of the key decisions (engine, voice
 names, narrator count, theme mode, accent color, platform/dimensions,
-target length, music, caption style) as a comment block at the top of
+target length, bed, caption style) as a comment block at the top of
 `reel.config.mjs` when you create it in step 2. Proceed to step 1.
 
 ### 1 — Check the environment
@@ -246,7 +246,7 @@ scenes keep their exact audio. Details:
 | `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
 | `references/url-to-source.md`   | classify any URL and extract the right factual and visual evidence|
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
-| `references/audio.md`          | music beds, spot SFX, forced word alignment, chatterbox v3   |
+| `references/audio.md`          | background beds, spot SFX, forced word alignment, chatterbox v3   |
 | `references/cli.md`            | see every command, flag, `out/` file, and rough cost         |
 | `references/gotchas.md`        | avoid the traps (tempo, --reuse, sync, determinism)          |
 | `references/environment.md`    | fix `doctor` failures: ffmpeg, python, venv, hyperframes     |

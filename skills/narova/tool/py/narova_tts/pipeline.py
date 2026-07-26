@@ -87,7 +87,7 @@ def to_mp3(wav: Path, mp3: Path) -> None:
     sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-b:a", "72k", str(mp3))
 
 
-# ---- music bed + spot sfx (mixed AFTER loudnorm; never re-loudnorm'd) --------
+# ---- background bed + spot sfx (mixed AFTER loudnorm; never re-loudnorm'd) --------
 
 def scene_starts(scenes, timings) -> dict[str, float]:
     """Global start time of each scene: cumulative durs in narration order."""
@@ -99,19 +99,19 @@ def scene_starts(scenes, timings) -> dict[str, float]:
 
 
 def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
-    """Overlay the music bed + spot sfx onto full.wav -> audio/mix.wav, in one
-    ffmpeg filter_complex pass. Music is looped/trimmed to the exact narration
-    length with `volume` gain and afade in/out; each sfx is adelay'd to its
-    global time (scene-anchored = scene start + `at`). loudnorm is NOT
+    """Overlay the background bed + spot sfx onto full.wav -> audio/mix.wav, in
+    one ffmpeg filter_complex pass. The bed is looped/trimmed to the exact
+    narration length with `volume` gain and afade in/out; each sfx is adelay'd
+    to its global time (scene-anchored = scene start + `at`). loudnorm is NOT
     re-applied (narration is already loudnorm'd): amix normalize=0 keeps the
-    narration level and an alimiter catches music+sfx clipping instead.
-    With neither music nor sfx configured, any stale mix.wav is deleted so
+    narration level and an alimiter catches bed+sfx clipping instead.
+    With neither bed nor sfx configured, any stale mix.wav is deleted so
     compose never picks up an old one."""
     full = audio_dir / "full.wav"
     mix = audio_dir / "mix.wav"
-    music = config.get("music")
+    bed = config.get("bed") or config.get("music")  # config.bed, fallback legacy config.music
     sfx = config.get("sfx") or []
-    if not music and not sfx:
+    if not bed and not sfx:
         mix.unlink(missing_ok=True)
         return
 
@@ -126,14 +126,14 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
     chains: list[str] = []              # per-source filter chains
     labels: list[str] = []              # amix input labels, after [0:a]
 
-    if music:
-        check_file(music["file"], "config.music.file")
+    if bed:
+        check_file(bed["file"], "config.bed.file")
         idx = len(labels) + 1
-        inputs.append(["-stream_loop", "-1", "-i", str(music["file"])])  # loop to length
-        fin = music.get("fadeIn", 0.5)
-        fout = music.get("fadeOut", 1.5)
+        inputs.append(["-stream_loop", "-1", "-i", str(bed["file"])])  # loop to length
+        fin = bed.get("fadeIn", 0.5)
+        fout = bed.get("fadeOut", 1.5)
         chain = (f"[{idx}:a]aresample={RATE},aformat=channel_layouts=mono,"
-                 f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,volume={music.get('volume', 0.14)}")
+                 f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,volume={bed.get('volume', 0.14)}")
         if fin > 0:
             chain += f",afade=t=in:st=0:d={fin}"
         if fout > 0:
@@ -168,7 +168,7 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
        "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(mix))
     drift = abs(probe(mix) - total)
     assert drift < 0.05, f"mix duration {probe(mix):.3f}s drifts {drift*1000:.0f}ms from narration {total:.3f}s"
-    what = ([f"music={Path(music['file']).name}@{music.get('volume', 0.14)}"] if music else []) \
+    what = ([f"bed={Path(bed['file']).name}@{bed.get('volume', 0.14)}"] if bed else []) \
         + ([f"sfx={len(sfx)}"] if sfx else [])
     print(f"mix   {total:5.1f}s  {' '.join(what)} -> audio/mix.wav", flush=True)
 
@@ -306,7 +306,7 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
     timings_path.write_text(json.dumps(timings))
 
     total = _verify_total(scenes, timings, audio_dir, tmp)
-    # Music/sfx also run on the reuse path: the mix config may change without
+    # Bed/sfx also run on the reuse path: the mix config may change without
     # the spoken text changing.
     mix_audio(scenes, timings, config, audio_dir)
     return {"totalDuration": round(total, 3), "scenes": len(scenes), "out": str(out_dir)}

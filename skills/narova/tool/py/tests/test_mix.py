@@ -1,4 +1,4 @@
-"""Tests for the music bed + spot sfx mix (narova_tts.pipeline.mix_audio).
+"""Tests for the background bed + spot sfx mix (narova_tts.pipeline.mix_audio).
 
 Uses real ffmpeg/ffprobe with small synthetic wavs (anullsrc/sine) — no TTS
 models involved. Skips cleanly when ffmpeg is absent."""
@@ -50,8 +50,8 @@ class TestMixAudio(unittest.TestCase):
         mix_audio(self.scenes, self.timings, config, self.audio)
         return self.audio / "mix.wav"
 
-    def test_music_bed_trimmed_to_narration_length(self):
-        out = self.mix({"music": {"file": str(self.tmp / "bed.wav"),
+    def test_bed_trimmed_to_narration_length(self):
+        out = self.mix({"bed": {"file": str(self.tmp / "bed.wav"),
                                   "volume": 0.5, "fadeIn": 0.1, "fadeOut": 0.5}})
         self.assertTrue(out.exists())
         self.assertAlmostEqual(probe(out), probe(self.audio / "full.wav"), delta=0.05)
@@ -81,15 +81,15 @@ class TestMixAudio(unittest.TestCase):
         self.assertTrue(out.exists())
         self.assertAlmostEqual(probe(out), 5.0, delta=0.05)
 
-    def test_no_music_no_sfx_deletes_stale_mix(self):
+    def test_no_bed_no_sfx_deletes_stale_mix(self):
         stale = self.audio / "mix.wav"
         stale.write_bytes(b"stale")
         mix_audio(self.scenes, self.timings, {}, self.audio)
         self.assertFalse(stale.exists())
 
-    def test_missing_music_file_raises_naming_it(self):
-        with self.assertRaisesRegex(ValueError, "music.*nope/bed.wav"):
-            self.mix({"music": {"file": "/nope/bed.wav", "volume": 0.14}})
+    def test_missing_bed_file_raises_naming_it(self):
+        with self.assertRaisesRegex(ValueError, "bed.*nope/bed.wav"):
+            self.mix({"bed": {"file": "/nope/bed.wav", "volume": 0.14}})
 
     def test_missing_sfx_file_raises_naming_it(self):
         with self.assertRaisesRegex(ValueError, r"sfx\[0\].*nope/hit.wav"):
@@ -102,7 +102,7 @@ class TestMixAudio(unittest.TestCase):
 
     def test_full_wav_untouched(self):
         before = (self.audio / "full.wav").read_bytes()
-        self.mix({"music": {"file": str(self.tmp / "bed.wav"), "volume": 0.5}})
+        self.mix({"bed": {"file": str(self.tmp / "bed.wav"), "volume": 0.5}})
         self.assertEqual((self.audio / "full.wav").read_bytes(), before)
 
 

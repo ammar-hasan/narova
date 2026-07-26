@@ -10,9 +10,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Music bed + spot SFX** — `music: {file, volume, fadeIn, fadeOut}` and
+- **Background bed + spot SFX** — `bed: {file, volume, fadeIn, fadeOut}` and
   `sfx: [{file, scene, at, volume}]` mixed into narration via ffmpeg.
-  Music changes don't require re-synthesis.
+  Bed changes don't require re-synthesis.
 - **Caption style presets + keyword emphasis** — `captions: {preset: karaoke|slam|pop|rise, emphasis: [...]}`.
   Slam/pop use GSAP-only tweens (seek-safe); emphasis highlights matching words.
 - **Per-platform export matrix** — `platform: tiktok|reels|shorts|linkedin|x` picks frame size

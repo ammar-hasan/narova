@@ -1,18 +1,19 @@
-# Audio: music bed, spot SFX, forced alignment, Chatterbox v3
+# Audio: background bed, spot SFX, forced alignment, Chatterbox v3
 
 Everything here is optional and configured in `reel.config.*`. The Python
 synth stage (`narova_tts`) does the work; compose picks up the result.
 
-## Music bed
+## Background bed
 
 ```json
-"music": { "file": "assets/bed.mp3", "volume": 0.14, "fadeIn": 0.5, "fadeOut": 1.5 }
+"bed": { "file": "assets/ambient.mp3", "volume": 0.14, "fadeIn": 0.5, "fadeOut": 1.5 }
 ```
 
 - `file` is project-relative; the resolver stores an absolute path.
 - The bed is looped or trimmed to the EXACT narration length, gained by
   `volume`, faded in/out with `afade`. Defaults shown above.
 - 0.14 is a starting point, not a law. Voice-forward reels sit at 0.08–0.2.
+- The legacy key `music` is also accepted (maps to `bed`).
 
 ## Spot SFX
 
@@ -38,8 +39,8 @@ synth stage (`narova_tts`) does the work; compose picks up the result.
 - loudnorm is NOT re-applied — the narration is already loudnorm'd and a
   second pass would shift its level. `normalize=0` keeps the voice at full
   level; the limiter catches bed+sfx clipping. If you hear pumping, lower
-  `music.volume`, don't reach for loudnorm.
-- Remove `music`/`sfx` from the config and the next synth DELETES the stale
+  `bed.volume`, don't reach for loudnorm.
+- Remove `bed`/`sfx` (or the legacy `music`) from the config and the next synth DELETES the stale
   `mix.wav` — compose falls back to `full.wav` automatically. Compose always
   prefers `mix.wav` when it exists.
 - Mixing runs on `--reuse` too: you can audition beds without re-voicing.

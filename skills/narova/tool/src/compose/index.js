@@ -24,10 +24,16 @@ function compose(config, outDir) {
   const css = composeCss(config.theme || {}, config.voices, size, config.themeCss || '', config.mode);
   const html = composeDoc(config, size, data, css);
 
-  const hfDir = path.join(outDir, 'hf');
+  const slugTitle = slug(config.title || 'narova');
+  const hfDir = path.join(outDir, `hf-${slugTitle}`);
   // A clean rebuild matters for assets: deleting logo.svg from the source must
-  // not leave a stale copy in the render project.
-  fs.rmSync(hfDir, { recursive: true, force: true });
+  // not leave a stale copy in the render project. Also remove any old hf-*
+  // directories so renames don't accumulate stale projects.
+  for (const entry of fs.readdirSync(outDir, { withFileTypes: true })) {
+    if (entry.isDirectory() && entry.name.startsWith('hf-')) {
+      fs.rmSync(path.join(outDir, entry.name), { recursive: true, force: true });
+    }
+  }
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
@@ -40,7 +46,7 @@ function compose(config, outDir) {
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
   fs.writeFileSync(path.join(hfDir, 'style.css'), css);
-  // Prefer mix.wav (narration + music bed + sfx) when the synth stage made one.
+  // Prefer mix.wav (narration + background bed + sfx) when the synth stage made one.
   const mixWav = path.join(outDir, 'audio', 'mix.wav');
   fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({

@@ -64,20 +64,31 @@ async function loadResolved(flags) {
 const outDirOf = (flags, projectDir) =>
   path.resolve(flags.out || path.join(projectDir || '.', 'out'));
 
-/* Studio serves out/hf from disk and does not hot-reload; compose deletes and
+/* Studio serves out/hf-<slug> from disk and does not hot-reload; compose deletes and
  * recreates that directory, so a detached preview left running would keep
  * showing the OLD build (or an empty 00:00 canvas). Instead of just warning,
  * restart it on the new build — the review URL the user has open starts
  * serving fresh frames. */
-function refreshPreviewIfLive(out, projectName) {
+function findHfDir(out) {
+  if (!fs.existsSync(out)) return path.join(out, 'hf');
+  try {
+    const entries = fs.readdirSync(out, { withFileTypes: true });
+    const match = entries.find(e => e.isDirectory() && e.name.startsWith('hf-'));
+    if (match) return path.join(out, match.name);
+  } catch (_) { /* out doesn't exist yet — fall through to legacy */ }
+  return path.join(out, 'hf');
+}
+
+function refreshPreviewIfLive(out) {
+  const hfDir = findHfDir(out);
   const pidFile = path.join(out, 'preview.pid');
   const pid = livePreviewPid(pidFile);
   if (!pid) return;
   const port = previewPort(pidFile) || 3002;
   try {
     stopHfPreview(pidFile);
-    const p = startHfPreview(path.join(out, 'hf'), {
-      port, logFile: path.join(out, 'preview.log'), pidFile, projectName,
+    const p = startHfPreview(hfDir, {
+      port, logFile: path.join(out, 'preview.log'), pidFile,
     });
     console.log(`Studio restarted on the new build -> ${p.url}  (pid ${p.pid}; stop: narova preview --stop)`);
   } catch (e) {
@@ -207,7 +218,7 @@ async function main() {
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
       console.log(`  qa: narova shots   ·   preview: narova preview --detach   ·   render: narova build --reuse`);
-      refreshPreviewIfLive(out, projectSlug(config));
+      refreshPreviewIfLive(out);
       return;
     }
 
@@ -227,7 +238,7 @@ async function main() {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const timingsPath = path.join(out, 'timings.json');
-      const hfDir = path.join(out, 'hf');
+      const hfDir = findHfDir(out);
       if (!fs.existsSync(timingsPath)) {
         console.error('shots needs out/timings.json — run `narova synth` first');
         process.exit(1);
@@ -281,7 +292,7 @@ async function main() {
             build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` });
           }
         }
-        refreshPreviewIfLive(out, projectSlug(config));
+        refreshPreviewIfLive(out);
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
@@ -290,7 +301,7 @@ async function main() {
         ...buildOpts, out, projectDir,
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
-      refreshPreviewIfLive(out, projectSlug(config));
+      refreshPreviewIfLive(out);
       return;
     }
 

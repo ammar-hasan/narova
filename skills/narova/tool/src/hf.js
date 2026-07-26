@@ -20,7 +20,8 @@ function runHf(args, cwd, opts = {}) {
 }
 
 function previewUrl(cwd, port = 3002, projectName) {
-  const name = projectName || path.basename(cwd);
+  let name = projectName || path.basename(cwd);
+  if (!projectName && name.startsWith('hf-')) name = name.slice(3); // strip hf- prefix
   return `http://localhost:${port}/#project/${encodeURIComponent(name)}`;
 }
 

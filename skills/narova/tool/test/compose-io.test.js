@@ -35,13 +35,13 @@ test('compose writes index.html, the audio copy, and a pinned package.json', () 
   const r = compose(config, out);
   assert.equal(r.scenes, 1);
   assert.equal(r.total, 3);
-  const html = fs.readFileSync(path.join(out, 'hf', 'index.html'), 'utf8');
+  const html = fs.readFileSync(path.join(out, 'hf-io-test', 'index.html'), 'utf8');
   assert.ok(html.startsWith('<!doctype html>'));
   assert.ok(html.includes('id="scene-only"'));
   assert.ok(!html.includes('<style>'), 'CSS must be external, not inlined');
-  assert.ok(fs.existsSync(path.join(out, 'hf', 'style.css')), 'CSS must be written as a separate file');
-  assert.equal(fs.readFileSync(path.join(out, 'hf', 'assets', 'narration.wav'), 'utf8'), 'RIFFfake');
-  const pkg = JSON.parse(fs.readFileSync(path.join(out, 'hf', 'package.json'), 'utf8'));
+  assert.ok(fs.existsSync(path.join(out, 'hf-io-test', 'style.css')), 'CSS must be written as a separate file');
+  assert.equal(fs.readFileSync(path.join(out, 'hf-io-test', 'assets', 'narration.wav'), 'utf8'), 'RIFFfake');
+  const pkg = JSON.parse(fs.readFileSync(path.join(out, 'hf-io-test', 'package.json'), 'utf8'));
   assert.equal(pkg.devDependencies.hyperframes, HYPERFRAMES_VERSION);
   assert.equal(pkg.name, 'io-test');
 });
@@ -53,20 +53,22 @@ test('compose copies project assets and removes stale generated copies', () => {
   fs.writeFileSync(path.join(projectAssets, 'logo.svg'), '<svg/>');
   fs.writeFileSync(path.join(projectAssets, 'fonts', 'brand.woff2'), 'font');
   compose({ ...config, assetsDir: projectAssets }, out);
-  assert.equal(fs.readFileSync(path.join(out, 'hf', 'assets', 'logo.svg'), 'utf8'), '<svg/>');
-  assert.equal(fs.readFileSync(path.join(out, 'hf', 'assets', 'fonts', 'brand.woff2'), 'utf8'), 'font');
+  assert.equal(fs.readFileSync(path.join(out, 'hf-io-test', 'assets', 'logo.svg'), 'utf8'), '<svg/>');
+  assert.equal(fs.readFileSync(path.join(out, 'hf-io-test', 'assets', 'fonts', 'brand.woff2'), 'utf8'), 'font');
 
   fs.rmSync(path.join(projectAssets, 'logo.svg'));
   compose({ ...config, assetsDir: projectAssets }, out);
-  assert.ok(!fs.existsSync(path.join(out, 'hf', 'assets', 'logo.svg')));
+  assert.ok(!fs.existsSync(path.join(out, 'hf-io-test', 'assets', 'logo.svg')));
 });
 
 test('compose is a clean regeneration (second run overwrites)', () => {
   const out = tmpOut();
   compose(config, out);
-  const first = fs.readFileSync(path.join(out, 'hf', 'index.html'), 'utf8');
+  const first = fs.readFileSync(path.join(out, 'hf-io-test', 'index.html'), 'utf8');
   compose({ ...config, title: 'Changed' }, out);
-  const second = fs.readFileSync(path.join(out, 'hf', 'index.html'), 'utf8');
+  // Title changed → directory changed, old one removed.
+  assert.ok(!fs.existsSync(path.join(out, 'hf-io-test')));
+  const second = fs.readFileSync(path.join(out, 'hf-changed', 'index.html'), 'utf8');
   assert.notEqual(first, second);
   assert.ok(second.includes('<title>Changed</title>'));
 });

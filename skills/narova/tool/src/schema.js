@@ -12,7 +12,7 @@ const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
  * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, timing,
- * scenes, assetsDir, projectDir, platform, music, sfx, captions, align,
+ * scenes, assetsDir, projectDir, platform, bed, sfx, captions, align,
  * variants, variant } and throws on anything the pipeline can't render. */
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
@@ -183,26 +183,26 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   });
 
-  // Sound: an optional music bed plus spot SFX, mixed into the narration track
-  // by the Python stage (narova_tts reads them from config.resolved.json, so
-  // file paths are resolved to absolutes here — Python never sees baseDir).
-  let music = null;
-  if (raw.music != null) {
-    const m = raw.music;
+  // Sound: an optional background bed plus spot SFX, mixed into the narration
+  // track by the Python stage. Accepts `bed` or the legacy `music` key.
+  let bed = null;
+  const bedRaw = raw.bed ?? raw.music;
+  if (bedRaw != null) {
+    const m = bedRaw;
     if (typeof m !== 'object' || Array.isArray(m)) {
-      errs.push('config.music: expected an object like { file, volume, fadeIn, fadeOut }');
+      errs.push('config.bed: expected an object like { file, volume, fadeIn, fadeOut }');
     } else if (typeof m.file !== 'string' || !m.file.trim()) {
-      errs.push('config.music.file: required (a project-relative audio file)');
+      errs.push('config.bed.file: required (a project-relative audio file)');
     } else {
       const p = path.resolve(baseDir, m.file);
       if (!fs.existsSync(p) || !fs.statSync(p).isFile()) {
-        errs.push(`config.music.file: not found: ${p}`);
+        errs.push(`config.bed.file: not found: ${p}`);
       } else {
-        music = { file: p, volume: m.volume ?? 0.14, fadeIn: m.fadeIn ?? 0.5, fadeOut: m.fadeOut ?? 1.5 };
+        bed = { file: p, volume: m.volume ?? 0.14, fadeIn: m.fadeIn ?? 0.5, fadeOut: m.fadeOut ?? 1.5 };
         for (const k of ['volume', 'fadeIn', 'fadeOut']) {
-          const v = music[k];
+          const v = bed[k];
           if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
-            errs.push(`config.music.${k}: must be a non-negative number`);
+            errs.push(`config.bed.${k}: must be a non-negative number`);
           }
         }
       }
@@ -330,7 +330,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     scenes[0] = { ...scenes[0], body: v.scene.body, vo: v.scene.vo, ...(v.scene.transition ? { transition: v.scene.transition } : {}) };
   }
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, music, sfx, captions, align, variants, variant, series };
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series };
 }
 
 /* The narration.json contract for the Python TTS stage. */
