@@ -40,7 +40,10 @@ def _pick_device(torch) -> str:
     if torch.cuda.is_available():
         return "cuda"
     if torch.backends.mps.is_available():
-        return "mps"
+        # MPS hits "Output channels > 65536 not supported" in conv1d ops
+        # used by both ChatterboxTTS and the multilingual model — force CPU.
+        print("[chatterbox] mps detected but known-broken — using cpu", flush=True)
+        return "cpu"
     return "cpu"
 
 

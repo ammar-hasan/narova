@@ -148,9 +148,11 @@ class QwenBackend:
         self._speakers = dict(speakers)
         self._langs = dict(langs or {})
         self._instructs = dict(instructs or {})
-        dev = device or os.environ.get(
-            "QWEN_TTS_DEVICE", "mps" if torch.backends.mps.is_available() else "cpu"
-        )
+        dev = device or os.environ.get("QWEN_TTS_DEVICE", None)
+        if dev is None:
+            if torch.backends.mps.is_available():
+                print("[qwen] mps detected but known-broken — using cpu", flush=True)
+            dev = "cpu"
         print(f"[qwen] loading {self.MODEL} on {dev} …", flush=True)
         try:
             self._model = Qwen3TTSModel.from_pretrained(self.MODEL, device_map=dev, dtype=torch.float32)
