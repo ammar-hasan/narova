@@ -195,11 +195,14 @@ def rescale_timings(t: dict[str, Any], actual: float) -> dict[str, Any]:
 
 # ---- sentence synthesis (raw voice -> tempo + fades + resample) --------------
 
-def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float) -> str:
+def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float, lang: str | None = None) -> str:
     """Stable identity of one synthesized sentence. Bump v1 when the processing
     chain (rate/fades/atempo) changes so old entries are naturally abandoned."""
     h = hashlib.sha1()
-    h.update(f"v1|{kind}|{speaker}|{tempo}|{RATE}|{FADE}|{text}".encode("utf-8"))
+    parts = f"v1|{kind}|{speaker}|{tempo}|{RATE}|{FADE}|{text}"
+    if lang:
+        parts += f"|lang={lang}"
+    h.update(parts.encode("utf-8"))
     return h.hexdigest()
 
 
@@ -354,11 +357,13 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
                     clock += gap_sentence
                 w = tmp / f"{nn}_{si:03d}.wav"
                 turn_lang = turn.get("lang") or voice_lang.get(who)
-                key_parts = [voice_kind.get(who, default_backend),
-                             voice_speaker.get(who, who), sent, str(tempo)]
-                if turn_lang:
-                    key_parts.append(f"lang={turn_lang}")
-                key = "|".join(key_parts)
+                key = sentence_cache_key(
+                    voice_kind.get(who, default_backend),
+                    voice_speaker.get(who, who),
+                    sent,
+                    tempo,
+                    lang=turn_lang,
+                )
                 d = synth_sentence(router[who], who, sent, tmp, w, tempo, cache_key=key, lang=turn_lang)
                 pieces.append(w)
                 # distribute words across the sentence's real duration, weighted by length
