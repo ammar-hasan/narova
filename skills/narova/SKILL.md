@@ -45,8 +45,43 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
 
 ## Workflow: prompt → video
 
-1. `doctor` — check the machine **before** writing a script.
-   Fix problems with `references/environment.md`.
+### 0 — INTAKE: Ask before you write
+
+**Never silently assume.** The user's prompt may be a single sentence.
+Every unasked decision becomes a surprise in the output. Ask, then write.
+
+**Must-ask questions (ask these before writing a single line of config):**
+
+| Question | Why | Default if user defers |
+|----------|-----|------------------------|
+| Which TTS engine? piper (fast, small), xtts (rich, 1.9GB), qwen (high quality, Apache 2.0), or chatterbox (voice cloning)? | Drives voice quality, speed, and whether a model download is needed | piper |
+| How many narrators? 0 (captions only, silent), 1 (monologue), 2 (dialogue), or N (panel)? | Shapes the entire script structure | 2 |
+| Which specific voices? (e.g. "en_US-ryan-high" for male, "en_US-hfc_female-medium" for female) | `narova voices list --backend <name>` shows options | ryan-high + hfc_female-medium |
+| Do you want to clone a voice? If so, provide a 10–20s clean recording. | chatterbox needs a sample; the user must supply it | No |
+| Which platform? tiktok, reels, shorts, linkedin, x, or custom? | Picks frame size + duration band | User must choose or say "no preference" (then 16:9, no duration lint) |
+
+**Ask-when-relevant questions (ask if the prompt doesn't already imply the answer):**
+
+| Question | When to ask |
+|----------|-------------|
+| Target duration? (e.g. "about 30 seconds") | User hasn't mentioned length |
+| Music bed? (background track, ducked under narration) | Prompt doesn't mention audio beyond voice |
+| Light or dark theme? (dark by default; `theme.mode: "light"` for light-brand sites) | Prompt names a brand/product with a light visual identity |
+| Any specific colors or mood? (accent color, palette direction) | Prompt is vague about visuals |
+| Hook variants for A/B testing? | User is optimizing for social media reach |
+
+**Present choices, don't interrogate.** Group related questions together.
+Offer the defaults explicitly so the user can just say "defaults are fine."
+If the user's prompt is detailed ("make a 30s TikTok about X with a female narrator"),
+fill in the rest with defaults and ask only: "I'll use piper TTS, dark theme,
+one female narrator — confirm or adjust?"
+
+**After intake**, proceed to step 1.
+
+### 1 — Check the environment
+
+`doctor` — check the machine **before** writing a script.
+Fix problems with `references/environment.md`.
 2. **Create the project, then write the scene script.** In a repository, put
    generated projects under `generated/<descriptive-slug>/`, never loose at
    the repo root: `init generated/<slug>`. Keep editable source
@@ -57,9 +92,9 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
    `references/url-to-source.md`; classify the page before deciding whether
    brand, editorial, research, or technical evidence should drive the video.
    A search result or prose page summary is not source evidence. Then read
-   `references/prompt-to-video.md` (intake and
-   script craft) and `references/scene-script.md` (the config format). Two
-   hosts by default (one male, one female voice), short turns, 5–10 scenes,
+    `references/prompt-to-video.md` (intake and
+    script craft) and `references/scene-script.md` (the config format).
+    Use the voice/engine/count decisions from the intake step. Short turns,
    `data-cue` on the key visual of most turns. Build the theme from the
    classified source evidence or the prompt's mood/colors: keep whatever the
    user gave, fill in the rest yourself, never ask for CSS. A light-brand
@@ -116,7 +151,7 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
   match. Keep ids unique WITHIN one scene, and style with classes, never `#id`
   selectors in theme.css (`check` warns). Reveal/cue on an SVG element with a
   `transform` attribute is safe: the runtime wraps it and tweens the wrapper.
-- **Default to piper.** It is fast, good for iteration. Offer `--backend qwen`
+- **Default to piper unless the intake step chose otherwise.** It is fast, good
   or `xtts` for the final render when the user wants richer voices. Both are
   slow and download a 1–2GB model once. `narova voices list --backend piper`
   shows a spread of starter voices; `narova voices get <name> --backend piper`
