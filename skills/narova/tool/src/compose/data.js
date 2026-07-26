@@ -52,6 +52,7 @@ function composeData(config, timings) {
         who,
         label: (config.voices[who] && config.voices[who].label) || who,
         start: r3(sc.start + ws[0].t0),
+        sceneEnd: r3(sc.start + sc.dur),
         words: ws.map(w => {
           const word = { w: w.w, t0: r3(sc.start + w.t0), t1: r3(sc.start + w.t1) };
           if (emphasis.size && emphasis.has(normWord(w.w))) word.kw = 1;
@@ -61,8 +62,13 @@ function composeData(config, timings) {
     }
   }
   groups.sort((a, b) => a.start - b.start);
-  // A group stays on screen until the next group starts (or the video ends).
-  groups.forEach((g, i) => { g.end = groups[i + 1] ? groups[i + 1].start : total; });
+  // A caption group stays visible until the next group starts or its scene ends.
+  // This prevents captions from bleeding into a silent end card.
+  groups.forEach((g, i) => {
+    const next = groups[i + 1];
+    g.end = next ? Math.min(next.start, g.sceneEnd) : g.sceneEnd;
+    delete g.sceneEnd;
+  });
 
   return { total, scenes, groups, preset: captions.preset || 'karaoke' };
 }

@@ -345,6 +345,14 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
     timings: dict[str, Any] = {}
     for s in scenes:
         nn = f"{s['n']:02d}"
+        # Silent scene: no narration, just a fixed-duration silence block.
+        if not s["segments"]:
+            dur = float(s.get("dur", 2.0))
+            wav = audio_dir / f"{nn}.wav"
+            make_silence(dur, wav)
+            timings[s["id"]] = {"dur": round(probe(wav), 3), "turns": [], "words": []}
+            print(f"scene {nn} [{s['id']:>9}] {timings[s['id']]['dur']:5.1f}s  turns=(silent)", flush=True)
+            continue
         pieces = [sil["lead"]]
         clock = lead
         words, turns = [], []

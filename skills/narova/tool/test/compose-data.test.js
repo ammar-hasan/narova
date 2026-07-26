@@ -50,12 +50,13 @@ test('words group by sentence with speaker + label', () => {
   assert.equal(d.groups[0].words.length, 2);
 });
 
-test('each group ends when the next starts; last ends at total', () => {
+test('each group ends at the next group start or its scene boundary', () => {
   const d = composeData(config, timings);
-  for (let i = 0; i < d.groups.length - 1; i++) {
-    assert.equal(d.groups[i].end, d.groups[i + 1].start);
-  }
-  assert.equal(d.groups.at(-1).end, d.total);
+  // Groups within the same scene: end when the next starts.
+  assert.equal(d.groups[0].end, d.groups[1].start);
+  // Last group in a scene: capped at scene end, not the next scene's first word.
+  assert.equal(d.groups[1].end, r3(0 + 10.101));  // s1 dur
+  assert.equal(d.groups[2].end, r3(d.total));      // s2's last group ends at total
 });
 
 test('a scene missing from timings.json throws a helpful error', () => {

@@ -163,8 +163,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     else if (seen.has(s.id)) errs.push(`${at}.id: duplicate "${s.id}"`);
     else seen.add(s.id);
     if (typeof s.body !== 'string') errs.push(`${at}.body: HTML string required`);
-    if (!Array.isArray(s.vo) || s.vo.length === 0) errs.push(`${at}.vo: non-empty turn list required`);
-    else s.vo.forEach((turn, j) => {
+    if (!Array.isArray(s.vo)) {
+      errs.push(`${at}.vo: turn list required`);
+    } else if (s.vo.length === 0 && !(typeof s.dur === 'number' && Number.isFinite(s.dur) && s.dur > 0)) {
+      errs.push(`${at}.vo: empty turn list requires a positive explicit dur for a silent scene`);
+    } else s.vo.forEach((turn, j) => {
       if (!turn || !turn.who) errs.push(`${at}.vo[${j}].who: required`);
       else if (!voices[turn.who]) errs.push(`${at}.vo[${j}].who: "${turn.who}" not in config.voices`);
       if (typeof turn.text !== 'string' || !turn.text.trim()) errs.push(`${at}.vo[${j}].text: required`);
@@ -341,7 +344,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
 /* The narration.json contract for the Python TTS stage. */
 function narration(config) {
-  return config.scenes.map((s, i) => ({ n: i + 1, id: s.id, segments: s.vo }));
+  return config.scenes.map((s, i) => ({
+    n: i + 1,
+    id: s.id,
+    segments: s.vo,
+    ...(s.vo.length === 0 ? { dur: s.dur } : {}),
+  }));
 }
 
 module.exports = { resolveConfig, narration };

@@ -1,6 +1,6 @@
 ---
 name: narova
-version: 0.7.4
+version: 0.7.5
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
   multi-host dialogue (0 to N narrators), prompt/script/README-to-video, videos sourced from any
