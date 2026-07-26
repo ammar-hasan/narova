@@ -35,6 +35,7 @@ DATA.groups.forEach(function (g, gi) {
   el.appendChild(spk);
   var line = document.createElement('div');
   line.className = 'caption2';
+  line.dir = 'auto';  // RTL for Arabic / Urdu — browser detects script direction
   g.words.forEach(function (w, wi) {
     var s = document.createElement('span');
     s.className = 'cap-w ' + g.who + (w.kw ? ' kw' : '');
