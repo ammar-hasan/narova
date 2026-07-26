@@ -170,7 +170,7 @@ test('scene with clip renders a b-roll video as a root-level clip before the sce
   };
   const cliptimings = Object.fromEntries(clipCfg.scenes.map(s => [s.id, timings[s.id] || timings.s1]));
   const h = composeDoc(clipCfg, size, composeData(clipCfg, cliptimings), '');
-  assert.match(h, /<video id="broll-s1" class="clip broll" src="assets\/clip-s1\.mp4" data-start="0" data-duration="5" data-track-index="100" muted loop playsinline preload="auto">/);
+  assert.match(h, /<video id="broll-s1" class="broll" src="assets\/clip-s1\.mp4" data-start="0" data-track-index="100" muted loop playsinline preload="auto">/);
   assert.ok(!h.includes('broll-s2'), 'scene 2 has no clip');
   // b-roll appears before scene-s1 in the root div.
   const brollIdx = h.indexOf('broll-s1');
