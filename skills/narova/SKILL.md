@@ -65,13 +65,22 @@ If the parameter doesn't matter for this particular video, skip it.
 - **Source:** URL to pull facts/imagery from (`narova ingest <url>`), claims ledger
 
 **How to ask:**
+- **Every question must stand alone.** The user has never heard of piper,
+  xtts, or ryan-high. Explain each option in plain words right where you
+  ask — what it sounds like, the trade-off, and what you recommend.
+  Bad: *"Which backend?"* Good: *"Voice quality — fast & small (piper),
+  richer & more natural but needs a one-time 1.9GB download (xtts), or
+  clone your own voice from a short recording?"*
+- For voices, list 3–4 concrete options with descriptions — *"a warm male
+  voice (Ryan), a clear female voice (Serena), an energetic male (Eric)"* —
+  don't make them run `narova voices list` to know what's available.
 - Group related gaps into one message — don't fire 8 questions one by one.
-- Offer the defaults so the user can just say "defaults."
+- Offer the defaults so the user can just say "defaults" or "the first one."
 - If the prompt is detailed, state what you inferred and ask only for
-  confirmation: *"I'll use piper TTS, male voice, 16:9, dark theme — ok?"*
+  confirmation: *"One male narrator, dark theme, TikTok format — ok?"*
 - Skip parameters the prompt already nailed. Don't ask "which platform?"
   when they said "make a TikTok."
-- Don't ask about arcane features (alignment, b‑roll, series) unless the
+- Don't mention arcane features (alignment, b‑roll, series) unless the
   prompt hints at them; mention them only when they'd lift the output.
 
 **After intake**, proceed to step 1.
