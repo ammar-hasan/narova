@@ -59,7 +59,9 @@ good enough for karaoke. `align` replaces them with measured ones:
 - **faster-whisper**: `pip install faster-whisper` into the narova venv
   (`~/.narova/venv`). Not in requirements.txt — it's a heavy optional dep.
   Model `tiny.en` by default; `$NAROVA_WHISPER_MODEL=base.en` for a bit more
-  accuracy at ~2× the time.
+  accuracy at ~2× the time. For multilingual content (Arabic, French, etc.)
+  use a non-`.en` model: `NAROVA_WHISPER_MODEL=small` — the `.en` models can
+  only transcribe English and will misread non-English speech.
 - **whisper.cpp**: install it so `whisper-cli` is on PATH
   (`brew install whisper-cpp`, or build ggerganov/whisper.cpp). The
   `ggml-tiny.en.bin` model auto-downloads once to `~/.narova/models/`.

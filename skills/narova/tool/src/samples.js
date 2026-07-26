@@ -62,8 +62,32 @@ function addSample(source, name, baseDir) {
   }
 
   ensureSamplesDir(dir);
-  const dest = path.join(dir, name + ext);
-  fs.copyFileSync(src, dest);
+  const dest = path.join(dir, name + '.wav');
+
+  // Normalize with ffmpeg: mono, 24kHz, voice-range EQ, peak-safe loudness.
+  // Raw mic recordings often have stereo channels, clipping peaks, or room
+  // noise that chatterbox rejects — this pass makes them clone-ready.
+  const ffmpeg = which('ffmpeg');
+  if (ffmpeg) {
+    try {
+      const { spawnSync } = require('child_process');
+      const r = spawnSync('ffmpeg', [
+        '-y', '-loglevel', 'error',
+        '-i', src,
+        '-af', 'pan=mono|c0=0.5*c0+0.5*c1,highpass=f=65,lowpass=f=12000,loudnorm=I=-20:TP=-2:LRA=7',
+        '-ar', '24000', '-ac', '1', '-c:a', 'pcm_s16le',
+        dest,
+      ], { stdio: 'ignore' });
+      if (r.status !== 0) {
+        // ffmpeg failed — fall back to raw copy.
+        fs.copyFileSync(src, dest);
+      }
+    } catch (_) {
+      fs.copyFileSync(src, dest);
+    }
+  } else {
+    fs.copyFileSync(src, dest);
+  }
   return dest;
 }
 
@@ -71,10 +95,10 @@ function addSample(source, name, baseDir) {
 function removeSample(name, baseDir) {
   const dir = baseDir || SAMPLES_DIR;
   if (!name || typeof name !== 'string') throw new Error('sample name is required');
-  for (const ext of VALID_EXTS) {
-    const p = path.join(dir, name + ext);
-    if (fs.existsSync(p)) { fs.unlinkSync(p); return p; }
-  }
+  // Samples are always saved as .wav after normalization.
+  const p = path.join(dir, name + '.wav');
+  if (fs.existsSync(p)) { fs.unlinkSync(p); return p; }
+  // Check as-is for legacy non-normalized samples.
   const asIs = path.join(dir, name);
   if (fs.existsSync(asIs)) { fs.unlinkSync(asIs); return asIs; }
   throw new Error(`sample "${name}" not found in ${dir}`);
