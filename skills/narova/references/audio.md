@@ -75,6 +75,11 @@ good enough for karaoke. `align` replaces them with measured ones:
 - **Failure is soft.** Engine missing/crashed, or aligned words don't match
   the script token-for-token (punctuation-stripped, case-insensitive): that
   scene keeps its estimates with a warning. Alignment never breaks a build.
+- **Partial alignment** (`NAROVA_ALIGN_PARTIAL=1`): for mixed-language
+  scenes (e.g. English narration + Arabic quotations), Whisper transcribes
+  only the English words. Partial mode finds exact English anchors and
+  interpolates timings for unrecognized spans instead of rejecting the
+  whole scene. Essential for multilingual projects.
 
 ## Chatterbox Multilingual v3
 

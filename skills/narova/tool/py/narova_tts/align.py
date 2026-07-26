@@ -31,6 +31,7 @@ import re
 import shutil
 import subprocess
 import urllib.request
+from difflib import SequenceMatcher
 from pathlib import Path
 from typing import Any, Callable
 
@@ -160,20 +161,76 @@ def _cached_words(wav: Path, engine: str, fn: Callable[[Path], list[dict]]) -> l
 # ---- mapping aligned words onto the expected token sequence ----------------------
 
 def apply_alignment(measured: list[dict], words: list[dict]) -> str | None:
-    """Overwrite word t0/t1 from measured words. Returns None on success, else
-    a mismatch description — on ANY mismatch nothing is touched (the estimates
-    stay). Strict on purpose: timings words carry the exact spoken text, so a
-    mismatch means the engine heard something else and its times are suspect."""
-    if len(measured) != len(words):
-        return f"word count differs: aligned {len(measured)} vs expected {len(words)}"
-    for i, (m, e) in enumerate(zip(measured, words)):
-        if _norm(m["w"]) != _norm(e["w"]):
-            return f"word {i} differs: aligned {m['w']!r} vs expected {e['w']!r}"
-    for m, e in zip(measured, words):
-        t0 = max(0.0, m["t0"])
-        e["t0"] = round(t0, 3)
-        e["t1"] = round(max(t0, m["t1"]), 3)
-    return None
+    """Overwrite word t0/t1 from measured words. Returns None on full success,
+    a 'partial N/M exact anchors' string on partial success, or a failure
+    description. On full failure nothing is touched (estimates stay).
+
+    When exact match fails and NAROVA_ALIGN_PARTIAL=1, uses SequenceMatcher to
+    find exact word anchors between expected and measured tokens, then
+    interpolates timings for unrecognized spans. Essential for mixed
+    Arabic/English scenes where Whisper transcribes English but not Arabic."""
+    # 1 — try exact match
+    if len(measured) == len(words) and all(
+        _norm(m["w"]) == _norm(e["w"]) for m, e in zip(measured, words)
+    ):
+        for m, e in zip(measured, words):
+            t0 = max(0.0, m["t0"])
+            e["t0"] = round(t0, 3)
+            e["t1"] = round(max(t0, m["t1"]), 3)
+        return None
+
+    # 2 — partial alignment (opt-in via NAROVA_ALIGN_PARTIAL=1)
+    if os.environ.get("NAROVA_ALIGN_PARTIAL") != "1":
+        if len(measured) != len(words):
+            return f"word count differs: aligned {len(measured)} vs expected {len(words)}"
+        for i, (m, e) in enumerate(zip(measured, words)):
+            if _norm(m["w"]) != _norm(e["w"]):
+                return f"word {i} differs: aligned {m['w']!r} vs expected {e['w']!r}"
+        return None  # unreachable but keeps linter happy
+
+    expected_norm = [_norm(e["w"]) for e in words]
+    measured_norm = [_norm(m["w"]) for m in measured]
+    matcher = SequenceMatcher(a=expected_norm, b=measured_norm, autojunk=False)
+    anchors: list[tuple[int, int]] = []
+    for block in matcher.get_matching_blocks():
+        for offset in range(block.size):
+            anchors.append((block.a + offset, block.b + offset))
+    if not anchors:
+        return (f"partial alignment found no exact anchors: aligned {len(measured)} "
+                f"vs expected {len(words)}")
+
+    original = [(float(e["t0"]), float(e["t1"])) for e in words]
+    for ei, mi in anchors:
+        t0 = max(0.0, float(measured[mi]["t0"]))
+        words[ei]["t0"] = round(t0, 3)
+        words[ei]["t1"] = round(max(t0, float(measured[mi]["t1"])), 3)
+
+    # Interpolate unrecognized spans between anchors.
+    anchored = {ei for ei, _ in anchors}
+    boundaries = [(-1, None), *anchors, (len(words), None)]
+    for (left_i, _), (right_i, _) in zip(boundaries, boundaries[1:]):
+        start_i = left_i + 1
+        end_i = right_i
+        if start_i >= end_i:
+            continue
+        if any(i in anchored for i in range(start_i, end_i)):
+            continue
+        left_t = (float(words[left_i]["t1"]) if left_i >= 0
+                  else original[start_i][0])
+        right_t = (float(words[right_i]["t0"]) if right_i < len(words)
+                   else original[end_i - 1][1])
+        if right_t <= left_t:
+            continue
+        weights = [max(1, len(expected_norm[i]) + 1) for i in range(start_i, end_i)]
+        total = float(sum(weights))
+        clock = left_t
+        for i, weight in zip(range(start_i, end_i), weights):
+            dur = (right_t - left_t) * (weight / total)
+            words[i]["t0"] = round(clock, 3)
+            words[i]["t1"] = round(clock + dur, 3)
+            clock += dur
+
+    return f"partial {len(anchors)}/{len(words)} exact anchors"
 
 
 # ---- entry point -------------------------------------------------------------------
@@ -205,8 +262,9 @@ def align_scenes(scenes: list[dict], timings: dict[str, Any],
             if why is None:
                 print(f"align {nn} [{s['id']:>9}] {len(words)} words measured ({name})",
                       flush=True)
+            elif why.startswith("partial "):
+                print(f"align {nn} [{s['id']:>9}] {why} ({name})", flush=True)
             else:
-                # deterministic mismatch — the other engine would hear the same
                 print(f"align: scene {nn} [{s['id']}] {name} mismatch: {why}"
                       " — keeping estimates", flush=True)
             break
