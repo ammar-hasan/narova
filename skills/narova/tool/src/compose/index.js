@@ -31,6 +31,13 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
+  // Copy per-scene b-roll clips to assets/clip-<sceneId>.<ext>.
+  for (const s of config.scenes) {
+    if (s.clip) {
+      const ext = path.extname(s.clip).toLowerCase() || '.mp4';
+      fs.copyFileSync(path.resolve(config.projectDir, s.clip), path.join(assetsDir, `clip-${s.id}${ext}`));
+    }
+  }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
   // Prefer mix.wav (narration + music bed + sfx) when the synth stage made one.
   const mixWav = path.join(outDir, 'audio', 'mix.wav');

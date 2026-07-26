@@ -95,3 +95,14 @@ test('mark layer styles use theme tokens only (mode-aware by construction)', () 
     assert.match(css, /\.marklayer \.markhl\{fill:var\(--accent\);opacity:\.26\}/);
   }
 });
+
+test('broll video covers the scene and sits below chrome z-index', () => {
+  const css = composeCss({}, voices, size);
+  assert.match(css, /\.broll\{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0/);
+});
+
+test('series badge uses theme tokens for brand-consistent color', () => {
+  const css = composeCss({}, voices, size);
+  assert.match(css, /\.series-badge\{[^}]*color:var\(--accent\)/);
+  assert.match(css, /\.series-badge\{[^}]*border:1px solid var\(--accent-dim\)/);
+});

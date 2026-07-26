@@ -156,6 +156,18 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (typeof turn.text !== 'string' || !turn.text.trim()) errs.push(`${at}.vo[${j}].text: required`);
     });
     if (s.dur != null && typeof s.dur !== 'number') errs.push(`${at}.dur: must be a number`);
+    // Optional b-roll video clip per scene: a project-relative video file
+    // that plays looped behind the HTML overlay.
+    if (s.clip != null) {
+      if (typeof s.clip !== 'string' || !s.clip.trim()) {
+        errs.push(`${at}.clip: must be a project-relative path to a video file`);
+      } else {
+        const clipPath = path.resolve(baseDir, s.clip);
+        if (!fs.existsSync(clipPath) || !fs.statSync(clipPath).isFile()) {
+          errs.push(`${at}.clip: file not found: ${clipPath}`);
+        }
+      }
+    }
   });
 
   // Sound: an optional music bed plus spot SFX, mixed into the narration track
@@ -266,6 +278,28 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     });
   }
 
+  // Series: multi-part mode for long scripts split into numbered episodes.
+  // `part` is 1-indexed; `total` is optional (unknown series length).
+  // compose adds a "Part X/Y" badge overlay; no enforcement of cliffhangers.
+  let series = null;
+  if (raw.series != null) {
+    if (typeof raw.series !== 'object' || Array.isArray(raw.series)) {
+      errs.push('config.series: expected an object like { part, total }');
+    } else {
+      const part = raw.series.part;
+      if (typeof part !== 'number' || !Number.isInteger(part) || part < 1) {
+        errs.push('config.series.part: must be a positive integer (1-indexed)');
+      }
+      const total = raw.series.total;
+      if (total != null && (typeof total !== 'number' || !Number.isInteger(total) || total < 1)) {
+        errs.push('config.series.total: must be a positive integer');
+      } else if (total != null && part != null && part > total) {
+        errs.push(`config.series.part: ${part} exceeds total ${total}`);
+      }
+      if (part != null) series = { part, total: total ?? null };
+    }
+  }
+
   if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
 
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
@@ -283,7 +317,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     scenes[0] = { ...scenes[0], body: v.scene.body, vo: v.scene.vo, ...(v.scene.transition ? { transition: v.scene.transition } : {}) };
   }
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, music, sfx, captions, align, variants, variant };
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, music, sfx, captions, align, variants, variant, series };
 }
 
 /* The narration.json contract for the Python TTS stage. */

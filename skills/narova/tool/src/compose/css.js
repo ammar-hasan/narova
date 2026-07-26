@@ -64,6 +64,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 
 /* clips */
 .scene{position:absolute;inset:0;z-index:1}
+.broll{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.52;filter:brightness(.72)}
 .overlay{position:absolute;inset:0;z-index:5;pointer-events:none}
 
 .chrome{position:absolute;inset:0;padding:clamp(16px,3.1vw,32px);display:flex;flex-direction:column;z-index:3}
@@ -78,6 +79,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .scenebody{width:100%;max-width:var(--colw,1000px);display:flex;flex-direction:column;align-items:stretch}
 .progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--track);z-index:6}
 .progress > i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,var(--accent-dim),var(--accent));box-shadow:0 0 12px var(--accent)}
+.series-badge{position:absolute;top:clamp(10px,2vw,20px);right:clamp(10px,2vw,32px);font-family:var(--mono);font-size:clamp(10px,1.3vw,13px);letter-spacing:.1em;color:var(--accent);background:rgba(0,0,0,.38);border:1px solid var(--accent-dim);border-radius:6px;padding:5px 13px;z-index:10}
 
 /* reveals: static baselines only — motion is timeline tweens (runtime.js) */
 .reveal,.cue{opacity:0}

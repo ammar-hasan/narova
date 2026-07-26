@@ -6,16 +6,45 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.7.0] - 2026-07-26
+
 ### Added
 
-- Interactive landing page (`docs/`, GitHub Pages): pointer-reactive WebGL hero,
-  scroll-driven storytelling, karaoke caption demo, bento feature grid.
-- Demo GIF (`assets/narova-demo.gif`) and video poster for the README.
-- This changelog, and the `/changelog` page on the site.
+- **Music bed + spot SFX** — `music: {file, volume, fadeIn, fadeOut}` and
+  `sfx: [{file, scene, at, volume}]` mixed into narration via ffmpeg.
+  Music changes don't require re-synthesis.
+- **Caption style presets + keyword emphasis** — `captions: {preset: karaoke|slam|pop|rise, emphasis: [...]}`.
+  Slam/pop use GSAP-only tweens (seek-safe); emphasis highlights matching words.
+- **Per-platform export matrix** — `platform: tiktok|reels|shorts|linkedin|x` picks frame size
+  and duration-band lint. `compose`/`build` write `captions.srt` + `captions.vtt` sidecars.
+- **Forced word alignment** — `align: true | {engine: "auto"|"faster-whisper"|"whisper-cpp"}`.
+  Measured word timings replace estimates; per-scene graceful fallback on failure.
+- **Chatterbox v3** — multilingual voice cloning with per-voice `lang`, watermarked output.
+  v2 fallback for existing installs.
+- **Scene transitions + hand-drawn annotations** — per-scene `transition: fade|wipe|slide|zoom`;
+  `data-mark="underline|circle|box|highlight"` draws SVG annotations cued to the timeline.
+- **Hook-variant generation** — `variants: [{id, scene}]` in config;
+  `narova build --variant <id>` / `--variants` renders A/B hook tests.
+- **`narova ingest <url>`** — fetches page, downloads top images, takes headless screenshot,
+  appends `sources.md`, seeds `claims.md`, prints brand-color theme suggestions.
+- **Hook enforcement in `narova check`** — warns on lead-in silence >200ms,
+  scene 1 missing visible text for muted viewers, missing saveable end-card.
+- **B‑roll per scene** — `clip: "assets/bg.mp4"` on any scene plays a looped video
+  behind the HTML overlay (muted, dimmed).
+- **Series/multi‑part mode** — `series: {part, total}` adds a "Part 2 / 5" badge overlay
+  for multi-episode scripts.
+- Interactive landing page (`docs/`, GitHub Pages) and `/changelog` subpage.
+- Demo GIF, this changelog, `references/audio.md`.
 
 ### Changed
 
 - README restructured around the demo: hook, GIF, why-bullets, install, quickstart.
+- SPEC updated to the 0.7.0 contract; stale `examples/` references repointed to `generated/`.
+
+### Fixed
+
+- **Slam caption overlap** — `fromTo` scale tween parked every upcoming word at the
+  from-state; rewritten as `.to()` tweens only (LEARNINGS #37).
 
 ## [0.6.0] - 2026-07-21
 
@@ -97,7 +126,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.6.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.7.0...HEAD
+[0.7.0]: https://github.com/ammar-hasan/narova/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/ammar-hasan/narova/commit/eeb373d
 [0.5.0]: https://github.com/ammar-hasan/narova/commit/16f1c43
 [0.4.0]: https://github.com/ammar-hasan/narova/commit/d00243f

@@ -286,3 +286,55 @@ test('overrides.variant swaps scene 1 keeping its id; unknown ids throw', () => 
   // Variant scenes join the narration contract (Python sees the swap).
   assert.deepEqual(narration(c)[0].segments, [{ who: 'b', text: 'Alt opener.' }]);
 });
+
+// -- per-scene b-roll clip --
+
+test('scene.clip: valid file is accepted and passed through', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-schema-clip-'));
+  const clipPath = path.join(dir, 'broll.mp4');
+  fs.writeFileSync(clipPath, 'fake-mp4');
+  const raw = { ...validRaw(), scenes: [{ id: 's1', body: '<p>one</p>', clip: 'broll.mp4', vo: [{ who: 'a', text: 'hi' }] }] };
+  const c = resolveConfig(raw, {}, dir);
+  assert.equal(c.scenes[0].clip, 'broll.mp4');
+});
+
+test('scene.clip: missing file throws', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-schema-clip-'));
+  const raw = { ...validRaw(), scenes: [{ id: 's1', body: '<p>one</p>', clip: 'missing.mp4', vo: [{ who: 'a', text: 'hi' }] }] };
+  assert.throws(() => resolveConfig(raw, {}, dir), /config\.scenes\[0\]\.clip: file not found/);
+});
+
+test('scene.clip: empty string throws', () => {
+  const raw = { ...validRaw(), scenes: [{ id: 's1', body: '<p>one</p>', clip: '', vo: [{ who: 'a', text: 'hi' }] }] };
+  assert.throws(() => resolveConfig(raw, {}, '.'), /config\.scenes\[0\]\.clip: must be a project-relative path/);
+});
+
+// -- series mode --
+
+test('series: part and total resolve correctly', () => {
+  const c = resolveConfig({ ...validRaw(), series: { part: 2, total: 5 } }, {}, '.');
+  assert.deepEqual(c.series, { part: 2, total: 5 });
+});
+
+test('series: total is optional', () => {
+  const c = resolveConfig({ ...validRaw(), series: { part: 3 } }, {}, '.');
+  assert.deepEqual(c.series, { part: 3, total: null });
+});
+
+test('series: part must be positive integer; invalid values throw', () => {
+  assert.throws(() => resolveConfig({ ...validRaw(), series: { part: 0 } }, {}, '.'),
+    /config\.series\.part: must be a positive integer/);
+  assert.throws(() => resolveConfig({ ...validRaw(), series: { part: -1 } }, {}, '.'),
+    /config\.series\.part: must be a positive integer/);
+  assert.throws(() => resolveConfig({ ...validRaw(), series: { part: 1.5 } }, {}, '.'),
+    /config\.series\.part: must be a positive integer/);
+});
+
+test('series: part cannot exceed total', () => {
+  assert.throws(() => resolveConfig({ ...validRaw(), series: { part: 4, total: 3 } }, {}, '.'),
+    /config\.series\.part: 4 exceeds total 3/);
+});
+
+test('series: null when not configured', () => {
+  assert.equal(resolveConfig(validRaw(), {}, '.').series, null);
+});

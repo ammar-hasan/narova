@@ -146,3 +146,48 @@ test('a configured caption preset lands on the caption stage', () => {
   assert.match(h, /id="cap-stage" class="cap-preset-slam"/);
   assert.match(h, /"preset":"slam"/, 'DATA carries the same preset for the runtime');
 });
+
+// -- b-roll clips --
+
+test('scene without clip has no video element', () => {
+  const h = doc();
+  assert.ok(!h.includes('<video class="broll"'), 'no broll when clip is absent');
+});
+
+test('scene with clip renders a muted, looping video behind chrome', () => {
+  const clipCfg = {
+    ...config,
+    scenes: [
+      { id: 's1', body: '<p>x</p>', clip: 'assets/intro.mp4' },
+      { id: 's2', body: '<p>y</p>' },
+    ],
+  };
+  const cliptimings = Object.fromEntries(clipCfg.scenes.map(s => [s.id, timings[s.id] || timings.s1]));
+  const h = composeDoc(clipCfg, size, composeData(clipCfg, cliptimings), '');
+  // s1 has a clip; s2 doesn't.
+  assert.match(h, /<video class="broll" src="assets\/clip-s1\.mp4" autoplay loop muted playsinline>/);
+  assert.ok(!h.includes('clip-s2'), 'scene 2 has no clip');
+  // video appears before chrome div inside the scene section.
+  const s1Chunk = h.slice(h.indexOf('id="scene-s1"'));
+  const s1End = s1Chunk.indexOf('</section>');
+  const vidIdx = s1Chunk.slice(0, s1End).indexOf('<video class="broll"');
+  const chromeIdx = s1Chunk.slice(0, s1End).indexOf('<div class="chrome">');
+  assert.ok(vidIdx < chromeIdx, 'broll video must be before chrome div');
+});
+
+// -- series badge --
+
+test('series badge renders when series config is present', () => {
+  const h = composeDoc({ ...config, series: { part: 2, total: 5 } }, size, composeData(config, timings), '');
+  assert.match(h, /<div class="series-badge">Part 2 \/ 5<\/div>/);
+});
+
+test('series badge with unknown total omits the denominator', () => {
+  const h = composeDoc({ ...config, series: { part: 1 } }, size, composeData(config, timings), '');
+  assert.match(h, /<div class="series-badge">Part 1<\/div>/);
+});
+
+test('no series badge when series is not configured', () => {
+  const h = doc();
+  assert.ok(!h.includes('series-badge'));
+});

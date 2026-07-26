@@ -105,6 +105,40 @@ const SCENE_TRANSITIONS = new Set(['fade', 'wipe', 'slide', 'zoom']);
  * exactly. */
 const MARK_KINDS = new Set(['underline', 'circle', 'box', 'highlight']);
 
+/* Hook enforcement (§Hook doctrine in the skill references).
+ * Viral video mechanics in 2026: muted autoplay is 80%+, hooks are measured at
+ * 2s, the first syllable must land within ~200ms. Scene 1 is the hook. */
+function checkHook(config, warnings) {
+  const s1 = config.scenes[0];
+  if (!s1) return;
+
+  const timing = config.timing || {};
+
+  // 1 — lead-in silence > 200ms (dead air at the head loses viewers in <2s).
+  const lead = timing.lead ?? 0.16;
+  if (lead > 0.2) {
+    warnings.push(`hook: timing.lead is ${lead}s (>200ms) — the first syllable should land within 200ms; set "timing.lead" ≤ 0.2`);
+  }
+
+  // 2 — no visible text on-screen for muted viewers.
+  const body = String(s1.body);
+  const textEls = body.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
+  if (!textEls || textEls.length === 0) {
+    warnings.push('hook: scene 1 has no visible text — muted viewers (80%+ of autoplay) see a blank screen; add hook text on-screen');
+  }
+
+  // 3 — platform duration band already checked (see check() below).
+
+  // 4 — last scene has no saveable end-frame (no text, no image, no CTA).
+  const last = config.scenes[config.scenes.length - 1];
+  const lastBody = String(last.body);
+  const hasImage = /<(?:img|svg|video)\b/i.test(lastBody);
+  const lastTextEls = lastBody.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
+  if (!hasImage && (!lastTextEls || lastTextEls.length === 0)) {
+    warnings.push(`saveable: last scene "${last.id}" has no text or image — a saveable end-card lifts completion rate; add a title, logo, or CTA`);
+  }
+}
+
 /* Print warnings + a one-line summary. Returns true (warnings never fail).
  * Cue semantics (compose/runtime.js): data-cue="k" is coerced with +k and
  * looked up in turns[] (0-based) when it is a non-negative integer in range;
@@ -180,6 +214,16 @@ function check(config) {
     for (const ref of cssUrls(s.body)) {
       inspectAssetRef(ref, config, `scene "${s.id}" inline style`, warnings);
     }
+
+    // Per-scene b-roll clip: validated at resolveConfig (hard error on missing
+    // file), so this is a soft check — warn if a clip is referenced but the
+    // file is not in a standard video container.
+    if (s.clip) {
+      const ext = path.extname(s.clip).toLowerCase();
+      if (!['.mp4', '.webm', '.mov'].includes(ext)) {
+        warnings.push(`scene "${s.id}": clip "${s.clip}" has unusual extension ${ext} — HyperFrames supports .mp4, .webm, .mov`);
+      }
+    }
   }
 
   // theme.css animations run on the wall clock — the HyperFrames renderer seeks
@@ -214,6 +258,9 @@ function check(config) {
       warnings.push(`platform ${config.platform} ${band}; estimated narration is ${Math.round(estSec)}s — tighten the script or pick a longer format`);
     }
   }
+
+  // Hook doctrine: scene 1 lead-in, on-screen text, saveable end-frame.
+  checkHook(config, warnings);
 
   // Grounding: stats and superlatives in the vo need a claims ledger tracing
   // each one to the source (references/url-to-source.md §Claims ledger).

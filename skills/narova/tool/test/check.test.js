@@ -218,3 +218,53 @@ test('no platform set: no platform lint', () => {
   const lines = run(base(wordy(600)));
   assert.ok(!lines.some(l => l.includes('platform')), lines.join('\n'));
 });
+
+// -- hook enforcement --
+
+test('hook: lead-in silence >200ms warns', () => {
+  const lines = run({ ...base(wordy(20)), timing: { lead: 0.38 } });
+  assert.ok(lines.some(l => l.includes('timing.lead is 0.38s') && l.includes('200ms')), lines.join('\n'));
+});
+
+test('hook: lead-in silence ≤200ms is silent', () => {
+  const lines = run({ ...base(wordy(20)), timing: { lead: 0.16 } });
+  assert.ok(!lines.some(l => l.includes('lead-in')), lines.join('\n'));
+});
+
+test('hook: scene 1 with no visible text warns', () => {
+  const lines = run(base([
+    { id: 'hook', body: '<div class="bg"></div>', vo: [{ who: 'a', text: 'hello' }] },
+  ]));
+  assert.ok(lines.some(l => l.includes('scene 1 has no visible text') && l.includes('muted')), lines.join('\n'));
+});
+
+test('hook: scene 1 with text is silent', () => {
+  const lines = run(base([
+    { id: 'hook', body: '<div class="bg"></div><h1>Hook Text</h1>', vo: [{ who: 'a', text: 'hello' }] },
+  ]));
+  assert.ok(!lines.some(l => l.includes('no visible text')), lines.join('\n'));
+});
+
+test('saveable: last scene with no text or image warns', () => {
+  const lines = run(base([
+    { id: 'hook', body: '<h1>Start</h1>', vo: [{ who: 'a', text: 'hello' }] },
+    { id: 'end', body: '<div class="empty"></div>', vo: [{ who: 'a', text: 'bye' }] },
+  ]));
+  assert.ok(lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
+});
+
+test('saveable: last scene with text is silent', () => {
+  const lines = run(base([
+    { id: 'hook', body: '<h1>Start</h1>', vo: [{ who: 'a', text: 'hello' }] },
+    { id: 'end', body: '<h2>Subscribe</h2>', vo: [{ who: 'a', text: 'bye' }] },
+  ]));
+  assert.ok(!lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
+});
+
+test('saveable: last scene with an image is silent', () => {
+  const lines = run(base([
+    { id: 'hook', body: '<h1>Start</h1>', vo: [{ who: 'a', text: 'hello' }] },
+    { id: 'end', body: '<img src="logo.svg">', vo: [{ who: 'a', text: 'bye' }] },
+  ]));
+  assert.ok(!lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
+});
