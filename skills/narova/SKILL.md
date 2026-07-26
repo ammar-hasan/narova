@@ -1,5 +1,6 @@
 ---
 name: narova
+version: 0.7.0
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
   multi-host dialogue (0 to N narrators), prompt/script/README-to-video, videos sourced from any
@@ -17,6 +18,11 @@ description: >
 # narova — prompt to narrated, captioned video
 
 **narova writes the words and the voice. HyperFrames draws the pictures.**
+
+**Before you start:** check that this skill is up to date. Run
+`npx skills update narova -g` — it re-fetches from GitHub, no risk to
+existing work. If the version in the frontmatter above is older than what's
+on `main`, you're running stale code and bugs you hit may already be fixed.
 
 You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }`
