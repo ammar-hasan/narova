@@ -5,13 +5,22 @@
  * network — so any frame is reproducible from its time value (the HyperFrames
  * determinism contract). Discrete state flips use tl.set(className) at absolute
  * times: the seek-safe karaoke pattern. All motion is timeline tweens/sets, so
- * seeking to any frame renders the correct state — no wall-clock CSS. */
+ * seeking to any frame renders the correct state — no wall-clock CSS. That is
+ * also why the caption presets (slam/pop) animate with short GSAP tweens at
+ * word times instead of CSS transitions: a transition runs on the wall clock
+ * and would not reproduce under seek-based frame rendering. */
 
 /* Returns the script body; `DATA` is inlined by html.js just above it. */
 function runtimeScript() {
   return `window.__timelines = window.__timelines || {};
 var tl = gsap.timeline({ paused: true });
 var stage = document.getElementById('cap-stage');
+
+// caption style preset (config.captions.preset; html.js mirrors it as a
+// cap-preset-* class on the stage). karaoke/rise are pure class-flip looks;
+// slam/pop add motion as short timeline tweens at word times — never CSS
+// transitions (wall clock, not seek-safe).
+var PRESET = DATA.preset || 'karaoke';
 
 // captions: one group per sentence, stacked on the same band; the timeline
 // shows exactly one at a time and walks each word upcoming -> active -> past.
@@ -28,7 +37,7 @@ DATA.groups.forEach(function (g, gi) {
   line.className = 'caption2';
   g.words.forEach(function (w, wi) {
     var s = document.createElement('span');
-    s.className = 'cap-w ' + g.who;
+    s.className = 'cap-w ' + g.who + (w.kw ? ' kw' : '');
     s.id = 'capw-' + gi + '-' + wi;
     s.textContent = w.w;
     line.appendChild(s);
@@ -41,9 +50,24 @@ DATA.groups.forEach(function (g, gi) {
   if (g.end < DATA.total) tl.set(el, { opacity: 0 }, g.end);
 
   g.words.forEach(function (w, wi) {
-    var id = '#capw-' + gi + '-' + wi, base = 'cap-w ' + g.who;
+    var id = '#capw-' + gi + '-' + wi, base = 'cap-w ' + g.who + (w.kw ? ' kw' : '');
+    var pastAt = g.words[wi + 1] ? g.words[wi + 1].t0 : w.t1;
     tl.set(id, { className: base + ' active' }, w.t0);
-    tl.set(id, { className: base + ' past' }, g.words[wi + 1] ? g.words[wi + 1].t0 : w.t1);
+    tl.set(id, { className: base + ' past' }, pastAt);
+    if (PRESET === 'slam') {
+      // slam: the active word lands big and settles back once it has passed.
+      // Built from .to() tweens ONLY — a fromTo leaves every UPCOMING word
+      // parked at its from-state (scale 1.7) until its turn, so the words
+      // pile onto each other. .to() tweens leave the pre-start state alone
+      // (scale 1), which is the correct seek-safe resting state.
+      tl.to(id, { scale: 1.7, duration: 0.06, ease: 'power4.in' }, w.t0);
+      tl.to(id, { scale: 1.25, duration: 0.14, ease: 'power2.out' }, w.t0 + 0.06);
+      tl.to(id, { scale: 1, duration: 0.22, ease: 'power2.out' }, pastAt);
+    } else if (PRESET === 'pop') {
+      // pop: the active word pops up into its slot (opacity stays class-driven,
+      // so the past state is never overridden by a lingering inline style).
+      tl.fromTo(id, { scale: 0.55, y: 10 }, { scale: 1, y: 0, duration: 0.18, ease: 'back.out(2.2)' }, w.t0);
+    }
   });
 });
 
@@ -69,7 +93,7 @@ function cueTime(sc, el, entryIndex) {
 // origin. Fix: wrap the carrier in a fresh <g>, move the animation hooks
 // (classes + data-attrs) onto the wrapper, and tween that instead. The
 // carrier's own transform survives untouched.
-var ANIM_ATTRS = ['data-cue', 'data-delay', 'data-grow', 'data-draw', 'data-count', 'data-count-suffix'];
+var ANIM_ATTRS = ['data-cue', 'data-delay', 'data-grow', 'data-draw', 'data-count', 'data-count-suffix', 'data-mark'];
 function shieldSvgTransform(el) {
   var isSvg = el.namespaceURI === 'http://www.w3.org/2000/svg';
   if (!isSvg || typeof el.hasAttribute !== 'function' || !el.hasAttribute('transform') || !el.parentNode) return el;
@@ -85,16 +109,105 @@ function shieldSvgTransform(el) {
   return wrap;
 }
 
+// data-mark="underline|circle|box|highlight": a rough hand-drawn annotation
+// around/under the element, drawn at the element's trigger (same cueTime
+// semantics as every other animator). Layout is fixed at load, so
+// getBoundingClientRect relative to the scene is deterministic. The
+// hand-drawn feel comes from two slightly offset strokes and a FIXED jitter
+// pattern — never randomness (the determinism contract). Unknown kinds are
+// ignored; check.js lints the same set.
+var MARK_JITTER = [0.9, -1.2, 0.6, -0.4, 1.1, -0.8, 0.5, -1.0];
+function mf(n) { return Math.round(n * 10) / 10; }
+function markPath(layer, d, cls) {
+  var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+  p.setAttribute('d', d);
+  p.setAttribute('class', cls);
+  layer.appendChild(p);
+  return p;
+}
+// The same stroke-dash self-draw as data-draw, with a fixed lag for the
+// second (sketch) stroke.
+function drawMark(p, t, lag) {
+  if (typeof p.getTotalLength !== 'function') return;
+  var len = p.getTotalLength();
+  tl.fromTo(p, { strokeDasharray: len, strokeDashoffset: len },
+    { strokeDashoffset: 0, duration: 0.55, ease: 'power2.inOut' }, t + lag);
+}
+function annotate(scene, layer, el, kind, t) {
+  var sr = scene.getBoundingClientRect();
+  var r = el.getBoundingClientRect();
+  var x = r.left - sr.left, y = r.top - sr.top, w = r.width, h = r.height;
+  var i, d, p;
+  if (kind === 'underline') {
+    var ly = y + h + 4, x0 = x - 3, x1 = x + w + 3, seg = 6;
+    for (i = 0; i < 2; i++) {
+      var o = i * 2.4, s = i * 3;
+      d = 'M ' + mf(x0) + ' ' + mf(ly + o + MARK_JITTER[s % 8]);
+      for (var k = 1; k <= seg; k++) {
+        d += ' L ' + mf(x0 + (x1 - x0) * k / seg) + ' ' + mf(ly + o + MARK_JITTER[(k + s) % 8]);
+      }
+      drawMark(markPath(layer, d, i ? 'mark mark2' : 'mark'), t, i * 0.07);
+    }
+  } else if (kind === 'circle') {
+    var cx = x + w / 2, cy = y + h / 2, rx = w / 2 + 10, ry = h / 2 + 8;
+    for (i = 0; i < 2; i++) {
+      var j = i * 1.7, rx2 = rx + j, ry2 = ry - j * 0.6;
+      d = 'M ' + mf(cx - rx2) + ' ' + mf(cy) +
+        ' a ' + mf(rx2) + ' ' + mf(ry2) + ' 0 1 0 ' + mf(2 * rx2) + ' 0' +
+        ' a ' + mf(rx2) + ' ' + mf(ry2) + ' 0 1 0 ' + mf(-2 * rx2) + ' 0';
+      p = markPath(layer, d, i ? 'mark mark2' : 'mark');
+      if (i) p.setAttribute('transform', 'rotate(-1.6 ' + mf(cx) + ' ' + mf(cy) + ')');
+      drawMark(p, t, i * 0.07);
+    }
+  } else if (kind === 'box') {
+    var bx = x - 8, by = y - 6, bw = w + 16, bh = h + 12;
+    for (i = 0; i < 2; i++) {
+      var b = i * 2.2, q = i * 4;
+      d = 'M ' + mf(bx - b + MARK_JITTER[q % 8]) + ' ' + mf(by + MARK_JITTER[(q + 1) % 8]) +
+        ' L ' + mf(bx + bw + MARK_JITTER[(q + 2) % 8]) + ' ' + mf(by - b + MARK_JITTER[(q + 3) % 8]) +
+        ' L ' + mf(bx + bw - b + MARK_JITTER[(q + 4) % 8]) + ' ' + mf(by + bh + MARK_JITTER[(q + 5) % 8]) +
+        ' L ' + mf(bx + MARK_JITTER[(q + 6) % 8]) + ' ' + mf(by + bh - b + MARK_JITTER[(q + 7) % 8]) + ' Z';
+      drawMark(markPath(layer, d, i ? 'mark mark2' : 'mark'), t, i * 0.07);
+    }
+  } else if (kind === 'highlight') {
+    // a marker wash swept in from the left behind the text (the mark layer
+    // paints below .chrome, so the text stays on top).
+    var rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rect.setAttribute('x', mf(x - 3));
+    rect.setAttribute('y', mf(y + h * 0.06));
+    rect.setAttribute('width', mf(w + 6));
+    rect.setAttribute('height', mf(h * 0.88));
+    rect.setAttribute('class', 'markhl');
+    layer.appendChild(rect);
+    tl.fromTo(rect, { scaleX: 0, transformOrigin: 'left center' },
+      { scaleX: 1, duration: 0.5, ease: 'power3.out' }, t);
+  }
+}
+
 // scenes: entrance reveals, voice-cued reveals, and the data-* animators
-// (grow/draw/count), all as timeline tweens or seek-safe sets. An element with
-// BOTH a reveal class and data-cue is cue-only (no double tween).
+// (grow/draw/count/mark), all as timeline tweens or seek-safe sets. An element
+// with BOTH a reveal class and data-cue is cue-only (no double tween).
 DATA.scenes.forEach(function (sc) {
   var scene = document.getElementById('scene-' + sc.id);
   if (!scene) return;
   var targets = [];
-  scene.querySelectorAll('.reveal, .cue, [data-cue], [data-grow], [data-draw], [data-count]').forEach(function (el) {
+  scene.querySelectorAll('.reveal, .cue, [data-cue], [data-grow], [data-draw], [data-count], [data-mark]').forEach(function (el) {
     targets.push(shieldSvgTransform(el));
   });
+  // one shared SVG overlay per scene, created lazily on the first data-mark;
+  // it paints below .chrome (z-index 3), behind the text it annotates.
+  var layer = null;
+  function markLayer() {
+    if (layer) return layer;
+    var sr = scene.getBoundingClientRect();
+    layer = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    layer.setAttribute('class', 'marklayer');
+    layer.setAttribute('viewBox', '0 0 ' + mf(sr.width) + ' ' + mf(sr.height));
+    layer.setAttribute('width', mf(sr.width));
+    layer.setAttribute('height', mf(sr.height));
+    scene.appendChild(layer);
+    return layer;
+  }
   var entry = 0;
   targets.forEach(function (el) {
     var hasCue = el.hasAttribute('data-cue');
@@ -133,6 +246,12 @@ DATA.scenes.forEach(function (sc) {
         }
       }
     }
+    // data-mark: hand-drawn annotation at the element's trigger. The kind set
+    // must stay EXACTLY in sync with src/check.js.
+    var mk = el.getAttribute('data-mark');
+    if (mk === 'underline' || mk === 'circle' || mk === 'box' || mk === 'highlight') {
+      annotate(scene, markLayer(), el, mk, t);
+    }
   });
   // data-drift: slow Ken Burns tween spanning the whole scene. Values:
   // "in" (push-in), "out" (pull-back), "left"/"right" (wide panorama pan),
@@ -157,10 +276,26 @@ DATA.scenes.forEach(function (sc) {
     to.ease = 'none';
     tl.fromTo(el, from, to, sc.start);
   });
-  // scene transition: every scene after the first fades up from dark over
-  // its first beats — a deterministic dip-to-black cut.
+  // scene transition: sc.transition picks the entrance — fade (default,
+  // dip-to-black), wipe (clip-path sweep in from the right), slide (x +
+  // opacity from the right), zoom (scale 1.08 -> 1 + opacity). All are ~0.7s
+  // timeline tweens at scene start, so they are seek-safe. Unknown values
+  // fall back to fade — check.js lints the same set. The first scene never
+  // transitions.
   if (sc.start > 0.01) {
-    tl.fromTo(scene, { opacity: 0 }, { opacity: 1, duration: 0.7, ease: 'power1.out' }, sc.start);
+    var tr = sc.transition || 'fade';
+    if (tr === 'wipe') {
+      tl.fromTo(scene, { clipPath: 'inset(0 0 0 100%)' },
+        { clipPath: 'inset(0 0 0 0%)', duration: 0.7, ease: 'power2.inOut' }, sc.start);
+    } else if (tr === 'slide') {
+      tl.fromTo(scene, { x: 90, opacity: 0 },
+        { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }, sc.start);
+    } else if (tr === 'zoom') {
+      tl.fromTo(scene, { scale: 1.08, opacity: 0 },
+        { scale: 1, opacity: 1, duration: 0.7, ease: 'power2.out' }, sc.start);
+    } else {
+      tl.fromTo(scene, { opacity: 0 }, { opacity: 1, duration: 0.7, ease: 'power1.out' }, sc.start);
+    }
   }
 });
 

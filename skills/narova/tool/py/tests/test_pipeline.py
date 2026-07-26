@@ -12,6 +12,7 @@ from narova_tts import pipeline
 from narova_tts.backends import ChatterboxBackend, XttsBackend
 from narova_tts.pipeline import (
     rescale_timings,
+    scene_starts,
     sentence_cache_key,
     sentences,
     synth_sentence,
@@ -87,6 +88,21 @@ class TestSentenceCacheKey(unittest.TestCase):
         self.assertNotEqual(base, sentence_cache_key("piper", "en_US-hfc_female-medium", "Hello world.", 1.12))
         self.assertNotEqual(base, sentence_cache_key("piper", "en_US-ryan-high", "Hello world!", 1.12))
         self.assertNotEqual(base, sentence_cache_key("piper", "en_US-ryan-high", "Hello world.", 1.2))
+
+
+class TestSceneStarts(unittest.TestCase):
+    """Sfx anchors and global timeline math: scene starts are cumulative sums
+    of scene durs in narration order."""
+
+    def scenes(self):
+        return [{"n": 1, "id": "intro"}, {"n": 2, "id": "main"}, {"n": 3, "id": "outro"}]
+
+    def test_cumulative_in_narration_order(self):
+        timings = {"intro": {"dur": 2.5}, "main": {"dur": 4.0}, "outro": {"dur": 1.25}}
+        self.assertEqual(
+            scene_starts(self.scenes(), timings),
+            {"intro": 0.0, "main": 2.5, "outro": 6.5},
+        )
 
 
 class _FakeBackend:
@@ -182,6 +198,16 @@ class TestVoiceCacheSpeaker(unittest.TestCase):
             {"speaker": "/abs/ref.wav", "cfg_weight": 0.3}, "a", "chatterbox")
         self.assertNotEqual(base, tuned)
 
+    def test_chatterbox_lang_changes_cache_key(self):
+        base = voice_cache_speaker({"backend": "chatterbox", "speaker": "/abs/ref.wav"}, "a")
+        french = voice_cache_speaker(
+            {"backend": "chatterbox", "speaker": "/abs/ref.wav", "lang": "fr"}, "a")
+        self.assertNotEqual(base, french)
+        self.assertNotEqual(
+            sentence_cache_key("chatterbox", base, "Bonjour.", 1.12),
+            sentence_cache_key("chatterbox", french, "Bonjour.", 1.12),
+        )
+
     def test_changed_clone_recording_changes_cache_identity(self):
         with tempfile.TemporaryDirectory() as d:
             sample = Path(d) / "voice.wav"
@@ -274,6 +300,7 @@ class TestChatterboxBackend(unittest.TestCase):
         b._speakers = {"a": speaker}
         b._exg = {}
         b._cfgw = {}
+        b._langs = {}
         b._proc = _FakeProc(responses)
         return b
 
@@ -295,6 +322,24 @@ class TestChatterboxBackend(unittest.TestCase):
         req = json.loads(b._proc.written[0])
         self.assertEqual(req["exaggeration"], 0.7)
         self.assertEqual(req["cfg_weight"], 0.3)
+
+    def test_lang_is_forwarded(self):
+        b = self.backend("/abs/ref.wav", [{"ok": True}])
+        b._langs = {"a": "fr"}
+        b.synthesize("a", "Bonjour.", Path("/tmp/o.wav"))
+        req = json.loads(b._proc.written[0])
+        self.assertEqual(req["lang"], "fr")
+
+    def test_no_lang_key_without_lang(self):
+        b = self.backend("/abs/ref.wav", [{"ok": True}])
+        b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+        self.assertNotIn("lang", json.loads(b._proc.written[0]))
+
+    def test_rejects_invalid_lang_before_startup(self):
+        with tempfile.NamedTemporaryFile(suffix=".wav") as f:
+            with self.assertRaisesRegex(ValueError, "lang"):
+                ChatterboxBackend({"a": f.name}, venv_python=Path("/nope/python"),
+                                  langs={"a": 3})
 
     def test_worker_error_raises(self):
         b = self.backend("/abs/ref.wav", [{"ok": False, "error": "boom"}])

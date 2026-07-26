@@ -135,3 +135,14 @@ test('chrome.counter:false keeps a wordmark-only topbar', () => {
   assert.ok(!/class="counter"/.test(h));
   assert.match(h, /id="progress-bar"/);
 });
+
+test('the caption stage carries the preset class (karaoke by default)', () => {
+  assert.match(doc(), /id="cap-stage" class="cap-preset-karaoke"/);
+});
+
+test('a configured caption preset lands on the caption stage', () => {
+  const cfg = { ...config, captions: { preset: 'slam', emphasis: [] } };
+  const h = composeDoc(cfg, size, composeData(cfg, timings), '');
+  assert.match(h, /id="cap-stage" class="cap-preset-slam"/);
+  assert.match(h, /"preset":"slam"/, 'DATA carries the same preset for the runtime');
+});

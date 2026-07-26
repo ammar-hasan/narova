@@ -51,7 +51,7 @@ function makeNode(tag, attrs = {}) {
   return node;
 }
 
-function runScript({ sceneEls = {} } = {}) {
+function runScript({ sceneEls = {}, data = DATA } = {}) {
   const calls = [];
   const tl = {
     set: (target, vars, at) => { calls.push({ op: 'set', target, vars, at }); return tl; },
@@ -64,17 +64,23 @@ function runScript({ sceneEls = {} } = {}) {
   const document = {
     getElementById: id => (id === 'cap-stage' ? capStage : id === 'progress-bar' ? progressBar : sceneEls[id] || null),
     createElement: makeNode,
-    createElementNS: (ns, tag) => { const n = makeNode(tag); n.namespaceURI = ns; return n; },
+    createElementNS: (ns, tag) => {
+      const n = makeNode(tag);
+      n.namespaceURI = ns;
+      n.getTotalLength = () => 100;   // SVG geometry stubs for dash walks
+      n.getBoundingClientRect = () => ({ left: 0, top: 0, width: 10, height: 10 });
+      return n;
+    },
     createTextNode: t => ({ text: t }),
   };
   const window = {};
-  new Function('window', 'document', 'gsap', 'DATA', runtimeScript())(window, document, gsap, DATA);
+  new Function('window', 'document', 'gsap', 'DATA', runtimeScript())(window, document, gsap, data);
   return { calls, window, capStage, tl };
 }
 
 /* A scene element whose querySelectorAll returns canned nodes for the runtime's
  * single animation-target selector. */
-const TARGET_SELECTOR = '.reveal, .cue, [data-cue], [data-grow], [data-draw], [data-count]';
+const TARGET_SELECTOR = '.reveal, .cue, [data-cue], [data-grow], [data-draw], [data-count], [data-mark]';
 function sceneEl(targets = [], drifts = []) {
   return { querySelectorAll: sel => (sel === TARGET_SELECTOR ? targets : sel === '[data-drift]' ? drifts : []) };
 }
@@ -267,4 +273,216 @@ test('determinism: script contains no clocks, randomness, or infinite repeats', 
   for (const banned of ['Date.now', 'performance.now', 'Math.random', 'repeat: -1', 'repeat:-1', 'setTimeout', 'requestAnimationFrame', 'fetch(']) {
     assert.ok(!src.includes(banned), `generated runtime must not contain ${src.includes(banned) ? banned : ''}`);
   }
+});
+
+/* ---- caption presets + emphasis keywords ---- */
+
+const KW_DATA = {
+  ...DATA,
+  groups: [
+    { who: 'a', label: 'A', start: 0.16, end: 9,
+      words: [{ w: 'Big', t0: 0.16, t1: 0.5, kw: 1 }, { w: 'word.', t0: 0.5, t1: 1.0 }] },
+  ],
+};
+
+test('emphasis keywords carry the kw class through every karaoke flip', () => {
+  const { calls, capStage } = runScript({ data: KW_DATA });
+  const line = capStage.children[0].children.find(c => c.className === 'caption2');
+  assert.equal(line.children[0].className, 'cap-w a kw');
+  assert.ok(calls.some(c => c.op === 'set' && c.vars.className === 'cap-w a kw active' && c.at === 0.16));
+  assert.ok(calls.some(c => c.op === 'set' && c.vars.className === 'cap-w a kw past' && c.at === 0.5));
+  assert.ok(calls.some(c => c.op === 'set' && c.vars.className === 'cap-w a active'),
+    'non-keyword words keep the plain base');
+});
+
+test('preset slam: active word slams to 1.25 and settles back at the past flip', () => {
+  const { calls } = runScript({ data: { ...DATA, preset: 'slam' } });
+  // `to` tweens only — a fromTo would park every upcoming word at its
+  // from-state (scale 1.7) until its turn and the words would overlap.
+  assert.ok(!calls.some(c => c.op === 'fromTo' && c.target.startsWith('#capw-') && 'scale' in (c.from || {})),
+    'slam must not use scale fromTo on caption words (upcoming words park at the from-state)');
+  const land = calls.find(c => c.op === 'to' && c.target === '#capw-0-0' && c.vars.scale === 1.7);
+  assert.equal(land.at, 0.16);
+  const hold = calls.find(c => c.op === 'to' && c.target === '#capw-0-0' && c.vars.scale === 1.25);
+  assert.ok(hold.at > land.at && hold.at <= land.at + 0.1);
+  const settle = calls.find(c => c.op === 'to' && c.target === '#capw-0-0' && c.vars.scale === 1);
+  assert.equal(settle.at, 0.5);   // the past flip (next word's t0)
+});
+
+test('preset pop: active word pops up with a quick scale+y tween', () => {
+  const { calls } = runScript({ data: { ...DATA, preset: 'pop' } });
+  const pop = calls.find(c => c.op === 'fromTo' && c.target === '#capw-0-1');
+  assert.equal(pop.from.scale, 0.55);
+  assert.equal(pop.from.y, 10);
+  assert.equal(pop.to.scale, 1);
+  assert.equal(pop.to.y, 0);
+  assert.equal(pop.at, 0.5);
+  assert.ok(!('opacity' in pop.from) && !('opacity' in pop.to),
+    'opacity stays class-driven so the past state is never overridden');
+});
+
+test('presets karaoke and rise add NO word tweens (class flips only)', () => {
+  for (const preset of ['karaoke', 'rise', undefined]) {
+    const { calls } = runScript({ data: { ...DATA, preset } });
+    assert.ok(!calls.some(c => (c.op === 'fromTo' || c.op === 'to') && /^#capw-/.test(c.target)),
+      `preset ${preset} must not tween words`);
+  }
+});
+
+/* ---- scene transitions ---- */
+
+test('transition wipe: clip-path inset sweep at scene start', () => {
+  const s2 = sceneEl();
+  const data = { ...DATA, scenes: [DATA.scenes[0], { ...DATA.scenes[1], transition: 'wipe' }] };
+  const { calls } = runScript({ data, sceneEls: { 'scene-s2': s2 } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === s2);
+  assert.equal(tw.from.clipPath, 'inset(0 0 0 100%)');
+  assert.equal(tw.to.clipPath, 'inset(0 0 0 0%)');
+  assert.equal(tw.to.duration, 0.7);
+  assert.equal(tw.at, 5);
+});
+
+test('transition slide: x + opacity from the right', () => {
+  const s2 = sceneEl();
+  const data = { ...DATA, scenes: [DATA.scenes[0], { ...DATA.scenes[1], transition: 'slide' }] };
+  const { calls } = runScript({ data, sceneEls: { 'scene-s2': s2 } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === s2);
+  assert.equal(tw.from.x, 90);
+  assert.equal(tw.from.opacity, 0);
+  assert.equal(tw.to.x, 0);
+  assert.equal(tw.to.opacity, 1);
+  assert.equal(tw.to.duration, 0.7);
+  assert.equal(tw.at, 5);
+});
+
+test('transition zoom: scale 1.08 -> 1 + opacity', () => {
+  const s2 = sceneEl();
+  const data = { ...DATA, scenes: [DATA.scenes[0], { ...DATA.scenes[1], transition: 'zoom' }] };
+  const { calls } = runScript({ data, sceneEls: { 'scene-s2': s2 } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === s2);
+  assert.equal(tw.from.scale, 1.08);
+  assert.equal(tw.from.opacity, 0);
+  assert.equal(tw.to.scale, 1);
+  assert.equal(tw.to.opacity, 1);
+  assert.equal(tw.at, 5);
+});
+
+test('an unknown transition value falls back to fade (check.js parity)', () => {
+  const s2 = sceneEl();
+  const data = { ...DATA, scenes: [DATA.scenes[0], { ...DATA.scenes[1], transition: 'spiral' }] };
+  const { calls } = runScript({ data, sceneEls: { 'scene-s2': s2 } });
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === s2);
+  assert.equal(tw.from.opacity, 0);
+  assert.equal(tw.to.opacity, 1);
+  assert.ok(!('clipPath' in tw.from) && !('scale' in tw.from) && !('x' in tw.from));
+});
+
+test('the first scene never transitions, whatever its transition value', () => {
+  const s1 = sceneEl();
+  const data = { ...DATA, scenes: [{ ...DATA.scenes[0], transition: 'zoom' }, DATA.scenes[1]] };
+  const { calls } = runScript({ data, sceneEls: { 'scene-s1': s1, 'scene-s2': sceneEl() } });
+  assert.ok(!calls.some(c => c.op === 'fromTo' && c.target === s1));
+});
+
+/* ---- data-mark annotations ---- */
+
+function markScene(targets) {
+  const s = makeNode('section');
+  s.querySelectorAll = sel => (sel === TARGET_SELECTOR ? targets : []);
+  s.getBoundingClientRect = () => ({ left: 0, top: 0, width: 1280, height: 720 });
+  return s;
+}
+function markEl(kind, attrs = {}) {
+  const el = makeNode('p', { 'data-mark': kind, ...attrs });
+  el.getBoundingClientRect = () => ({ left: 100, top: 200, width: 300, height: 40 });
+  return el;
+}
+
+test('data-mark underline: two jittered strokes self-draw at the cue time', () => {
+  const el = markEl('underline', { 'data-cue': '0' });
+  const s1 = markScene([el]);
+  const { calls } = runScript({ sceneEls: { 'scene-s1': s1 } });
+  const layer = s1.children.find(c => c.tag === 'svg');
+  assert.ok(layer, 'one SVG mark layer is appended to the scene');
+  assert.equal(layer.getAttribute('class'), 'marklayer');
+  assert.equal(layer.getAttribute('viewBox'), '0 0 1280 720');
+  const strokes = layer.children.filter(c => c.tag === 'path');
+  assert.equal(strokes.length, 2);
+  assert.equal(strokes[0].getAttribute('class'), 'mark');
+  assert.equal(strokes[1].getAttribute('class'), 'mark mark2');
+  assert.match(strokes[0].getAttribute('d'), /^M /);
+  assert.notEqual(strokes[0].getAttribute('d'), strokes[1].getAttribute('d'),
+    'the sketch stroke is offset from the main one');
+  const draws = calls.filter(c => c.op === 'fromTo' && strokes.includes(c.target));
+  assert.equal(draws.length, 2);
+  assert.equal(draws[0].from.strokeDashoffset, 100);   // getTotalLength stub
+  assert.equal(draws[0].to.strokeDashoffset, 0);
+  assert.equal(draws[0].at, 0.16);                     // cue time: turn 0
+  assert.ok(Math.abs(draws[1].at - 0.23) < 1e-9, 'second stroke lags by 0.07');
+});
+
+test('data-mark circle: two elliptical strokes, the sketch one rotated', () => {
+  const el = markEl('circle', { 'data-cue': '1' });
+  const s1 = markScene([el]);
+  const { calls } = runScript({ sceneEls: { 'scene-s1': s1 } });
+  const layer = s1.children.find(c => c.tag === 'svg');
+  const strokes = layer.children.filter(c => c.tag === 'path');
+  assert.equal(strokes.length, 2);
+  assert.match(strokes[0].getAttribute('d'), / a /);
+  assert.match(strokes[1].getAttribute('transform'), /^rotate\(-1\.6 /);
+  assert.ok(!strokes[0].hasAttribute('transform'));
+  assert.equal(calls.find(c => c.op === 'fromTo' && c.target === strokes[0]).at, 2.5);  // cue 1
+});
+
+test('data-mark box: two closed rectangle strokes at the entry stagger', () => {
+  const el = markEl('box');
+  const s1 = markScene([el]);
+  const { calls } = runScript({ sceneEls: { 'scene-s1': s1 } });
+  const layer = s1.children.find(c => c.tag === 'svg');
+  const strokes = layer.children.filter(c => c.tag === 'path');
+  assert.equal(strokes.length, 2);
+  assert.ok(strokes.every(p => / Z$/.test(p.getAttribute('d'))));
+  assert.ok(Math.abs(calls.find(c => c.op === 'fromTo' && c.target === strokes[0]).at - 0.1) < 1e-9,
+    'no data-cue -> scene entry stagger');
+});
+
+test('data-mark highlight: an accent rect swept in with scaleX from the left', () => {
+  const el = markEl('highlight', { 'data-cue': '0' });
+  const s1 = markScene([el]);
+  const { calls } = runScript({ sceneEls: { 'scene-s1': s1 } });
+  const layer = s1.children.find(c => c.tag === 'svg');
+  const rect = layer.children.find(c => c.tag === 'rect');
+  assert.ok(rect, 'the highlight is a rect, not a path');
+  assert.equal(rect.getAttribute('class'), 'markhl');
+  const tw = calls.find(c => c.op === 'fromTo' && c.target === rect);
+  assert.equal(tw.from.scaleX, 0);
+  assert.equal(tw.from.transformOrigin, 'left center');
+  assert.equal(tw.to.scaleX, 1);
+  assert.equal(tw.at, 0.16);
+  assert.equal(layer.children.filter(c => c.tag === 'path').length, 0);
+});
+
+test('data-mark honors data-delay and unknown kinds are ignored', () => {
+  const late = markEl('underline', { 'data-cue': '0', 'data-delay': '0.5' });
+  const junk = markEl('scribble');
+  const s1 = markScene([late]);
+  const s2 = markScene([junk]);
+  const { calls } = runScript({ sceneEls: { 'scene-s1': s1, 'scene-s2': s2 } });
+  const layer = s1.children.find(c => c.tag === 'svg');
+  const strokes = layer.children.filter(c => c.tag === 'path');
+  assert.equal(calls.find(c => c.op === 'fromTo' && c.target === strokes[0]).at, 0.16 + 0.5);
+  assert.ok(!s2.children.some(c => c.tag === 'svg'), 'unknown kind: no mark layer created');
+  assert.ok(!calls.some(c => strokes.length && c.target === junk), 'unknown kind: no tweens');
+});
+
+test('data-mark on an SVG transform carrier moves to the wrapper', () => {
+  const marker = makeNode('g', { transform: 'translate(100,60)', 'data-mark': 'circle', 'data-cue': '0' });
+  marker.namespaceURI = 'http://www.w3.org/2000/svg';
+  const svg = makeNode('svg');
+  svg.appendChild(marker);
+  const s1 = markScene([marker]);
+  runScript({ sceneEls: { 'scene-s1': s1 } });
+  const wrap = svg.children[0];
+  assert.equal(wrap.getAttribute('data-mark'), 'circle');
+  assert.ok(!marker.hasAttribute('data-mark'), 'carrier keeps only its transform');
 });

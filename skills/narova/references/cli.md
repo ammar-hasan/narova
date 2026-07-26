@@ -18,9 +18,10 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. Exit 1 if invalid. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. | piper: fast; xtts/qwen/chatterbox: slow + one-time 1–2GB model |
-| `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project), and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
+| `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project) + `out/captions.srt`/`.vtt`, and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
+| `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) into `out/hf/snapshots/review/` via `hyperframes snapshot`. `--at t1,t2,…` picks explicit times (see the scene table from `compose`). | seconds (opens a browser) |
-| `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4`. Restarts a live detached preview afterwards. | synth cost + render (~1–2x video length) |
+| `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4` (+ captions). `--variant <id>` renders `out/video-<id>.mp4` instead; `--variants` renders the base plus one `out/video-<id>.mp4` per declared variant. Restarts a live detached preview afterwards. | synth cost + render (~1–2x video length) |
 | `narova preview` | compose, print the Studio URL, then run it in the foreground | runs until Ctrl-C |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
@@ -38,6 +39,17 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
   synth, `--reuse` is ignored with a note and a full synth runs instead.
 - `--tempo N` — speech speed (1.1–1.2 reads well).
 - `--size 16:9|1:1|9:16` — frame shape.
+- `--platform tiktok|reels|shorts|linkedin|x` — frame preset plus the target
+  duration band `check` lints against. An explicit `--size` (or `config.size`)
+  wins over the platform preset.
+- `--variant <id>` — apply a declared hook variant (`config.variants`) as
+  scene 1. Works with `check`, `synth`, `compose`, `build`; `build` renders
+  `out/video-<id>.mp4` instead of `video.mp4`.
+- `--variants` — `build` only: render the base `video.mp4` AND one
+  `out/video-<id>.mp4` per declared variant, sequentially. The sentence-level
+  TTS cache makes shared sentences free, so each extra pass only pays for the
+  variant's scene-1 lines. With no variants declared it says so and builds
+  just the base. Mutually exclusive with `--variant`.
 - `--fps N`, `--quality draft|standard|high` — render settings.
 - `--at t1,t2,…` — `shots`: explicit frame times in seconds.
 - `--port N` — Studio port (default 3002).
@@ -53,12 +65,20 @@ out/
 ├── audio/NN.wav|mp3       # audio per scene
 ├── audio/full.wav         # all scenes joined — the narration track
 ├── timings.json           # word/turn times, scaled to the real audio
+├── captions.srt|.vtt      # sentence-level captions, global time (compose/build/captions)
 ├── hf/                    # the generated HyperFrames project
 │   ├── index.html         #   scenes, captions, timeline
 │   ├── assets/            #   project assets + narration.wav
 │   └── package.json       #   pins the hyperframes version
-└── video.mp4              # the final video (build only)
+├── video.mp4              # the final video (build only)
+└── video-<id>.mp4         # per-variant videos (build --variant/--variants)
 ```
+
+`out/` is a single directory, so `synth`/`compose` reflect whichever variant
+was selected last (plain = base, `--variant <id>` = that variant's scene 1).
+Switching variants and re-running with `--reuse` is safe: the spoken text
+differs, so `--reuse` is detected as stale, ignored with a note, and the
+changed sentences re-synthesize (the sentence cache keeps the rest free).
 
 `timings.json` is keyed by scene id, all times **scene-local** seconds:
 

@@ -4,6 +4,7 @@
  * errors, so everything here is a warning (exit stays 0). */
 const fs = require('fs');
 const path = require('path');
+const { PLATFORMS } = require('./util');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -95,6 +96,15 @@ function fmtDuration(sec) {
   return s >= 60 ? `${Math.floor(s / 60)}m${String(s % 60).padStart(2, '0')}s` : `${s}s`;
 }
 
+/* Scene transition kinds (compose/runtime.js): anything else falls back to
+ * fade at runtime — warn here so the fallback is never a surprise. */
+const SCENE_TRANSITIONS = new Set(['fade', 'wipe', 'slide', 'zoom']);
+
+/* data-mark annotation kinds (compose/runtime.js): the runtime IGNORES any
+ * other value, so an unknown kind is a warning, mirroring the runtime set
+ * exactly. */
+const MARK_KINDS = new Set(['underline', 'circle', 'box', 'highlight']);
+
 /* Print warnings + a one-line summary. Returns true (warnings never fail).
  * Cue semantics (compose/runtime.js): data-cue="k" is coerced with +k and
  * looked up in turns[] (0-based) when it is a non-negative integer in range;
@@ -106,6 +116,10 @@ function check(config) {
 
   for (const s of config.scenes) {
     const sceneIds = new Set();
+    // per-scene transition: absent means fade (the default) — no warning.
+    if (s.transition != null && !SCENE_TRANSITIONS.has(s.transition)) {
+      warnings.push(`scene "${s.id}": unknown transition "${s.transition}" (valid: fade, wipe, slide, zoom) — the runtime falls back to fade`);
+    }
     for (const t of tags(s.body)) {
       // Render-time network makes frames non-reproducible. Project media belongs
       // in assets/ (copied by compose) or in a small data URI / inline SVG.
@@ -145,6 +159,13 @@ function check(config) {
       if (count != null && !Number.isFinite(parseFloat(count))) {
         warnings.push(`scene "${s.id}": data-count="${count}" is not numeric — the runtime skips it`);
       }
+      // data-mark kinds — the runtime ignores unknown ones (mirror its set).
+      if (/(?<![-\w])data-mark\s*=/.test(t)) {
+        const kind = attr(t, 'data-mark');
+        if (!MARK_KINDS.has(kind)) {
+          warnings.push(`scene "${s.id}": data-mark="${kind}" is not a known mark (valid: underline, circle, box, highlight) — the runtime ignores it`);
+        }
+      }
       // ids: compose namespaces them per scene (<sceneId>--<id>), so reuse ACROSS
       // scenes is fine (reusable SVG defs); a duplicate WITHIN one scene still
       // makes its own fragment references ambiguous.
@@ -177,6 +198,20 @@ function check(config) {
   for (const id of bodyIds) {
     if (new RegExp(`#${id.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}(?![-\\w])`).test(config.themeCss || '')) {
       warnings.push(`theme.css targets #${id}, but compose renames body ids to <scene>--${id} — use a class selector instead`);
+    }
+  }
+
+  // Platform length band: when config.platform is set, the estimated narration
+  // should land inside PLATFORMS[platform].band (util.js). A band of [0, hi]
+  // (x) has no lower bound — only warn above hi. Warning only, never an error.
+  if (config.platform && PLATFORMS[config.platform]) {
+    const [lo, hi] = PLATFORMS[config.platform].band;
+    const estSec = estimateSeconds(config);
+    if (estSec < lo) {
+      warnings.push(`platform ${config.platform} targets ${lo}–${hi}s; estimated narration is ${Math.round(estSec)}s — add material or pick a shorter format`);
+    } else if (estSec > hi) {
+      const band = lo > 0 ? `targets ${lo}–${hi}s` : `allows up to ${hi}s`;
+      warnings.push(`platform ${config.platform} ${band}; estimated narration is ${Math.round(estSec)}s — tighten the script or pick a longer format`);
     }
   }
 

@@ -175,3 +175,46 @@ test('a claims.md ledger in the project dir silences the grounding warning', () 
   const lines = run({ ...base(scenes), projectDir: dir });
   assert.ok(!lines.some(l => l.includes('claims.md')), lines.join('\n'));
 });
+
+test('unknown scene transitions warn naming the valid set; fade/wipe/slide/zoom/absent do not', () => {
+  const bad = run(base([{ id: 's', body: '<p>x</p>', transition: 'spiral', vo: [{ who: 'a', text: 'a' }] }]));
+  assert.ok(bad.some(l => l.includes('unknown transition "spiral"') && l.includes('fade, wipe, slide, zoom')), bad.join('\n'));
+  for (const transition of ['fade', 'wipe', 'slide', 'zoom', undefined]) {
+    const lines = run(base([{ id: 's', body: '<p>x</p>', transition, vo: [{ who: 'a', text: 'a' }] }]));
+    assert.ok(!lines.some(l => l.includes('transition')), `transition ${transition} must not warn`);
+  }
+});
+
+test('unknown data-mark kinds warn; known kinds do not', () => {
+  const bad = run(base([{ id: 's', body: '<p data-mark="scribble">x</p>', vo: [{ who: 'a', text: 'a' }] }]));
+  assert.ok(bad.some(l => l.includes('data-mark="scribble"') && l.includes('underline, circle, box, highlight')), bad.join('\n'));
+  for (const kind of ['underline', 'circle', 'box', 'highlight']) {
+    const lines = run(base([{ id: 's', body: `<p data-mark="${kind}">x</p>`, vo: [{ who: 'a', text: 'a' }] }]));
+    assert.ok(!lines.some(l => l.startsWith('warn:')), `data-mark=${kind} must not warn: ` + lines.join('\n'));
+  }
+});
+
+/* A scene with ~N spoken words for the platform-band tests. */
+const wordy = n => [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: Array(n).fill('word').join(' ') }] }];
+
+test('platform band: narration outside the target range warns, inside does not', () => {
+  // tiktok band 21–34s ≈ 60–100 words at default tempo.
+  const long = run({ ...base(wordy(400)), platform: 'tiktok' });
+  assert.ok(long.some(l => /platform tiktok targets 21–34s; estimated narration is \d+s — tighten the script or pick a longer format/.test(l)), long.join('\n'));
+  const short = run({ ...base(wordy(8)), platform: 'tiktok' });
+  assert.ok(short.some(l => /platform tiktok targets 21–34s.*add material or pick a shorter format/.test(l)), short.join('\n'));
+  const ok = run({ ...base(wordy(80)), platform: 'tiktok' });
+  assert.ok(!ok.some(l => l.includes('platform')), ok.join('\n'));
+});
+
+test('platform x has no lower bound — only warns above 140s', () => {
+  const short = run({ ...base(wordy(5)), platform: 'x' });
+  assert.ok(!short.some(l => l.includes('platform')), short.join('\n'));
+  const long = run({ ...base(wordy(600)), platform: 'x' });
+  assert.ok(long.some(l => /platform x allows up to 140s.*tighten the script/.test(l)), long.join('\n'));
+});
+
+test('no platform set: no platform lint', () => {
+  const lines = run(base(wordy(600)));
+  assert.ok(!lines.some(l => l.includes('platform')), lines.join('\n'));
+});

@@ -13,7 +13,9 @@
 # chatterbox is special: it hard-pins torch==2.6 / transformers==5.2, which
 # conflict with xtts/qwen, so it gets its OWN venv at
 # $NAROVA_CHATTERBOX_VENV (else ~/.narova/venv-chatterbox) and narova drives it
-# as a subprocess. It does not touch the main venv.
+# as a subprocess. It does not touch the main venv. The pin in
+# requirements-chatterbox.txt is git master — PyPI 0.1.7 predates Chatterbox
+# Multilingual V3 (per-voice `lang` support).
 #
 # Idempotent: safe to re-run. macOS (arm64) friendly. Node deps and the CLI are
 # installed separately with `npm install`; this script only wires the Python side.
@@ -131,7 +133,7 @@ if [ "$WITH_CHATTERBOX" = "1" ]; then
   fi
   "$CB_VENV/bin/python" -m pip install --quiet --upgrade pip
   "$CB_VENV/bin/python" -m pip install -r "$REQ_CHATTERBOX"
-  ok "chatterbox deps installed (model downloads on first synth, ~1GB, one-time)"
+  ok "chatterbox deps installed (model downloads on first synth, ~1GB, one-time; multilingual v3 model on first use of a voice with \`lang\`)"
 else
   echo "  (skip chatterbox — re-run with --chatterbox for that backend)"
 fi

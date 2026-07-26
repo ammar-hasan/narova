@@ -19,6 +19,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .align import align_scenes
 from .backends import build_backends
 
 RATE = 22050          # output sample rate (Piper-native; XTTS is resampled to it)
@@ -86,6 +87,92 @@ def to_mp3(wav: Path, mp3: Path) -> None:
     sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(wav), "-ac", "1", "-b:a", "72k", str(mp3))
 
 
+# ---- music bed + spot sfx (mixed AFTER loudnorm; never re-loudnorm'd) --------
+
+def scene_starts(scenes, timings) -> dict[str, float]:
+    """Global start time of each scene: cumulative durs in narration order."""
+    starts, clock = {}, 0.0
+    for s in scenes:
+        starts[s["id"]] = round(clock, 3)
+        clock += timings[s["id"]]["dur"]
+    return starts
+
+
+def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
+    """Overlay the music bed + spot sfx onto full.wav -> audio/mix.wav, in one
+    ffmpeg filter_complex pass. Music is looped/trimmed to the exact narration
+    length with `volume` gain and afade in/out; each sfx is adelay'd to its
+    global time (scene-anchored = scene start + `at`). loudnorm is NOT
+    re-applied (narration is already loudnorm'd): amix normalize=0 keeps the
+    narration level and an alimiter catches music+sfx clipping instead.
+    With neither music nor sfx configured, any stale mix.wav is deleted so
+    compose never picks up an old one."""
+    full = audio_dir / "full.wav"
+    mix = audio_dir / "mix.wav"
+    music = config.get("music")
+    sfx = config.get("sfx") or []
+    if not music and not sfx:
+        mix.unlink(missing_ok=True)
+        return
+
+    total = probe(full)
+    starts = scene_starts(scenes, timings)
+
+    def check_file(p, what: str) -> None:
+        if not Path(p).is_file():
+            raise ValueError(f"{what}: file not found or unreadable: {p}")
+
+    inputs: list[list[str]] = []        # ffmpeg argv fragments per -i
+    chains: list[str] = []              # per-source filter chains
+    labels: list[str] = []              # amix input labels, after [0:a]
+
+    if music:
+        check_file(music["file"], "config.music.file")
+        idx = len(labels) + 1
+        inputs.append(["-stream_loop", "-1", "-i", str(music["file"])])  # loop to length
+        fin = music.get("fadeIn", 0.5)
+        fout = music.get("fadeOut", 1.5)
+        chain = (f"[{idx}:a]aresample={RATE},aformat=channel_layouts=mono,"
+                 f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,volume={music.get('volume', 0.14)}")
+        if fin > 0:
+            chain += f",afade=t=in:st=0:d={fin}"
+        if fout > 0:
+            chain += f",afade=t=out:st={max(0.0, total - fout):.3f}:d={fout}"
+        chains.append(chain + "[mus]")
+        labels.append("mus")
+
+    for i, e in enumerate(sfx):
+        check_file(e["file"], f"config.sfx[{i}].file")
+        idx = len(labels) + 1
+        inputs.append(["-i", str(e["file"])])
+        at = e.get("at", 0)
+        sc = e.get("scene")
+        if sc is not None:
+            if sc not in starts:
+                raise ValueError(f"config.sfx[{i}].scene: {sc!r} is not a scene id")
+            at = starts[sc] + at
+        chains.append(f"[{idx}:a]aresample={RATE},aformat=channel_layouts=mono,"
+                      f"volume={e.get('volume', 0.8)},adelay={round(at * 1000)}[fx{i}]")
+        labels.append(f"fx{i}")
+
+    n = 1 + len(labels)
+    fc = ";".join(chains + [
+        f"[0:a]{''.join(f'[{l}]' for l in labels)}"
+        f"amix=inputs={n}:duration=first:normalize=0:dropout_transition=0,"
+        f"aresample={RATE},aformat=channel_layouts=mono,alimiter=limit=0.891[mix]"
+    ])
+    args = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(full)]
+    for frag in inputs:
+        args += frag
+    sh(*args, "-filter_complex", fc, "-map", "[mix]",
+       "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(mix))
+    drift = abs(probe(mix) - total)
+    assert drift < 0.05, f"mix duration {probe(mix):.3f}s drifts {drift*1000:.0f}ms from narration {total:.3f}s"
+    what = ([f"music={Path(music['file']).name}@{music.get('volume', 0.14)}"] if music else []) \
+        + ([f"sfx={len(sfx)}"] if sfx else [])
+    print(f"mix   {total:5.1f}s  {' '.join(what)} -> audio/mix.wav", flush=True)
+
+
 def sentences(text: str) -> list[str]:
     return [p for p in re.split(r"(?<=[.!?])\s+", text.strip()) if p]
 
@@ -142,8 +229,8 @@ def _clone_sample_cache_identity(kind: str | None, speaker: str) -> str:
 def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None) -> str:
     """The speaker fragment of a voice's cache identity: its speaker plus any
     delivery direction — qwen's `instruct`, or chatterbox's `exaggeration` /
-    `cfg_weight` — so a changed direction re-synthesizes instead of serving
-    stale audio."""
+    `cfg_weight` / `lang` — so a changed direction re-synthesizes instead of
+    serving stale audio."""
     kind = effective_backend or v.get("backend")
     spk = _clone_sample_cache_identity(kind, v.get("speaker", who))
     parts = [spk]
@@ -152,6 +239,8 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
     if kind == "chatterbox" and (
             v.get("exaggeration") is not None or v.get("cfg_weight") is not None):
         parts.append(f"exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}")
+    if kind == "chatterbox" and v.get("lang"):
+        parts.append(f"lang={v['lang']}")
     return "|".join(parts)
 
 
@@ -206,9 +295,17 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
     else:
         timings = _synthesize(scenes, config, timing, audio_dir, tmp, default_backend)
 
+    # Forced alignment replaces estimated word times with measured ones. Runs on
+    # the reuse path too (config.align may change without the text changing).
+    if config.get("align"):
+        align_scenes(scenes, timings, audio_dir, config["align"].get("engine", "auto"))
+
     timings_path.write_text(json.dumps(timings))
 
     total = _verify_total(scenes, timings, audio_dir, tmp)
+    # Music/sfx also run on the reuse path: the mix config may change without
+    # the spoken text changing.
+    mix_audio(scenes, timings, config, audio_dir)
     return {"totalDuration": round(total, 3), "scenes": len(scenes), "out": str(out_dir)}
 
 

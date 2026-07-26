@@ -2,22 +2,33 @@
 /* Resolve + validate a project config into the shape the renderer/synth expect. */
 const fs = require('fs');
 const path = require('path');
-const { resolveSize } = require('./util');
+const { resolveSize, PLATFORMS } = require('./util');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
 const TTS_BACKENDS = new Set(['piper', 'xtts', 'qwen', 'chatterbox']);
+const CAPTION_PRESETS = new Set(['karaoke', 'slam', 'pop', 'rise']);
+const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
- * Returns { title, size:{w,h}, voices, theme, timing, scenes, assetsDir } and throws on
- * anything the pipeline can't render. */
+ * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, timing,
+ * scenes, assetsDir, projectDir, platform, music, sfx, captions, align,
+ * variants, variant } and throws on anything the pipeline can't render. */
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
   const errs = [];
 
   const title = raw.title || 'narova';
+  // Platform preset (--platform / config.platform): picks the frame size when
+  // no explicit size is set and carries the target duration band for `check`.
+  // Precedence: --size > config.size > platform preset > 16:9 default.
+  const platformName = overrides.platform ?? raw.platform ?? null;
+  if (platformName != null && !PLATFORMS[platformName]) {
+    errs.push(`config.platform: unknown platform ${JSON.stringify(platformName)} (${Object.keys(PLATFORMS).join('|')})`);
+  }
   let size = { w: 1280, h: 720 };
-  try { size = resolveSize(overrides.size || raw.size); }
+  const sizeRef = overrides.size ?? raw.size ?? (platformName && PLATFORMS[platformName] ? PLATFORMS[platformName].size : undefined);
+  try { size = resolveSize(sizeRef); }
   catch (e) { errs.push(`config.size: ${e.message}`); }
 
   // Scene/voice ids land in element ids, CSS selectors, and getElementById —
@@ -124,7 +135,10 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   const timing = { ...DEFAULT_TIMING, ...(raw.timing || {}) };
   if (overrides.tempo != null) timing.tempo = Number(overrides.tempo);
 
-  const scenes = Array.isArray(raw.scenes) ? raw.scenes : [];
+  // Copy the scenes array: the variant swap below replaces scenes[0], and the
+  // caller's raw config must never be mutated (the CLI re-resolves one raw
+  // config for base + each variant in a --variants build).
+  const scenes = Array.isArray(raw.scenes) ? raw.scenes.map(s => ({ ...s })) : [];
   if (scenes.length === 0) errs.push('config.scenes: at least one scene required');
   const seen = new Set();
   scenes.forEach((s, i) => {
@@ -144,12 +158,132 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     if (s.dur != null && typeof s.dur !== 'number') errs.push(`${at}.dur: must be a number`);
   });
 
+  // Sound: an optional music bed plus spot SFX, mixed into the narration track
+  // by the Python stage (narova_tts reads them from config.resolved.json, so
+  // file paths are resolved to absolutes here — Python never sees baseDir).
+  let music = null;
+  if (raw.music != null) {
+    const m = raw.music;
+    if (typeof m !== 'object' || Array.isArray(m)) {
+      errs.push('config.music: expected an object like { file, volume, fadeIn, fadeOut }');
+    } else if (typeof m.file !== 'string' || !m.file.trim()) {
+      errs.push('config.music.file: required (a project-relative audio file)');
+    } else {
+      const p = path.resolve(baseDir, m.file);
+      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) {
+        errs.push(`config.music.file: not found: ${p}`);
+      } else {
+        music = { file: p, volume: m.volume ?? 0.14, fadeIn: m.fadeIn ?? 0.5, fadeOut: m.fadeOut ?? 1.5 };
+        for (const k of ['volume', 'fadeIn', 'fadeOut']) {
+          const v = music[k];
+          if (typeof v !== 'number' || !Number.isFinite(v) || v < 0) {
+            errs.push(`config.music.${k}: must be a non-negative number`);
+          }
+        }
+      }
+    }
+  }
+  const sfx = [];
+  if (raw.sfx != null) {
+    if (!Array.isArray(raw.sfx)) {
+      errs.push('config.sfx: expected an array like [{ file, scene, at, volume }]');
+    } else raw.sfx.forEach((e, i) => {
+      const at = `config.sfx[${i}]`;
+      if (!e || typeof e !== 'object') { errs.push(`${at}: not an object`); return; }
+      if (typeof e.file !== 'string' || !e.file.trim()) { errs.push(`${at}.file: required`); return; }
+      const p = path.resolve(baseDir, e.file);
+      if (!fs.existsSync(p) || !fs.statSync(p).isFile()) { errs.push(`${at}.file: not found: ${p}`); return; }
+      if (e.scene != null && !seen.has(e.scene)) {
+        errs.push(`${at}.scene: "${e.scene}" is not a scene id — sfx anchors to a scene or, without one, to the global timeline`);
+      }
+      if (e.at != null && (typeof e.at !== 'number' || !Number.isFinite(e.at) || e.at < 0)) {
+        errs.push(`${at}.at: must be a non-negative number of seconds`);
+      }
+      if (e.volume != null && (typeof e.volume !== 'number' || !Number.isFinite(e.volume) || e.volume < 0)) {
+        errs.push(`${at}.volume: must be a non-negative number`);
+      }
+      sfx.push({ file: p, scene: e.scene ?? null, at: e.at ?? 0, volume: e.volume ?? 0.8 });
+    });
+  }
+
+  // Captions: a karaoke style preset plus words to auto-emphasize (matched
+  // case-insensitively, punctuation-stripped, against each spoken token).
+  const captions = { preset: 'karaoke', emphasis: [] };
+  if (raw.captions != null) {
+    const c = raw.captions;
+    if (typeof c !== 'object' || Array.isArray(c)) {
+      errs.push('config.captions: expected an object like { preset, emphasis }');
+    } else {
+      if (c.preset != null) {
+        if (!CAPTION_PRESETS.has(c.preset)) {
+          errs.push(`config.captions.preset: unknown preset ${JSON.stringify(c.preset)} (${[...CAPTION_PRESETS].join('|')})`);
+        } else captions.preset = c.preset;
+      }
+      if (c.emphasis != null) {
+        if (!Array.isArray(c.emphasis) || c.emphasis.some(w => typeof w !== 'string' || !w.trim())) {
+          errs.push('config.captions.emphasis: expected an array of words');
+        } else captions.emphasis = c.emphasis.map(w => w.trim());
+      }
+    }
+  }
+
+  // Forced alignment: replace estimated word timings with measured ones
+  // (narova_tts aligns each scene wav after synth; off by default).
+  let align = false;
+  if (raw.align != null) {
+    if (typeof raw.align === 'boolean') align = raw.align ? { engine: 'auto' } : false;
+    else if (typeof raw.align === 'object' && !Array.isArray(raw.align)) {
+      const engine = raw.align.engine ?? 'auto';
+      if (!ALIGN_ENGINES.has(engine)) {
+        errs.push(`config.align.engine: unknown engine ${JSON.stringify(engine)} (${[...ALIGN_ENGINES].join('|')})`);
+      } else align = { engine };
+    } else errs.push('config.align: expected true/false or { engine }');
+  }
+
+  // Hook variants: alternative scene-1 definitions for A/B testing openers.
+  // `narova build --variant <id>` swaps one in; the scene keeps the original
+  // scene-1 id so timings keys and DOM ids stay stable across variants.
+  const variants = [];
+  if (raw.variants != null) {
+    if (!Array.isArray(raw.variants)) {
+      errs.push('config.variants: expected an array like [{ id, scene: { body, vo } }]');
+    } else raw.variants.forEach((v, i) => {
+      const at = `config.variants[${i}]`;
+      if (!v || typeof v !== 'object') { errs.push(`${at}: not an object`); return; }
+      if (typeof v.id !== 'string' || !ID_RE.test(v.id)) { errs.push(`${at}.id: must match ${ID_RE}`); return; }
+      if (variants.some(x => x.id === v.id)) { errs.push(`${at}.id: duplicate "${v.id}"`); return; }
+      const sc = v.scene;
+      if (!sc || typeof sc !== 'object' || typeof sc.body !== 'string') {
+        errs.push(`${at}.scene.body: HTML string required`); return;
+      }
+      if (!Array.isArray(sc.vo) || sc.vo.length === 0) { errs.push(`${at}.scene.vo: non-empty turn list required`); return; }
+      let ok = true;
+      sc.vo.forEach((turn, j) => {
+        if (!turn || !turn.who || !voices[turn.who]) { errs.push(`${at}.scene.vo[${j}].who: ${turn && turn.who ? `"${turn.who}" not in config.voices` : 'required'}`); ok = false; }
+        if (!turn || typeof turn.text !== 'string' || !turn.text.trim()) { errs.push(`${at}.scene.vo[${j}].text: required`); ok = false; }
+      });
+      if (ok) variants.push({ id: v.id, scene: { body: sc.body, vo: sc.vo, ...(sc.transition ? { transition: sc.transition } : {}) } });
+    });
+  }
+
   if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
 
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir) };
+  // --variant <id>: swap the variant's scene in as scene 1 (keeping its id).
+  let variant = null;
+  if (overrides.variant != null) {
+    const v = variants.find(x => x.id === overrides.variant);
+    if (!v) {
+      const ids = variants.map(x => x.id).join(', ') || '(none declared)';
+      throw new Error(`unknown variant "${overrides.variant}" — declared variants: ${ids}`);
+    }
+    variant = v.id;
+    scenes[0] = { ...scenes[0], body: v.scene.body, vo: v.scene.vo, ...(v.scene.transition ? { transition: v.scene.transition } : {}) };
+  }
+
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, music, sfx, captions, align, variants, variant };
 }
 
 /* The narration.json contract for the Python TTS stage. */

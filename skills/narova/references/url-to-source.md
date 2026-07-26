@@ -4,6 +4,19 @@ Use this workflow whenever the prompt includes a URL. The URL is source
 material, but not every URL is a brand. Classify it before scripting or art
 direction so the right evidence drives the video.
 
+## 0. Mechanical first pass: `narova ingest <url>`
+
+`narova ingest <url>` automates the fetching and freezing below: it downloads
+the page, pulls metadata (title, description, og tags, theme color, canonical
+URL), saves the best content images (og:image first, up to 5) and a
+best-effort headless-Chrome screenshot into the project's `assets/`, appends a
+dated entry to `sources.md`, seeds a `claims.md` skeleton if none exists, and
+prints theme-color hints as suggestions (it never edits `reel.config.mjs`).
+
+It does not replace this document. The agent still does the judgment work:
+classify the source (§1), inspect the authoritative material beyond what a
+single fetch sees (§2), and fill in the claims ledger (§3) before scripting.
+
 ## 1. Classify the source
 
 - **Product, company, or organization site** → brand-led promo/explainer.

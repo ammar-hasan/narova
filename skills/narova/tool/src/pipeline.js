@@ -8,6 +8,7 @@ const { spawnSync } = require('child_process');
 const { ensureDir, probe } = require('./util');
 const { narration } = require('./schema');
 const { compose } = require('./compose');
+const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
 
 /* ---- Python (synth) handoff -------------------------------------------------
@@ -120,6 +121,8 @@ function build(config, opts = {}) {
 
   log('[2/3] compose');
   const c = compose(config, outDir);
+  const caps = writeCaptions(config, outDir);
+  log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
 
   log('[3/3] hyperframes render (first run downloads the CLI — not a hang)');
   const name = opts.name || 'video.mp4';

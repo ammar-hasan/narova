@@ -109,7 +109,20 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   until every video chain ends in `setsar=1`.
 - **Word timing is computed, not measured.** Speech is made per sentence and
   words are spread by length. Good for karaoke captions. Do not chase
-  per-word perfection.
+  per-word perfection. If measured word times are genuinely needed (tight
+  word-level effects), that is what `align` is for — see
+  `references/audio.md`; it needs faster-whisper or whisper.cpp installed and
+  never breaks a build when they aren't.
+- **Music/SFX go through `out/audio/mix.wav`, never a re-loudnorm.** The mix
+  keeps narration at full level and limits the rest (`references/audio.md`).
+  Anchor sfx to a `scene` — a bare `at` is a global timeline second and
+  silently lands early/late after any re-voicing that changes scene lengths.
+  Removing `music`/`sfx` from the config deletes the stale mix on next synth.
+- **Running `python -m narova_tts` by hand: pass an ABSOLUTE `--out`.** The
+  concat demuxer resolves the relative wav paths in its list file against the
+  list file's own directory, so `--out out` fails with "Impossible to open
+  'out/.tmp/out/audio/01.wav'". The CLI always passes an absolute path; only
+  manual invocations hit this.
 - **Never edit `out/hf/`.** Every `compose` regenerates it. Edits made in
   Studio during preview are lost — warn the user. Change the config instead.
 - **Commands work from anywhere inside the project.** The config is found by

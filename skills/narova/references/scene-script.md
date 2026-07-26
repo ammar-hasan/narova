@@ -2,7 +2,8 @@
 
 A project is a folder with one config file: `reel.config.mjs` (also accepted:
 `.js`, `.json`, `.cjs`). It exports one object. Full contract: `SPEC.md` in
-the repo. Full example: `examples/venture-factory/` (14 scenes).
+the repo. Full example: `generated/us-iran-standoff/` (11 scenes;
+`generated/narova-skill-reel/` is the flagship demo).
 
 ```js
 export default {
@@ -20,9 +21,16 @@ export default {
   },
   chrome: { topbar: true, counter: true, progress: true },  // or false to strip all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
+  platform: "tiktok",                // optional: tiktok|reels|shorts|linkedin|x — picks the frame size
+                                     // (when size is unset) and a target duration band for `check`
+  captions: {
+    preset: "karaoke",               // karaoke (default) | slam | pop | rise — the caption word style
+    emphasis: ["factory"],           // words to auto-highlight wherever they are spoken
+  },
   scenes: [
     {
       id: "title",                       // unique, [A-Za-z][A-Za-z0-9_-]*
+      transition: "wipe",                // optional: fade (default) | wipe | slide | zoom
       vo: [                              // what is SPOKEN, in order
         { who: "b", text: "What if your codebase could build itself?" },
         { who: "a", text: "That's the Venture Factory. Let me show you." },
@@ -58,8 +66,27 @@ export default {
   `background-position` across an ultra-wide panorama image edge to edge.
   Never combine `data-drift` with `.reveal`/`.cue` on the SAME element —
   those tween transform channels of their own; put the cue on a wrapper.
-- **Transitions**: every scene after the first fades up from dark over its
-  first 0.7 s automatically (a deterministic dip-to-black cut).
+- **Transitions**: set `transition` on a scene — `fade` (default; dips up from
+  dark over its first 0.7 s), `wipe` (clip-path sweep in from the right),
+  `slide` (slides in from the right with a fade), `zoom` (settles from 1.08×
+  with a fade). Every scene after the first transitions in automatically; the
+  first scene enters clean. An unknown value falls back to `fade` — `check`
+  warns and names the valid set.
+- **Caption presets**: `captions.preset` restyles the word-by-word captions.
+  `karaoke` (default) flips each active word to the speaker's color. `slam`
+  lands the active word big and heavy, settling back once spoken. `pop` dims
+  upcoming words further and pops the active word up into place. `rise` lifts
+  the active word with an underline in the speaker's color. All presets are
+  seek-safe (class flips plus short timeline tweens — no CSS transitions).
+- **Emphasis keywords**: `captions.emphasis` lists words that get a standing
+  accent underline and slight size bump wherever they appear in the captions —
+  product names, the one number that matters. Matching is case-insensitive and
+  ignores surrounding punctuation (`"Factory."` matches `factory`), and it
+  composes with every preset.
+- **Platform targets**: `platform: "tiktok" | "reels" | "shorts" | "linkedin" | "x"`
+  picks the frame size when `size` is unset and gives `check` a target
+  duration band — it warns when the estimated narration falls outside it
+  (`x` only warns above 140 s). A warning, never an error.
 - **Two hosts**: voices trading lines — question, answer, handoff — sound much
   better than one narrator. Give each a different `color`; the active caption
   word takes that color.
@@ -102,6 +129,19 @@ seeks through) — never wall-clock CSS. The vocabulary:
   timeline sets (seek-safe). Optional `data-count-suffix="%"`; one decimal is
   kept when the target has one (`data-count="4.5"`). Pair with
   `class="cue" data-cue="k"` so the element is hidden until the count starts.
+- `data-mark="underline|circle|box|highlight"` — a rough hand-drawn
+  annotation drawn around/under the element at its trigger (same
+  `data-cue`/`data-delay` timing as every other animator). `underline`,
+  `circle`, and `box` sketch two slightly offset strokes that self-draw like
+  `data-draw`; `highlight` sweeps a semi-transparent accent wash in from the
+  left, behind the text, like a marker. The stroke color is the theme
+  `accent`. Unknown kinds are ignored — `check` warns.
+
+Example — underline the verdict when the host delivers it:
+
+```html
+<p class="vname cue" data-cue="2" data-mark="underline">Ship it.</p>
+```
 
 Example — a stat that counts up when the host says the number:
 

@@ -4,7 +4,12 @@
 # torch==2.6 / transformers==5.2 / diffusers==0.29, which conflict with the
 # xtts/qwen backends. narova drives it as a subprocess worker.
 #
+# Pinned to git master: Chatterbox Multilingual V3 support (the
+# `t3_model="v3"` kwarg of ChatterboxMultilingualTTS, used when a voice sets
+# `lang`). The latest PyPI release (0.1.7, March 2026) predates v3 — switch
+# back to plain `chatterbox-tts` once a v3-capable release lands on PyPI.
+#
 # setuptools<81: chatterbox's watermarker dep (resemble-perth) imports the
 # deprecated `pkg_resources`, which setuptools removed in 81+.
-chatterbox-tts
+chatterbox-tts @ git+https://github.com/resemble-ai/chatterbox.git@5de7a54aa4e5e2baadb0182dde554908b48b85c2
 setuptools<81

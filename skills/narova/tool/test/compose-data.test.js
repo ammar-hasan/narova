@@ -62,3 +62,40 @@ test('a scene missing from timings.json throws a helpful error', () => {
   assert.throws(() => composeData({ ...config, scenes: [{ id: 'ghost' }] }, timings),
     /no entry for scene "ghost".*narova synth/);
 });
+
+test('preset defaults to karaoke and passes config.captions.preset through', () => {
+  assert.equal(composeData(config, timings).preset, 'karaoke');
+  const slam = { ...config, captions: { preset: 'slam', emphasis: [] } };
+  assert.equal(composeData(slam, timings).preset, 'slam');
+});
+
+test('emphasis words get kw=1, matched case-insensitively with punctuation stripped', () => {
+  const emph = { ...config, captions: { preset: 'karaoke', emphasis: ['World', 'bye'] } };
+  const d = composeData(emph, timings);
+  assert.equal(d.groups[0].words[0].kw, undefined);          // Hello
+  assert.equal(d.groups[0].words[1].kw, 1);                  // world. -> World
+  assert.equal(d.groups[2].words[0].kw, 1);                  // Bye. -> bye
+});
+
+test('emphasis entries are punctuation-stripped too; no emphasis means no kw keys', () => {
+  const emph = { ...config, captions: { preset: 'karaoke', emphasis: ['"hello,"'] } };
+  const d = composeData(emph, timings);
+  assert.equal(d.groups[0].words[0].kw, 1);                  // Hello -> "hello,"
+  const plain = composeData(config, timings);
+  assert.ok(plain.groups.every(g => g.words.every(w => !('kw' in w))),
+    'DATA stays lean when nothing is emphasized');
+});
+
+test('scene transition passes through; absent leaves no key (fade default)', () => {
+  const tr = { ...config, scenes: [{ id: 's1', body: '', transition: 'wipe' }, { id: 's2', body: '' }] };
+  const d = composeData(tr, timings);
+  assert.equal(d.scenes[0].transition, 'wipe');
+  assert.ok(!('transition' in d.scenes[1]));
+});
+
+test('DATA stays JSON-serializable with preset, kw, and transition', () => {
+  const full = { ...config, captions: { preset: 'pop', emphasis: ['world'] },
+    scenes: [{ id: 's1', body: '', transition: 'slide' }, { id: 's2', body: '' }] };
+  const d = composeData(full, timings);
+  assert.deepEqual(JSON.parse(JSON.stringify(d)), d);
+});

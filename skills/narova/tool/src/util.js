@@ -44,6 +44,17 @@ function resolveSize(size) {
   throw new Error(`unknown size ${JSON.stringify(size)} — use 16:9, 1:1, 9:16, or {w,h}`);
 }
 
+/* Platform presets: --platform / config.platform. `size` is the frame preset
+ * used when no explicit size is set; `band` is the target duration range in
+ * seconds used by `narova check` for length linting (2026 platform norms). */
+const PLATFORMS = {
+  tiktok:   { size: { w: 1080, h: 1920 }, band: [21, 34],  label: 'TikTok' },
+  reels:    { size: { w: 1080, h: 1920 }, band: [15, 30],  label: 'Instagram Reels' },
+  shorts:   { size: { w: 1080, h: 1920 }, band: [30, 50],  label: 'YouTube Shorts' },
+  linkedin: { size: { w: 1080, h: 1080 }, band: [30, 90],  label: 'LinkedIn' },
+  x:        { size: { w: 1080, h: 1920 }, band: [0, 140],  label: 'X' },
+};
+
 /* #rrggbb -> "rgba(r,g,b,a)" for text-shadow tints. */
 function hexToRgba(hex, a) {
   const m = /^#?([0-9a-f]{6})$/i.exec(String(hex).trim());
@@ -52,4 +63,4 @@ function hexToRgba(hex, a) {
   return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${a})`;
 }
 
-module.exports = { sh, probe, which, ensureDir, resolveSize, hexToRgba };
+module.exports = { sh, probe, which, ensureDir, resolveSize, hexToRgba, PLATFORMS };

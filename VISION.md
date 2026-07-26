@@ -76,7 +76,7 @@ strengthening · `[ ]` gap.
 - [x] `npm test` exits 0 (62 JS + 12 Python tests).
 - [x] End-to-end: a project written from a plain natural-language prompt
   builds to `out/video.mp4`; `ffprobe` duration ≈ `out/audio/full.wav`
-  (±0.15s). See `examples/`.
+  (±0.15s). See `generated/`.
 - [x] Iteration consistency demo: one-turn edit → only that scene's audio
   changed (sha256 of every other scene wav identical across runs).
 - [x] Multiple videos: three distinct example projects build end-to-end —

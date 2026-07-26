@@ -175,18 +175,28 @@ class ChatterboxBackend:
     """Resemble AI Chatterbox — voice CLONING from a recording. `speaker` in
     config is an ABSOLUTE path to a short clean sample (10–20s). Optional
     per-voice `exaggeration` (0.25–2.0) and `cfg_weight` (0.0–1.0) tune
-    delivery. Runs the model in an isolated venv via a persistent subprocess
-    worker; this class only speaks the stdio JSON protocol (no torch here)."""
+    delivery; optional per-voice `lang` (e.g. "fr", "zh") switches synthesis to
+    the Multilingual model (v3 checkpoint by default — see chatterbox_worker).
+    Runs the model in an isolated venv via a persistent subprocess worker;
+    this class only speaks the stdio JSON protocol (no torch here)."""
 
     def __init__(self, speakers: dict[str, str],
                  exaggerations: dict[str, float] | None = None,
                  cfg_weights: dict[str, float] | None = None,
+                 langs: dict[str, str] | None = None,
                  venv_python: Path | None = None):
         self._speakers = dict(speakers)
         self._exg = self._validate_delivery(
             exaggerations or {}, "exaggeration", 0.25, 2.0)
         self._cfgw = self._validate_delivery(
             cfg_weights or {}, "cfg_weight", 0.0, 1.0)
+        self._langs = {}
+        for who, lang in (langs or {}).items():
+            if not isinstance(lang, str) or not lang.strip():
+                raise ValueError(
+                    f"voice {who!r}: chatterbox lang must be a language code "
+                    f"like \"fr\" or \"zh\", got {lang!r}")
+            self._langs[who] = lang.strip()
         for who, spk in self._speakers.items():
             p = Path(spk)
             if p.suffix.lower() not in CLONE_EXTS:
@@ -254,6 +264,8 @@ class ChatterboxBackend:
             req["exaggeration"] = self._exg[who]
         if who in self._cfgw:
             req["cfg_weight"] = self._cfgw[who]
+        if who in self._langs:
+            req["lang"] = self._langs[who]
         try:
             self._proc.stdin.write(json.dumps(req) + "\n")
             self._proc.stdin.flush()
@@ -316,7 +328,8 @@ def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, B
                    if voices[who].get("exaggeration") is not None}
             cfgw = {who: voices[who]["cfg_weight"] for who in speakers
                     if voices[who].get("cfg_weight") is not None}
-            instances[kind] = ChatterboxBackend(speakers, exg, cfgw)
+            langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
+            instances[kind] = ChatterboxBackend(speakers, exg, cfgw, langs)
         else:
             instances[kind] = BACKENDS[kind](speakers)
 

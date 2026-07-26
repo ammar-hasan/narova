@@ -93,6 +93,9 @@ test('compose prints the scene start table for QA', () => {
   assert.match(r.stdout, /scene starts:/);
   assert.match(r.stdout, /00:00\.0 {2}title {2}\(3\.0s\)/);
   assert.match(r.stdout, /narova shots/);
+  assert.match(r.stdout, /captions -> /);
+  assert.ok(fs.existsSync(path.join(out, 'captions.srt')));
+  assert.ok(fs.existsSync(path.join(out, 'captions.vtt')));
 });
 
 test('shots without synth exits 1 with the run-synth hint', () => {
@@ -120,4 +123,68 @@ test('any bare value-flag errors instead of resolving to true', () => {
   const r = run(['check', '--project', proj, '--tempo']);
   assert.equal(r.status, 1);
   assert.match(r.stderr, /--tempo needs a value/);
+});
+
+/* A scaffold with timings.json already synthed (fake audio, real timings). */
+function projectWithTimings() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const out = path.join(proj, 'out');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(out, 'audio', 'full.wav'), 'RIFFfake');
+  fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify({
+    title: { dur: 3, turns: [0.16], words: [{ w: 'Hi.', t0: 0.16, t1: 0.9, who: 'a', si: 0 }] },
+  }));
+  return proj;
+}
+
+test('captions rewrites out/captions.{srt,vtt} from timings.json', () => {
+  const proj = projectWithTimings();
+  const r = run(['captions', '--project', proj]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /captions -> .*captions\.srt \(\+ captions\.vtt, 1 cues\)/);
+  const out = path.join(proj, 'out');
+  assert.equal(fs.readFileSync(path.join(out, 'captions.srt'), 'utf8'),
+    '1\n00:00:00,160 --> 00:00:03,000\nHi.\n');
+  assert.equal(fs.readFileSync(path.join(out, 'captions.vtt'), 'utf8'),
+    'WEBVTT\n\n00:00:00.160 --> 00:00:03.000\nHi.\n');
+});
+
+test('captions without synth exits 1 with the run-synth hint', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const r = run(['captions', '--project', proj]);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /narova synth/);
+});
+
+test('--platform sets a frame preset; an unknown platform fails check', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const ok = run(['check', '--project', proj, '--platform', 'tiktok']);
+  assert.equal(ok.status, 0, ok.stderr);
+  const bad = run(['check', '--project', proj, '--platform', 'myspace']);
+  assert.equal(bad.status, 1);
+  assert.match(bad.stderr, /unknown platform "myspace"/);
+});
+
+test('--variant with an undeclared id fails check naming the declared variants', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const r = run(['check', '--project', proj, '--variant', 'nope']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /unknown variant "nope"/);
+});
+
+test('build --variant and --variants together are rejected before any synth', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const r = run(['build', '--project', proj, '--variant', 'x', '--variants']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /mutually exclusive/);
 });

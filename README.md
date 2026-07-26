@@ -113,6 +113,7 @@ The rules:
 | `piper` | good | fast | none (default) | small local voices |
 | `xtts`  | higher | slow | `skills/narova/tool/setup.sh --xtts` | ~1.9GB model, 58 speakers |
 | `qwen`  | high | slow | `skills/narova/tool/setup.sh --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
+| `chatterbox` | voice cloning | slowest | `skills/narova/tool/setup.sh --chatterbox` | `speaker` = absolute path to a 10–20s recording; own venv, ~1GB model |
 
 Pick two voices that sound clearly different. Give each a `color`.
 List voices with `narova voices list --backend <name>`.
@@ -136,7 +137,7 @@ Commands find the project from any folder inside it (they walk up to the
 nearest `reel.config.*`). `check` also prints an estimated narration length,
 so a target duration can be tuned before any audio exists.
 
-Useful flags: `--backend piper|xtts|qwen`, `--reuse` (keep old audio),
+Useful flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (keep old audio),
 `--tempo`, `--size`, `--fps`, `--quality draft|standard|high`.
 
 ## How it works
@@ -161,7 +162,7 @@ The config file is the only source of truth.
 ```
 skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
 docs/              the marketing site (GitHub Pages) + /changelog
-examples/          sample projects (incl. one built from a plain-language prompt)
+generated/narova-skill-reel/  flagship sample project (built from a plain-language prompt; more in generated/)
 generated/         agent-created projects; source kept, out/ and build/ ignored
 CHANGELOG.md       every notable change, version by version
 SPEC.md            the contract

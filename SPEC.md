@@ -40,11 +40,11 @@ narova/                          # the repo
 │   ├── SKILL.md  references/    # what an agent reads
 │   └── tool/                    # the CLI
 │       ├── bin/narova.js        # entry point
-│       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, util
+│       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, ingest, captions, util
 │       ├── py/narova_tts/       # TTS backends + timing
 │       ├── setup.sh             # creates the venv (auto-run by first synth)
 │       └── test/                # test suite (npm test)
-└── examples/                    # sample projects
+└── generated/                   # agent-created sample projects (narova-skill-reel is the flagship)
 ```
 
 The venv lives at `~/.narova/venv` (override with `$NAROVA_VENV`). It sits
@@ -87,12 +87,21 @@ export default {
   theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional; mode: "light" flips the base palette
   chrome: { topbar: true, counter: true, progress: true },        // optional; false strips all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
+  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint
+  captions: { preset: "karaoke",          // optional: karaoke|slam|pop|rise
+              emphasis: ["narova"] },     //   words auto-highlighted in every caption line
+  music: { file: "assets/bed.mp3", volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 },  // optional music bed
+  sfx: [ { file: "assets/pop.wav", scene: "title", at: 0.5, volume: 0.8 } ],   // optional spot SFX
+  align: false,                           // true | { engine: "auto"|"faster-whisper"|"whisper-cpp" } — measured word timings
+  variants: [ { id: "cold-open",          // optional hook variants for A/B tests (narova build --variants)
+                scene: { vo: [ { who: "a", text: "Different opener." } ], body: `<div class="s-title"><h1>Hook B</h1></div>` } } ],
   scenes: [
     { id: "title",
+      transition: "wipe",                 // optional: fade (default) | wipe | slide | zoom
       vo: [ { who: "a", text: "This is narova." },
             { who: "b", text: "Scenes in, video out." } ],
       body: `<div class="s-title"><h1 class="reveal">narova</h1>
-             <p class="cue" data-cue="1">scenes in, video out</p></div>` },
+             <p class="cue" data-cue="1">scenes in, <span data-mark="underline">video out</span></p></div>` },
   ],
 }
 ```
@@ -106,6 +115,8 @@ Rules:
 - Timeline animators: `data-grow` (scaleX 0→1 from the left), `data-draw`
   (SVG stroke-dash self-draw), `data-count="N"` (+ optional
   `data-count-suffix`), `data-delay="s"` (added to the cue/entry trigger).
+  `data-mark="underline|circle|box|highlight"` draws a hand-drawn-style
+  annotation around the element at its cue time.
 - Scene and voice ids must match `[A-Za-z][A-Za-z0-9_-]*`.
 - Element ids in bodies are namespaced per scene at compose
   (`<sceneId>--<id>`; the body's own `url(#…)` / `href="#…"` / `for` /
@@ -123,6 +134,20 @@ Rules:
   `progress` keys (all default true).
 - Stats and superlatives in `vo` belong in the project's `claims.md` with a
   source; `check` warns when claim-looking lines have no ledger.
+- `captions.preset` is `karaoke` (default), `slam`, `pop`, or `rise`;
+  `captions.emphasis` words are matched case-insensitively,
+  punctuation-stripped, and highlighted in every preset.
+- `platform` picks the frame size when `size` is unset (`--size` beats the
+  preset) and makes `check` warn when the estimated narration length falls
+  outside the platform's target duration band.
+- `music` and `sfx` are mixed into the narration track by the synth stage
+  (`references/audio.md`). SFX anchor to `scene` + scene-local `at`, or to
+  the global timeline when `scene` is omitted. Files are resolved relative
+  to the project. Music changes do not require re-synthesis.
+- `align: true` replaces estimated word timings with measured ones
+  (faster-whisper or whisper.cpp; `references/audio.md`). Off by default.
+- `variants` are alternate scene-1 definitions for hook A/B tests;
+  `narova build --variant <id>` / `--variants` render them.
 - Old fields `caption` and `dur` are accepted and ignored.
 
 `narova check` catches all of this.
@@ -145,9 +170,11 @@ Rules:
 
 ```
 { total,
-  scenes: [{ id, start, dur, turns[] }],        // turns are scene-local seconds
-  groups: [{ who, label, start, end,            // one caption line per sentence
-             words: [{ w, t0, t1 }] }] }        // global seconds
+  preset,                                        // caption style preset name
+  scenes: [{ id, start, dur, turns[],            // turns are scene-local seconds
+             transition? }],                     // fade|wipe|slide|zoom (absent = fade)
+  groups: [{ who, label, start, end,             // one caption line per sentence
+             words: [{ w, t0, t1, kw? }] }] }    // global seconds; kw=1 = emphasis word
 ```
 
 Captions use `tl.set(el, {className}, t)` per word: upcoming → active → past.
@@ -160,12 +187,15 @@ attribute survives GSAP's CSS transform. The canvas reserves the caption
 band's height; the content column is `var(--colw, 1000px)`.
 
 Also in out/hf: the copied project `assets/`, `assets/narration.wav` (a copy
-of `out/audio/full.wav`), and `package.json` (pins the HyperFrames version).
+of `out/audio/mix.wav` when a music/SFX mix was made, else
+`out/audio/full.wav`), and `package.json` (pins the HyperFrames version).
 
 ## The Python contract (frozen)
 
 In: `narration.json` + `config.resolved.json`.
-Out: `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav`, `timings.json`.
+Out: `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav`, `timings.json`, and
+`audio/mix.wav` when `music`/`sfx` is configured (full.wav + music bed + spot
+SFX, same duration; narration is NOT re-loudnorm'd).
 
 `timings.json`:
 
@@ -175,15 +205,20 @@ Out: `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav`, `timings.json`.
 
 All times are scene-local seconds, already rescaled to the real audio.
 `full.wav` length equals the sum of all `dur` (asserted, ~5ms per scene).
+With `align` on, word `t0`/`t1` come from measured forced alignment instead of
+length-weighted estimates (per-scene fallback to estimates on any mismatch).
 
 ## CLI
 
 ```
 narova init <dir>     new project
+narova ingest <url>   fetch a source page: images -> assets/, Chrome screenshot,
+                      sources.md entry, claims.md skeleton (references/url-to-source.md)
 narova check          validate the config (fast, no side effects); prints an
                       estimated narration length for target-duration tuning
 narova synth          Python TTS -> out/audio/*, out/timings.json
-narova compose        -> out/hf/; prints per-scene start times
+narova compose        -> out/hf/ + out/captions.srt|.vtt; prints per-scene start times
+narova captions       (re)write out/captions.srt + out/captions.vtt from timings.json
 narova shots          snapshot one QA frame per scene -> out/hf/snapshots/
 narova build          synth + compose + render -> out/video.mp4
 narova preview        compose + HyperFrames Studio; prints the exact URL
@@ -196,8 +231,11 @@ Commands find the config by walking up from the current directory, so they
 work from inside `out/` and `out/hf`. A detached Studio preview left running
 is restarted automatically whenever `compose`/`build` replaces `out/hf`.
 
-Flags: `--backend piper|xtts|qwen`, `--reuse` (ignored automatically when the
-spoken text changed since the last synth), `--tempo`, `--size`, `--fps`,
+Flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (ignored automatically when the
+spoken text changed since the last synth), `--tempo`, `--size`,
+`--platform tiktok|reels|shorts|linkedin|x` (frame preset + duration-band
+lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
+each variant renders `out/video-<id>.mp4`), `--fps`,
 `--quality draft|standard|high`, `--at` (shots), `--out`, `--project`,
 `--config`, `--voice-a`, `--voice-b`.
 
@@ -209,15 +247,28 @@ spoken text changed since the last synth), `--tempo`, `--size`, `--fps`,
 - **qwen** — Qwen3-TTS 0.6B, Apache 2.0. High quality, slow. ~1.2GB model,
   9 speakers, optional per-voice `lang`. Setup: `tool/setup.sh --qwen`.
   Change the model with `$NAROVA_QWEN_MODEL`.
+- **chatterbox** — voice cloning. Set the voice's `speaker` to an ABSOLUTE
+  path to a clean 10–20s recording. Slowest backend. Runs in its own venv
+  (`~/.narova/venv-chatterbox`, override `$NAROVA_CHATTERBOX_VENV`) because
+  its torch/transformers pins conflict with xtts/qwen. ~1GB model, optional
+  per-voice `exaggeration` / `cfg_weight`. Setup: `tool/setup.sh --chatterbox`.
+  Pinned to git master for Chatterbox Multilingual v3 (per-voice `lang`;
+  outputs carry Resemble's PerTh watermark by default).
 
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.6.0 shipped
+## Status: 0.7.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
 compose → preview → build. The tool and tests ship inside the skill.
+
+Since 0.6.0: music bed + spot SFX mixing, forced word alignment (optional),
+caption style presets + keyword emphasis, per-scene transitions, `data-mark`
+annotations, `--platform` presets with duration-band lint, SRT/VTT caption
+export, hook-variant builds (`--variant`/`--variants`), `narova ingest <url>`,
+Chatterbox v3 (git pin, per-voice `lang`).
 
 ## Future work (decided, not started)
 

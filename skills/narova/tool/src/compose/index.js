@@ -32,7 +32,9 @@ function compose(config, outDir) {
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
-  fs.copyFileSync(fullWav, path.join(assetsDir, 'narration.wav'));
+  // Prefer mix.wav (narration + music bed + sfx) when the synth stage made one.
+  const mixWav = path.join(outDir, 'audio', 'mix.wav');
+  fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({
     name: slug(config.title || 'narova'),
     private: true,

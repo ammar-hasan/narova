@@ -4,12 +4,14 @@ description: >
   Use narova for narration-first video: narrated or captioned explainers,
   two-host dialogue, prompt/script/README-to-video, videos sourced from any
   URL (product site, article, paper, docs, repository, or general page),
-  word-synced karaoke captions, voice-triggered reveals, or local neural TTS
+  word-synced karaoke captions, voice-triggered reveals, music beds and
+  sound effects, per-platform exports (TikTok/Reels/Shorts/LinkedIn/X),
+  SRT/VTT sidecar captions, hook A/B variants, or local neural TTS
   with no API keys. It turns a prompt or scene script into an MP4 with local
-  piper/xtts/qwen voiceover, word-level captions, and speech-timed visuals
-  rendered through HyperFrames. The full tool ships inside the skill. Also
-  use whenever the user names narova or a reel.config file. For silent motion
-  graphics without narration, use plain HyperFrames instead.
+  piper/xtts/qwen/chatterbox voiceover, word-level captions, and speech-timed
+  visuals rendered through HyperFrames. The full tool ships inside the skill.
+  Also use whenever the user names narova or a reel.config file. For silent
+  motion graphics without narration, use plain HyperFrames instead.
 ---
 
 # narova — prompt to narrated, captioned video
@@ -49,7 +51,9 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
    generated projects under `generated/<descriptive-slug>/`, never loose at
    the repo root: `init generated/<slug>`. Keep editable source
    (`reel.config.mjs`, `theme.css`, `assets/`) and ignore `out/`.
-   If the prompt names a URL, first read and follow
+   If the prompt names a URL, first run `ingest <url>` for the mechanical
+   pass (images into `assets/`, page screenshot, `sources.md` entry,
+   `claims.md` skeleton), then read and follow
    `references/url-to-source.md`; classify the page before deciding whether
    brand, editorial, research, or technical evidence should drive the video.
    A search result or prose page summary is not source evidence. Then read
@@ -157,6 +161,7 @@ scenes keep their exact audio. Details:
 | `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
 | `references/url-to-source.md`   | classify any URL and extract the right factual and visual evidence|
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
+| `references/audio.md`          | music beds, spot SFX, forced word alignment, chatterbox v3   |
 | `references/cli.md`            | see every command, flag, `out/` file, and rough cost         |
 | `references/gotchas.md`        | avoid the traps (tempo, --reuse, sync, determinism)          |
 | `references/environment.md`    | fix `doctor` failures: ffmpeg, python, venv, hyperframes     |

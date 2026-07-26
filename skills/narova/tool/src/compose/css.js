@@ -94,7 +94,27 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .caption2{font-size:clamp(17px,2.7vw,30px);font-weight:800;line-height:1.28;letter-spacing:-.01em;text-align:center;max-width:24em;text-wrap:balance}
 .cap-w{display:inline-block;margin:0 .13em;color:var(--capidle);opacity:.6}
 .cap-w.past{color:var(--ink);opacity:.9}
-.cap-w.active{opacity:1;transform:translateY(-2px) scale(1.05)}
+.cap-w.active{opacity:1}
+/* caption presets: the preset name lands as a cap-preset-* class on the
+ * caption stage (html.js). karaoke is the historical look — identical to the
+ * pre-preset build. slam/pop motion lives in timeline tweens (runtime.js);
+ * CSS transitions are wall-clock and banned under frame rendering. */
+.cap-preset-karaoke .cap-w.active{transform:translateY(-2px) scale(1.05)}
+.cap-preset-slam .cap-w.active{font-weight:900}
+.cap-preset-pop .cap-w{opacity:.35}
+.cap-preset-rise .cap-w.active{transform:translateY(-3px);box-shadow:0 .1em 0 currentColor}
+/* emphasis keywords (captions.emphasis): accent underline + slight size bump,
+ * static styling so it composes with every preset. */
+.cap-w.kw{font-size:1.06em;text-decoration:underline;text-decoration-color:var(--accent);text-decoration-thickness:.09em;text-underline-offset:.16em}
+
+/* hand-drawn annotations (data-mark): one SVG overlay per scene, appended by
+ * runtime.js. It paints below .chrome (z-index 3), so strokes and the
+ * highlight wash sit behind the text they annotate. Colors are theme tokens,
+ * so they follow mode and custom palettes. */
+.marklayer{position:absolute;inset:0;pointer-events:none}
+.marklayer .mark{fill:none;stroke:var(--accent);stroke-width:2.5;stroke-linecap:round;stroke-linejoin:round}
+.marklayer .mark2{opacity:.55;stroke-width:1.75}
+.marklayer .markhl{fill:var(--accent);opacity:.26}
 
 /* shared */
 .eyebrow{font-family:var(--mono);font-size:clamp(10px,1.15vw,12px);letter-spacing:.26em;color:var(--accent);text-transform:uppercase}

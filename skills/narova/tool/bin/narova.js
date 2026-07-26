@@ -12,12 +12,14 @@ const { resolveConfig } = require('../src/schema');
 const { synth, writeStageInputs, build, findPython, resolveReuse } = require('../src/pipeline');
 const { compose } = require('../src/compose');
 const { composeData } = require('../src/compose/data');
+const { writeCaptions } = require('../src/captions');
 const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
+const { ingest } = require('../src/ingest');
 
-const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version']);
+const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -43,6 +45,8 @@ function overridesFrom(flags) {
   const o = {};
   if (flags.backend) o.backend = flags.backend;
   if (flags.size) o.size = flags.size;
+  if (flags.platform) o.platform = flags.platform;
+  if (flags.variant) o.variant = flags.variant;
   if (flags.tempo != null) o.tempo = flags.tempo;
   if (flags['voice-a']) o.voiceA = flags['voice-a'];
   if (flags['voice-b']) o.voiceB = flags['voice-b'];
@@ -100,9 +104,13 @@ Usage: narova <command> [options]
 
 Commands:
   init <dir>            scaffold a project (config + one example scene)
+  ingest <url>          fetch a source page: download images into assets/,
+                          screenshot it (if Chrome), append sources.md,
+                          seed claims.md — the mechanical pass of url-to-source
   check                validate config fast — no TTS, no browser, no writes
   synth                Python TTS -> out/audio/*, out/timings.json
-  compose              timings + audio -> out/hf/ (HyperFrames project)
+  compose              timings + audio -> out/hf/ (HyperFrames project) + captions
+  captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
   shots                snapshot one QA frame per scene into out/hf/snapshots/
   build                synth + compose + hyperframes render -> out/video.mp4
   preview              compose, then open HyperFrames Studio on out/hf
@@ -119,6 +127,12 @@ Options:
                            (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)
   --size 16:9|1:1|9:16     frame aspect
+  --platform tiktok|reels|shorts|linkedin|x   frame preset + target duration band
+                           (--size wins over the platform preset)
+  --variant <id>           apply a declared hook variant as scene 1 (check/synth/
+                           compose/build; build renders out/video-<id>.mp4)
+  --variants               build the base video.mp4 AND one out/video-<id>.mp4
+                           per declared variant (shared sentences are cache-free)
   --fps N                  render fps (hyperframes; default 30)
   --quality draft|standard|high   render quality (hyperframes)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
@@ -143,6 +157,13 @@ async function main() {
       const dir = positionals[1];
       if (!dir) { console.error('usage: narova init <dir>'); process.exit(1); }
       initProject(dir);
+      return;
+    }
+
+    case 'ingest': {
+      const url = positionals[1];
+      if (!url) { console.error('usage: narova ingest <url> [--project <dir>]'); process.exit(1); }
+      await ingest(url, { projectDir: path.resolve(flags.project || '.') });
       return;
     }
 
@@ -174,9 +195,23 @@ async function main() {
       const out = outDirOf(flags, projectDir);
       const r = compose(config, out);
       console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
+      const caps = writeCaptions(config, out);
+      console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
       console.log(`  qa: narova shots   ·   preview: narova preview --detach   ·   render: narova build --reuse`);
       refreshPreviewIfLive(out);
+      return;
+    }
+
+    case 'captions': {
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      if (!fs.existsSync(path.join(out, 'timings.json'))) {
+        console.error('captions needs out/timings.json — run `narova synth` first');
+        process.exit(1);
+      }
+      const caps = writeCaptions(config, out);
+      console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       return;
     }
 
@@ -209,12 +244,43 @@ async function main() {
     }
 
     case 'build': {
+      if (flags.variant && flags.variants) {
+        console.error('--variant and --variants are mutually exclusive — pick one');
+        process.exit(1);
+      }
+      const buildOpts = {
+        backend: flags.backend, reuse: flags.reuse,
+        fps: flags.fps, quality: flags.quality,
+      };
+      if (flags.variants) {
+        // One resolved config per pass: base first, then each declared variant.
+        // The sentence-level TTS cache makes shared sentences free, so each
+        // extra pass only pays for the variant's scene-1 lines.
+        const { raw, dir } = await loadProjectConfig(flags.project || '.', flags.config);
+        const out = outDirOf(flags, dir);
+        // resolveConfig no longer mutates the raw config (scenes are copied),
+        // but keep the fresh-copy discipline cheap and explicit per pass.
+        const fresh = () => JSON.parse(JSON.stringify(raw));
+        const base = resolveConfig(fresh(), overridesFrom(flags), dir);
+        if (base.variants.length === 0) {
+          console.log('no variants declared in config — building the base video only');
+          build(base, { ...buildOpts, out, projectDir: dir });
+        } else {
+          build(base, { ...buildOpts, out, projectDir: dir });
+          for (const v of base.variants) {
+            console.log(`\nvariant "${v.id}": only its scene-1 sentences re-synthesize — the sentence cache covers the rest`);
+            const vc = resolveConfig(fresh(), { ...overridesFrom(flags), variant: v.id }, dir);
+            build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` });
+          }
+        }
+        refreshPreviewIfLive(out);
+        return;
+      }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       build(config, {
-        out, projectDir,
-        backend: flags.backend, reuse: flags.reuse,
-        fps: flags.fps, quality: flags.quality,
+        ...buildOpts, out, projectDir,
+        name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
       refreshPreviewIfLive(out);
       return;

@@ -165,6 +165,18 @@ Keep the fixes in the code so they never come back.
     cover the major perspectives on contested topics, and the script gets a
     "whose framing is this?" read before synth (url-to-source.md §3).
 
+## Motion on the timeline (0.7.0)
+
+37. **A `fromTo` caption tween parks upcoming words at the from-state.** The
+    slam preset's `tl.fromTo(word, {scale: 1.7}, …, w.t0)` rendered EVERY
+    not-yet-spoken word at scale 1.7 until its turn — the caption line piled
+    onto itself (caught only by looking at rendered frames; lint is blind to
+    it). Before a tween's start, GSAP renders progress 0 = the from-values.
+    Fix: build word motion from `.to()` tweens only, so the pre-start state
+    stays the natural scale 1. Same trap as #27/#28: on a seeked timeline,
+    every tween's off-window state is part of the design, not an afterthought.
+    (`pop` is exempt on purpose: small/dim IS the designed resting state.)
+
 ## The scene model that worked
 
 - Big word-synced captions + a richer voiceover. Do not put the transcript

@@ -1,0 +1,93 @@
+# Audio: music bed, spot SFX, forced alignment, Chatterbox v3
+
+Everything here is optional and configured in `reel.config.*`. The Python
+synth stage (`narova_tts`) does the work; compose picks up the result.
+
+## Music bed
+
+```json
+"music": { "file": "assets/bed.mp3", "volume": 0.14, "fadeIn": 0.5, "fadeOut": 1.5 }
+```
+
+- `file` is project-relative; the resolver stores an absolute path.
+- The bed is looped or trimmed to the EXACT narration length, gained by
+  `volume`, faded in/out with `afade`. Defaults shown above.
+- 0.14 is a starting point, not a law. Voice-forward reels sit at 0.08–0.2.
+
+## Spot SFX
+
+```json
+"sfx": [
+  { "file": "assets/whoosh.wav", "scene": "hook", "at": 0.2, "volume": 0.8 },
+  { "file": "assets/riser.wav",  "at": 12.5 }
+]
+```
+
+- With `scene`: plays at that scene's start (its real, post-loudnorm timeline
+  position) + `at` seconds. This is what you almost always want — it survives
+  re-voicing that changes earlier scenes' lengths.
+- Without `scene` (`"scene": null` or omitted): `at` is a global timeline
+  time in seconds. Brittle across re-voicing; use for one-off fixes.
+- `at` defaults to 0, `volume` to 0.8.
+
+## How the mix behaves
+
+- Output is `out/audio/mix.wav` = narration + bed + sfx, one ffmpeg pass
+  (`adelay` + `amix normalize=0` + `alimiter`). Duration equals `full.wav`
+  exactly (asserted within 50ms); a sfx tail past the end is cut.
+- loudnorm is NOT re-applied — the narration is already loudnorm'd and a
+  second pass would shift its level. `normalize=0` keeps the voice at full
+  level; the limiter catches bed+sfx clipping. If you hear pumping, lower
+  `music.volume`, don't reach for loudnorm.
+- Remove `music`/`sfx` from the config and the next synth DELETES the stale
+  `mix.wav` — compose falls back to `full.wav` automatically. Compose always
+  prefers `mix.wav` when it exists.
+- Mixing runs on `--reuse` too: you can audition beds without re-voicing.
+- A missing/unreadable `file` fails the synth naming the file. Fix the path;
+  there is no silent skip.
+
+## Forced word alignment
+
+Word timings are estimated (words spread by length across each sentence) —
+good enough for karaoke. `align` replaces them with measured ones:
+
+```json
+"align": true                                // engine: auto
+"align": { "engine": "faster-whisper" }      // or "whisper-cpp"
+```
+
+- **faster-whisper**: `pip install faster-whisper` into the narova venv
+  (`~/.narova/venv`). Not in requirements.txt — it's a heavy optional dep.
+  Model `tiny.en` by default; `$NAROVA_WHISPER_MODEL=base.en` for a bit more
+  accuracy at ~2× the time.
+- **whisper.cpp**: install it so `whisper-cli` is on PATH
+  (`brew install whisper-cpp`, or build ggerganov/whisper.cpp). The
+  `ggml-tiny.en.bin` model auto-downloads once to `~/.narova/models/`.
+- **auto**: faster-whisper if importable, else whisper.cpp. `narova doctor`
+  reports which engines it can see.
+- Alignment runs AFTER the loudnorm rescale, on the final scene wav, and only
+  rewrites word `t0`/`t1` — scene `dur` and `turns` are untouched, so the
+  caption-sync guarantee still holds. Works on `--reuse`.
+- Results are cached by scene-wav sha1 at `~/.narova/cache/align/` — re-runs
+  are free until the audio changes.
+- **Failure is soft.** Engine missing/crashed, or aligned words don't match
+  the script token-for-token (punctuation-stripped, case-insensitive): that
+  scene keeps its estimates with a warning. Alignment never breaks a build.
+
+## Chatterbox Multilingual v3
+
+- narova pins chatterbox to git master in `requirements-chatterbox.txt`:
+  Multilingual **v3** (June 2026 — better speaker similarity, fewer
+  hallucinations) is selected via `t3_model="v3"`, which the latest PyPI
+  release (0.1.7) does not have. Re-run `tool/setup.sh --chatterbox` to move
+  an existing venv to the pin. `$NAROVA_CHATTERBOX_T3_MODEL=v2` forces the
+  legacy checkpoint.
+- Per-voice `lang` (e.g. `"fr"`, `"zh"`; 23 languages) switches that voice to
+  the Multilingual model — loaded lazily on first use, so all-English builds
+  never pay for it. `lang` joins `exaggeration`/`cfg_weight` in the sentence
+  cache identity: changing it re-voices that speaker. The reference clip
+  should match the target language (or set `cfg_weight: 0`).
+- **All Chatterbox output is watermarked.** The library embeds Resemble's
+  PerTh neural watermark by default — inaudible, survives mp3 compression
+  (that's why `resemble-perth` is a hard dep and setuptools is pinned <81).
+  Good for EU AI Act provenance; do not try to strip it.

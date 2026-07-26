@@ -65,3 +65,33 @@ test('the canvas reserves the caption band; the column width is a token', () => 
   assert.match(css, /\.scenebody\{[^}]*max-width:var\(--colw,1000px\)/);
   assert.match(composeCss({ colw: '1180px' }, voices, size), /--colw:1180px/);
 });
+
+test('karaoke keeps the historical active-word look, scoped to its preset class', () => {
+  const css = composeCss({}, voices, size);
+  assert.match(css, /\.cap-preset-karaoke \.cap-w\.active\{transform:translateY\(-2px\) scale\(1\.05\)\}/);
+  assert.match(css, /\.cap-w\.active\{opacity:1\}/);
+  assert.ok(!/\.cap-w\.active\{opacity:1;transform/.test(css),
+    'the unscoped transform is gone — other presets drive transform via timeline tweens');
+});
+
+test('slam, pop, and rise presets ship built-in styles', () => {
+  const css = composeCss({}, voices, size);
+  assert.match(css, /\.cap-preset-slam \.cap-w\.active\{font-weight:900\}/);
+  assert.match(css, /\.cap-preset-pop \.cap-w\{opacity:\.35\}/);
+  assert.match(css, /\.cap-preset-rise \.cap-w\.active\{transform:translateY\(-3px\);box-shadow:0 \.1em 0 currentColor\}/);
+});
+
+test('emphasis keywords use the accent token, composing with every preset', () => {
+  const css = composeCss({}, voices, size);
+  assert.match(css, /\.cap-w\.kw\{[^}]*text-decoration-color:var\(--accent\)/);
+  assert.ok(!/\.cap-preset-[a-z]+ \.cap-w\.kw/.test(css), 'kw is preset-agnostic');
+});
+
+test('mark layer styles use theme tokens only (mode-aware by construction)', () => {
+  for (const mode of ['dark', 'light']) {
+    const css = composeCss({}, voices, size, '', mode);
+    assert.match(css, /\.marklayer\{position:absolute;inset:0;pointer-events:none\}/);
+    assert.match(css, /\.marklayer \.mark\{fill:none;stroke:var\(--accent\)/);
+    assert.match(css, /\.marklayer \.markhl\{fill:var\(--accent\);opacity:\.26\}/);
+  }
+});

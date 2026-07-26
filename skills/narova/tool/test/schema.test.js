@@ -162,3 +162,127 @@ test('narration produces the Python contract', () => {
   assert.deepEqual(n.map(s => [s.n, s.id]), [[1, 's1'], [2, 's2']]);
   assert.deepEqual(n[1].segments, c.scenes[1].vo);
 });
+
+/* ---- new keys: platform, music, sfx, captions, align, variants ------------- */
+
+const noSize = () => { const raw = validRaw(); delete raw.size; return raw; };
+
+test('platform preset picks the frame size only when no size is set', () => {
+  assert.equal(resolveConfig(noSize(), {}, '.').platform, null);
+  assert.deepEqual(resolveConfig({ ...noSize(), platform: 'tiktok' }, {}, '.').size, { w: 1080, h: 1920 });
+  assert.deepEqual(resolveConfig({ ...noSize(), platform: 'linkedin' }, {}, '.').size, { w: 1080, h: 1080 });
+  // --platform override beats config.platform.
+  const c = resolveConfig({ ...noSize(), platform: 'linkedin' }, { platform: 'shorts' }, '.');
+  assert.equal(c.platform, 'shorts');
+  assert.deepEqual(c.size, { w: 1080, h: 1920 });
+  // Explicit size wins over the platform preset (config.size and --size alike).
+  assert.deepEqual(resolveConfig({ ...validRaw(), platform: 'tiktok' }, {}, '.').size, { w: 1080, h: 1080 });
+  assert.deepEqual(resolveConfig({ ...noSize(), platform: 'tiktok' }, { size: '16:9' }, '.').size, { w: 1280, h: 720 });
+});
+
+test('unknown platform is a config error', () => {
+  assert.throws(() => resolveConfig({ ...validRaw(), platform: 'myspace' }, {}, '.'),
+    /config\.platform: unknown platform "myspace"/);
+});
+
+test('music resolves file to absolute with defaults; bad music throws', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-music-'));
+  fs.writeFileSync(path.join(dir, 'bed.mp3'), 'fake');
+  const c = resolveConfig({ ...validRaw(), music: { file: 'bed.mp3' } }, {}, dir);
+  assert.deepEqual(c.music, { file: path.join(dir, 'bed.mp3'), volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 });
+  assert.equal(resolveConfig(validRaw(), {}, '.').music, null);
+  assert.throws(() => resolveConfig({ ...validRaw(), music: 'bed.mp3' }, {}, dir),
+    /config\.music: expected an object/);
+  assert.throws(() => resolveConfig({ ...validRaw(), music: { file: 'missing.mp3' } }, {}, dir),
+    /config\.music\.file: not found/);
+  assert.throws(() => resolveConfig({ ...validRaw(), music: { file: 'bed.mp3', volume: -1 } }, {}, dir),
+    /config\.music\.volume: must be a non-negative number/);
+});
+
+test('sfx entries anchor to scenes; bad anchors/files throw', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sfx-'));
+  fs.writeFileSync(path.join(dir, 'whoosh.wav'), 'fake');
+  const c = resolveConfig({ ...validRaw(), sfx: [{ file: 'whoosh.wav', scene: 's2', at: 1.5 }] }, {}, dir);
+  assert.deepEqual(c.sfx, [{ file: path.join(dir, 'whoosh.wav'), scene: 's2', at: 1.5, volume: 0.8 }]);
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').sfx, []);
+  assert.throws(() => resolveConfig({ ...validRaw(), sfx: { file: 'whoosh.wav' } }, {}, dir),
+    /config\.sfx: expected an array/);
+  assert.throws(() => resolveConfig({ ...validRaw(), sfx: [{ file: 'missing.wav' }] }, {}, dir),
+    /config\.sfx\[0\]\.file: not found/);
+  assert.throws(() => resolveConfig({ ...validRaw(), sfx: [{ file: 'whoosh.wav', scene: 'nope' }] }, {}, dir),
+    /config\.sfx\[0\]\.scene: "nope" is not a scene id/);
+  assert.throws(() => resolveConfig({ ...validRaw(), sfx: [{ file: 'whoosh.wav', at: -1 }] }, {}, dir),
+    /config\.sfx\[0\]\.at: must be a non-negative number/);
+});
+
+test('captions preset/emphasis resolve with defaults; junk throws', () => {
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'karaoke', emphasis: [] });
+  const c = resolveConfig({ ...validRaw(), captions: { preset: 'slam', emphasis: ['Free', ' zero '] } }, {}, '.');
+  assert.deepEqual(c.captions, { preset: 'slam', emphasis: ['Free', 'zero'] });
+  assert.throws(() => resolveConfig({ ...validRaw(), captions: { preset: 'bounce' } }, {}, '.'),
+    /config\.captions\.preset: unknown preset "bounce"/);
+  assert.throws(() => resolveConfig({ ...validRaw(), captions: { emphasis: 'Free' } }, {}, '.'),
+    /config\.captions\.emphasis: expected an array of words/);
+  assert.throws(() => resolveConfig({ ...validRaw(), captions: 'slam' }, {}, '.'),
+    /config\.captions: expected an object/);
+});
+
+test('align is off by default, true means auto, unknown engines throw', () => {
+  assert.equal(resolveConfig(validRaw(), {}, '.').align, false);
+  assert.deepEqual(resolveConfig({ ...validRaw(), align: true }, {}, '.').align, { engine: 'auto' });
+  assert.deepEqual(resolveConfig({ ...validRaw(), align: { engine: 'faster-whisper' } }, {}, '.').align,
+    { engine: 'faster-whisper' });
+  assert.equal(resolveConfig({ ...validRaw(), align: false }, {}, '.').align, false);
+  assert.throws(() => resolveConfig({ ...validRaw(), align: { engine: 'magic' } }, {}, '.'),
+    /config\.align\.engine: unknown engine "magic"/);
+  assert.throws(() => resolveConfig({ ...validRaw(), align: 'yes' }, {}, '.'),
+    /config\.align: expected true\/false or \{ engine \}/);
+});
+
+const rawWithVariants = () => ({
+  ...validRaw(),
+  variants: [
+    { id: 'punchy', scene: { body: '<p>alt</p>', vo: [{ who: 'b', text: 'Alt opener.' }] } },
+    { id: 'quiet', scene: { body: '<p>soft</p>', vo: [{ who: 'a', text: 'Soft opener.' }], transition: 'fade' } },
+  ],
+});
+
+test('variants are validated and carried on the config', () => {
+  const c = resolveConfig(rawWithVariants(), {}, '.');
+  assert.equal(c.variant, null);
+  assert.deepEqual(c.variants.map(v => v.id), ['punchy', 'quiet']);
+  assert.deepEqual(c.variants[0].scene, { body: '<p>alt</p>', vo: [{ who: 'b', text: 'Alt opener.' }] });
+  assert.equal(c.variants[1].scene.transition, 'fade');
+  // Base scenes untouched without --variant.
+  assert.equal(c.scenes[0].body, '<p>one</p>');
+});
+
+test('invalid variants throw: bad id, duplicate, ghost voice, missing vo', () => {
+  const badId = rawWithVariants();
+  badId.variants[0].id = 'bad id';
+  assert.throws(() => resolveConfig(badId, {}, '.'), /config\.variants\[0\]\.id: must match/);
+  const dup = rawWithVariants();
+  dup.variants[1].id = 'punchy';
+  assert.throws(() => resolveConfig(dup, {}, '.'), /config\.variants\[1\]\.id: duplicate "punchy"/);
+  const ghost = rawWithVariants();
+  ghost.variants[0].scene.vo = [{ who: 'ghost', text: 'hi' }];
+  assert.throws(() => resolveConfig(ghost, {}, '.'), /config\.variants\[0\]\.scene\.vo\[0\]\.who: "ghost" not in config\.voices/);
+  const noVo = rawWithVariants();
+  noVo.variants[0].scene.vo = [];
+  assert.throws(() => resolveConfig(noVo, {}, '.'), /config\.variants\[0\]\.scene\.vo: non-empty turn list required/);
+  assert.throws(() => resolveConfig({ ...validRaw(), variants: 'punchy' }, {}, '.'),
+    /config\.variants: expected an array/);
+});
+
+test('overrides.variant swaps scene 1 keeping its id; unknown ids throw', () => {
+  const c = resolveConfig(rawWithVariants(), { variant: 'punchy' }, '.');
+  assert.equal(c.variant, 'punchy');
+  assert.equal(c.scenes[0].id, 's1');
+  assert.equal(c.scenes[0].body, '<p>alt</p>');
+  assert.deepEqual(c.scenes[0].vo, [{ who: 'b', text: 'Alt opener.' }]);
+  assert.equal(c.scenes[1].body, '<p>two</p>');
+  assert.throws(() => resolveConfig(rawWithVariants(), { variant: 'nope' }, '.'),
+    /unknown variant "nope" — declared variants: punchy, quiet/);
+  // Variant scenes join the narration contract (Python sees the swap).
+  assert.deepEqual(narration(c)[0].segments, [{ who: 'b', text: 'Alt opener.' }]);
+});
