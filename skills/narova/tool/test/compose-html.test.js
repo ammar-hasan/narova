@@ -170,12 +170,29 @@ test('scene with clip renders a b-roll video as a root-level clip before the sce
   };
   const cliptimings = Object.fromEntries(clipCfg.scenes.map(s => [s.id, timings[s.id] || timings.s1]));
   const h = composeDoc(clipCfg, size, composeData(clipCfg, cliptimings), '');
-  assert.match(h, /<video id="broll-s1" class="broll" src="assets\/clip-s1\.mp4" data-start="0" data-track-index="100" muted loop playsinline preload="auto">/);
+  assert.match(h, /<video id="broll-s1" class="broll" src="assets\/clip-s1\.mp4" data-start="0" data-duration="5" data-track-index="100" muted loop playsinline preload="auto">/);
   assert.ok(!h.includes('broll-s2'), 'scene 2 has no clip');
   // b-roll appears before scene-s1 in the root div.
   const brollIdx = h.indexOf('broll-s1');
   const sceneIdx = h.indexOf('id="scene-s1"');
   assert.ok(brollIdx < sceneIdx, 'broll must be before the scene section in the root');
+});
+
+test('b-roll data-duration matches its scene duration (scene-bounded, no bleed)', () => {
+  const clipCfg = {
+    ...config,
+    scenes: [
+      { id: 's1', body: '<p>x</p>', clip: 'assets/intro.mp4' },
+      { id: 's2', body: '<p>y</p>' },
+    ],
+  };
+  const cliptimings = Object.fromEntries(clipCfg.scenes.map(s => [s.id, timings[s.id] || timings.s1]));
+  const h = composeDoc(clipCfg, size, composeData(clipCfg, cliptimings), '');
+  // s1 dur is 5, s2 has no clip.
+  assert.match(h, /broll-s1.*data-duration="5"/);
+  assert.ok(!h.includes('broll-s2'));
+  // Verify the data-start of scene-s2 equals the end of s1's broll (start+dur=0+5=5)
+  assert.match(h, /id="scene-s2"[^>]*data-start="5"/);
 });
 
 // -- series badge --

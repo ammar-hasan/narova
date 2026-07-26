@@ -55,7 +55,7 @@ function composeDoc(config, size, data, css) {
     const sc = data.scenes[i];
     const id = escapeHtml(s.id);
     const ext = escapeHtml(path.extname(s.clip));
-    return `  <video id="broll-${id}" class="broll" src="assets/clip-${id}${ext}" data-start="${fmt(sc.start)}" data-track-index="${100 + i}" muted loop playsinline preload="auto"></video>`;
+    return `  <video id="broll-${id}" class="broll" src="assets/clip-${id}${ext}" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${100 + i}" muted loop playsinline preload="auto"></video>`;
   }).filter(Boolean).join('\n');
 
   const sceneClips = config.scenes.map((s, i) => {
