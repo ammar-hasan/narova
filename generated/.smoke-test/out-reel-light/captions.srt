@@ -1,0 +1,7 @@
+1
+00:00:00,160 --> 00:00:02,479
+This is narova in light mode on TikTok.
+
+2
+00:00:02,479 --> 00:00:04,835
+Fully local, no API keys.

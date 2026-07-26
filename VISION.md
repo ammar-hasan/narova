@@ -1,6 +1,36 @@
-# narova — vision checklist
+# narova — vision and implementation
 
-Every point of the product vision, mapped to where it is implemented.
+## Vision
+
+Give every person and every intelligence the creative power to make remarkable
+video—regardless of expertise, budget, hardware, or model sophistication.
+
+Narova is MIT-licensed open-source software. It should transfer capability:
+someone with an idea, limited production knowledge, and even a simple LLM
+should be able to make work far beyond what their tools or skills previously
+allowed.
+
+Experience is part of that capability transfer. Narova should meet each person
+at their current video fluency, technical fluency, and desired level of
+involvement. It should hide unfamiliar production language when that language
+would create friction, then reveal deeper reasoning and precise controls as the
+person asks for or demonstrates greater control. Simplicity must never mean a
+lower creative ceiling.
+
+## Mission
+
+Build an open and efficient creative system that lets a person or agent turn
+intent into exceptional video, then direct, evolve, organize, and reuse that
+work without production friction.
+
+Adaptive experience, generation, direction, changeability, maintenance,
+management, provenance, and distribution are functions that make the vision
+practical. They are not the vision itself.
+
+## Implementation checklist
+
+The currently specified product capabilities, mapped to where they are
+implemented.
 Status legend: `[x]` implemented and verified · `[~]` implemented, needs
 strengthening · `[ ]` gap.
 

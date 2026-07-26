@@ -1,0 +1,19 @@
+1
+00:00:00,160 --> 00:00:02,815
+XTTS voice quality.
+
+2
+00:00:02,815 --> 00:00:06,205
+Richer, more natural, running on your machine.
+
+3
+00:00:06,205 --> 00:00:10,230
+Two speakers, three scenes, with transitions between them.
+
+4
+00:00:10,230 --> 00:00:12,569
+All rendered locally.
+
+5
+00:00:12,569 --> 00:00:16,585
+No cloud, no API keys, no monthly bill.

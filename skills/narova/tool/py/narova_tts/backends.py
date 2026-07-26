@@ -93,16 +93,15 @@ class XttsBackend:
         from TTS.api import TTS
 
         self._speakers = dict(speakers)
-        dev = device or os.environ.get(
-            "XTTS_DEVICE", "mps" if torch.backends.mps.is_available() else "cpu"
-        )
+        dev = device or os.environ.get("XTTS_DEVICE", None)
+        if dev is None:
+            if torch.backends.mps.is_available():
+                print("[xtts] mps detected but known-broken with XTTS — using cpu", flush=True)
+            dev = "cpu"
         print(f"[xtts] loading XTTS-v2 on {dev} …", flush=True)
         self._tts = TTS("tts_models/multilingual/multi-dataset/xtts_v2")
-        try:
+        if dev != "cpu":
             self._tts.to(dev)
-        except Exception as e:  # MPS can fail on some ops; fall back to CPU
-            print("[xtts] device fallback cpu:", e, flush=True)
-            self._tts.to("cpu")
         print("[xtts] speakers:", self._speakers, flush=True)
 
     def synthesize(self, who: str, text: str, out_path: Path) -> Path:

@@ -1,0 +1,32 @@
+[
+  {
+    "n": 1,
+    "id": "one",
+    "segments": [
+      {
+        "who": "a",
+        "text": "XTTS voice quality. Richer, more natural, running on your machine."
+      }
+    ]
+  },
+  {
+    "n": 2,
+    "id": "two",
+    "segments": [
+      {
+        "who": "b",
+        "text": "Two speakers, three scenes, with transitions between them."
+      }
+    ]
+  },
+  {
+    "n": 3,
+    "id": "three",
+    "segments": [
+      {
+        "who": "a",
+        "text": "All rendered locally. No cloud, no API keys, no monthly bill."
+      }
+    ]
+  }
+]

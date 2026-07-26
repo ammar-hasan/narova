@@ -1,0 +1,74 @@
+{
+  "title": "narova — Slam + Music",
+  "size": {
+    "w": 1280,
+    "h": 720
+  },
+  "voices": {
+    "a": {
+      "backend": "piper",
+      "speaker": "en_US-ryan-high",
+      "color": "#2ee6d6",
+      "label": "host · A"
+    },
+    "b": {
+      "backend": "piper",
+      "speaker": "en_US-hfc_female-medium",
+      "color": "#ff7eb6",
+      "label": "host · B"
+    }
+  },
+  "theme": {},
+  "mode": "dark",
+  "chrome": {
+    "topbar": true,
+    "counter": true,
+    "progress": true
+  },
+  "themeCss": "",
+  "timing": {
+    "gapSentence": 0.24,
+    "gapTurn": 0.44,
+    "lead": 0.16,
+    "tail": 0.58,
+    "tempo": null
+  },
+  "scenes": [
+    {
+      "id": "title",
+      "transition": "wipe",
+      "vo": [
+        {
+          "who": "a",
+          "text": "Slam caption preset with a music bed underneath."
+        },
+        {
+          "who": "b",
+          "text": "Every word lands big and settles back. On your machine."
+        }
+      ],
+      "body": "<div class=\"s-title\"><h1 class=\"reveal grad\">narova</h1><p class=\"lede cue\" data-cue=\"1\"><span data-mark=\"underline\">word-synced captions</span> with a music bed</p></div>",
+      "dur": 10
+    }
+  ],
+  "projectDir": "/Users/ammarhasan/Work/narova/generated/.smoke-test",
+  "platform": null,
+  "music": {
+    "file": "/tmp/narova-bed.mp3",
+    "volume": 0.12,
+    "fadeIn": 0.5,
+    "fadeOut": 1.5
+  },
+  "sfx": [],
+  "captions": {
+    "preset": "slam",
+    "emphasis": [
+      "narova",
+      "machine"
+    ]
+  },
+  "align": false,
+  "variants": [],
+  "variant": null,
+  "series": null
+}

@@ -1,0 +1,3 @@
+file '/Users/ammarhasan/Work/narova/generated/.smoke-test/out-xtts/audio/01.wav'
+file '/Users/ammarhasan/Work/narova/generated/.smoke-test/out-xtts/audio/02.wav'
+file '/Users/ammarhasan/Work/narova/generated/.smoke-test/out-xtts/audio/03.wav'

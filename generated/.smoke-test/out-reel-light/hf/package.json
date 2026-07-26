@@ -1,0 +1,7 @@
+{
+  "name": "narova-light-tiktok",
+  "private": true,
+  "devDependencies": {
+    "hyperframes": "0.7.64"
+  }
+}
