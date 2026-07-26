@@ -19,8 +19,9 @@ function runHf(args, cwd, opts = {}) {
   return r;
 }
 
-function previewUrl(cwd, port = 3002) {
-  return `http://localhost:${port}/#project/${encodeURIComponent(path.basename(cwd))}`;
+function previewUrl(cwd, port = 3002, projectName) {
+  const name = projectName || path.basename(cwd);
+  return `http://localhost:${port}/#project/${encodeURIComponent(name)}`;
 }
 
 function livePreviewPid(pidFile) {
@@ -42,7 +43,7 @@ function livePreviewPid(pidFile) {
 /* Start Studio in its own process group so an agent shell can return without
  * reaping the preview server. Logs and the process id live outside out/hf,
  * which compose replaces on every run. */
-function startHfPreview(cwd, { port = 3002, logFile, pidFile } = {}) {
+function startHfPreview(cwd, { port = 3002, logFile, pidFile, projectName } = {}) {
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const log = logFile || path.join(path.dirname(cwd), 'preview.log');
   const pid = pidFile || path.join(path.dirname(cwd), 'preview.pid');
@@ -56,10 +57,8 @@ function startHfPreview(cwd, { port = 3002, logFile, pidFile } = {}) {
   fs.closeSync(fd);
   child.unref();
   fs.writeFileSync(pid, `${child.pid}\n`);
-  // The port travels with the pid so a later `preview --detach` restart reuses
-  // it without the caller passing --port again.
   fs.writeFileSync(portFileFor(pid), `${port}\n`);
-  return { pid: child.pid, pidFile: pid, logFile: log, url: previewUrl(cwd, port) };
+  return { pid: child.pid, pidFile: pid, logFile: log, url: previewUrl(cwd, port, projectName) };
 }
 
 function portFileFor(pidFile) {

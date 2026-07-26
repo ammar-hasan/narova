@@ -69,7 +69,7 @@ const outDirOf = (flags, projectDir) =>
  * showing the OLD build (or an empty 00:00 canvas). Instead of just warning,
  * restart it on the new build — the review URL the user has open starts
  * serving fresh frames. */
-function refreshPreviewIfLive(out) {
+function refreshPreviewIfLive(out, projectName) {
   const pidFile = path.join(out, 'preview.pid');
   const pid = livePreviewPid(pidFile);
   if (!pid) return;
@@ -77,7 +77,7 @@ function refreshPreviewIfLive(out) {
   try {
     stopHfPreview(pidFile);
     const p = startHfPreview(path.join(out, 'hf'), {
-      port, logFile: path.join(out, 'preview.log'), pidFile,
+      port, logFile: path.join(out, 'preview.log'), pidFile, projectName,
     });
     console.log(`Studio restarted on the new build -> ${p.url}  (pid ${p.pid}; stop: narova preview --stop)`);
   } catch (e) {
@@ -86,6 +86,10 @@ function refreshPreviewIfLive(out) {
 }
 
 const fmtTime = s => `${String(Math.floor(s / 60)).padStart(2, '0')}:${(s % 60).toFixed(1).padStart(4, '0')}`;
+
+function projectSlug(config) {
+  return String(config.title || 'narova').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'narova';
+}
 
 /* Print when each scene starts — the QA timeline for snapshots and review. */
 function printSceneTable(config, out) {
@@ -203,7 +207,7 @@ async function main() {
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
       console.log(`  qa: narova shots   ·   preview: narova preview --detach   ·   render: narova build --reuse`);
-      refreshPreviewIfLive(out);
+      refreshPreviewIfLive(out, projectSlug(config));
       return;
     }
 
@@ -277,7 +281,7 @@ async function main() {
             build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` });
           }
         }
-        refreshPreviewIfLive(out);
+        refreshPreviewIfLive(out, projectSlug(config));
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
@@ -286,7 +290,7 @@ async function main() {
         ...buildOpts, out, projectDir,
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
-      refreshPreviewIfLive(out);
+      refreshPreviewIfLive(out, projectSlug(config));
       return;
     }
 
@@ -315,8 +319,8 @@ async function main() {
         if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
         const p = startHfPreview(r.dir, {
           port,
-          logFile: path.join(out, 'preview.log'),
-          pidFile,
+          logFile: path.join(out, 'preview.log'), pidFile,
+          projectName: projectSlug(config),
         });
         console.log(`Studio running -> ${p.url}`);
         console.log(`  pid ${p.pid} · log ${p.logFile} · stop: narova preview --stop --project ${projectDir}`);
@@ -324,7 +328,7 @@ async function main() {
         const port = Number(flags.port || 3002);
         if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
         console.log(`composed -> ${r.dir}`);
-        console.log(`Studio -> ${previewUrl(r.dir, port)} (Ctrl-C to stop)`);
+        console.log(`Studio -> ${previewUrl(r.dir, port, projectSlug(config))} (Ctrl-C to stop)`);
         runHf(['preview', '--port', String(port)], r.dir);
       }
       return;
