@@ -162,6 +162,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (!turn || !turn.who) errs.push(`${at}.vo[${j}].who: required`);
       else if (!voices[turn.who]) errs.push(`${at}.vo[${j}].who: "${turn.who}" not in config.voices`);
       if (typeof turn.text !== 'string' || !turn.text.trim()) errs.push(`${at}.vo[${j}].text: required`);
+      // Per-turn language override for multilingual TTS (chatterbox/qwen).
+      // Accepted but not validated against a list — the backend decides.
+      if (turn.lang != null && typeof turn.lang !== 'string') {
+        errs.push(`${at}.vo[${j}].lang: must be a language code string (e.g. "en", "ar", "ur")`);
+      }
     });
     if (s.dur != null && typeof s.dur !== 'number') errs.push(`${at}.dur: must be a number`);
     // Optional b-roll video clip per scene: a project-relative video file

@@ -110,7 +110,7 @@ class _FakeBackend:
     def __init__(self):
         self.calls = 0
 
-    def synthesize(self, who, text, out_path):
+    def synthesize(self, who, text, out_path, lang=None):
         self.calls += 1
         Path(out_path).write_bytes(b"raw audio")
 

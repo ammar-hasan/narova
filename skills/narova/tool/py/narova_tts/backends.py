@@ -45,7 +45,7 @@ def chatterbox_python() -> Path:
 class Backend(Protocol):
     """A backend synthesizes one utterance for one speaker to a raw wav."""
 
-    def synthesize(self, who: str, text: str, out_path: Path) -> Path: ...
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path: ...
 
 
 class PiperBackend:
@@ -75,7 +75,7 @@ class PiperBackend:
             )
         return onnx
 
-    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
         with wave.open(str(out_path), "wb") as wf:
             self._voices[who].synthesize_wav(text, wf, syn_config=self._cfg)
         return out_path
@@ -104,7 +104,7 @@ class XttsBackend:
             self._tts.to(dev)
         print("[xtts] speakers:", self._speakers, flush=True)
 
-    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
         # `speaker` may be a studio speaker name OR an ABSOLUTE path to a
         # short clean recording (wav/mp3/flac/m4a) — XTTS then clones that
         # voice. (Absolute because synth does not run in the project dir.)
@@ -161,11 +161,12 @@ class QwenBackend:
             self._model = Qwen3TTSModel.from_pretrained(self.MODEL, device_map="cpu", dtype=torch.float32)
         print("[qwen] speakers:", self._speakers, flush=True)
 
-    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
         import soundfile as sf  # dep of qwen-tts
 
+        turn_lang = lang or self._langs.get(who)
         wavs, sr = self._model.generate_custom_voice(
-            text=text, speaker=self._speakers[who], language=self._langs.get(who),
+            text=text, speaker=self._speakers[who], language=turn_lang,
             instruct=self._instructs.get(who),
         )
         sf.write(str(out_path), wavs[0], sr)
@@ -259,14 +260,15 @@ class ChatterboxBackend:
             raise RuntimeError(
                 f"chatterbox worker returned an invalid response: {line.rstrip()!r}") from e
 
-    def synthesize(self, who: str, text: str, out_path: Path) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
         req = {"text": text, "out": str(out_path), "ref": self._speakers[who]}
         if who in self._exg:
             req["exaggeration"] = self._exg[who]
         if who in self._cfgw:
             req["cfg_weight"] = self._cfgw[who]
-        if who in self._langs:
-            req["lang"] = self._langs[who]
+        turn_lang = lang or self._langs.get(who)
+        if turn_lang:
+            req["lang"] = turn_lang
         try:
             self._proc.stdin.write(json.dumps(req) + "\n")
             self._proc.stdin.flush()

@@ -245,7 +245,7 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
 
 
 def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,
-                   cache_key: str | None = None) -> float:
+                   cache_key: str | None = None, lang: str | None = None) -> float:
     """Synthesize one sentence, speed via atempo (pitch-preserving; NEVER the XTTS
     speed param, LEARNINGS #9), then fade the edges. Returns the MEASURED duration
     of the processed clip — word timing is distributed across this real value.
@@ -255,7 +255,7 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
         shutil.copyfile(cached, out)
         return probe(out)
     raw = tmp / "_raw.wav"
-    backend.synthesize(who, text, raw)
+    backend.synthesize(who, text, raw, lang=lang)
     d = probe(raw) / tempo                 # duration on the post-tempo timeline
     fo = max(0.0, d - FADE)
     sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(raw),
@@ -325,6 +325,8 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
         who: voice_cache_speaker(v, who, voice_kind[who])
         for who, v in voices.items()
     }
+    # Per-voice default lang for chatterbox/qwen (may be overridden per-turn).
+    voice_lang = {who: v.get("lang") for who, v in voices.items() if v.get("lang")}
 
     sil = {}
     for name, d in (("s", gap_sentence), ("t", gap_turn), ("lead", lead), ("tail", tail)):
@@ -351,9 +353,13 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
                     pieces.append(sil["s"])
                     clock += gap_sentence
                 w = tmp / f"{nn}_{si:03d}.wav"
-                key = sentence_cache_key(voice_kind.get(who, default_backend),
-                                         voice_speaker.get(who, who), sent, tempo)
-                d = synth_sentence(router[who], who, sent, tmp, w, tempo, cache_key=key)
+                turn_lang = turn.get("lang") or voice_lang.get(who)
+                key_parts = [voice_kind.get(who, default_backend),
+                             voice_speaker.get(who, who), sent, str(tempo)]
+                if turn_lang:
+                    key_parts.append(f"lang={turn_lang}")
+                key = "|".join(key_parts)
+                d = synth_sentence(router[who], who, sent, tmp, w, tempo, cache_key=key, lang=turn_lang)
                 pieces.append(w)
                 # distribute words across the sentence's real duration, weighted by length
                 toks = sent.split()
