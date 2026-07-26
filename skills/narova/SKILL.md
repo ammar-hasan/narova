@@ -45,43 +45,54 @@ chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
 
 ## Workflow: prompt → video
 
-### 0 — INTAKE: Ask about what the prompt left out
+### 0 — INTAKE: Recommend, don't interrogate
 
-**Never silently assume.** A one-sentence prompt is missing most of what
-narova needs to produce the right video. Your job is to spot the gaps and
-ask — not to fill them with guesses.
+The user came to you for a video, not a questionnaire. Your job is to
+make it great — pick the right defaults, recommend what will lift the
+output, and only ask when there's a genuine trade-off the user should
+weigh in on.
 
-**The rule:** for every narova parameter below, if the prompt doesn't
-already answer it AND choosing differently would change the video, ask.
-If the parameter doesn't matter for this particular video, skip it.
+**The mindset:** You are a consultant, not a menu. Analyze the prompt
+deeply. For every narova parameter, decide the best value for THIS
+particular video — then state it as your recommendation with a short
+why. The user should only need to say "yes" or tweak one thing.
 
-**What narova can vary (scan the prompt against this):**
-- **Voice:** TTS engine (piper/xtts/qwen/chatterbox), number of narrators (0–N), specific speaker names, voice cloning from a sample
-- **Format:** platform (tiktok/reels/shorts/linkedin/x), target duration, aspect ratio
-- **Audio:** background music, spot sound effects, forced word alignment
-- **Look:** light/dark mode, accent color, mood/palette, transitions between scenes, hand-drawn annotations (`data-mark`)
-- **Motion:** caption preset (karaoke/slam/pop/rise), keyword emphasis, b‑roll video clips behind scenes
-- **Structure:** hook A/B variants, series episodes (`series: {part, total}`), scene count
-- **Source:** URL to pull facts/imagery from (`narova ingest <url>`), claims ledger
+**How to recommend (not ask):**
+- *"For a product launch on TikTok, I'd use a single energetic female
+  narrator (Serena, xtts for richer quality) with a dark theme and your
+  brand's blue as the accent. The hook should land in the first 200ms
+  so I'll keep the intro tight. Want me to go with that?"*
+- Only ask the user when two genuinely good paths exist and the
+  trade-off is subjective — e.g. formal vs casual tone, one narrator
+  vs a dialogue. Even then, give your pick: *"I'd go with a dialogue
+  here — two voices trading lines keeps the pace up on Shorts. But a
+  single narrator is cleaner if you prefer. Which way?"*
+- If the user's prompt is a single vague sentence, recommend the most
+  likely great setup and ask for confirmation — don't dump options.
 
-**How to ask:**
-- **Every question must stand alone.** The user has never heard of piper,
-  xtts, or ryan-high. Explain each option in plain words right where you
-  ask — what it sounds like, the trade-off, and what you recommend.
-  Bad: *"Which backend?"* Good: *"Voice quality — fast & small (piper),
-  richer & more natural but needs a one-time 1.9GB download (xtts), or
-  clone your own voice from a short recording?"*
-- For voices, list 3–4 concrete options with descriptions — *"a warm male
-  voice (Ryan), a clear female voice (Serena), an energetic male (Eric)"* —
-  don't make them run `narova voices list` to know what's available.
-- Group related gaps into one message — don't fire 8 questions one by one.
-- Offer the defaults so the user can just say "defaults" or "the first one."
-- If the prompt is detailed, state what you inferred and ask only for
-  confirmation: *"One male narrator, dark theme, TikTok format — ok?"*
-- Skip parameters the prompt already nailed. Don't ask "which platform?"
-  when they said "make a TikTok."
-- Don't mention arcane features (alignment, b‑roll, series) unless the
-  prompt hints at them; mention them only when they'd lift the output.
+**What to consider when deciding (scan the prompt against this):**
+- **Voice:** engine quality (piper is fast & fine, xtts/qwen are richer,
+  chatterbox clones a specific person), narrator count (0 for silent
+  motion graphics, 1 for monologue, 2 for dialogue), which concrete
+  voices fit the tone (warm, energetic, authoritative, calm)
+- **Format:** platform dimensions + duration band, target length
+- **Audio:** background music (always worth suggesting — it lifts
+  production value dramatically), sound effects for key moments
+- **Look:** light/dark mode, accent color from brand/prompt, mood,
+  caption animation style (slam for punchy, karaoke for explainers),
+  transitions between scenes
+- **Motion:** b‑roll clips behind scenes if the prompt suggests
+  visual richness, hand-drawn annotations for explainer content
+- **Structure:** hook variants if the user cares about social reach,
+  series if the script is naturally long
+
+**Don't:**
+- Ask the user what piper/xtts/qwen is — just pick and explain inline.
+- List every possible option — recommend one and mention the alternative
+  only if it's a real contender.
+- Ask about features the prompt doesn't need (no b‑roll for a podcast,
+  no series for a 30s clip).
+- Make the user run commands or read docs to understand your suggestion.
 
 **After intake**, proceed to step 1.
 
