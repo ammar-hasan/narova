@@ -115,6 +115,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   voiceIds.forEach(id => {
     const v = voices[id];
     const at = `config.voices.${id}`;
+    // Per-voice gain trim in dB — works for all backends.
+    if (v.gainDb != null && (typeof v.gainDb !== 'number' || !Number.isFinite(v.gainDb)
+        || v.gainDb < -24 || v.gainDb > 24)) {
+      errs.push(`${at}.gainDb: must be a number from -24 to 24`);
+    }
     if (!TTS_BACKENDS.has(v.backend)) {
       errs.push(`${at}.backend: unknown backend ${JSON.stringify(v.backend)} (piper|xtts|qwen|chatterbox)`);
     }
@@ -137,12 +142,6 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (value != null && (typeof value !== 'number' || !Number.isFinite(value) || value < min || value > max)) {
         errs.push(`${at}.${key}: must be a number from ${min} to ${max}`);
       }
-    }
-    // Per-voice gain trim in dB — balances quieter voices (e.g. Arabic) against
-    // louder ones after loudnorm. Applied before fade/atempo in the ffmpeg chain.
-    if (v.gainDb != null && (typeof v.gainDb !== 'number' || !Number.isFinite(v.gainDb)
-        || v.gainDb < -24 || v.gainDb > 24)) {
-      errs.push(`${at}.gainDb: must be a number from -24 to 24`);
     }
   });
 

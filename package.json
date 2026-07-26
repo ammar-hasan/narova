@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "A scene script becomes a narrated, captioned video. narova writes the words and the voice; HyperFrames draws the pictures.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"

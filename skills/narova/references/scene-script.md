@@ -47,9 +47,14 @@ export default {
 ## What `check` enforces (errors)
 
 - At least one voice. Every `vo[].who` must be a declared voice.
-- At least one scene. Every scene needs a unique `id`, a `body` string, and
-  a non-empty `vo` with `who` + `text` in every turn.
-- Scene and voice ids: letters, digits, `_`, `-`. Must start with a letter.
+- At least one scene. Every scene needs a unique `id` and a `body` string.
+  - `vo` is normally a non-empty list of `{ who, text }` turns.
+  - **Silent scenes**: `vo: []` with an explicit positive `dur` (e.g. `dur: 2`
+    for a 2-second reference screen). The synth stage generates silence.
+- Per-voice `gainDb` (-24 to +24): trim a quieter voice (e.g. Arabic) up
+  against louder ones after loudnorm. Included in the sentence cache identity.
+- Per-scene `clip`: a project-relative video file played as a full-bleed
+  background behind the HTML overlay (looped, dimmed to 52%, seek-safe).
 - If `theme.css` is set, the file must exist.
 - Old fields `caption` and `dur` are ignored. Do not write them.
 

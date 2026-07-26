@@ -370,3 +370,43 @@ test('series: part cannot exceed total', () => {
 test('series: null when not configured', () => {
   assert.equal(resolveConfig(validRaw(), {}, '.').series, null);
 });
+
+// -- silent scenes --
+
+test('silent scene: vo: [] with explicit positive dur is accepted', () => {
+  const raw = { ...validRaw(), scenes: [{ id: 'silent', body: '<p>x</p>', vo: [], dur: 2 }] };
+  const c = resolveConfig(raw, {}, '.');
+  assert.equal(c.scenes[0].vo.length, 0);
+  assert.equal(c.scenes[0].dur, 2);
+  // narration contract carries dur for silent scenes.
+  const n = require('../src/schema').narration(c);
+  assert.equal(n[0].segments.length, 0);
+  assert.equal(n[0].dur, 2);
+});
+
+test('silent scene: vo: [] without dur throws', () => {
+  const raw = { ...validRaw(), scenes: [{ id: 'silent', body: '<p>x</p>', vo: [] }] };
+  assert.throws(() => resolveConfig(raw, {}, '.'),
+    /empty turn list requires a positive explicit dur/);
+});
+
+test('silent scene: dur must be positive', () => {
+  const raw = { ...validRaw(), scenes: [{ id: 'silent', body: '<p>x</p>', vo: [], dur: 0 }] };
+  assert.throws(() => resolveConfig(raw, {}, '.'),
+    /empty turn list requires a positive explicit dur/);
+});
+
+// -- per-voice gainDb --
+
+test('gainDb: accepted within -24 to 24 dB range', () => {
+  const c = resolveConfig({ ...validRaw(), voices: { a: { speaker: 'v1', gainDb: 3 }, b: { speaker: 'v2' } } }, {}, '.');
+  assert.equal(c.voices.a.gainDb, 3);
+  assert.equal(c.voices.b.gainDb, undefined);
+});
+
+test('gainDb: out of range throws', () => {
+  const raw = { ...validRaw(), voices: { a: { speaker: 'v1', gainDb: 30 } } };
+  assert.throws(() => resolveConfig(raw, {}, '.'), /gainDb: must be a number from -24 to 24/);
+  const raw2 = { ...validRaw(), voices: { a: { speaker: 'v1', gainDb: -30 } } };
+  assert.throws(() => resolveConfig(raw2, {}, '.'), /gainDb: must be a number from -24 to 24/);
+});

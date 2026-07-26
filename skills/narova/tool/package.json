@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.7.5",
+  "version": "0.7.6",
   "description": "narova bundled tool — the CLI that ships inside the agent skill.",
   "private": true,
   "type": "commonjs",
