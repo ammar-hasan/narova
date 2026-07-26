@@ -38,6 +38,8 @@ test('compose writes index.html, the audio copy, and a pinned package.json', () 
   const html = fs.readFileSync(path.join(out, 'hf', 'index.html'), 'utf8');
   assert.ok(html.startsWith('<!doctype html>'));
   assert.ok(html.includes('id="scene-only"'));
+  assert.ok(!html.includes('<style>'), 'CSS must be external, not inlined');
+  assert.ok(fs.existsSync(path.join(out, 'hf', 'style.css')), 'CSS must be written as a separate file');
   assert.equal(fs.readFileSync(path.join(out, 'hf', 'assets', 'narration.wav'), 'utf8'), 'RIFFfake');
   const pkg = JSON.parse(fs.readFileSync(path.join(out, 'hf', 'package.json'), 'utf8'));
   assert.equal(pkg.devDependencies.hyperframes, HYPERFRAMES_VERSION);

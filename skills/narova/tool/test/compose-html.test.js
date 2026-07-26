@@ -26,6 +26,12 @@ test('document starts with the doctype (hyperframes lint requirement)', () => {
   assert.ok(doc().startsWith('<!doctype html>'));
 });
 
+test('stylesheet is an external link, not inlined (keeps HTML under composition_file_too_large threshold)', () => {
+  const h = doc();
+  assert.match(h, /<link rel="stylesheet" href="style\.css">/);
+  assert.ok(!h.includes('<style>'), 'CSS must not be inlined');
+});
+
 test('root carries the composition contract attributes', () => {
   const h = doc();
   assert.match(h, /data-composition-id="main"/);

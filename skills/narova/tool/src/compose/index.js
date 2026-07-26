@@ -39,6 +39,7 @@ function compose(config, outDir) {
     }
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
+  fs.writeFileSync(path.join(hfDir, 'style.css'), css);
   // Prefer mix.wav (narration + music bed + sfx) when the synth stage made one.
   const mixWav = path.join(outDir, 'audio', 'mix.wav');
   fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));

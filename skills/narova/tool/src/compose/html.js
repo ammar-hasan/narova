@@ -87,9 +87,7 @@ function composeDoc(config, size, data, css) {
   <meta name="viewport" content="width=${size.w}, height=${size.h}">
   <title>${title}</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-  <style>
-${css}
-  </style>
+  <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div id="root" data-composition-id="main" data-start="0"
