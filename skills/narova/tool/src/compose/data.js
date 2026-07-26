@@ -24,6 +24,7 @@ const normWord = s => String(s).toLowerCase()
 function composeData(config, timings) {
   const captions = config.captions || {};
   const emphasis = new Set((captions.emphasis || []).map(normWord));
+  const maxWords = Number.isInteger(captions.maxWords) ? captions.maxWords : Infinity;
 
   const scenes = [];
   let acc = 0;
@@ -48,17 +49,22 @@ function composeData(config, timings) {
     }
     for (const ws of by.values()) {
       const who = ws[0].who;
-      groups.push({
-        who,
-        label: (config.voices[who] && config.voices[who].label) || who,
-        start: r3(sc.start + ws[0].t0),
-        sceneEnd: r3(sc.start + sc.dur),
-        words: ws.map(w => {
-          const word = { w: w.w, t0: r3(sc.start + w.t0), t1: r3(sc.start + w.t1) };
-          if (emphasis.size && emphasis.has(normWord(w.w))) word.kw = 1;
-          return word;
-        }),
-      });
+      const label = (config.voices[who] && config.voices[who].label) || who;
+      // Chunk long sentences into maxWords-sized caption lines (bilingual content).
+      for (let offset = 0; offset < ws.length; offset += maxWords) {
+        const chunk = ws.slice(offset, offset + maxWords);
+        groups.push({
+          who,
+          label,
+          start: r3(sc.start + chunk[0].t0),
+          sceneEnd: r3(sc.start + sc.dur),
+          words: chunk.map(w => {
+            const word = { w: w.w, t0: r3(sc.start + w.t0), t1: r3(sc.start + w.t1) };
+            if (emphasis.size && emphasis.has(normWord(w.w))) word.kw = 1;
+            return word;
+          }),
+        });
+      }
     }
   }
   groups.sort((a, b) => a.start - b.start);

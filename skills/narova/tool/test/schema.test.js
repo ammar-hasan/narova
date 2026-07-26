@@ -248,9 +248,9 @@ test('sfx entries anchor to scenes; bad anchors/files throw', () => {
 });
 
 test('captions preset/emphasis resolve with defaults; junk throws', () => {
-  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'karaoke', emphasis: [] });
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'karaoke', emphasis: [], maxWords: null });
   const c = resolveConfig({ ...validRaw(), captions: { preset: 'slam', emphasis: ['Free', ' zero '] } }, {}, '.');
-  assert.deepEqual(c.captions, { preset: 'slam', emphasis: ['Free', 'zero'] });
+  assert.deepEqual(c.captions, { preset: 'slam', emphasis: ['Free', 'zero'], maxWords: null });
   assert.throws(() => resolveConfig({ ...validRaw(), captions: { preset: 'bounce' } }, {}, '.'),
     /config\.captions\.preset: unknown preset "bounce"/);
   assert.throws(() => resolveConfig({ ...validRaw(), captions: { emphasis: 'Free' } }, {}, '.'),

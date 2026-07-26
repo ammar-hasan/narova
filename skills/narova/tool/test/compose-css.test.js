@@ -61,7 +61,7 @@ test('theme.css is appended last so it can override the base', () => {
 
 test('the canvas reserves the caption band; the column width is a token', () => {
   const css = composeCss({}, voices, size);
-  assert.match(css, /\.canvas\{[^}]*padding-bottom:clamp\(84px,15vh,170px\)/);
+  assert.match(css, /\.canvas\{[^}]*padding-bottom:var\(--cap-pad,\s*clamp\(84px,15vh,170px\)\)/);
   assert.match(css, /\.scenebody\{[^}]*max-width:var\(--colw,1000px\)/);
   assert.match(composeCss({ colw: '1180px' }, voices, size), /--colw:1180px/);
 });

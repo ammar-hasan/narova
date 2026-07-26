@@ -75,7 +75,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
  * its height so vertically-centered content never slides underneath it.
  * --colw widens the content column for wide infographics/maps
  * (theme: { colw: "1180px" }) without touching this stylesheet. */
-.canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding-bottom:clamp(84px,15vh,170px)}
+.canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding-bottom:var(--cap-pad, clamp(84px,15vh,170px))}
 .scenebody{width:100%;max-width:var(--colw,1000px);display:flex;flex-direction:column;align-items:stretch}
 .progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--track);z-index:6}
 .progress > i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,var(--accent-dim),var(--accent));box-shadow:0 0 12px var(--accent)}
@@ -87,7 +87,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .grad{background:linear-gradient(92deg,var(--accent),#7ef0ff 40%,var(--pink) 80%,var(--gold));-webkit-background-clip:text;background-clip:text;color:transparent;background-size:220% auto}
 
 /* captions: groups stack on one band, timeline toggles their opacity */
-.capzone{position:absolute;left:0;right:0;bottom:3px;z-index:5;padding:0 6% 22px}
+.capzone{position:absolute;left:0;right:0;bottom:3px;z-index:5;padding:0 6% var(--cap-gap, 22px)}
 .cap-group{position:absolute;left:6%;right:6%;bottom:22px;display:flex;flex-direction:column;align-items:center;gap:10px;opacity:0}
 .spk{display:flex;align-items:center;gap:8px;font-family:var(--mono);font-size:clamp(9px,1.05vw,11px);letter-spacing:.18em;color:var(--muted);text-transform:uppercase}
 .spk .eq{display:inline-flex;gap:2px;align-items:flex-end;height:12px}

@@ -241,11 +241,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   // Captions: a karaoke style preset plus words to auto-emphasize (matched
   // case-insensitively, punctuation-stripped, against each spoken token).
-  const captions = { preset: 'karaoke', emphasis: [] };
+  const captions = { preset: 'karaoke', emphasis: [], maxWords: null };
   if (raw.captions != null) {
     const c = raw.captions;
     if (typeof c !== 'object' || Array.isArray(c)) {
-      errs.push('config.captions: expected an object like { preset, emphasis }');
+      errs.push('config.captions: expected an object like { preset, emphasis, maxWords }');
     } else {
       if (c.preset != null) {
         if (!CAPTION_PRESETS.has(c.preset)) {
@@ -256,6 +256,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (!Array.isArray(c.emphasis) || c.emphasis.some(w => typeof w !== 'string' || !w.trim())) {
           errs.push('config.captions.emphasis: expected an array of words');
         } else captions.emphasis = c.emphasis.map(w => w.trim());
+      }
+      if (c.maxWords != null) {
+        if (!Number.isInteger(c.maxWords) || c.maxWords < 1 || c.maxWords > 30) {
+          errs.push('config.captions.maxWords: expected an integer from 1 to 30');
+        } else captions.maxWords = c.maxWords;
       }
     }
   }
