@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Changelog — narova</title>
+<meta name="description" content="Every notable change to narova, version by version.">
+<meta property="og:title" content="narova changelog">
+<meta property="og:url" content="https://ammar-hasan.github.io/narova/changelog/">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2312061d'/%3E%3Cpath d='M24 18l22 14-22 14z' fill='%23d6f94c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="changelog.css">
+</head>
+<body>
+
+<div class="cursor-dot" aria-hidden="true"></div>
+<div class="cursor-ring" aria-hidden="true"></div>
+<div class="progress" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="nav-logo" href="../" data-hover>
+    <svg viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><rect width="64" height="64" rx="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M24 18l22 14-22 14z" fill="#d6f94c"/></svg>
+    narova
+  </a>
+  <nav class="nav-links">
+    <a href="../#demo" data-hover>Demo</a>
+    <a href="../#features" data-hover>Features</a>
+    <a href="../#how" data-hover>How it works</a>
+    <a href="./" data-hover aria-current="page">Changelog</a>
+  </nav>
+  <a class="nav-gh magnetic" href="https://github.com/ammar-hasan/narova" data-hover>
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    GitHub
+  </a>
+</header>
+
+<main>
+
+  <section class="cl-hero">
+    <p class="kicker sr-title">Every move, logged</p>
+    <h1 class="sec-title sr-title">Change<em>log.</em></h1>
+    <p class="cl-sub sr-title">Follows <a href="https://keepachangelog.com/en/1.1.0/" data-hover>Keep a Changelog</a> and
+      <a href="https://semver.org/" data-hover>SemVer</a>. The raw file lives in
+      <a href="https://github.com/ammar-hasan/narova/blob/main/CHANGELOG.md" data-hover>CHANGELOG.md</a>.</p>
+  </section>
+
+  <section class="cl-list">
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version unreleased">Unreleased</span>
+        <span class="rel-date">next</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Interactive landing page (this site): pointer-reactive WebGL hero, scroll-driven storytelling, karaoke caption demo, bento feature grid.</li>
+          <li>Demo GIF and video poster for the README.</li>
+          <li>This changelog, in the repo and on the site.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>README restructured around the demo: hook, GIF, why-bullets, install, quickstart.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.6.0</span>
+        <span class="rel-date">2026-07-21</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Photo motion, scene transitions, XTTS voice cloning, and Qwen instruct control.</li>
+          <li>Chatterbox voice-cloning TTS backend.</li>
+          <li>narova skill showcase reel.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Session friction from the us-iran-standoff build: motion glitches, scene ids, QA workflow, CLI edges.</li>
+          <li>Loud clone-path errors, drift lint, chatterbox validation and cache identity.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.5.0</span>
+        <span class="rel-date">2026-07-21</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Example intro videos: Folio3, Careem, DeepLearning.AI, US–Iran standoff briefing.</li>
+          <li>Hardening against the failures found in the bazaartech retrospective.</li>
+          <li>Skill exposed to <code>.agents</code>-standard agents at project scope.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Aligned versions and hardened config/argument edges from the skill review.</li>
+        </ul>
+        <h4><span class="tag removed">Removed</span></h4>
+        <ul>
+          <li>Legacy examples superseded by the generated intro projects.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.4.0</span>
+        <span class="rel-date">2026-07-21</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Source-aware, asset-native pipeline: any URL becomes verified source material.</li>
+          <li>Iteration-consistent synthesis: unchanged turns keep byte-identical audio across revisions.</li>
+          <li>Prompt-to-video craft references and anti-template visual-variety rules.</li>
+          <li>Qwen3-TTS backend and theme-from-intent skill rules.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Breaking:</strong> narova IS the skill — tool bundled under the standard <code>skills/</code> layout.</li>
+          <li>Docs rewritten in plain language; tests moved into the skill.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.3.0</span>
+        <span class="rel-date">2026-07-21</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Breaking:</strong> <code>build</code>/<code>preview</code> run on the HyperFrames render engine; the old player/capture/assemble/serve pipeline is deleted.</li>
+        </ul>
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><code>narova compose</code> — HyperFrames composition generator.</li>
+          <li><code>audio/full.wav</code> — the concatenated narration track.</li>
+          <li>Zero-dependency test suite for schema, lints, compose, and timings.</li>
+          <li>Claude Code agent skill + installer.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.2.0</span>
+        <span class="rel-date">2026-07-20</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><code>narova check</code> — fast config validation with no synth or capture.</li>
+          <li><code>vkf-upgrade</code> example: a 7-scene 1:1 social announcement.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><code>py/</code> and <code>scripts/</code> now ship in the published package files.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.1.0</span>
+        <span class="rel-date">2026-07-15</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Initial release: a script-to-narrated-kinetic-video toolkit.</li>
+        </ul>
+      </div>
+    </article>
+
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>MIT · built with narova, narrated by narova</span>
+  <a href="https://github.com/ammar-hasan/narova" data-hover>github.com/ammar-hasan/narova</a>
+</footer>
+
+<script src="../vendor/gsap.min.js"></script>
+<script src="../vendor/ScrollTrigger.min.js"></script>
+<script src="../vendor/lenis.min.js"></script>
+<script src="../app.js"></script>
+</body>
+</html>

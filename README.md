@@ -1,29 +1,35 @@
+<div align="center">
+
 # narova
 
-> Working name. The final name is not decided yet.
+**You write a prompt. narova makes the video.**
 
-**You give a prompt or a scene script. narova makes a narrated video.**
+A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
+prompts, scripts, and any URL into narrated, captioned video. Rendered on your machine.
 
-<div align="center">
-  <video src="assets/narova-skill-reel.mp4" width="100%" controls playsinline title="Narova — prompt, voice, motion"></video>
-  <p><a href="assets/narova-skill-reel.mp4">Watch the 30-second Narova overview</a></p>
+[![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
+[![Version](https://img.shields.io/badge/version-0.6.0-4fd9e8.svg)](./package.json)
+[![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
+
+<a href="assets/narova-skill-reel.mp4">
+  <img src="assets/narova-demo.gif" alt="narova demo — prompt, voice, motion" width="100%">
+</a>
+
+*This 30-second reel was made by narova, about narova. [Watch it with sound](assets/narova-skill-reel.mp4) · [Live site](https://ammar-hasan.github.io/narova/)*
+
 </div>
 
-The video has:
+## Why narova
 
-- Two voices talking to each other (neural TTS, runs on your machine).
-- Captions that light up word by word, in each speaker's color.
-- Elements that appear exactly when the voice reaches them.
-- No API keys. No cloud.
+- **Two voices, one conversation** — neural TTS dialogue synthesized locally. Give each speaker a color; narova writes the banter and the timing.
+- **Karaoke captions** — every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.
+- **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
+- **No API keys. No cloud.** — ffmpeg, local TTS, and [HyperFrames](https://www.npmjs.com/package/hyperframes). Nothing leaves your machine.
 
-narova makes the speech. [HyperFrames](https://www.npmjs.com/package/hyperframes)
-draws the pictures and renders the mp4.
+## Install
 
-## narova is a skill
-
-The whole tool lives inside one folder: `skills/narova/`. An AI agent
-(Claude Code, Codex, Cursor, ...) reads it and can build videos for you.
-To install it:
+narova is a **skill** — the whole product lives in `skills/narova/`, and any agent
+that reads skills can use it:
 
 ```bash
 npx skills add ammar-hasan/narova
@@ -38,9 +44,9 @@ npm link            # optional: gives you the `narova` command
 narova doctor       # checks ffmpeg, python, hyperframes
 
 narova init generated/myreel && cd generated/myreel
-narova synth        # makes narration + timings
-narova preview --detach   # keeps Studio alive and prints its review URL
-narova build --reuse      # after approval, makes out/video.mp4
+narova synth        # makes narration + word timings
+narova preview --detach   # review it in HyperFrames Studio
+narova build --reuse      # after approval → out/video.mp4
 ```
 
 You need: **ffmpeg**, **Node 18+**, **Python 3.10+**.
@@ -50,6 +56,10 @@ at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.
 This can take a minute. It is not stuck.
 
 Without `npm link`, run `node skills/narova/tool/bin/narova.js` instead of `narova`.
+
+Or skip the terminal entirely — once the skill is installed, just ask your agent
+for a video. Point it at a product site, an article, a paper, or a repo, and it
+writes the script, picks the voices, and builds the visual language itself.
 
 ## The scene script
 
@@ -150,8 +160,10 @@ The config file is the only source of truth.
 
 ```
 skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
+docs/              the marketing site (GitHub Pages) + /changelog
 examples/          sample projects (incl. one built from a plain-language prompt)
 generated/         agent-created projects; source kept, out/ and build/ ignored
+CHANGELOG.md       every notable change, version by version
 SPEC.md            the contract
 VISION.md          the product vision, mapped to where each point is implemented
 LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline
@@ -161,4 +173,4 @@ Run the tests: `npm test` (no extra deps).
 
 ## License
 
-MIT — see [LICENSE](./LICENSE).
+MIT — see [LICENSE](./LICENSE). Changes are tracked in [CHANGELOG.md](./CHANGELOG.md) and on the [changelog page](https://ammar-hasan.github.io/narova/changelog/).

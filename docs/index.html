@@ -1,0 +1,204 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>narova — Prompt in. Narrated video out.</title>
+<meta name="description" content="narova is a skill for your AI agent that turns prompts, scripts, and any URL into narrated, captioned videos — rendered on your machine. No API keys. No cloud.">
+<meta property="og:title" content="narova — Prompt in. Narrated video out.">
+<meta property="og:description" content="A skill for your AI agent: prompts, scripts, and URLs become narrated, captioned videos. Fully local. No API keys.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ammar-hasan.github.io/narova/">
+<meta property="og:image" content="https://ammar-hasan.github.io/narova/assets/poster.jpg">
+<meta name="twitter:card" content="summary_large_image">
+<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2312061d'/%3E%3Cpath d='M24 18l22 14-22 14z' fill='%23d6f94c'/%3E%3C/svg%3E">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+<div class="cursor-dot" aria-hidden="true"></div>
+<div class="cursor-ring" aria-hidden="true"></div>
+<div class="progress" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+<div class="grain" aria-hidden="true"></div>
+
+<header class="nav">
+  <a class="nav-logo" href="#top" data-hover>
+    <svg viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><rect width="64" height="64" rx="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M24 18l22 14-22 14z" fill="#d6f94c"/></svg>
+    narova
+  </a>
+  <nav class="nav-links">
+    <a href="#demo" data-hover>Demo</a>
+    <a href="#features" data-hover>Features</a>
+    <a href="#how" data-hover>How it works</a>
+    <a href="#quickstart" data-hover>Quickstart</a>
+    <a href="changelog/" data-hover>Changelog</a>
+  </nav>
+  <a class="nav-gh magnetic" href="https://github.com/ammar-hasan/narova" data-hover>
+    <svg viewBox="0 0 16 16" width="16" height="16" aria-hidden="true"><path fill="currentColor" d="M8 0C3.58 0 0 3.58 0 8c0 3.54 2.29 6.53 5.47 7.59.4.07.55-.17.55-.38 0-.19-.01-.82-.01-1.49-2.01.37-2.53-.49-2.69-.94-.09-.23-.48-.94-.82-1.13-.28-.15-.68-.52-.01-.53.63-.01 1.08.58 1.23.82.72 1.21 1.87.87 2.33.66.07-.52.28-.87.51-1.07-1.78-.2-3.64-.89-3.64-3.95 0-.87.31-1.59.82-2.15-.08-.2-.36-1.02.08-2.12 0 0 .67-.21 2.2.82.64-.18 1.32-.27 2-.27s1.36.09 2 .27c1.53-1.04 2.2-.82 2.2-.82.44 1.1.16 1.92.08 2.12.51.56.82 1.27.82 2.15 0 3.07-1.87 3.75-3.65 3.95.29.25.54.73.54 1.48 0 1.07-.01 1.93-.01 2.2 0 .21.15.46.55.38A8.01 8.01 0 0 0 16 8c0-4.42-3.58-8-8-8z"/></svg>
+    GitHub
+  </a>
+</header>
+
+<main id="top">
+
+  <!-- HERO -->
+  <section class="hero">
+    <canvas id="gl" aria-hidden="true"></canvas>
+    <div class="hero-fallback" aria-hidden="true"></div>
+    <div class="hero-inner">
+      <p class="kicker reveal-line">The narration-first video skill</p>
+      <h1 class="hero-title" id="heroTitle">
+        <span class="ht-line">You write a prompt.</span>
+        <span class="ht-line grad">narova makes the video.</span>
+      </h1>
+      <p class="hero-sub reveal-line">A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
+        prompts, scripts, and any URL into narrated, captioned video. Rendered on your machine.</p>
+      <div class="cta-row reveal-line">
+        <button class="install magnetic" id="copyInstall" data-hover aria-label="Copy install command">
+          <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova</code>
+          <span class="copy-label" id="copyLabel">copy</span>
+        </button>
+        <a class="btn-ghost magnetic" href="https://github.com/ammar-hasan/narova" data-hover>★ Star on GitHub</a>
+      </div>
+      <div class="karaoke" id="karaoke" aria-label="Live demo: word-synced captions in two voices"></div>
+      <p class="trust reveal-line">MIT licensed&nbsp;&nbsp;·&nbsp;&nbsp;No API keys&nbsp;&nbsp;·&nbsp;&nbsp;100% local</p>
+    </div>
+    <div class="scroll-hint" aria-hidden="true"><span></span></div>
+  </section>
+
+  <!-- MARQUEE -->
+  <div class="marquee" aria-hidden="true">
+    <div class="marquee-track" id="marqueeTrack">
+      <span>Claude Code</span><i>·</i><span>Codex</span><i>·</i><span>Cursor</span><i>·</i><span>Kimi Code</span><i>·</i><span>opencode</span><i>·</i><span>any agent that reads skills</span><i>·</i>
+    </div>
+  </div>
+
+  <!-- VIDEO -->
+  <section class="video-section" id="demo">
+    <div class="video-pin" id="videoPin">
+      <h2 class="sec-title sr-title">Don't read about it. <em>Watch it.</em></h2>
+      <div class="video-card" id="videoCard">
+        <video src="assets/narova-skill-reel.mp4" poster="assets/poster.jpg"
+               autoplay muted loop playsinline controls preload="metadata"
+               title="narova — prompt, voice, motion"></video>
+        <div class="video-glow" aria-hidden="true"></div>
+      </div>
+      <p class="video-cap">This 30-second reel was made by narova, about narova.</p>
+    </div>
+  </section>
+
+  <!-- FEATURES / BENTO -->
+  <section class="features" id="features">
+    <p class="kicker sr-title">Speech drives everything</p>
+    <h2 class="sec-title sr-title">The voice is the clock.<br><em>Every word is a trigger.</em></h2>
+    <div class="bento">
+
+      <article class="card card-big tilt" data-hover>
+        <div class="wave-bars" aria-hidden="true">
+          <span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span><span></span>
+        </div>
+        <h3>Two voices, one conversation</h3>
+        <p>Neural TTS dialogue — piper, XTTS, or Qwen voices — synthesized on your machine.
+           Give each speaker a color; narova writes the banter and the timing.</p>
+      </article>
+
+      <article class="card tilt" data-hover>
+        <h3>Karaoke captions</h3>
+        <p>Every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.</p>
+      </article>
+
+      <article class="card tilt" data-hover>
+        <h3>Cue-timed reveals</h3>
+        <p><code>data-cue="2"</code> keeps an element hidden until turn 2 is spoken. Visuals land on the beat.</p>
+      </article>
+
+      <article class="card tilt" data-hover>
+        <h3>Any URL becomes source material</h3>
+        <p>Product sites, articles, papers, docs, repos — narova extracts the facts and the visual evidence, then scripts from them.</p>
+      </article>
+
+      <article class="card tilt" data-hover>
+        <h3>No keys. No cloud.</h3>
+        <p>ffmpeg, local TTS, and HyperFrames. Your machine does all the work; nothing leaves it.</p>
+      </article>
+
+      <article class="card card-wide tilt" data-hover>
+        <h3>Never the same video twice</h3>
+        <p>Palette, layout, pacing, and one signature move are derived from each brief — not a template re-skinned.
+           A paper walkthrough doesn't look like a product reel, and neither looks like anyone else's.</p>
+      </article>
+
+    </div>
+  </section>
+
+  <!-- HOW IT WORKS -->
+  <section class="how" id="how">
+    <p class="kicker sr-title">From idea to mp4</p>
+    <h2 class="sec-title sr-title">Three moves. <em>That's it.</em></h2>
+    <div class="steps">
+      <svg class="steps-line" viewBox="0 0 1000 60" preserveAspectRatio="none" aria-hidden="true">
+        <path id="stepsPath" d="M0,30 C250,10 750,50 1000,30" fill="none"/>
+      </svg>
+      <div class="step" data-hover>
+        <span class="step-num">01</span>
+        <h3>Prompt or script</h3>
+        <p>Tell your agent what the video is about — or drop a URL. It writes <code>reel.config.mjs</code>: voices, scenes, visuals.</p>
+      </div>
+      <div class="step" data-hover>
+        <span class="step-num">02</span>
+        <h3>Synth</h3>
+        <p><code>narova synth</code> creates the narration and scales word timings to match the real audio exactly.</p>
+      </div>
+      <div class="step" data-hover>
+        <span class="step-num">03</span>
+        <h3>Build</h3>
+        <p>Preview in HyperFrames Studio, then <code>narova build</code> renders <code>out/video.mp4</code> with the audio inside.</p>
+      </div>
+    </div>
+  </section>
+
+  <!-- QUICKSTART -->
+  <section class="quick" id="quickstart">
+    <h2 class="sec-title sr-title">First video in <em>sixty seconds.</em></h2>
+    <div class="terminal tilt" data-hover>
+      <div class="term-bar">
+        <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
+        <span class="term-title">your machine — no cloud involved</span>
+        <button class="term-copy magnetic" id="copyQuick" data-hover>copy</button>
+      </div>
+      <pre id="quickCode"><span class="c"># needs: ffmpeg · node 18+ · python 3.10+</span>
+<span class="p">$</span> git clone https://github.com/ammar-hasan/narova.git && cd narova
+<span class="p">$</span> npm link
+<span class="p">$</span> narova init generated/myreel && cd generated/myreel
+<span class="p">$</span> narova synth          <span class="c"># narration + word timings</span>
+<span class="p">$</span> narova preview        <span class="c"># review it in HyperFrames Studio</span>
+<span class="p">$</span> narova build          <span class="c"># → out/video.mp4</span></pre>
+    </div>
+    <p class="quick-note">Or don't touch the terminal at all — install the skill and just ask your agent for a video.</p>
+  </section>
+
+  <!-- FINAL CTA -->
+  <section class="final-cta">
+    <h2 class="final-title sr-title">Your next video is<br><em>one prompt away.</em></h2>
+    <div class="cta-row">
+      <button class="install magnetic" id="copyInstall2" data-hover aria-label="Copy install command">
+        <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova</code>
+        <span class="copy-label">copy</span>
+      </button>
+      <a class="btn-ghost magnetic" href="https://github.com/ammar-hasan/narova" data-hover>★ Star on GitHub</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer">
+  <span>MIT · built with narova, narrated by narova</span>
+  <a href="https://github.com/ammar-hasan/narova" data-hover>github.com/ammar-hasan/narova</a>
+</footer>
+
+<script src="vendor/gsap.min.js"></script>
+<script src="vendor/ScrollTrigger.min.js"></script>
+<script src="vendor/lenis.min.js"></script>
+<script src="app.js"></script>
+</body>
+</html>
