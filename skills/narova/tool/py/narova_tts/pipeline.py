@@ -244,11 +244,14 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
         parts.append(f"exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}")
     if kind == "chatterbox" and v.get("lang"):
         parts.append(f"lang={v['lang']}")
+    if v.get("gainDb") is not None:
+        parts.append(f"gainDb={v['gainDb']}")
     return "|".join(parts)
 
 
 def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,
-                   cache_key: str | None = None, lang: str | None = None) -> float:
+                   cache_key: str | None = None, lang: str | None = None,
+                   gain_db: float = 0.0) -> float:
     """Synthesize one sentence, speed via atempo (pitch-preserving; NEVER the XTTS
     speed param, LEARNINGS #9), then fade the edges. Returns the MEASURED duration
     of the processed clip — word timing is distributed across this real value.
@@ -261,8 +264,10 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
     backend.synthesize(who, text, raw, lang=lang)
     d = probe(raw) / tempo                 # duration on the post-tempo timeline
     fo = max(0.0, d - FADE)
+    gain = f",volume={gain_db}dB" if gain_db != 0.0 else ""
     sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(raw),
-       "-af", f"atempo={tempo},afade=t=in:st=0:d={FADE},afade=t=out:st={fo}:d={FADE}",
+       "-af", f"atempo={tempo}{gain},"
+              f"afade=t=in:st=0:d={FADE},afade=t=out:st={fo}:d={FADE}",
        "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(out))
     dur = probe(out)
     if cached is not None:
@@ -330,6 +335,7 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
     }
     # Per-voice default lang for chatterbox/qwen (may be overridden per-turn).
     voice_lang = {who: v.get("lang") for who, v in voices.items() if v.get("lang")}
+    voice_gain_db = {who: float(v.get("gainDb", 0.0)) for who, v in voices.items()}
 
     sil = {}
     for name, d in (("s", gap_sentence), ("t", gap_turn), ("lead", lead), ("tail", tail)):
@@ -364,7 +370,11 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
                     tempo,
                     lang=turn_lang,
                 )
-                d = synth_sentence(router[who], who, sent, tmp, w, tempo, cache_key=key, lang=turn_lang)
+                d = synth_sentence(
+                    router[who], who, sent, tmp, w, tempo,
+                    cache_key=key, lang=turn_lang,
+                    gain_db=voice_gain_db.get(who, 0.0),
+                )
                 pieces.append(w)
                 # distribute words across the sentence's real duration, weighted by length
                 toks = sent.split()

@@ -138,6 +138,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         errs.push(`${at}.${key}: must be a number from ${min} to ${max}`);
       }
     }
+    // Per-voice gain trim in dB — balances quieter voices (e.g. Arabic) against
+    // louder ones after loudnorm. Applied before fade/atempo in the ffmpeg chain.
+    if (v.gainDb != null && (typeof v.gainDb !== 'number' || !Number.isFinite(v.gainDb)
+        || v.gainDb < -24 || v.gainDb > 24)) {
+      errs.push(`${at}.gainDb: must be a number from -24 to 24`);
+    }
   });
 
   const timing = { ...DEFAULT_TIMING, ...(raw.timing || {}) };

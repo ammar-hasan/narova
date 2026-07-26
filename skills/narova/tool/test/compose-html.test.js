@@ -160,7 +160,7 @@ test('scene without clip has no video element', () => {
   assert.ok(!h.includes('<video class="broll"'), 'no broll when clip is absent');
 });
 
-test('scene with clip renders a muted, looping video behind chrome', () => {
+test('scene with clip renders a b-roll video as a root-level clip before the scene', () => {
   const clipCfg = {
     ...config,
     scenes: [
@@ -170,15 +170,12 @@ test('scene with clip renders a muted, looping video behind chrome', () => {
   };
   const cliptimings = Object.fromEntries(clipCfg.scenes.map(s => [s.id, timings[s.id] || timings.s1]));
   const h = composeDoc(clipCfg, size, composeData(clipCfg, cliptimings), '');
-  // s1 has a clip; s2 doesn't.
-  assert.match(h, /<video class="clip broll" src="assets\/clip-s1\.mp4" data-start="0" data-duration="5" muted loop playsinline preload="auto">/);
-  assert.ok(!h.includes('clip-s2'), 'scene 2 has no clip');
-  // video appears before chrome div inside the scene section.
-  const s1Chunk = h.slice(h.indexOf('id="scene-s1"'));
-  const s1End = s1Chunk.indexOf('</section>');
-  const vidIdx = s1Chunk.slice(0, s1End).indexOf('<video class="broll"');
-  const chromeIdx = s1Chunk.slice(0, s1End).indexOf('<div class="chrome">');
-  assert.ok(vidIdx < chromeIdx, 'broll video must be before chrome div');
+  assert.match(h, /<video id="broll-s1" class="clip broll" src="assets\/clip-s1\.mp4" data-start="0" data-duration="5" data-track-index="100" muted loop playsinline preload="auto">/);
+  assert.ok(!h.includes('broll-s2'), 'scene 2 has no clip');
+  // b-roll appears before scene-s1 in the root div.
+  const brollIdx = h.indexOf('broll-s1');
+  const sceneIdx = h.indexOf('id="scene-s1"');
+  assert.ok(brollIdx < sceneIdx, 'broll must be before the scene section in the root');
 });
 
 // -- series badge --

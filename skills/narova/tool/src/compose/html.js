@@ -47,6 +47,17 @@ function composeDoc(config, size, data, css) {
   // here we only merge that resolved object over the all-on default.
   const chrome = { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
 
+  // B-roll video clips must be direct children of the composition root so
+  // HyperFrames can discover and seek them. Place them alongside scene clips
+  // with the same start/duration; z-index puts them behind the HTML overlay.
+  const mediaClips = config.scenes.map((s, i) => {
+    if (!s.clip) return '';
+    const sc = data.scenes[i];
+    const id = escapeHtml(s.id);
+    const ext = escapeHtml(path.extname(s.clip));
+    return `  <video id="broll-${id}" class="clip broll" src="assets/clip-${id}${ext}" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${100 + i}" muted loop playsinline preload="auto"></video>`;
+  }).filter(Boolean).join('\n');
+
   const sceneClips = config.scenes.map((s, i) => {
     const sc = data.scenes[i];
     const track = Math.floor(i / 3) + 1;
@@ -54,11 +65,7 @@ function composeDoc(config, size, data, css) {
       ? `<div class="topbar"><div class="wordmark"><b>${title}</b></div>${
         chrome.counter ? `<div class="counter">${String(i + 1).padStart(2, '0')} / ${nn}</div>` : ''}</div>`
       : '';
-    const broll = s.clip
-      ? `<video class="clip broll" src="assets/clip-${escapeHtml(s.id)}${escapeHtml(path.extname(s.clip))}" data-start="0" data-duration="${fmt(sc.dur)}" muted loop playsinline preload="auto"></video>`
-      : '';
     return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
-    ${broll}
     <div class="chrome">
       ${bar}
       <div class="canvas"><div class="scenebody">${namespaceIds(s.body, s.id)}</div></div>
@@ -93,6 +100,7 @@ function composeDoc(config, size, data, css) {
 <div id="root" data-composition-id="main" data-start="0"
      data-width="${size.w}" data-height="${size.h}" data-duration="${fmt(data.total)}">
   <div id="bg" class="stage"></div><!-- class="stage" kept so pre-0.3.0 theme.css background rules still apply -->
+${mediaClips}
 ${sceneClips}
   <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(data.total)}" data-track-index="1000">
     <div class="capzone"><div id="cap-stage" class="cap-preset-${capPreset}" style="position:relative;height:100%"></div></div>
