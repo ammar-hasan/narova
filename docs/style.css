@@ -488,6 +488,47 @@ section > .kicker { text-align: center; }
 
 /* ---------- quickstart ---------- */
 .quick { padding: 110px 24px; max-width: 880px; margin: 0 auto; }
+.quick-intro {
+  max-width: 650px;
+  margin: -12px auto 30px;
+  text-align: center;
+  color: var(--muted);
+  font-size: 16px;
+  line-height: 1.7;
+}
+.prompt-tabs {
+  display: flex;
+  justify-content: center;
+  flex-wrap: wrap;
+  gap: 9px;
+  margin: 0 auto 16px;
+}
+.prompt-tab {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(32,16,58,0.45);
+  color: var(--muted);
+  padding: 8px 14px;
+  font-family: var(--font);
+  font-size: 12px;
+  font-weight: 700;
+  cursor: pointer;
+  transition: color 0.2s, border-color 0.2s, background 0.2s, transform 0.2s;
+}
+.prompt-tab:hover {
+  color: var(--text);
+  border-color: rgba(79,217,232,0.45);
+  transform: translateY(-1px);
+}
+.prompt-tab.active {
+  color: var(--bg);
+  border-color: var(--cyan);
+  background: var(--cyan);
+}
+.prompt-tab:focus-visible {
+  outline: 2px solid var(--lime);
+  outline-offset: 3px;
+}
 .terminal {
   border: 1px solid var(--line); border-radius: 18px;
   background: #0d0416;
@@ -517,9 +558,28 @@ section > .kicker { text-align: center; }
   font-family: var(--mono); font-size: 14px; line-height: 1.85;
   overflow-x: auto;
 }
+.quick .terminal pre { white-space: pre-wrap; overflow-wrap: anywhere; }
 .terminal .p { color: var(--pink); font-weight: 700; }
 .terminal .c { color: rgba(169,156,196,0.6); }
+.terminal .you { color: var(--cyan); font-weight: 800; }
+.terminal .agent { color: var(--lime); font-weight: 800; }
 .quick-note { text-align: center; color: var(--muted); font-size: 14px; margin-top: 24px; }
+.quick-note a {
+  color: var(--cyan);
+  text-decoration: none;
+  border-bottom: 1px solid rgba(79,217,232,0.35);
+  transition: color 0.2s, border-color 0.2s;
+}
+.quick-note a:hover { color: var(--lime); border-color: var(--lime); }
+@media (max-width: 520px) {
+  .quick { padding-left: 16px; padding-right: 16px; }
+  .quick-intro { font-size: 15px; }
+  .prompt-tabs { justify-content: flex-start; }
+  .prompt-tab { font-size: 11px; padding: 7px 11px; }
+  .term-bar { padding: 11px 13px; }
+  .term-title { display: none; }
+  .terminal pre { padding: 20px 18px; font-size: 12px; line-height: 1.75; }
+}
 
 /* ---------- final cta ---------- */
 .final-cta {

@@ -231,6 +231,7 @@
     var btn = document.getElementById(btnId);
     if (!btn) return;
     btn.addEventListener("click", function () {
+      var copyText = typeof text === "function" ? text() : text;
       function done() {
         if (label) {
           var old = label.textContent;
@@ -244,10 +245,10 @@
         }
       }
       if (navigator.clipboard && navigator.clipboard.writeText) {
-        navigator.clipboard.writeText(text).then(done, done);
+        navigator.clipboard.writeText(copyText).then(done, done);
       } else {
         var ta = document.createElement("textarea");
-        ta.value = text; document.body.appendChild(ta); ta.select();
+        ta.value = copyText; document.body.appendChild(ta); ta.select();
         try { document.execCommand("copy"); } catch (e) {}
         document.body.removeChild(ta); done();
       }
@@ -256,9 +257,54 @@
   var INSTALL = "npx skills add ammar-hasan/narova";
   bindCopy("copyInstall", INSTALL, document.querySelector("#copyInstall .copy-label"));
   bindCopy("copyInstall2", INSTALL, document.querySelector("#copyInstall2 .copy-label"));
-  bindCopy("copyQuick",
-    "git clone https://github.com/ammar-hasan/narova.git && cd narova\nnpm link\nnarova init generated/myreel && cd generated/myreel\nnarova synth\nnarova preview\nnarova build",
-    null);
+
+  var PROMPT_EXAMPLES = {
+    idea: {
+      mode: "# idea → video",
+      prompt: "Make a 45-second vertical explainer about why starting small makes habits easier to keep. Make it warm and practical, and show me a preview before rendering.",
+      reply: "I’ll use one warm narrator, a calm visual rhythm, and simple step-by-step scenes. I’ll keep the language practical and show you the vertical preview first."
+    },
+    product: {
+      mode: "# product page → launch video",
+      prompt: "Turn this product page into a 30-second LinkedIn launch video: [product URL]. Lead with the user outcome, use the site’s visual identity, and show me a preview before rendering.",
+      reply: "I’ll study the page, pull its visual language and strongest product outcome, then build a concise launch story for LinkedIn. I’ll show you the direction before the final render."
+    },
+    research: {
+      mode: "# paper → sourced explainer",
+      prompt: "Turn this paper into a 60-second explainer: [paper URL]. Separate the authors’ findings from inference, cite the source on screen, and keep the language accessible.",
+      reply: "I’ll ground every factual claim in the paper, translate the core finding into plain language, and use visuals that clarify the method without overstating the result."
+    },
+    repo: {
+      mode: "# repository → technical overview",
+      prompt: "Read this repository and make a 45-second technical overview: [repository URL]. Explain what it does, show the architecture clearly, and end with how to get started.",
+      reply: "I’ll inspect the README and project structure, focus the story on the real workflow, and turn the architecture into a clear narrated walkthrough with an actionable ending."
+    },
+    script: {
+      mode: "# script → two-host reel",
+      prompt: "Turn the script below into a fast two-host vertical reel. Keep the exchange natural, use distinct caption colors, and let the visuals change with each speaker.\\n\\n[paste script]",
+      reply: "I’ll shape the dialogue into short, energetic turns, give each host a distinct voice and caption color, and cue the visual changes to the speaker handoffs."
+    }
+  };
+  var activePrompt = PROMPT_EXAMPLES.idea;
+  var promptMode = document.getElementById("promptMode");
+  var quickPromptText = document.getElementById("quickPromptText");
+  var quickReplyText = document.getElementById("quickReplyText");
+  document.querySelectorAll(".prompt-tab").forEach(function (tab) {
+    tab.addEventListener("click", function () {
+      var next = PROMPT_EXAMPLES[tab.getAttribute("data-prompt")];
+      if (!next) return;
+      activePrompt = next;
+      document.querySelectorAll(".prompt-tab").forEach(function (item) {
+        var selected = item === tab;
+        item.classList.toggle("active", selected);
+        item.setAttribute("aria-pressed", selected ? "true" : "false");
+      });
+      if (promptMode) promptMode.textContent = next.mode;
+      if (quickPromptText) quickPromptText.textContent = next.prompt;
+      if (quickReplyText) quickReplyText.textContent = next.reply;
+    });
+  });
+  bindCopy("copyQuick", function () { return activePrompt.prompt; }, null);
 
   /* ---------------- WebGL hero ---------------- */
   (function gl() {

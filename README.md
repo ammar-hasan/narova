@@ -38,6 +38,33 @@ npx skills add ammar-hasan/narova
 
 ## Quickstart
 
+Once the skill is installed, ask your agent for the video in normal language.
+Narova supports different starting points:
+
+- **Idea:** “Make a 45-second vertical explainer about why starting small makes
+  habits easier to keep. Make it warm and practical, and show me a preview
+  before rendering.”
+- **Product page:** “Turn this product page into a 30-second LinkedIn launch
+  video: `[product URL]`. Lead with the user outcome and use the site's visual
+  identity.”
+- **Research:** “Turn this paper into a 60-second explainer: `[paper URL]`.
+  Separate the authors' findings from inference, cite the source on screen, and
+  keep the language accessible.”
+- **Repository:** “Read this repository and make a 45-second technical
+  overview: `[repository URL]`. Explain what it does, show the architecture,
+  and end with how to get started.”
+- **Script or dialogue:** “Turn the script below into a fast two-host vertical
+  reel. Keep the exchange natural, use distinct caption colors, and let the
+  visuals change with each speaker.”
+
+Your agent uses Narova to recommend the creative direction, create the editable
+project, synthesize the narration, check the result, and show you a preview.
+You direct revisions in the same conversation.
+
+## Direct CLI control
+
+The CLI is available when you want to inspect or automate each step yourself:
+
 ```bash
 git clone https://github.com/ammar-hasan/narova.git && cd narova
 npm link            # optional: gives you the `narova` command
@@ -56,10 +83,6 @@ at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.
 This can take a minute. It is not stuck.
 
 Without `npm link`, run `node skills/narova/tool/bin/narova.js` instead of `narova`.
-
-Or skip the terminal entirely — once the skill is installed, just ask your agent
-for a video. Point it at a product site, an article, a paper, or a repo, and it
-writes the script, picks the voices, and builds the visual language itself.
 
 ## The scene script
 

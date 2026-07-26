@@ -161,40 +161,52 @@
       </svg>
       <div class="step" data-hover>
         <span class="step-num">01</span>
-        <h3>Prompt or script</h3>
-        <p>Tell your agent what the video is about — or drop a URL. It writes <code>reel.config.mjs</code>: voices, scenes, visuals.</p>
+        <h3>Ask naturally</h3>
+        <p>Tell your agent what you want to make. Add a URL, repo, document, script, or just an idea.</p>
       </div>
       <div class="step" data-hover>
         <span class="step-num">02</span>
-        <h3>Synth</h3>
-        <p><code>narova synth</code> creates the narration and scales word timings to match the real audio exactly.</p>
+        <h3>Narova takes the lead</h3>
+        <p>It recommends the story, voice, look, pacing, and format — then builds the complete editable project.</p>
       </div>
       <div class="step" data-hover>
         <span class="step-num">03</span>
-        <h3>Build</h3>
-        <p>Preview in HyperFrames Studio, then <code>narova build</code> renders <code>out/video.mp4</code> with the audio inside.</p>
+        <h3>Preview, direct, finish</h3>
+        <p>Watch the preview, ask for changes in your own words, and approve the final local render.</p>
       </div>
     </div>
   </section>
 
   <!-- QUICKSTART -->
   <section class="quick" id="quickstart">
-    <h2 class="sec-title sr-title">First video in <em>sixty seconds.</em></h2>
+    <h2 class="sec-title sr-title">Your first video starts<br>with <em>one prompt.</em></h2>
+    <p class="quick-intro">Install the skill once. After that, use Narova the way it was designed: talk to your agent. Pick a starting point or say it your way.</p>
+    <div class="prompt-tabs" aria-label="Example Narova prompts">
+      <button class="prompt-tab active" type="button" aria-pressed="true" data-prompt="idea">Idea</button>
+      <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="product">Product page</button>
+      <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="research">Research</button>
+      <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="repo">Repository</button>
+      <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="script">Script / dialogue</button>
+    </div>
     <div class="terminal tilt" data-hover>
       <div class="term-bar">
         <span class="dot r"></span><span class="dot y"></span><span class="dot g"></span>
-        <span class="term-title">your machine — no cloud involved</span>
-        <button class="term-copy magnetic" id="copyQuick" data-hover>copy</button>
+        <span class="term-title">pick an example · ask your agent · render locally</span>
+        <button class="term-copy magnetic" id="copyQuick" data-hover>copy prompt</button>
       </div>
-      <pre id="quickCode"><span class="c"># needs: ffmpeg · node 18+ · python 3.10+</span>
-<span class="p">$</span> git clone https://github.com/ammar-hasan/narova.git && cd narova
-<span class="p">$</span> npm link
-<span class="p">$</span> narova init generated/myreel && cd generated/myreel
-<span class="p">$</span> narova synth          <span class="c"># narration + word timings</span>
-<span class="p">$</span> narova preview        <span class="c"># review it in HyperFrames Studio</span>
-<span class="p">$</span> narova build          <span class="c"># → out/video.mp4</span></pre>
+      <pre id="quickCode"><span class="c"># install once</span>
+<span class="p">$</span> npx skills add ammar-hasan/narova
+
+<span class="c" id="promptMode"># idea → video</span>
+<span class="you">you →</span> <span id="quickPromptText">Make a 45-second vertical explainer about why starting
+small makes habits easier to keep. Make it warm and practical,
+and show me a preview before rendering.</span>
+
+<span class="agent">agent →</span> <span id="quickReplyText">I’ll use one warm narrator, a calm visual rhythm, and
+simple step-by-step scenes. I’ll keep the language practical
+and show you the vertical preview first.</span></pre>
     </div>
-    <p class="quick-note">Or don't touch the terminal at all — install the skill and just ask your agent for a video.</p>
+    <p class="quick-note">Want direct control? The same open project works from the CLI. <a href="https://github.com/ammar-hasan/narova#direct-cli-control">See the manual workflow →</a></p>
   </section>
 
   <!-- FINAL CTA -->
