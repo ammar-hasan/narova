@@ -87,6 +87,11 @@ why. The user should only need to say "yes" or tweak one thing.
   series if the script is naturally long
 
 **Don't:**
+- Second-guess what the user explicitly chose. If they said "piper" or
+  "30 seconds" or "dark background," use it — don't suggest they switch
+  to xtts or a different length. Only push back if their choice is
+  genuinely broken (a voice that doesn't exist, a 5-second video for a
+  2-minute script, a platform/size mismatch that will fail at render).
 - Ask the user what piper/xtts/qwen is — just pick and explain inline.
 - List every possible option — recommend one and mention the alternative
   only if it's a real contender.
