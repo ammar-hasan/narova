@@ -285,3 +285,86 @@ test('body elements without reserved class names are silent', () => {
   ]));
   assert.ok(!lines.some(l => l.includes('reserved name')), lines.join('\n'));
 });
+
+// ---- render-path CSS compatibility ------------------------------------------
+
+function cssConfig(themeCss, body) {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-ck-'));
+  const cssPath = path.join(tmp, 'theme.css');
+  fs.writeFileSync(cssPath, themeCss || '');
+  const raw = {
+    title: 'test', size: '16:9',
+    theme: { css: cssPath },
+    voices: { a: { label: 'A', color: '#0ff', backend: 'piper', speaker: 'x' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], body: body || '<div/>' }],
+  };
+  const { resolveConfig } = require('../src/schema');
+  try { return resolveConfig(raw, {}, tmp); }
+  finally { fs.rmSync(tmp, { recursive: true, force: true }); }
+}
+
+test('CSS lint warns on backdrop-filter', () => {
+  const config = cssConfig('.card { backdrop-filter: blur(4px); }');
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('backdrop-filter')), 'should warn on backdrop-filter');
+});
+
+test('CSS lint warns on filter: blur', () => {
+  const config = cssConfig('.broll { filter: blur(2px); }');
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('filter: blur')), 'should warn on filter blur');
+});
+
+test('CSS lint warns on filter: drop-shadow', () => {
+  const config = cssConfig('path { filter: drop-shadow(0 0 10px #fff); }');
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('drop-shadow')), 'should warn on drop-shadow');
+});
+
+test('CSS lint warns on mix-blend-mode', () => {
+  const config = cssConfig('.overlay { mix-blend-mode: soft-light; }');
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('mix-blend-mode')), 'should warn on mix-blend-mode');
+});
+
+test('CSS lint warns on filter: brightness/saturate/contrast', () => {
+  const config = cssConfig('img { filter: brightness(.9) saturate(.8) contrast(1.1); }');
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('brightness/saturate/contrast')));
+});
+
+test('CSS lint warns on scene body with slow-path CSS', () => {
+  const config = cssConfig('', '<div style="backdrop-filter: blur(2px)">x</div>');
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('scene "s1" body')), 'should warn on scene body');
+});
+
+test('CSS lint is silent on clean theme.css', () => {
+  const config = cssConfig('.card { color: #fff; background: #111; }');
+  const lines = run(config);
+  assert.ok(!lines.some(l => l.includes('forces screenshot')), 'clean CSS should not warn');
+});
+
+// ---- wipe transition --------------------------------------------------------
+
+function wordyConfig(n) {
+  const raw = {
+    title: 'test', size: '16:9',
+    voices: { a: { label: 'A', color: '#0ff', backend: 'piper', speaker: 'x' } },
+    scenes: [{ id: 's1', transition: 'wipe', vo: [{ who: 'a', text: 'A '.repeat(n) }], body: '<div/>' }],
+  };
+  const { resolveConfig } = require('../src/schema');
+  return resolveConfig(raw, {}, '.');
+}
+
+test('wipe transition on long video warns', () => {
+  const config = wordyConfig(400); // many words = longer duration
+  const lines = run(config);
+  assert.ok(lines.some(l => l.includes('wipe') && l.includes('fade')), 'should suggest fade');
+});
+
+test('wipe transition on short video is silent', () => {
+  const config = wordyConfig(5);
+  const lines = run(config);
+  assert.ok(!lines.some(l => l.includes('wipe') && l.includes('fade')), 'short video wipe should be silent');
+});

@@ -64,7 +64,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 
 /* clips */
 .scene{position:absolute;inset:0;z-index:1}
-.broll{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.52;filter:brightness(.72);pointer-events:none}
+.broll{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.52;pointer-events:none}
 .overlay{position:absolute;inset:0;z-index:5;pointer-events:none}
 
 .chrome{position:absolute;inset:0;padding:clamp(16px,3.1vw,32px);display:flex;flex-direction:column;z-index:3}

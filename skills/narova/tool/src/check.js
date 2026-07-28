@@ -158,6 +158,11 @@ function check(config) {
     if (s.transition != null && !SCENE_TRANSITIONS.has(s.transition)) {
       warnings.push(`scene "${s.id}": unknown transition "${s.transition}" (valid: fade, wipe, slide, zoom) — the runtime falls back to fade`);
     }
+    // wipe transition uses clip-path which forces the renderer into screenshot
+    // capture for every frame. On long videos this can double render time.
+    if (s.transition === 'wipe' && estimateSeconds(config) > 30) {
+      warnings.push(`scene "${s.id}": "wipe" transition uses clip-path, which forces screenshot capture on all frames — consider "fade" for faster renders on videos over 30s`);
+    }
     for (const t of tags(s.body)) {
       // Render-time network makes frames non-reproducible. Project media belongs
       // in assets/ (copied by compose) or in a small data URI / inline SVG.
@@ -247,6 +252,32 @@ function check(config) {
   }
   if (/(?:font-family|--[\w-]*(?:font|serif|sans|mono))\s*:[^;{}]*(?:Georgia|Times New Roman|Arial|Roboto)/i.test(config.themeCss || '')) {
     warnings.push('theme.css uses a named fallback font — HyperFrames may fetch it; use the bundled family plus serif/sans-serif/monospace unless the extra family is intentional');
+  }
+
+  // ---- render-path CSS compatibility (HyperFrames drawElement → screenshot fallback) ----
+  // These CSS features force the HyperFrames renderer into a slower screenshot-based
+  // capture path for every frame. On a 2-minute video that can mean 8+ minutes of
+  // extra render time — worth fixing before synth. See LEARNINGS #38.
+  const SLOW_PATH_RULES = [
+    { pattern: /\bbackdrop-filter\s*:/gi,  desc: 'backdrop-filter forces screenshot capture for every frame' },
+    { pattern: /\bfilter\s*:\s*blur\b/gi,  desc: 'filter: blur() forces screenshot capture' },
+    { pattern: /\bfilter\s*:\s*drop-shadow\b/gi,  desc: 'filter: drop-shadow() forces screenshot capture' },
+    { pattern: /\bfilter\s*:\s*(?:brightness|saturate|contrast)\(/gi,  desc: 'filter: brightness/saturate/contrast() forces screenshot capture; use opacity instead' },
+    { pattern: /\bmix-blend-mode\s*:/gi,   desc: 'mix-blend-mode is incompatible with the render capture path' },
+  ];
+  for (const rule of SLOW_PATH_RULES) {
+    if (rule.pattern.test(config.themeCss || '')) {
+      warnings.push(`theme.css: ${rule.desc} — remove the property or accept significantly slower renders`);
+    }
+  }
+  // Also scan scene body HTML for the same patterns.
+  for (const s of config.scenes) {
+    if (!s.body) continue;
+    for (const rule of SLOW_PATH_RULES) {
+      if (rule.pattern.test(s.body)) {
+        warnings.push(`scene "${s.id}" body: ${rule.desc} — move the effect to a plain color/opacity treatment in theme.css`);
+      }
+    }
   }
   for (const ref of cssUrls(config.themeCss || '')) {
     inspectAssetRef(ref, config, 'theme.css', warnings);

@@ -5,7 +5,7 @@
  * config, theme, and project assets are source; out/hf is never hand-edited. */
 const fs = require('fs');
 const path = require('path');
-const { ensureDir } = require('../util');
+const { ensureDir, probe, sh } = require('../util');
 const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
@@ -37,11 +37,36 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
-  // Copy per-scene b-roll clips to assets/clip-<sceneId>.<ext>.
+  // Copy and auto-loop per-scene b-roll clips. If a clip is shorter than
+  // its scene, narova creates a looped version with ffmpeg so the renderer
+  // doesn't stutter on boundary seeks.
   for (const s of config.scenes) {
     if (s.clip) {
       const ext = path.extname(s.clip).toLowerCase() || '.mp4';
-      fs.copyFileSync(path.resolve(config.projectDir, s.clip), path.join(assetsDir, `clip-${s.id}${ext}`));
+      const dest = path.join(assetsDir, `clip-${s.id}${ext}`);
+      const srcPath = path.resolve(config.projectDir, s.clip);
+      fs.copyFileSync(srcPath, dest);
+      const sceneDur = timings[s.id] ? timings[s.id].dur : 0;
+      if (sceneDur > 0) {
+        try {
+          const clipDur = probe(srcPath);
+          if (clipDur < sceneDur * 0.95) {
+            const isWebm = ext === '.webm';
+            sh('ffmpeg', [
+              '-y', '-loglevel', 'error',
+              '-stream_loop', '-1', '-i', srcPath,
+              '-t', String(Math.ceil(sceneDur + 1)),
+              '-an',
+              ...(isWebm
+                ? ['-c:v', 'libvpx-vp9', '-crf', '20', '-b:v', '0']
+                : ['-c:v', 'libx264', '-preset', 'fast', '-crf', '20']),
+              '-r', '30', '-g', '30', '-keyint_min', '30',
+              '-sc_threshold', '0', '-pix_fmt', 'yuv420p',
+              '-movflags', '+faststart', dest,
+            ]);
+          }
+        } catch { /* keep original clip if ffprobe/ffmpeg fails */ }
+      }
     }
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);

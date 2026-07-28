@@ -6,6 +6,29 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.3] - 2026-07-28
+
+### Added
+
+- **Render-path CSS compatibility lint** — `narova check` now warns on CSS
+  properties that force HyperFrames into slow screenshot capture: `backdrop-filter`,
+  `filter: blur()`, `filter: drop-shadow()`, `filter: brightness/saturate/contrast()`,
+  and `mix-blend-mode`. Scans both `theme.css` and scene body HTML. See LEARNINGS #38.
+- **Auto-loop b-roll clips** — `narova compose` now detects clips shorter than
+  their scenes and auto-loops with ffmpeg `-stream_loop -1`. Handles both mp4
+  (libx264) and webm (libvpx-vp9) input formats.
+- **Wipe transition warning** — `check` warns when `wipe` transition is used on
+  videos over 30s (wipe uses `clip-path`, another slow-capture trigger).
+- 9 new check tests (7 CSS lint + 2 wipe transition).
+- LEARNINGS #38: documented all known slow-path CSS and the auto-loop fix.
+
+### Fixed
+
+- Built-in `.broll` CSS removed `filter:brightness(.72)` (replaced with opacity)
+  to avoid triggering the slow render path in narova's own generated output.
+- Auto-loop ffmpeg command uses `libvpx-vp9` for webm sources (libx264 is
+  incompatible with webm container).
+
 ## [0.8.2] - 2026-07-28
 
 ### Changed

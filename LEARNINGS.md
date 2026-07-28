@@ -185,3 +185,17 @@ Keep the fixes in the code so they never come back.
   Everything else appears at scene start.
 - Two hosts trading lines, with questions and banter, read far better than
   one narrator. Color the active caption word by speaker.
+
+## Render-path CSS compatibility (0.8.3)
+
+38. **CSS blur, drop-shadow, mix-blend-mode, and backdrop-filter force
+    HyperFrames into screenshot capture for every frame.** On a 2-minute
+    30fps video that turns a ~3-minute render into 8+ minutes. The fast
+    drawElement capture path cannot handle these properties. Before synth,
+    `narova check` warns on all of them in theme.css and scene bodies.
+    Replace blur with opacity layers, drop-shadow with plain strokes,
+    brightness/contrast/saturate filters with opacity, and mix-blend-mode
+    with a flat rgba background. Wipe transitions also use clip-path and
+    trigger the same slow path — swap to fade for long videos (>30s).
+    B-roll clips shorter than their scenes must be pre-looped with ffmpeg
+    (`narova compose` now does this automatically).
