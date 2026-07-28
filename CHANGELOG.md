@@ -6,6 +6,37 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.8.2] - 2026-07-28
+
+### Changed
+
+- **`timeline.json` → `manifest.json`** — renamed to align with the roadmap's
+  "canonical narova.manifest.json" vision. All references updated throughout
+  the codebase: `manifest.js`, `manifest.test.js`, pipeline, CLI, SPEC, and
+  reference docs.
+
+### Added
+
+- **Hash/immutability layer** — `manifest.json` now includes SHA-256 hashes
+  for the resolved config, theme CSS, every file under `assets/`, and
+  bed/sfx/clip files. An `environment` block captures the narova version,
+  TTS backend, and compile timestamp.
+- **`narova plan`** — compares the current project config against the last
+  manifest and classifies the change: no-change, config-only (compose +
+  render), visual-only (compose + render, no synth), script-changed (full
+  synth), or full rebuild. Shows affected scenes and which pipeline stages
+  will run.
+- **`narova release`** — named release management in `~/.narova/releases/`:
+  `save <name>` snapshots `manifest.json`, `list` shows all saved releases,
+  `restore <name>` copies back to `out/manifest.json`, `remove <name>`
+  deletes a release.
+- `plan.test.js` (11 tests), `releases.test.js` (7 tests).
+
+### Fixed
+
+- Releases test suite uses isolated temp directories (not `~/.narova/`).
+- Release names sanitized to alphanumeric + dots/dashes/underscores.
+
 ## [0.8.1] - 2026-07-28
 
 ### Added

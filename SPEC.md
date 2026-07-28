@@ -220,8 +220,10 @@ length-weighted estimates (per-scene fallback to estimates on any mismatch).
 narova init <dir>     new project
 narova ingest <url>   fetch a source page: images -> assets/, Chrome screenshot,
                       sources.md entry, claims.md skeleton (references/url-to-source.md)
-narova compile        reel.config.* -> out/manifest.json (versioned IR; also
-                      written automatically by synth/compose/build)
+narova compile        reel.config.* -> out/manifest.json (versioned project
+                      manifest; also written automatically by synth/compose/build)
+narova plan           compare current config against last manifest; classify
+                      what changed and predict which stages will rebuild
 narova check          validate the config (fast, no side effects); prints an
                       estimated narration length for target-duration tuning
 narova synth          Python TTS -> out/audio/*, out/timings.json
@@ -232,6 +234,8 @@ narova build          synth + compose + render -> out/video.mp4
 narova preview        compose + HyperFrames Studio; prints the exact URL
 narova preview --detach   persistent Studio (PID/log); --stop ends it
 narova voices         list or download voices
+narova release        save/list/restore/remove named manifest snapshots
+                      in ~/.narova/releases/
 narova doctor         check ffmpeg, python, venv, hyperframes
 ```
 
@@ -305,7 +309,7 @@ enable forward-compatible consumers to gate on schema changes.
 
 **Schema (top-level keys):** `narova`, `version`, `project`, `format`, `theme`,
 `chrome`, `voices`, `timing`, `audio`, `captions`, `align`, `assets`, `scenes`,
-`variants`, `series`, `variant`, `deliverables`.
+`variants`, `series`, `variant`, `environment`, `hashes`, `deliverables`.
 
 - `project` — title, creation timestamp, platform target.
 - `format` — width, height, fps, sampleRate, colorSpace.
@@ -322,10 +326,14 @@ enable forward-compatible consumers to gate on schema changes.
   platform when `platform` is set. Entries carry width, height, fps, codec,
   bitrate, sampleRate.
 - `stages.synth` — ISO timestamp set after synthesis completes.
+- `environment` — narova version, TTS backend, and compile timestamp.
+- `hashes` — SHA-256 content hashes for config, theme CSS, assets/ tree,
+  and bed/sfx/clip source files.
 
-**Consumers:** `validate(timeline)` checks schema compliance; `mergeTimings()`
-merges `out/timings.json` word-level data into the scene tree; future tooling
-reads the timeline as the canonical project snapshot.
+**Consumers:** `validate(manifest)` checks schema compliance; `mergeTimings()`
+merges `out/timings.json` word-level data into the scene tree; `narova plan`
+compares manifests to classify changes; future tooling reads the manifest as
+the canonical project snapshot.
 
 ## Future work (decided, not started)
 

@@ -17,7 +17,8 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. Exit 1 if invalid. | instant |
-| `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned intermediate representation). The timeline is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
+| `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
+| `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. | piper: fast; xtts/qwen/chatterbox: slow + one-time 1–2GB model |
 | `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project) + `out/captions.srt`/`.vtt`, and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
@@ -27,6 +28,10 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
 | `narova doctor` | check ffmpeg, python, venv, hyperframes. Exit 1 if something is missing. | first run downloads the HyperFrames CLI |
+| `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |
+| `narova release list` | list all saved releases with size and date. | instant |
+| `narova release restore <name>` | copy a saved release back to `out/manifest.json`. | instant |
+| `narova release remove <name>` | delete a saved release. | instant |
 
 `narova render` was removed in 0.3.0. Use `compose` or `build`.
 
