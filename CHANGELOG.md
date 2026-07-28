@@ -92,20 +92,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
-- Version drift across five presentation surfaces (SKILL.md, two
-  package.json files, README badge, CHANGELOG). Root `package.json` is now
-  the canonical version source.
+- Version drift corrected: root `package.json` is now the canonical version
+  source; `scripts/sync-version.js` stamps it into `SKILL.md`, `tool/package.json`,
+  and `README.md` badge. `npm version` runs it automatically.
 
 ## [0.7.10] - 2026-07-28
 
 ### Added
 
-- npx retry with exponential backoff for DNS failures during renderer fetch.
+- npx retry with fixed delay for DNS failures during renderer fetch.
 - Stock assets reference documentation.
 
 ### Changed
 
-- Doctor command now reports mismatched tool versions and venv health.
+- Doctor command now reports mismatched tool versions, venv health, and
+  `agent-browser` availability (for stock footage acquisition).
+- Python test suite: 10 alignment tests (`test_align.py`), 8 audio mix
+  tests (`test_mix.py`) covering bed/sfx concatenation and scene-anchored
+  positioning.
 
 ## [0.7.9] - 2026-07-27
 
@@ -113,7 +117,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - `captions.maxWords` config — limit words per caption line to prevent
   overcrowding.
-- CSS custom property tokens for caption zone height (`--captions-zone-h`).
+- CSS custom property tokens for caption zone spacing (`--cap-pad`,
+  `--cap-gap`).
 
 ## [0.7.8] - 2026-07-26
 
@@ -199,8 +204,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **Per-turn language for multilingual TTS** — `lang` on any turn in
   `reel.config.mjs` selects the TTS language for chatterbox and qwen
   backends (e.g. `vo: [{ who: "a", text: "مرحباً", lang: "ar" }]`).
-- Voice sample management: `narova voice add/list/remove` for
-  chatterbox voice cloning.
+- Voice sample management: `narova voice sample add/list/remove` for
+  chatterbox voice cloning (`samples.js` — validation, auto-normalization:
+  mono, 24 kHz, voice-range EQ, peak-safe loudness).
 
 ### Changed
 
@@ -224,13 +230,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Full CLI command set** — `narova init <dir>` (project scaffolding),
+  `narova check` (config validation), `narova shots` (per-scene QA snapshots
+  via HyperFrames `snapshot`), `narova preview` (HyperFrames Studio with
+  `--detach`/`--stop` lifecycle), `narova captions` (standalone SRT/VTT
+  rewrite from timings.json), `narova voices list|get`, `narova doctor`
+  (ffmpeg, python, venv, hyperframes checks), and `narova build` (full
+  synth + compose + render pipeline).
 - **Background bed + spot SFX** — `bed: {file, volume, fadeIn, fadeOut}` and
   `sfx: [{file, scene, at, volume}]` mixed into narration via ffmpeg.
   Bed changes don't require re-synthesis.
 - **Caption style presets + keyword emphasis** — `captions: {preset: karaoke|slam|pop|rise, emphasis: [...]}`.
   Slam/pop use GSAP-only tweens (seek-safe); emphasis highlights matching words.
 - **Per-platform size presets + duration-band lint** — `platform: tiktok|reels|shorts|linkedin|x` picks frame size
-  and duration-band lint. `compose`/`build` write `captions.srt` + `captions.vtt` sidecars.
+  and duration-band lint. `compose`/`build` write `captions.srt` + `captions.vtt` sidecars
+  (`captions.js`: SRT/VTT export from timings.json).
 - **Forced word alignment** — `align: true | {engine: "auto"|"faster-whisper"|"whisper-cpp"}`.
   Measured word timings replace estimates; per-scene graceful fallback on failure.
 - **Chatterbox v3** — multilingual voice cloning with per-voice `lang`, watermarked output.
@@ -307,6 +321,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - **Breaking:** narova IS the skill — the tool is bundled under the standard
   `skills/` layout; SKILL.md + references are the product.
+- Core Node modules established: `config.js` (project discovery, ESM/CJS/JSON
+  loader), `hf.js` (HyperFrames CLI access, pinned version, preview lifecycle),
+  `util.js` (shared helpers: ffprobe, resolveSize, PLATFORMS, hexToRgba),
+  `doctor.js` (environment checks), `init.js` (project scaffolding).
 - Docs rewritten in plain language; tests moved into the skill.
 
 ## [0.3.0] - 2026-07-21
@@ -318,7 +336,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- `narova compose` — HyperFrames composition generator.
+- `narova compose` — HyperFrames composition generator
+  (`compose/index.js`, `data.js`, `html.js`, `css.js`, `runtime.js`).
+  Generates deterministic GSAP-timeline-driven HyperFrames projects
+  with word-synced captions, cue-timed reveals, and data-* animators.
 - `audio/full.wav` — the concatenated narration track.
 - Zero-dependency test suite for schema, lints, compose, and timings.
 - Claude Code agent skill + installer (with per-project installs).
