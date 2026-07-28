@@ -6,12 +6,33 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Planned (0.8.1)
+## [0.8.1] - 2026-07-28
 
-- Comprehensive export profiles — codec, bitrate, frame-rate, audio-loudness
-  normalization, safe-area guides, color-space tagging, file-size budgeting,
-  and thumbnail generation per platform. Currently `platform` selects frame
-  dimensions and a target duration band only.
+### Added
+
+- **Comprehensive export presets** — `skills/narova/tool/src/exports.js` defines
+  platform-specific render + encode profiles: YouTube 1080p/4K, TikTok,
+  Instagram Reels, YouTube Shorts, LinkedIn, X, and a narova-standard baseline.
+  Each preset carries HyperFrames render flags (`--format`, `--quality`,
+  `--resolution`), an ffmpeg post-processing profile (codec, bitrate, audio
+  loudness normalization, safe-area guides, pixel format, `faststart`), and
+  an optional thumbnail extraction point.
+- `buildFfmpegArgs(input, output, preset)` — pure function for unit-testable
+  ffmpeg argument construction.
+- `postProcess` — loudness-normalize + h264 encode with safe-area drawbox.
+- `generateThumbnail` — extract a thumbnail frame via ffmpeg.
+- `renderDeliverable` — orchestrate HF render → ffmpeg post-process → thumbnail.
+- `buildDeliverables` — render all applicable presets (standard first).
+- `--deliverables` CLI flag on `narova build`.
+- `PLATFORM_TO_PRESET` maps legacy platform keys to canonical preset ids.
+- 19 unit tests with pure arg-level ffmpeg assertion.
+
+### Fixed (codex review)
+
+- **P1**: No in-place ffmpeg processing; use temp path → rename.
+- **P2**: Extension stripped from output name before suffixing.
+- **P2**: Removed `-crf` from bitrate-targeted encodes.
+- **P2**: Tests assert ffmpeg args via pure `buildFfmpegArgs`.
 
 ## [0.8.0] - 2026-07-28
 

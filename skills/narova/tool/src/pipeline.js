@@ -11,6 +11,7 @@ const { compose } = require('./compose');
 const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
 const { compile, read, write, mergeTimings } = require('./timeline');
+const { buildDeliverables } = require('./exports');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
@@ -136,8 +137,18 @@ function build(config, opts = {}) {
   const args = ['render', '--output', path.join('..', name)];
   if (opts.fps) args.push('--fps', String(opts.fps));
   if (opts.quality) args.push('--quality', String(opts.quality));
-  runHf(args, c.dir);
 
+  if (opts.deliverables) {
+    // Multi-deliverable render: one mp4 per export profile.
+    log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
+    const results = buildDeliverables(config, c.dir, outDir, { ...opts, log });
+    const mp4 = path.join(outDir, name);
+    const seconds = probe(mp4);
+    log(`done -> ${results.map(r => r.mp4).join(', ')}  (${seconds.toFixed(1)}s base)`);
+    return { mp4, seconds, hf: c.dir, deliverables: results };
+  }
+
+  runHf(args, c.dir);
   const mp4 = path.join(outDir, name);
   const seconds = probe(mp4);
   log(`done -> ${mp4}  (${seconds.toFixed(1)}s)`);

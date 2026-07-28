@@ -20,7 +20,7 @@ const { check } = require('../src/check');
 const { ingest } = require('../src/ingest');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 
-const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants']);
+const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'deliverables']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -154,7 +154,9 @@ Options:
   --variant <id>           apply a declared hook variant as scene 1 (check/synth/
                            compose/build; build renders out/video-<id>.mp4)
   --variants               build the base video.mp4 AND one out/video-<id>.mp4
-                           per declared variant (shared sentences are cache-free)
+                            per declared variant (shared sentences are cache-free)
+  --deliverables           build: render per-platform deliverables (one mp4 per
+                            export profile + thumbnails, ffmpeg post-processed)
   --fps N                  render fps (hyperframes; default 30)
   --quality draft|standard|high   render quality (hyperframes)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
@@ -282,6 +284,7 @@ async function main() {
       const buildOpts = {
         backend: flags.backend, reuse: flags.reuse,
         fps: flags.fps, quality: flags.quality,
+        deliverables: flags.deliverables,
       };
       if (flags.variants) {
         // One resolved config per pass: base first, then each declared variant.
