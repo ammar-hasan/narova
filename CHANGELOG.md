@@ -6,12 +6,42 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-### Planned (0.7.12)
+### Planned (0.8.1)
 
-- **Comprehensive export profiles** — codec, bitrate, frame-rate,
-  audio-loudness normalization, safe-area guides, color-space tagging,
-  file-size budgeting, and thumbnail generation per platform. Currently
-  `platform` selects frame dimensions and a target duration band only.
+- Comprehensive export profiles — codec, bitrate, frame-rate, audio-loudness
+  normalization, safe-area guides, color-space tagging, file-size budgeting,
+  and thumbnail generation per platform. Currently `platform` selects frame
+  dimensions and a target duration band only.
+
+## [0.8.0] - 2026-07-28
+
+### Added
+
+- **Versioned timeline intermediate representation** — `narova compile`
+  produces `out/timeline.json`, a self-contained JSON document (schema
+  version `1.0`) that captures every datum the pipeline needs: project
+  metadata, format, voices, scenes with narration, asset inventory,
+  deliverables, and variant definitions. The timeline is also written
+  automatically during `synth`/`compose`/`build` and enriched with measured
+  word timings after synthesis (`enrichTimeline`).
+- `compile` command in CLI + help text.
+- Timeline validation (`validate`/`isValid`) enforces the `narova` key,
+  schema version compatibility, and structural integrity.
+- `mergeTimings` merges `timings.json` word-level data into the timeline
+  scene tree with correct sentence-to-turn distribution.
+- `countSentencesPerTurn` utility for mapping synthesis sentence indices to
+  VO turns.
+- `walkAssets` recursively discovers all files in `assetsDir/` for the
+  timeline asset inventory.
+- 31 unit tests for timeline compilation, validation, merge, and round-trip.
+
+### Changed
+
+- `writeStageInputs` now also writes `timeline.json`.
+- `synth` and `build` commands call `enrichTimeline` after TTS completes.
+- Variants in the timeline carry full scene definitions (body, VO, transition)
+  rather than just ids.
+- SPEC.md: timeline IR section added; status bumped to 0.8.0.
 
 ## [0.7.11] - 2026-07-28
 
