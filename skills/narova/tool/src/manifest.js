@@ -1,26 +1,83 @@
 'use strict';
-/* Versioned timeline intermediate representation.
+/* Versioned project manifest — narova's canonical intermediate representation.
 
  * narova projects compile the friendly reel.config.* surface into a single
- * versioned timeline.json document. The timeline captures every datum the
+ * versioned manifest.json document. The manifest captures every datum the
  * pipeline needs — project metadata, format, voices, scenes, narration,
- * timing slots, and deliverables — in one self-contained file.
+ * timing slots, asset inventory, and deliverables — in one self-contained,
+ * hash-addressable file.
 
  * Contract:
- *   compile(config)       — reel.config (resolved) → timeline document
- *   validate(timeline)    — check a timeline against the schema; returns errors[]
+ *   compile(config)       — reel.config (resolved) → manifest document
+ *   validate(manifest)    — check a manifest against the schema; returns errors[]
  *   mergeTimings(tl, path) — read timings.json and merge word/scene data into tl
- *   TIMELINE_SCHEMA_VER   — the schema version string
+ *   MANIFEST_SCHEMA_VER   — the schema version string
 
- * The timeline is forward-compatible: unknown top-level keys are ignored by
+ * The manifest is forward-compatible: unknown top-level keys are ignored by
  * consumers. New pipelines read the `narova` key to decide compatibility. */
 
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const { PLATFORMS } = require('./util');
 
 /* ---- schema version ------------------------------------------------------- */
-const TIMELINE_SCHEMA_VER = '1.0';
+const MANIFEST_SCHEMA_VER = '1.0';
+
+/* ---- hashing --------------------------------------------------------------- */
+
+function sha256(input) {
+  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
+}
+
+function hashFile(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  return sha256(fs.readFileSync(filePath));
+}
+
+function hashConfig(config) {
+  const { assetsDir: _a, projectDir: _p, ...serializable } = config;
+  return sha256(JSON.stringify(serializable));
+}
+
+function buildHashes(config, projectDir) {
+  const h = {};
+  h.config = hashConfig(config);
+  // Theme CSS
+  if (config.themeCss) h.themeCss = sha256(config.themeCss);
+  // Assets: hash each discoverable file
+  const assetsRoot = config.assetsDir || path.join(projectDir || '.', 'assets');
+  if (fs.existsSync(assetsRoot)) {
+    function walk(dir, prefix) {
+      try {
+        for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
+          if (e.isFile()) {
+            h[path.join(prefix || '', e.name)] = hashFile(path.join(dir, e.name));
+          } else if (e.isDirectory()) {
+            walk(path.join(dir, e.name), path.join(prefix || '', e.name));
+          }
+        }
+      } catch {}
+    }
+    walk(assetsRoot, '');
+  }
+  // Bed / sfx / clip files
+  if (config.bed && config.bed.file) {
+    const fp = path.resolve(projectDir || '.', config.bed.file);
+    h[config.bed.file] = hashFile(fp);
+  }
+  if (config.sfx) config.sfx.forEach(s => {
+    const fp = path.resolve(projectDir || '.', s.file);
+    h[s.file] = hashFile(fp);
+  });
+  config.scenes.forEach(s => {
+    if (s.clip) {
+      const fp = path.resolve(projectDir || '.', s.clip);
+      h[s.clip] = hashFile(fp);
+    }
+  });
+  return h;
+}
 
 /* Platfom-specific deliverable presets (future: codec/bitrate/safe-area).
  * Today they carry the frame size + advisory duration band. */
@@ -45,7 +102,7 @@ function compile(config, opts = {}) {
 
   return {
     narova: opts.toolVersion || '0.8.0',
-    version: TIMELINE_SCHEMA_VER,
+    version: MANIFEST_SCHEMA_VER,
     project: {
       title,
       created: new Date().toISOString(),
@@ -88,6 +145,12 @@ function compile(config, opts = {}) {
     variants: compileVariants(variants || []),
     series: series || null,
     variant: variant || null,
+    environment: {
+      narova:    opts.toolVersion || '0.8.0',
+      backend:   opts.backend || config.voices && Object.values(config.voices)[0]?.backend || 'piper',
+      compiled:  new Date().toISOString(),
+    },
+    hashes: buildHashes(config, projectDir),
     deliverables,
   };
 }
@@ -235,40 +298,40 @@ function buildDeliverables(config) {
 
 function validate(tl) {
   const errs = [];
-  if (!tl || typeof tl !== 'object') { errs.push('timeline: expected an object'); return errs; }
+  if (!tl || typeof tl !== 'object') { errs.push('manifest: expected an object'); return errs; }
   // Compatibility gating: the narova key is required for forward compatibility.
   if (!tl.narova || typeof tl.narova !== 'string') {
-    errs.push('timeline.narova: required (string) — the tool version that produced this timeline');
+    errs.push('manifest.narova: required (string) — the tool version that produced this timeline');
   }
-  if (!tl.version || typeof tl.version !== 'string') errs.push('timeline.version: required (string)');
-  else if (tl.version !== TIMELINE_SCHEMA_VER) {
-    errs.push(`timeline.version: expected "${TIMELINE_SCHEMA_VER}", got "${tl.version}"`);
+  if (!tl.version || typeof tl.version !== 'string') errs.push('manifest.version: required (string)');
+  else if (tl.version !== MANIFEST_SCHEMA_VER) {
+    errs.push(`manifest.version: expected "${MANIFEST_SCHEMA_VER}", got "${tl.version}"`);
   }
-  if (!tl.project || typeof tl.project !== 'object') errs.push('timeline.project: required (object)');
-  else if (!tl.project.title || typeof tl.project.title !== 'string') errs.push('timeline.project.title: required (string)');
-  if (!tl.format || typeof tl.format !== 'object') errs.push('timeline.format: required (object)');
+  if (!tl.project || typeof tl.project !== 'object') errs.push('manifest.project: required (object)');
+  else if (!tl.project.title || typeof tl.project.title !== 'string') errs.push('manifest.project.title: required (string)');
+  if (!tl.format || typeof tl.format !== 'object') errs.push('manifest.format: required (object)');
   else {
-    if (!Number.isFinite(tl.format.width)) errs.push('timeline.format.width: required (number)');
-    if (!Number.isFinite(tl.format.height)) errs.push('timeline.format.height: required (number)');
+    if (!Number.isFinite(tl.format.width)) errs.push('manifest.format.width: required (number)');
+    if (!Number.isFinite(tl.format.height)) errs.push('manifest.format.height: required (number)');
   }
   if (!tl.voices || typeof tl.voices !== 'object' || Object.keys(tl.voices).length === 0) {
-    errs.push('timeline.voices: at least one voice required');
+    errs.push('manifest.voices: at least one voice required');
   }
-  if (!Array.isArray(tl.scenes)) errs.push('timeline.scenes: required (array)');
-  else if (tl.scenes.length === 0) errs.push('timeline.scenes: at least one scene required');
+  if (!Array.isArray(tl.scenes)) errs.push('manifest.scenes: required (array)');
+  else if (tl.scenes.length === 0) errs.push('manifest.scenes: at least one scene required');
   else {
     tl.scenes.forEach((s, i) => {
-      if (!s.id) errs.push(`timeline.scenes[${i}].id: required`);
-      if (!Array.isArray(s.vo)) errs.push(`timeline.scenes[${i}].vo: required (array)`);
+      if (!s.id) errs.push(`manifest.scenes[${i}].id: required`);
+      if (!Array.isArray(s.vo)) errs.push(`manifest.scenes[${i}].vo: required (array)`);
       else {
         s.vo.forEach((turn, j) => {
-          if (!turn.who) errs.push(`timeline.scenes[${i}].vo[${j}].who: required`);
-          if (typeof turn.text !== 'string') errs.push(`timeline.scenes[${i}].vo[${j}].text: required`);
+          if (!turn.who) errs.push(`manifest.scenes[${i}].vo[${j}].who: required`);
+          if (typeof turn.text !== 'string') errs.push(`manifest.scenes[${i}].vo[${j}].text: required`);
         });
       }
     });
   }
-  if (!Array.isArray(tl.deliverables)) errs.push('timeline.deliverables: required (array)');
+  if (!Array.isArray(tl.deliverables)) errs.push('manifest.deliverables: required (array)');
   return errs;
 }
 
@@ -345,16 +408,20 @@ function read(p) {
   return JSON.parse(fs.readFileSync(p, 'utf8'));
 }
 
-function write(timeline, outPath) {
-  fs.writeFileSync(outPath, JSON.stringify(timeline, null, 2));
+function write(m, outPath) {
+  fs.writeFileSync(outPath, JSON.stringify(m, null, 2));
 }
 
 module.exports = {
-  TIMELINE_SCHEMA_VER,
+  MANIFEST_SCHEMA_VER,
   compile,
   validate,
   isValid,
   mergeTimings,
+  sha256,
+  hashFile,
+  hashConfig,
+  buildHashes,
   read,
   write,
 };

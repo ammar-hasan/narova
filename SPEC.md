@@ -56,7 +56,7 @@ outside the skill folder so a skill update cannot delete it. The first
 
 ```
 reel.config.mjs
-   │  narova compile     out/timeline.json (versioned intermediate representation)
+   │  narova compile     out/manifest.json (versioned intermediate representation)
    ▼
    │  narova synth       Python: per-scene wavs + full.wav + timings.json
    ▼
@@ -220,7 +220,7 @@ length-weighted estimates (per-scene fallback to estimates on any mismatch).
 narova init <dir>     new project
 narova ingest <url>   fetch a source page: images -> assets/, Chrome screenshot,
                       sources.md entry, claims.md skeleton (references/url-to-source.md)
-narova compile        reel.config.* -> out/timeline.json (versioned IR; also
+narova compile        reel.config.* -> out/manifest.json (versioned IR; also
                       written automatically by synth/compose/build)
 narova check          validate the config (fast, no side effects); prints an
                       estimated narration length for target-duration tuning
@@ -286,7 +286,7 @@ externalization, `captions.maxWords`, XTTS multilingual `lang` support,
 version sync automation, platform qualification, and documentation remediation
 across all surfaces.
 
-Since 0.8.0: versioned timeline intermediate representation beneath the
+Since 0.8.0: versioned manifest intermediate representation beneath the
 friendly `reel.config.*` surface.
 
 Since 0.8.1: comprehensive export profiles with per-platform render presets,
@@ -295,7 +295,7 @@ guides, thumbnails), and `--deliverables` multi-render builds.
 
 ## Timeline intermediate representation
 
-`narova compile` converts `reel.config.*` → `out/timeline.json`, a versioned
+`narova compile` converts `reel.config.*` → `out/manifest.json`, a versioned
 JSON document that captures every datum the pipeline needs in one self-contained
 file. The timeline is also written automatically during `synth` and `build`,
 and enriched with measured word timings after synthesis.

@@ -10,7 +10,7 @@ const { narration } = require('./schema');
 const { compose } = require('./compose');
 const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
-const { compile, read, write, mergeTimings } = require('./timeline');
+const { compile, read, write, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
 
 /* ---- Python (synth) handoff -------------------------------------------------
@@ -56,7 +56,7 @@ function ensureVenv(projectDir, log = console.log) {
 }
 
 /* Write the two Python stage inputs (narration.json + config.resolved.json)
- * plus the versioned timeline.json intermediate representation. */
+ * plus the versioned narova manifest. */
 function writeStageInputs(config, outDir) {
   ensureDir(outDir);
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
@@ -64,10 +64,10 @@ function writeStageInputs(config, outDir) {
   // nor should a generated manifest embed a machine-specific path.
   const { assetsDir: _assetsDir, ...serializableConfig } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
-  // timeline.json — versioned intermediate representation that supersedes
+  // manifest.json — versioned project model that supersedes
   // narration.json + config.resolved.json for downstream consumers.
   const tl = compile(config, { toolVersion: require('../package.json').version });
-  fs.writeFileSync(path.join(outDir, 'timeline.json'), JSON.stringify(tl, null, 2));
+  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(tl, null, 2));
 }
 
 /* `--reuse` replays the previous synth's audio + timings. If the spoken text
@@ -125,7 +125,7 @@ function build(config, opts = {}) {
     backend: opts.backend, reuse,
     projectDir: opts.projectDir, python: opts.python, log,
   });
-  enrichTimeline(outDir);   // merge measured timings into timeline.json
+  enrichTimeline(outDir);   // merge measured timings into manifest.json
 
   log('[2/3] compose');
   const c = compose(config, outDir);
@@ -155,26 +155,26 @@ function build(config, opts = {}) {
   return { mp4, seconds, hf: c.dir };
 }
 
-/* ---- compile: reel.config → timeline.json --------------------------------- */
+/* ---- compile: reel.config → manifest.json --------------------------------- */
 
 function compileTimeline(config, opts = {}) {
   const outDir = path.resolve(opts.out || 'out');
   ensureDir(outDir);
   writeStageInputs(config, outDir);
-  const tl = JSON.parse(fs.readFileSync(path.join(outDir, 'timeline.json'), 'utf8'));
-  return { timeline: tl, outDir };
+  const tl = JSON.parse(fs.readFileSync(path.join(outDir, 'manifest.json'), 'utf8'));
+  return { manifest: tl, outDir };
 }
 
-/* ---- enrich timeline with timings post-synth ------------------------------ */
+/* ---- enrich manifest with timings post-synth ------------------------------ */
 
 function enrichTimeline(outDir) {
-  const tp = path.join(outDir, 'timeline.json');
+  const mp = path.join(outDir, 'manifest.json');
   const tlp = path.join(outDir, 'timings.json');
-  if (!fs.existsSync(tp)) return null;
-  if (!fs.existsSync(tlp)) return JSON.parse(fs.readFileSync(tp, 'utf8'));
-  const tl = read(tp);
+  if (!fs.existsSync(mp)) return null;
+  if (!fs.existsSync(tlp)) return JSON.parse(fs.readFileSync(mp, 'utf8'));
+  const tl = read(mp);
   const enriched = mergeTimings(tl, tlp);
-  fs.writeFileSync(tp, JSON.stringify(enriched, null, 2));
+  fs.writeFileSync(mp, JSON.stringify(enriched, null, 2));
   return enriched;
 }
 

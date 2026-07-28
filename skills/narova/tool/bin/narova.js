@@ -19,6 +19,8 @@ const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
 const { ingest } = require('../src/ingest');
 const { addSample, removeSample, listSamples } = require('../src/samples');
+const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
+const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
 
 const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'deliverables']);
 
@@ -123,10 +125,16 @@ Commands:
   ingest <url>          fetch a source page: download images into assets/,
                            screenshot it (if Chrome), append sources.md,
                            seed claims.md — the mechanical pass of url-to-source
-  compile               compile reel.config -> out/timeline.json
+  compile               compile reel.config -> out/manifest.json
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
   check                validate config fast — no TTS, no browser, no writes
+  plan                 compare current config against the last manifest;
+                           classify what changed and which stages will rebuild
+  release save <name>  save out/manifest.json as a named release
+  release list         list all saved releases
+  release restore <n>  restore a saved release to out/manifest.json
+  release remove <n>   delete a saved release
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> out/hf/ (HyperFrames project) + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
@@ -195,7 +203,7 @@ async function main() {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       compileTimeline(config, { out });
-      console.log(`timeline -> ${path.join(out, 'timeline.json')}`);
+      console.log(`manifest -> ${path.join(out, 'manifest.json')}`);
       return;
     }
 
@@ -204,6 +212,68 @@ async function main() {
       try { ({ config } = await loadResolved(flags)); }
       catch (e) { console.error(e.message); process.exit(1); }
       check(config);
+      return;
+    }
+
+    case 'plan': {
+      const { config, dir } = await loadCurrent(flags.project || '.');
+      const out = outDirOf(flags, dir);
+      const prev = lastManifest(out);
+      if (!prev) {
+        console.log('no previous manifest found in', out);
+        console.log('run `narova compile` or `narova build` first to generate one');
+        process.exit(1);
+      }
+      const result = plan(prev, config, { toolVersion: require('../package.json').version });
+      console.log(formatPlan(result));
+      return;
+    }
+
+    case 'release': {
+      const sub = positionals[1];
+      const projectDir = flags.project || '.';
+      const out = outDirOf(flags, projectDir);
+      const mp = path.join(out, 'manifest.json');
+      if (!fs.existsSync(mp)) {
+        console.error(`no manifest found in ${out} — run narova compile or build first`);
+        process.exit(1);
+      }
+      if (!sub || sub === 'list') {
+        const entries = listReleases();
+        if (entries.length === 0) {
+          console.log('no releases saved yet — narova release save <name>');
+        } else {
+          for (const e of entries) {
+            const kb = (e.size / 1024).toFixed(1);
+            console.log(`  ${e.name.padEnd(24)} ${kb.padStart(6)}KB  ${new Date(e.created).toISOString().slice(0,16).replace('T',' ')}`);
+          }
+          console.log(`\n${entries.length} release(s) in ${require('../src/releases').RELEASES_DIR}`);
+        }
+        return;
+      }
+      if (sub === 'save') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova release save <name>'); process.exit(1); }
+        const r = saveRelease(mp, name);
+        console.log(`release "${r.name}" saved -> ${r.path}`);
+        return;
+      }
+      if (sub === 'restore') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova release restore <name>'); process.exit(1); }
+        const dest = restoreRelease(name, out);
+        console.log(`release "${name}" restored -> ${dest}`);
+        return;
+      }
+      if (sub === 'remove') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova release remove <name>'); process.exit(1); }
+        removeRelease(name);
+        console.log(`release "${name}" removed`);
+        return;
+      }
+      console.error('usage: narova release save|list|restore|remove [name]');
+      process.exit(1);
       return;
     }
 
@@ -218,7 +288,7 @@ async function main() {
       const reuse = resolveReuse(config, out, flags.reuse);
       writeStageInputs(config, out);
       synth(out, { backend: flags.backend, reuse, projectDir });
-      enrichTimeline(out);   // merge measured timings into timeline.json
+      enrichTimeline(out);   // merge measured timings into manifest.json
       console.log(`synth complete -> ${out}/audio (incl. full.wav), ${out}/timings.json`);
       return;
     }

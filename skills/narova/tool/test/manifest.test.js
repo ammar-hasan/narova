@@ -6,7 +6,7 @@ const fs = require('fs');
 const os = require('os');
 
 const { resolveConfig } = require('../src/schema');
-const { compile, validate, isValid, mergeTimings, TIMELINE_SCHEMA_VER } = require('../src/timeline');
+const { compile, validate, isValid, mergeTimings, MANIFEST_SCHEMA_VER } = require('../src/manifest');
 
 // ---- minimal config fixture -------------------------------------------------
 function makeRaw(overrides = {}) {
@@ -53,7 +53,7 @@ function withAssets(overrides, fn) {
 
 test('compile produces versioned document', () => {
   const tl = compile(resolve(makeRaw()));
-  assert.equal(tl.version, TIMELINE_SCHEMA_VER);
+  assert.equal(tl.version, MANIFEST_SCHEMA_VER);
   assert.equal(typeof tl.narova, 'string');
   assert.ok(tl.narova.length > 0);
 });
@@ -204,7 +204,7 @@ test('compile collects assets from project', () => {
     bed: { file: 'assets/bed.wav', volume: 0.1 },
     scenes: [{ id: 's1', vo: [{ who: 'a', text: 'x' }], body: '<div/>', clip: 'assets/vid.mp4' }],
   });
-  const dir = path.join(os.tmpdir(), 'narova-timeline-test-' + Date.now());
+  const dir = path.join(os.tmpdir(), 'narova-manifest-test-' + Date.now());
   fs.mkdirSync(dir, { recursive: true });
   const assetsDir = path.join(dir, 'assets');
   fs.mkdirSync(assetsDir, { recursive: true });
@@ -223,7 +223,7 @@ test('compile collects assets from project', () => {
 
 // ---- validation -------------------------------------------------------------
 
-test('validate passes a valid compiled timeline', () => {
+test('validate passes a valid compiled manifest', () => {
   const tl = compile(resolve(makeRaw()));
   assert.equal(validate(tl).length, 0);
   assert.ok(isValid(tl));
@@ -371,7 +371,7 @@ test('compile → validate → read back is stable', () => {
   const tl = compile(resolve(makeRaw()));
   const tmp = path.join(os.tmpdir(), 'narova-rt-' + Date.now());
   fs.mkdirSync(tmp, { recursive: true });
-  const tp = path.join(tmp, 'timeline.json');
+  const tp = path.join(tmp, 'manifest.json');
   try {
     fs.writeFileSync(tp, JSON.stringify(tl));
     const back = JSON.parse(fs.readFileSync(tp, 'utf8'));
