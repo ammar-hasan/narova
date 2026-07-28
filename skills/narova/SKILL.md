@@ -1,30 +1,42 @@
 ---
 name: narova
-version: 0.7.10
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
-  multi-host dialogue (0 to N narrators), prompt/script/README-to-video, videos sourced from any
-  URL (product site, article, paper, docs, repository, or general page),
-  word-synced karaoke captions, voice-triggered reveals, background beds and
-  sound effects, per-platform exports (TikTok/Reels/Shorts/LinkedIn/X),
-  SRT/VTT sidecar captions, hook A/B variants, or local neural TTS
-  with no API keys. It turns a prompt or scene script into an MP4 with local
-  piper/xtts/qwen/chatterbox voiceover, word-level captions, and speech-timed
-  visuals rendered through HyperFrames. The full tool ships inside the skill.
-  Also use whenever the user names narova or a reel.config file. For silent
-  motion graphics without narration, use plain HyperFrames instead.
+  multi-host dialogue (0 to N narrators), prompt/script/README-to-video,
+  videos sourced from web pages and agent-readable sources (product sites,
+  articles, docs, repositories), word-synced karaoke captions,
+  voice-triggered reveals, background beds and sound effects, per-platform
+  size presets and duration bands (TikTok/Reels/Shorts/LinkedIn/X),
+  SRT/VTT sidecar captions,
+  hook A/B variants, or local neural TTS with no API keys. It turns a
+  prompt or scene script into an MP4 with local piper/xtts/qwen/chatterbox
+  voiceover, word-level captions, and speech-timed visuals rendered
+  through HyperFrames. The full tool ships inside the skill. Also use
+  whenever the user names narova or a reel.config file. For silent motion
+  graphics without narration, use plain HyperFrames instead.
+license: MIT
+compatibility: >
+  Requires Node.js 18+, Python 3.10+ and ffmpeg.
+  First-time model and renderer setup requires internet access.
+metadata:
+  author: ammar-hasan
+  version: "0.7.11"
 ---
 
 # narova — prompt to narrated, captioned video
 
 **narova writes the words and the voice. HyperFrames draws the pictures.**
 
-**Before you start:** check that this skill is up to date. Run
-`npx skills update narova -g` — it re-fetches from GitHub, no risk to
-existing work. If the version in the frontmatter above is older than what's
-on `main`, you're running stale code and bugs you hit may already be fixed.
-You can check the live version at any time:
+**Version check (read-only):** This skill is pinned to the version in the
+frontmatter above — do NOT auto-update. Before starting, check whether a
+newer version is available without modifying anything:
 `curl -s https://raw.githubusercontent.com/ammar-hasan/narova/main/skills/narova/SKILL.md | head -5`
+
+If a newer version exists, tell the user and ask whether they want to
+upgrade. Only run `npx skills update narova -g` when the user explicitly
+requests it, or when a bug you've hit is confirmed fixed in a newer version.
+Auto-updating undermines reproducibility and introduces an unsolicited
+network mutation. Keep the project pinned to the version that created it.
 
 You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }`
@@ -246,7 +258,7 @@ scenes keep their exact audio. Details:
 | Read…                          | to…                                                          |
 |--------------------------------|--------------------------------------------------------------|
 | `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
-| `references/url-to-source.md`   | classify any URL and extract the right factual and visual evidence|
+| `references/url-to-source.md`   | classify a web page or agent-readable source and extract the right factual and visual evidence|
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
 | `references/stock-assets.md`  | source images and video clips from CLI (Pexels, NASA, Mixkit, Wikimedia, Archive.org) |
 | `references/audio.md`          | background beds, spot SFX, forced word alignment, chatterbox v3   |

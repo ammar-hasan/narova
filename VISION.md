@@ -44,8 +44,9 @@ strengthening · `[ ]` gap.
   (Kimi Code, Codex, Claude Code, opencode, agentic SDKs). Verified: only
   framework mention in the skill was a stale code comment (fixed).
   Install line mentions agents only as examples.
-- [x] **Fully local stack** — HyperFrames + open-source TTS (piper/xtts/qwen)
-  + ffmpeg. No API keys, no cloud. `README.md`, `references/environment.md`.
+- [x] **Local rendering and speech** — HyperFrames + open-source TTS (piper/xtts/qwen)
+  + ffmpeg. Local rendering and speech, with optional network-dependent
+  setup and sourcing. `README.md`, `references/environment.md`.
 
 ## What narova does
 
@@ -103,7 +104,7 @@ strengthening · `[ ]` gap.
 
 ## Proof (all verified on this machine)
 
-- [x] `npm test` exits 0 (62 JS + 12 Python tests).
+- [x] `npm test` exits 0 (200+ JS tests + 50+ Python tests).
 - [x] End-to-end: a project written from a plain natural-language prompt
   builds to `out/video.mp4`; `ffprobe` duration ≈ `out/audio/full.wav`
   (±0.15s). See `generated/`.

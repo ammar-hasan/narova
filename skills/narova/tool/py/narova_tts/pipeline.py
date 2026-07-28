@@ -333,7 +333,7 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
         who: voice_cache_speaker(v, who, voice_kind[who])
         for who, v in voices.items()
     }
-    # Per-voice default lang for chatterbox/qwen (may be overridden per-turn).
+    # Per-voice default lang for chatterbox/qwen/xtts (may be overridden per-turn).
     voice_lang = {who: v.get("lang") for who, v in voices.items() if v.get("lang")}
     voice_gain_db = {who: float(v.get("gainDb", 0.0)) for who, v in voices.items()}
 

@@ -32,6 +32,14 @@ from typing import Protocol
 CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
 
 
+# Languages supported by the XTTS-v2 multilingual model
+# (tts_models/multilingual/multi-dataset/xtts_v2).
+XTTS_LANGS = frozenset([
+    "en", "es", "fr", "de", "it", "pt", "pl", "tr", "ru",
+    "nl", "cs", "ar", "zh-cn", "ja", "hu", "ko", "hi",
+])
+
+
 def chatterbox_python() -> Path:
     """The Python of the isolated chatterbox venv (created by
     `setup.sh --chatterbox`). Mirrors setup.sh's default location."""
@@ -86,13 +94,15 @@ class XttsBackend:
     (e.g. "Damien Black"). NEVER use the XTTS `speed` param (LEARNINGS #9) —
     speed is applied downstream with ffmpeg atempo."""
 
-    def __init__(self, speakers: dict[str, str], device: str | None = None):
+    def __init__(self, speakers: dict[str, str], langs: dict[str, str] | None = None,
+                 device: str | None = None):
         os.environ["COQUI_TOS_AGREED"] = "1"  # license gate (LEARNINGS #8)
         from . import xtts_compat  # noqa: F401  shim newest transformers (LEARNINGS #6)
         import torch
         from TTS.api import TTS
 
         self._speakers = dict(speakers)
+        self._langs = dict(langs) if langs else {}
         dev = device or os.environ.get("XTTS_DEVICE", None)
         if dev is None:
             if torch.backends.mps.is_available():
@@ -126,8 +136,14 @@ class XttsBackend:
             kw["speaker_wav"] = str(p)
         else:
             kw["speaker"] = spk
+        turn_lang = lang or self._langs.get(who)
+        if turn_lang and turn_lang not in XTTS_LANGS:
+            raise ValueError(
+                f"voice {who!r}: XTTS does not support language {turn_lang!r}. "
+                f"Supported: {', '.join(sorted(XTTS_LANGS))}"
+            )
         self._tts.tts_to_file(
-            text=text, language="en", file_path=str(out_path), **kw
+            text=text, language=turn_lang or "en", file_path=str(out_path), **kw
         )
         return out_path
 
@@ -330,9 +346,12 @@ def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, B
             exg = {who: voices[who]["exaggeration"] for who in speakers
                    if voices[who].get("exaggeration") is not None}
             cfgw = {who: voices[who]["cfg_weight"] for who in speakers
-                    if voices[who].get("cfg_weight") is not None}
+                     if voices[who].get("cfg_weight") is not None}
             langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
             instances[kind] = ChatterboxBackend(speakers, exg, cfgw, langs)
+        elif kind == "xtts":
+            langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
+            instances[kind] = XttsBackend(speakers, langs)
         else:
             instances[kind] = BACKENDS[kind](speakers)
 

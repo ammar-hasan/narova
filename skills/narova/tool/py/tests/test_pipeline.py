@@ -9,7 +9,7 @@ from pathlib import Path
 from unittest import mock
 
 from narova_tts import pipeline
-from narova_tts.backends import ChatterboxBackend, XttsBackend
+from narova_tts.backends import ChatterboxBackend, XttsBackend, XTTS_LANGS
 from narova_tts.pipeline import (
     rescale_timings,
     scene_starts,
@@ -228,6 +228,7 @@ class TestXttsCloneSpeaker(unittest.TestCase):
         # bypass __init__ (loads torch/TTS); we only exercise synthesize's routing
         b = XttsBackend.__new__(XttsBackend)
         b._speakers = {"a": speaker}
+        b._langs = {}
         b._tts = mock.Mock()
         return b
 
@@ -255,6 +256,56 @@ class TestXttsCloneSpeaker(unittest.TestCase):
         b = self.backend("/nope/missing.wav")
         with self.assertRaisesRegex(ValueError, "not found"):
             b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+
+
+class TestXttsLanguage(unittest.TestCase):
+    """XttsBackend.synthesize uses per-turn `lang` or per-voice `_langs` to set
+    the XTTS language, falling back to "en". Unsupported languages raise."""
+
+    def backend(self, speaker="Damien Black", langs=None):
+        b = XttsBackend.__new__(XttsBackend)
+        b._speakers = {"a": speaker}
+        b._langs = dict(langs) if langs else {}
+        b._tts = mock.Mock()
+        return b
+
+    def test_defaults_to_en_when_no_lang(self):
+        b = self.backend()
+        b.synthesize("a", "Hi.", Path("/tmp/o.wav"))
+        _, kw = b._tts.tts_to_file.call_args
+        self.assertEqual(kw["language"], "en")
+
+    def test_uses_turn_lang_over_voice_default(self):
+        b = self.backend(langs={"a": "fr"})
+        b.synthesize("a", "Hola.", Path("/tmp/o.wav"), lang="es")
+        _, kw = b._tts.tts_to_file.call_args
+        self.assertEqual(kw["language"], "es")
+
+    def test_uses_voice_lang_when_turn_lang_absent(self):
+        b = self.backend(langs={"a": "de"})
+        b.synthesize("a", "Hallo.", Path("/tmp/o.wav"))
+        _, kw = b._tts.tts_to_file.call_args
+        self.assertEqual(kw["language"], "de")
+
+    def test_uses_turn_lang_when_voice_lang_absent(self):
+        b = self.backend()
+        b.synthesize("a", "Bonjour.", Path("/tmp/o.wav"), lang="fr")
+        _, kw = b._tts.tts_to_file.call_args
+        self.assertEqual(kw["language"], "fr")
+
+    def test_rejects_unsupported_language(self):
+        b = self.backend()
+        with self.assertRaisesRegex(ValueError, "XTTS does not support"):
+            b.synthesize("a", "...", Path("/tmp/o.wav"), lang="xx")
+
+    def test_passes_every_known_language(self):
+        b = self.backend()
+        for lang in sorted(XTTS_LANGS):
+            b._tts.reset_mock()
+            b.synthesize("a", f"test {lang}", Path("/tmp/o.wav"), lang=lang)
+            _, kw = b._tts.tts_to_file.call_args
+            self.assertEqual(kw["language"], lang, f"language={lang} was not passed through")
+            self.assertIn("speaker", kw)
 
 
 class _FakeProc:

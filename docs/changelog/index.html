@@ -53,6 +53,50 @@
         <span class="rel-date">next</span>
       </div>
       <div class="rel-body">
+        <h4><span class="tag planned">Planned (0.7.12)</span></h4>
+        <ul>
+          <li>Comprehensive export profiles — codec, bitrate, frame-rate, audio-loudness, safe-area, color, file-size, and thumbnail profiles per platform.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.11</span>
+        <span class="rel-date">2026-07-28</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>XTTS language support</strong> — per-turn and per-voice <code>lang</code> now flows through to coqui-tts against 17 supported languages.</li>
+          <li>Release automation: <code>scripts/sync-version.js</code> keeps all version surfaces in sync.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Documentation remediation: narrowed "any URL", restructured frontmatter, qualified platform/offline claims, read-only update check.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Version drift across five surfaces.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.10</span>
+        <span class="rel-date">2026-07-28</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>npx retry with exponential backoff for DNS failures.</li>
+          <li>Stock assets reference documentation.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Doctor command now reports mismatched tool versions and venv health.</li>
+        </ul>
       </div>
     </article>
 
@@ -69,7 +113,7 @@
             Music changes don't require re-synthesis.</li>
           <li><strong>Caption style presets + keyword emphasis</strong> —
             <code>captions: {preset: karaoke|slam|pop|rise, emphasis: [...]}</code>.</li>
-          <li><strong>Per-platform export matrix</strong> —
+          <li><strong>Per-platform size presets + duration-band lint</strong> —
             <code>platform: tiktok|reels|shorts|linkedin|x</code> picks frame size
             and duration-band lint. SRT + WebVTT sidecars.</li>
           <li><strong>Forced word alignment</strong> — <code>align: true | {engine}</code>.

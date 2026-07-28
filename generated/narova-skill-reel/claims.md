@@ -11,7 +11,7 @@ Source of truth: repository [`README.md`](../../README.md) and the bundled [`SKI
 | “Initialize a project…synthesize, preview, and build” | Paraphrase | `README.md` Quickstart and Commands sections. |
 | “Audio sets the timing” | Paraphrase | `README.md` line 86 and How it works: real audio decides scene duration and supplies word timings. |
 | “HyperFrames turns your HTML visuals into a rendered MP4” | Paraphrase | `README.md` lines 14–15 and 132–137; `SKILL.md` lines 21–23. |
-| “No API keys. No cloud.” | Verbatim | `README.md` line 12. |
+| “Local rendering, local speech.” | Verbatim | `README.md` line 27. |
 | “invoke the Narova skill” | Paraphrase | `README.md` lines 18–20: an AI agent reads the skill and can build videos. |
 
 Creative framing (“Stop building…frame by frame,” “watch this,” and “let it roll”) is promotional language, not a factual claim.

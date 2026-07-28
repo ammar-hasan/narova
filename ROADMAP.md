@@ -35,7 +35,7 @@ Narova 0.7 is the generation and compilation engine:
 
 - prompt/script/README/repository/URL to narrated video;
 - local TTS, voice cloning, alignment, captions, cues, audio, B-roll, and
-  platform exports;
+  platform size/duration presets;
 - source and claims ledgers;
 - deterministic HyperFrames composition;
 - validation, preview, snapshot QA, and rendering;

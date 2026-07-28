@@ -87,7 +87,7 @@ export default {
   theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional; mode: "light" flips the base palette
   chrome: { topbar: true, counter: true, progress: true },        // optional; false strips all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
-  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint
+  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint (comprehensive export profiles planned)
   captions: { preset: "karaoke",          // optional: karaoke|slam|pop|rise
               emphasis: ["narova"] },     //   words auto-highlighted in every caption line
   bed: { file: "assets/ambient.mp3", volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 },  // optional background bed (legacy key: music)
@@ -258,7 +258,7 @@ each variant renders `out/video-<id>.mp4`), `--fps`,
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.7.0 shipped
+## Status: 0.7.11 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -267,11 +267,22 @@ compose → preview → build. The tool and tests ship inside the skill.
 Since 0.6.0: background bed + spot SFX mixing, forced word alignment (optional),
 caption style presets + keyword emphasis, per-scene transitions, `data-mark`
 annotations, `--platform` presets with duration-band lint, SRT/VTT caption
-export, hook-variant builds (`--variant`/`--variants`), `narova ingest <url>`,
+sidecars, hook-variant builds (`--variant`/`--variants`), `narova ingest <url>`,
 Chatterbox v3 (git pin, per-voice `lang`).
+
+Since 0.7.0: per-turn `lang` for multilingual TTS, voice sample management,
+silent scenes, per-voice `gainDb`, b-roll as HyperFrames-native clips,
+partial word alignment for mixed-language scenes, RTL captions, CSS
+externalization, `captions.maxWords`, XTTS multilingual `lang` support,
+version sync automation, and documentation remediation across all surfaces.
 
 ## Future work (decided, not started)
 
+- Comprehensive export profiles: codec, bitrate, frame-rate, audio-loudness
+  normalization, safe-area guides, color-space tagging, file-size budget, and
+  thumbnail generation per platform. Currently, `platform` selects frame
+  dimensions and a target duration band; rendered output is MP4 with SRT/VTT
+  sidecars.
 - `--eject`: make out/hf a standalone project you can edit in Studio.
 - Theme gallery: ready-made looks, picked by name.
 - Qwen voice cloning (`speaker: {clone: "sample.wav"}`).

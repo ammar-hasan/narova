@@ -5,10 +5,10 @@
 **You write a prompt. narova makes the video.**
 
 A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
-prompts, scripts, and any URL into narrated, captioned video. Rendered on your machine.
+prompts, scripts, and web pages into narrated, captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.6.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.7.11-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -24,7 +24,7 @@ prompts, scripts, and any URL into narrated, captioned video. Rendered on your m
 - **Two voices, one conversation** — neural TTS dialogue synthesized locally. Give each speaker a color; narova writes the banter and the timing.
 - **Karaoke captions** — every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.
 - **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
-- **No API keys. No cloud.** — ffmpeg, local TTS, and [HyperFrames](https://www.npmjs.com/package/hyperframes). Nothing leaves your machine.
+- **Local rendering, local speech.** — ffmpeg and neural TTS run entirely on your machine. [HyperFrames](https://www.npmjs.com/package/hyperframes) renders the video. Model downloads, stock assets, and HyperFrames need network access on first run.
 
 ## Install
 
@@ -35,7 +35,7 @@ that reads skills can use it:
 
 ```bash
 npx skills add ammar-hasan/narova -g
-# when there's a new version: npx skills update narova -g
+# check for updates: npx skills update narova -g (only when you're ready — upgrading replaces the skill files)
 ```
 
 ## Quickstart

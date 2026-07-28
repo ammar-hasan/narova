@@ -170,7 +170,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (!turn || !turn.who) errs.push(`${at}.vo[${j}].who: required`);
       else if (!voices[turn.who]) errs.push(`${at}.vo[${j}].who: "${turn.who}" not in config.voices`);
       if (typeof turn.text !== 'string' || !turn.text.trim()) errs.push(`${at}.vo[${j}].text: required`);
-      // Per-turn language override for multilingual TTS (chatterbox/qwen).
+      // Per-turn language override for multilingual TTS (chatterbox/qwen/xtts).
       // Accepted but not validated against a list — the backend decides.
       if (turn.lang != null && typeof turn.lang !== 'string') {
         errs.push(`${at}.vo[${j}].lang: must be a language code string (e.g. "en", "ar", "ur")`);

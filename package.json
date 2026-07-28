@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.7.9",
+  "version": "0.7.11",
   "description": "A scene script becomes a narrated, captioned video. narova writes the words and the voice; HyperFrames draws the pictures.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"
@@ -11,7 +11,9 @@
     "narova": "node skills/narova/tool/bin/narova.js",
     "test": "npm run -s test:js && npm run -s test:py",
     "test:js": "node --test 'skills/narova/tool/test/*.test.js'",
-    "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests"
+    "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests",
+    "version:sync": "node scripts/sync-version.js",
+    "version": "node scripts/sync-version.js"
   },
   "files": [
     "skills/",
