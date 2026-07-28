@@ -1,6 +1,6 @@
 ---
 name: narova
-version: 0.7.9
+version: 0.7.10
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
   multi-host dialogue (0 to N narrators), prompt/script/README-to-video, videos sourced from any
@@ -130,8 +130,10 @@ with your own is the normal flow. Keep editable source
    `references/url-to-source.md`; classify the page before deciding whether
    brand, editorial, research, or technical evidence should drive the video.
    A search result or prose page summary is not source evidence. Then read
-   `references/prompt-to-video.md` (intake and
-   script craft) and `references/scene-script.md` (the config format).
+    `references/prompt-to-video.md` (intake and
+    script craft) and `references/scene-script.md` (the config format).
+    For projects needing cinematic stock footage, also read
+    `references/stock-assets.md` before sourcing visuals.
    Use the voice/engine/count decisions from the intake step. Short turns,
    `data-cue` on the key visual of most turns. Build the theme from the
    classified source evidence or the prompt's mood/colors: keep whatever the
@@ -246,6 +248,7 @@ scenes keep their exact audio. Details:
 | `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
 | `references/url-to-source.md`   | classify any URL and extract the right factual and visual evidence|
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
+| `references/stock-assets.md`  | source images and video clips from CLI (Pexels, NASA, Mixkit, Wikimedia, Archive.org) |
 | `references/audio.md`          | background beds, spot SFX, forced word alignment, chatterbox v3   |
 | `references/cli.md`            | see every command, flag, `out/` file, and rough cost         |
 | `references/gotchas.md`        | avoid the traps (tempo, --reuse, sync, determinism)          |

@@ -10,7 +10,7 @@ const os = require('os');
 const { spawnSync } = require('child_process');
 const { which } = require('./util');
 const { findPython } = require('./pipeline');
-const { HYPERFRAMES_VERSION } = require('./hf');
+const { HYPERFRAMES_VERSION, npxSync } = require('./hf');
 
 // narova_tts is provided from the repo's py/ dir via PYTHONPATH (not pip-installed
 // into the venv) — mirror exactly what pipeline.synth sets, or the check false-negatives.
@@ -31,7 +31,7 @@ function pyHasPackage(py, pkg) {
   return r.status === 0;
 }
 function hfOk() {
-  const r = spawnSync('npx', ['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, '--version'],
+  const r = npxSync(['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, '--version'],
     { encoding: 'utf8', timeout: 300000 });
   return r.status === 0 ? (r.stdout || '').trim().split('\n').pop() : null;
 }
@@ -83,6 +83,15 @@ function doctor(projectDir) {
     add('chatterbox venv', false, 'not installed — only needed for the chatterbox backend: <skill>/tool/setup.sh --chatterbox', true);
   }
 
+  // Optional: agent-browser for stock asset sourcing (references/stock-assets.md Tier 2).
+  const ab = which('agent-browser');
+  if (ab) {
+    const abv = spawnSync(ab, ['--version'], { encoding: 'utf8' });
+    add('agent-browser', true, abv.status === 0 ? abv.stdout.trim() : ab, true);
+  } else {
+    add('agent-browser', false, 'not installed — optional; `npm install -g agent-browser` for stock footage download', true);
+  }
+
   const npx = which('npx');
   add('npx', !!npx, npx || 'not found — install Node.js >= 18');
   if (npx) {
@@ -93,12 +102,17 @@ function doctor(projectDir) {
 
   console.log('narova doctor\n');
   let allOk = true;
+  const missing = [];
   for (const r of rows) {
     console.log(`  ${r.ok ? '✓' : r.optional ? '○' : '✗'} ${r.name.padEnd(20)} ${r.detail}`);
-    if (!r.ok && !r.optional) allOk = false;
+    if (!r.ok && !r.optional) { allOk = false; missing.push(r.name); }
   }
   console.log('');
-  console.log(allOk ? 'All required tools present.' : 'Some required tools are missing (see ✗ above).');
+  if (allOk) {
+    console.log('All required tools present.');
+  } else {
+    console.log(`Missing required: ${missing.join(', ')}`);
+  }
   return allOk;
 }
 

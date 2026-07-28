@@ -8,10 +8,33 @@ const { spawn, spawnSync } = require('child_process');
 
 const HYPERFRAMES_VERSION = '0.7.64';
 
+const RETRY_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN']);
+const MAX_RETRIES = 2;
+const RETRY_DELAY_MS = 1000;
+
+function sleep(ms) {
+  const end = Date.now() + ms;
+  while (Date.now() < end) { /* spin */ }
+}
+
+/* npx `spawnSync` with retry for transient DNS/network errors. macOS sees
+ * intermittent ENOTFOUND on npx registry calls (resolved by a brief wait). */
+function npxSync(args, opts) {
+  let last;
+  for (let attempt = 0; attempt <= MAX_RETRIES; attempt++) {
+    if (attempt > 0) sleep(RETRY_DELAY_MS);
+    const r = spawnSync('npx', args, opts);
+    if (!r.error || !RETRY_CODES.has(r.error.code)) return r;
+    last = r.error;
+  }
+  const r = { error: last, status: 1, stdout: '', stderr: '' };
+  return r;
+}
+
 /* Run a hyperframes CLI command in `cwd` (normally out/hf). Inherits stdio so
  * progress is visible. Throws on non-zero exit. */
 function runHf(args, cwd, opts = {}) {
-  const r = spawnSync('npx', ['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, ...args], {
+  const r = npxSync(['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, ...args], {
     cwd, stdio: 'inherit', ...opts,
   });
   if (r.error) throw r.error;
@@ -88,4 +111,4 @@ function stopHfPreview(pidFile) {
   return true;
 }
 
-module.exports = { HYPERFRAMES_VERSION, runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort };
+module.exports = { HYPERFRAMES_VERSION, runHf, npxSync, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort };
