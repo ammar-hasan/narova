@@ -6,7 +6,7 @@ description: >
   videos sourced from web pages and agent-readable sources (product sites,
   articles, docs, repositories), word-synced karaoke captions,
   voice-triggered reveals, background beds and sound effects, per-platform
-  size presets and duration bands (TikTok/Reels/Shorts/LinkedIn/X),
+  presets and comprehensive export profiles (TikTok/Reels/Shorts/LinkedIn/X),
   SRT/VTT sidecar captions,
   hook A/B variants, or local neural TTS with no API keys. It turns a
   prompt or scene script into an MP4 with local piper/xtts/qwen/chatterbox

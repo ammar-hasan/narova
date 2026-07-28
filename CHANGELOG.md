@@ -340,7 +340,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.7.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.8.1...HEAD
+[0.8.1]: https://github.com/ammar-hasan/narova/compare/v0.8.0...v0.8.1
+[0.8.0]: https://github.com/ammar-hasan/narova/compare/v0.7.11...v0.8.0
+[0.7.11]: https://github.com/ammar-hasan/narova/compare/v0.7.10...v0.7.11
+[0.7.10]: https://github.com/ammar-hasan/narova/commit/40723f9
+[0.7.9]: https://github.com/ammar-hasan/narova/commit/ba9880c
+[0.7.8]: https://github.com/ammar-hasan/narova/commit/b156c8d
+[0.7.7]: https://github.com/ammar-hasan/narova/commit/0ed2efe
+[0.7.6]: https://github.com/ammar-hasan/narova/commit/a4bef78
+[0.7.5]: https://github.com/ammar-hasan/narova/commit/637258f
+[0.7.4]: https://github.com/ammar-hasan/narova/commit/cab2a1a
+[0.7.3]: https://github.com/ammar-hasan/narova/commit/b408b7c
+[0.7.2]: https://github.com/ammar-hasan/narova/commit/be3ab29
+[0.7.1]: https://github.com/ammar-hasan/narova/commit/e0acbca
 [0.7.0]: https://github.com/ammar-hasan/narova/compare/v0.6.0...v0.7.0
 [0.6.0]: https://github.com/ammar-hasan/narova/commit/eeb373d
 [0.5.0]: https://github.com/ammar-hasan/narova/commit/16f1c43

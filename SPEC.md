@@ -40,7 +40,8 @@ narova/                          # the repo
 │   ├── SKILL.md  references/    # what an agent reads
 │   └── tool/                    # the CLI
 │       ├── bin/narova.js        # entry point
-│       ├── src/                 # config, schema, check, compose/, hf, pipeline, doctor, init, ingest, captions, util
+│       ├── src/                 # config, schema, check, compose/, hf, pipeline,
+│       │                        #   timeline, exports, doctor, init, ingest, captions, util
 │       ├── py/narova_tts/       # TTS backends + timing
 │       ├── setup.sh             # creates the venv (auto-run by first synth)
 │       └── test/                # test suite (npm test)
@@ -55,11 +56,13 @@ outside the skill folder so a skill update cannot delete it. The first
 
 ```
 reel.config.mjs
-   │  narova synth      Python: per-scene wavs + full.wav + timings.json
+   │  narova compile     out/timeline.json (versioned intermediate representation)
    ▼
-   │  narova compose    out/hf/: index.html + assets/narration.wav + package.json
+   │  narova synth       Python: per-scene wavs + full.wav + timings.json
    ▼
-   │  narova build      synth + compose + `npx hyperframes render`
+   │  narova compose     out/hf/: index.html + assets/narration.wav + package.json
+   ▼
+   │  narova build       synth + compose + `npx hyperframes render`
    ▼
 out/video.mp4
 ```
@@ -81,25 +84,28 @@ export default {
   size: "16:9",                           // "16:9" | "1:1" | "9:16" | {w,h}
   assets: "assets",                       // optional; copied into out/hf/assets/
   voices: {
-    a: { backend: "piper", speaker: "en_US-ryan-high", color: "#2ee6d6", label: "host · A" },
+    a: { backend: "piper", speaker: "en_US-ryan-high", color: "#2ee6d6", label: "host · A", gainDb: 0 },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
   theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional; mode: "light" flips the base palette
   chrome: { topbar: true, counter: true, progress: true },        // optional; false strips all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
-  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint (comprehensive export profiles planned)
+  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint
   captions: { preset: "karaoke",          // optional: karaoke|slam|pop|rise
-              emphasis: ["narova"] },     //   words auto-highlighted in every caption line
+              emphasis: ["narova"],       //   words auto-highlighted in every caption line
+              maxWords: 5 },             //   optional: cap words per caption line
   bed: { file: "assets/ambient.mp3", volume: 0.14, fadeIn: 0.5, fadeOut: 1.5 },  // optional background bed (legacy key: music)
   sfx: [ { file: "assets/pop.wav", scene: "title", at: 0.5, volume: 0.8 } ],   // optional spot SFX
   align: false,                           // true | { engine: "auto"|"faster-whisper"|"whisper-cpp" } — measured word timings
   variants: [ { id: "cold-open",          // optional hook variants for A/B tests (narova build --variants)
                 scene: { vo: [ { who: "a", text: "Different opener." } ], body: `<div class="s-title"><h1>Hook B</h1></div>` } } ],
+  series: { part: 1, total: 5 },           // optional: multi-episode badge "Part 1 / 5"
   scenes: [
     { id: "title",
       transition: "wipe",                 // optional: fade (default) | wipe | slide | zoom
+      clip: "assets/bg.mp4",              // optional: b-roll video behind the scene
       vo: [ { who: "a", text: "This is narova." },
-            { who: "b", text: "Scenes in, video out." } ],
+            { who: "b", text: "Scenes in, video out.", lang: "en" } ],  // lang: optional per-turn TTS language
       body: `<div class="s-title"><h1 class="reveal">narova</h1>
              <p class="cue" data-cue="1">scenes in, <span data-mark="underline">video out</span></p></div>` },
   ],
@@ -214,6 +220,8 @@ length-weighted estimates (per-scene fallback to estimates on any mismatch).
 narova init <dir>     new project
 narova ingest <url>   fetch a source page: images -> assets/, Chrome screenshot,
                       sources.md entry, claims.md skeleton (references/url-to-source.md)
+narova compile        reel.config.* -> out/timeline.json (versioned IR; also
+                      written automatically by synth/compose/build)
 narova check          validate the config (fast, no side effects); prints an
                       estimated narration length for target-duration tuning
 narova synth          Python TTS -> out/audio/*, out/timings.json
@@ -235,8 +243,9 @@ Flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (ignored automatically 
 spoken text changed since the last synth), `--tempo`, `--size`,
 `--platform tiktok|reels|shorts|linkedin|x` (frame preset + duration-band
 lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
-each variant renders `out/video-<id>.mp4`), `--fps`,
-`--quality draft|standard|high`, `--at` (shots), `--out`, `--project`,
+each variant renders `out/video-<id>.mp4`), `--deliverables` (multi-render
+with per-platform export presets + ffmpeg post-processing + thumbnails),
+`--fps`, `--quality draft|standard|high`, `--at` (shots), `--out`, `--project`,
 `--config`, `--voice-a`, `--voice-b`.
 
 ## Backends
@@ -258,7 +267,7 @@ each variant renders `out/video-<id>.mp4`), `--fps`,
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.8.0 shipped
+## Status: 0.8.1 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -279,6 +288,10 @@ across all surfaces.
 
 Since 0.8.0: versioned timeline intermediate representation beneath the
 friendly `reel.config.*` surface.
+
+Since 0.8.1: comprehensive export profiles with per-platform render presets,
+ffmpeg post-processing (loudness normalization, h264 encode, safe-area
+guides, thumbnails), and `--deliverables` multi-render builds.
 
 ## Timeline intermediate representation
 
@@ -316,11 +329,6 @@ reads the timeline as the canonical project snapshot.
 
 ## Future work (decided, not started)
 
-- Comprehensive export profiles: codec, bitrate, frame-rate, audio-loudness
-  normalization, safe-area guides, color-space tagging, file-size budget, and
-  thumbnail generation per platform. Currently, `platform` selects frame
-  dimensions and a target duration band; rendered output is MP4 with SRT/VTT
-  sidecars.
 - `--eject`: make out/hf a standalone project you can edit in Studio.
 - Theme gallery: ready-made looks, picked by name.
 - Qwen voice cloning (`speaker: {clone: "sample.wav"}`).
