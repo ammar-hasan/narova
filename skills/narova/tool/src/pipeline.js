@@ -6,10 +6,14 @@
  *                                ↓
  *                         synth / compose / export
  *
- * The manifest is the canonical intermediate representation. Every stage
- * after compilation consumes it. narration.json and config.resolved.json
- * are temporary compatibility projections generated FROM the manifest
- * (Python still consumes those files). */
+ * The manifest is the canonical intermediate representation. After
+ * compilation, every stage reads the manifest. narration.json and
+ * config.resolved.json are temporary compatibility projections
+ * generated FROM the manifest for the Python TTS stage only.
+ *
+ * The full build() pipeline additionally enriches the manifest with
+ * measured timings after synthesis, then derives compose and export
+ * inputs from that enriched manifest. */
 
 const fs = require('fs');
 const path = require('path');
@@ -74,7 +78,8 @@ function hashFile(filePath) {
  * audio. --reuse replays previous synth output only when the full fingerprint
  * matches. This covers:
  *   backend, speaker, text, language, tempo, gain, instruct,
- *   exaggeration, cfg_weight, and the audio-processing pipeline version. */
+ *   exaggeration, cfg_weight, gapSentence, gapTurn, lead, tail,
+ *   clone-sample contents (XTTS and chatterbox), and pipeline version. */
 function audioFingerprint(config) {
   const voices = config.voices || {};
   const entries = [];
@@ -83,9 +88,9 @@ function audioFingerprint(config) {
     const fp = { id };
     fp.backend = v.backend || 'piper';
     fp.speaker = v.speaker || '';
-    // For chatterbox clones, hash the sample recording so a
-    // re-recording invalidates the cache.
-    if (v.backend === 'chatterbox' && v.speaker) {
+    // Hash clone samples for any backend that supports cloning (chatterbox, XTTS).
+    // XTTS also clones from a recording — one path change should invalidate.
+    if ((v.backend === 'chatterbox' || v.backend === 'xtts') && v.speaker) {
       const resolved = v.speaker; // already absolute from resolveConfig
       if (fs.existsSync(resolved)) {
         fp.sampleHash = hashFile(resolved);
@@ -114,8 +119,12 @@ function audioFingerprint(config) {
     voices: entries,
     turns,
     tempo,
+    gapSentence: timing.gapSentence != null ? timing.gapSentence : 0.24,
+    gapTurn: timing.gapTurn != null ? timing.gapTurn : 0.44,
+    lead: timing.lead != null ? timing.lead : 0.16,
+    tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
-    pipeline: 1, // increment when audio-processing pipeline changes
+    pipeline: 3, // increment when audio-processing pipeline changes
   }));
 }
 
@@ -125,7 +134,11 @@ function audioFingerprint(config) {
  * The manifest is compiled FIRST from the resolved config and written.
  * narration.json and config.resolved.json are then derived as
  * compatibility projections from the resolved config (Python still
- * consumes those files). Downstream stages should prefer the manifest. */
+ * consumes those files). Downstream stages should prefer the manifest.
+
+ * The audio fingerprint is NOT written here; it is committed atomically
+ * only after successful synthesis to prevent a failed build from
+ * leaving a stale fingerprint that could trick a later --reuse. */
 function writeStageInputs(config, outDir) {
   ensureDir(outDir);
   // manifest.json — canonical versioned project model
@@ -136,9 +149,17 @@ function writeStageInputs(config, outDir) {
   // config.resolved.json — resolved config for Python (compatibility projection)
   const { assetsDir: _assetsDir, ...serializableConfig } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
-  // audio-fingerprint (used by --reuse to detect voice/backend/tempo changes)
+}
+
+/* Commit the audio fingerprint atomically after successful synthesis.
+ * Uses a write-to-temp + rename pattern so a crash partway through
+ * never leaves a corrupt fingerprint behind. */
+function commitFingerprint(config, outDir) {
   const fp = audioFingerprint(config);
-  fs.writeFileSync(path.join(outDir, '.audio-fingerprint'), fp + '\n');
+  const tmp = path.join(outDir, '.audio-fingerprint.tmp');
+  const dest = path.join(outDir, '.audio-fingerprint');
+  fs.writeFileSync(tmp, fp + '\n');
+  fs.renameSync(tmp, dest);
 }
 
 /* `--reuse` replays the previous synth's audio + timings only when the
@@ -189,11 +210,21 @@ function synth(outDir, opts = {}) {
   (opts.log || console.log)(`synth: ${py} ${args.join(' ')}`);
   const pyPath = path.join(TOOL_ROOT, 'py') +
     (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : '');
+  // Invalidate the old fingerprint *before* synthesis runs. If the process
+  // crashes partway through writing audio/NN.wav files, the old fingerprint
+  // no longer exists, so a later --reuse won't pick up partially overwritten
+  // audio by mistake.
+  if (!opts.reuse && opts.config) {
+    const fp = path.join(outDir, '.audio-fingerprint');
+    try { fs.unlinkSync(fp); } catch {}
+  }
   const r = spawnSync(py, args, { stdio: 'inherit', cwd: TOOL_ROOT, env: { ...process.env, PYTHONPATH: pyPath } });
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
   if (r.status !== 0) throw new Error(`synth (narova_tts) exited ${r.status}`);
   const timings = path.join(outDir, 'timings.json');
   if (!fs.existsSync(timings)) throw new Error(`synth produced no timings.json in ${outDir}`);
+  // Commit the audio fingerprint only after synthesis succeeds.
+  if (opts.config) commitFingerprint(opts.config, outDir);
   return { timings };
 }
 
@@ -209,13 +240,15 @@ function build(config, opts = {}) {
   writeStageInputs(config, outDir);
   synth(outDir, {
     backend: opts.backend, reuse,
-    projectDir: opts.projectDir, python: opts.python, log,
+    projectDir: opts.projectDir, python: opts.python, log, config,
   });
   enrichTimeline(outDir);
 
   log('[2/3] compose');
-  const c = compose(config, outDir);
-  const caps = writeCaptions(config, outDir);
+  const manifest = read(path.join(outDir, 'manifest.json'));
+  const cc = configFromManifest(manifest, config) || config;
+  const c = compose(cc, outDir);
+  const caps = writeCaptions(cc, outDir);
   log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
 
   log('[3/3] hyperframes render (first run downloads the CLI — not a hang)');
@@ -226,7 +259,7 @@ function build(config, opts = {}) {
 
   if (opts.deliverables) {
     log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
-    const results = buildDeliverables(config, c.dir, outDir, { ...opts, log });
+    const results = buildDeliverables(cc, c.dir, outDir, { ...opts, log, safeAreaGuides: opts.safeAreaGuides });
     const mp4 = path.join(outDir, name);
     const seconds = probe(mp4);
     log(`done -> ${results.map(r => r.mp4).join(', ')}  (${seconds.toFixed(1)}s base)`);
@@ -263,4 +296,47 @@ function enrichTimeline(outDir) {
   return enriched;
 }
 
-module.exports = { build, synth, writeStageInputs, resolveReuse, audioFingerprint, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline };
+/* Derive a config-like projection from the enriched manifest for downstream
+ * consumers that still expect the resolved config shape (compose, captions,
+ * exports). This is a compatibility bridge — new code should read the
+ * manifest directly. */
+function configFromManifest(manifest, resolvedConfig) {
+  if (!manifest) return null;
+  const m = manifest;
+  return {
+    title: m.project?.title || 'narova',
+    platform: m.project?.platform || null,
+    size: m.format ? { w: m.format.width, h: m.format.height } : { w: 1280, h: 720 },
+    voices: Object.fromEntries(Object.entries(m.voices || {}).map(([id, v]) => [id, {
+      label: v.label, color: v.color, backend: v.backend, speaker: v.speaker,
+      ...(v.gainDb != null ? { gainDb: v.gainDb } : {}),
+      ...(v.lang ? { lang: v.lang } : {}),
+      ...(v.instruct ? { instruct: v.instruct } : {}),
+    }])),
+    theme: { accent: m.theme?.accent, bg: m.theme?.bg },
+    mode: m.theme?.mode || 'dark',
+    chrome: m.chrome || {},
+    themeCss: m.theme?.css || '',
+    timing: m.timing || {},
+    scenes: (m.scenes || []).map(s => ({
+      id: s.id, body: s.body || '', clip: s.clip || null, dur: s.dur || null,
+      transition: s.transition || 'fade',
+      vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}) })),
+    })),
+    captions: m.captions || {},
+    align: m.align || false,
+    bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
+    sfx: (m.audio?.sfx || []).map(s => ({ file: s.file, scene: s.scene, at: s.at, volume: s.volume })),
+    variants: (m.variants || []).map(v => ({
+      id: v.id, scene: v.scene ? { body: v.scene.body, vo: v.scene.vo } : null,
+    })),
+    variant: m.variant || null,
+    series: m.series || null,
+    // Preserve resolved filesystem paths from the original config.
+    // These are needed by compose for asset copying and clip resolution.
+    assetsDir: resolvedConfig ? resolvedConfig.assetsDir : undefined,
+    projectDir: resolvedConfig ? resolvedConfig.projectDir : undefined,
+  };
+}
+
+module.exports = { build, synth, writeStageInputs, commitFingerprint, resolveReuse, audioFingerprint, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline, configFromManifest };

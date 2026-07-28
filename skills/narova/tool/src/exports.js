@@ -108,13 +108,20 @@ function presetFor(id) {
   return PRESETS[id] || PRESETS['narova-standard'];
 }
 
-function presetsFor(config) {
+function presetsFor(config, explicitDeliverables) {
   const ids = new Set();
   ids.add('narova-standard');
   if (config.platform && PLATFORM_TO_PRESET[config.platform]) {
     ids.add(PLATFORM_TO_PRESET[config.platform]);
   }
-  // TODO: config.deliverables can add more.
+  // config.deliverables: explicit preset ids or platform names
+  const explicit = explicitDeliverables || config.deliverables;
+  if (Array.isArray(explicit)) {
+    for (const d of explicit) {
+      const presetId = PLATFORM_TO_PRESET[d] || d; // resolve platform name → preset id
+      if (PRESETS[presetId]) ids.add(presetId);
+    }
+  }
   return [...ids].map(id => ({ id, ...presetFor(id) }));
 }
 
@@ -258,7 +265,8 @@ function renderDeliverable(hfDir, outDir, preset, opts = {}) {
 /* Render all deliverable presets for a project. */
 function buildDeliverables(config, hfDir, outDir, opts = {}) {
   const log = opts.log || console.log;
-  const presets = presetsFor(config);
+  const explicitDeliverables = opts.deliverables === true ? null : opts.deliverables;
+  const presets = presetsFor(config, explicitDeliverables);
   const results = [];
 
   // Always do narova-standard first (it's the quickest baseline render).

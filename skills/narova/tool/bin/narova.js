@@ -22,17 +22,28 @@ const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
 
-const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'deliverables']);
+const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite']);
 
 function parseArgs(argv) {
   const positionals = [];
   const flags = {};
+  // Flags that can be either boolean OR take a value (bare = true, with value = string).
+  const BOOL_OR_VALUE = new Set(['deliverables']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
       const eq = a.indexOf('=');
       if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
       const key = a.slice(2);
+      if (BOOL_OR_VALUE.has(key)) {
+        const nxt = argv[i + 1];
+        if (nxt != null && !nxt.startsWith('--')) {
+          flags[key] = nxt; i++;
+        } else {
+          flags[key] = true;
+        }
+        continue;
+      }
       if (BOOL_FLAGS.has(key)) { flags[key] = true; continue; }
       // Every remaining flag expects a value; a bare `--tempo` must error, not
       // silently resolve to `true` (Number(true)===1, "true" -> hyperframes).
@@ -165,8 +176,12 @@ Options:
                             per declared variant (shared sentences are cache-free)
   --deliverables           build: render per-platform deliverables (one mp4 per
                             export profile + thumbnails, ffmpeg post-processed)
+  --deliverables ids      build: comma-separated export preset ids or "true"
+                            for all profiles (e.g. --deliverables youtube-1080p,reels-1080p)
   --fps N                  render fps (hyperframes; default 30)
   --quality draft|standard|high   render quality (hyperframes)
+  --safe-area-guides       build: overlay TikTok safe-area zones on the output
+                            (authoring/QA only — not burned in by default)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
   --port N                 Studio port (default 3002)
   --detach                 keep Studio running and return its URL + pid
@@ -258,16 +273,22 @@ async function main() {
       if (sub === 'save') {
         const name = positionals[2];
         if (!name) { console.error('usage: narova release save <name>'); process.exit(1); }
-        const r = saveRelease(mp, name, { projectDir: path.resolve(flags.project || '.') });
-        console.log(`release "${r.name}" saved -> ${r.dir}`);
+        const projectDir = path.resolve(flags.project || '.');
+        const r = saveRelease(mp, name, { projectDir });
+        console.log(`release "${r.name}" saved -> ${r.dir}  (${r.files.length} files: ${r.files.join(', ')})`);
         return;
       }
       if (sub === 'restore') {
         const name = positionals[2];
         if (!name) { console.error('usage: narova release restore <name>'); process.exit(1); }
-        const result = restoreRelease(name, out);
+        const result = restoreRelease(name, out, {
+          projectDir: path.resolve(flags.project || '.'),
+          overwrite: flags.overwrite,
+          newProject: flags['new-project'],
+        });
         console.log(`release "${name}" restored -> ${result.manifest}`);
-        if (result.restored.length) console.log(`  source files: ${result.restored.join(', ')}`);
+        if (result.restored.length) console.log(`  restored: ${result.restored.join(', ')}`);
+        if (result.conflicts.length) console.log(`  skipped (existing): ${result.conflicts.join(', ')}`);
         return;
       }
       if (sub === 'remove') {
@@ -292,7 +313,7 @@ async function main() {
       const out = outDirOf(flags, projectDir);
       const reuse = resolveReuse(config, out, flags.reuse);
       writeStageInputs(config, out);
-      synth(out, { backend: flags.backend, reuse, projectDir });
+      synth(out, { backend: flags.backend, reuse, projectDir, config });
       enrichTimeline(out);   // merge measured timings into manifest.json
       console.log(`synth complete -> ${out}/audio (incl. full.wav), ${out}/timings.json`);
       return;
@@ -359,7 +380,10 @@ async function main() {
       const buildOpts = {
         backend: flags.backend, reuse: flags.reuse,
         fps: flags.fps, quality: flags.quality,
-        deliverables: flags.deliverables,
+        deliverables: flags.deliverables
+          ? (flags.deliverables === true ? true : String(flags.deliverables).split(',').map(s => s.trim()).filter(Boolean))
+          : undefined,
+        safeAreaGuides: flags['safe-area-guides'],
       };
       if (flags.variants) {
         // One resolved config per pass: base first, then each declared variant.

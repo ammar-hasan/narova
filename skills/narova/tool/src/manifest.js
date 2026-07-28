@@ -159,10 +159,12 @@ function collectAssets(config, projectDir) {
   const assets = [];
   function add(type, file) {
     if (!file) return;
-    const abs = path.resolve(projectDir || '.', file);
+    const pd = projectDir || '.';
+    const abs = path.resolve(pd, file);
     if (seen.has(abs)) return;
     seen.add(abs);
-    const entry = { id: path.basename(file, path.extname(file)), type, file };
+    const rel = path.relative(pd, abs) || file;
+    const entry = { id: path.basename(file, path.extname(file)), type, file: rel };
     if (fs.existsSync(abs)) {
       try { entry.size = fs.statSync(abs).size; } catch {}
     }
@@ -209,11 +211,15 @@ function walkAssets(dir, relPrefix, seen, assets, projectDir) {
 function compileVoices(voices) {
   const out = {};
   for (const [id, v] of Object.entries(voices)) {
+    const speaker = v.speaker;
+    const cleanSpeaker = (v.backend === 'chatterbox' || v.backend === 'xtts') && speaker && path.isAbsolute(speaker)
+      ? path.basename(speaker, path.extname(speaker))
+      : speaker;
     out[id] = {
       label:   v.label,
       color:   v.color,
       backend: v.backend,
-      speaker: v.speaker,
+      speaker: cleanSpeaker,
       ...(v.gainDb != null ? { gainDb: v.gainDb } : {}),
       ...(v.lang ? { lang: v.lang } : {}),
       ...(v.instruct ? { instruct: v.instruct } : {}),
@@ -293,7 +299,7 @@ function buildDeliverables(config) {
         bitrate:    preset.enc ? preset.enc.videoBitrate : '4M',
         sampleRate: preset.enc ? preset.enc.sampleRate : 48000,
         loudness:   preset.enc && preset.enc.loudness ? preset.enc.loudness : null,
-        safeArea:   preset.enc && preset.enc.safeArea ? preset.enc.safeArea : null,
+        safeArea:   preset.safeArea || null,
         thumbnail:  preset.thumbnail ? { width: preset.thumbnail.width, at: preset.thumbnail.at } : null,
         ...(PLATFORMS[platform] && PLATFORMS[platform].band ? { durationBand: PLATFORMS[platform].band } : {}),
       });

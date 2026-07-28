@@ -3,15 +3,17 @@
 
  * Each release is a directory under RELEASES_DIR/<name>/ containing:
  *   manifest.json     — the versioned intermediate representation
- *   config.json       — exported resolved config snapshot
+ *   reel.config.mjs   — original config (preserves original filename)
  *   theme.css         — project theme stylesheet (if present)
  *   assets/           — project asset tree (if present)
  *   claims.md         — claims ledger (if present)
  *   sources.md        — source reference (if present)
 
- * Restore writes everything back to the project directory, warning on
- * conflicts. The snapshot is content-addressed: manifest hashes identify
- * every file, so a restore can detect drift from the original build. */
+ * Restore writes everything back to the project directory. Policies:
+ *   --overwrite  replace existing files (default: skip)
+ *   --merge      merge assets directories (default: skip dirs)
+ *   --new-project <dir>  restore into a fresh directory
+ *   --dry-run    print what would happen without writing */
 
 const fs = require('fs');
 const path = require('path');
@@ -35,7 +37,6 @@ function releasePath(name) {
   return p;
 }
 
-/* Recursively copy a directory tree. */
 function copyDir(src, dest) {
   fs.mkdirSync(dest, { recursive: true });
   for (const e of fs.readdirSync(src, { withFileTypes: true })) {
@@ -46,7 +47,6 @@ function copyDir(src, dest) {
   }
 }
 
-/* Recursively remove a directory tree. */
 function rmDir(dir) {
   if (!fs.existsSync(dir)) return;
   for (const e of fs.readdirSync(dir, { withFileTypes: true })) {
@@ -57,26 +57,49 @@ function rmDir(dir) {
   fs.rmdirSync(dir);
 }
 
+/* Resolve the project root the same way other commands do — walk up from
+ * the given directory to find reel.config.*. Falls back to the directory
+ * itself when no config file is found. */
+function resolveProjectDir(fromDir) {
+  // Dynamic require to avoid circular deps at module load time.
+  const { loadConfigFile } = require('./config');
+  let dir = path.resolve(fromDir);
+  for (let i = 0; i < 16; i++) {
+    for (const name of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
+      if (fs.existsSync(path.join(dir, name))) return dir;
+    }
+    const parent = path.dirname(dir);
+    if (parent === dir) break;
+    dir = parent;
+  }
+  return path.resolve(fromDir); // fallback: use the given dir
+}
+
 /* Snapshot a project: copies manifest + config + theme + assets + ledgers
- * into the release directory. Returns { name, dir, created }. */
+ * into the release directory. Preserves the original config filename.
+ * Returns { name, dir, created, files }. */
 function save(manifestPath, name, opts = {}) {
   const releaseDir = releasePath(name);
   fs.mkdirSync(releaseDir, { recursive: true });
 
-  // manifest.json — always present
   const manifestSrc = fs.readFileSync(manifestPath, 'utf8');
   fs.writeFileSync(path.join(releaseDir, 'manifest.json'), manifestSrc, 'utf8');
 
   const safeName = path.basename(releaseDir);
+  const saved = ['manifest.json'];
 
-  // Project snapshot (source files that made this build).
-  const projectDir = opts.projectDir;
+  // Resolve the project root properly.
+  const projectDir = opts.projectDir
+    ? resolveProjectDir(opts.projectDir)
+    : resolveProjectDir(path.resolve(path.dirname(manifestPath), '..'));
+
   if (projectDir && fs.existsSync(projectDir)) {
-    // config snapshot — copy the first found reel.config.*
-    for (const name of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
-      const cf = path.join(projectDir, name);
+    // Preserve original config filename.
+    for (const fname of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
+      const cf = path.join(projectDir, fname);
       if (fs.existsSync(cf)) {
-        fs.copyFileSync(cf, path.join(releaseDir, `config.${path.extname(name).slice(1)}`));
+        fs.copyFileSync(cf, path.join(releaseDir, fname));
+        saved.push(fname);
         break;
       }
     }
@@ -84,20 +107,25 @@ function save(manifestPath, name, opts = {}) {
     const themeFile = path.join(projectDir, 'theme.css');
     if (fs.existsSync(themeFile)) {
       fs.copyFileSync(themeFile, path.join(releaseDir, 'theme.css'));
+      saved.push('theme.css');
     }
     // assets directory
     const assetsDir = path.join(projectDir, 'assets');
     if (fs.existsSync(assetsDir)) {
       copyDir(assetsDir, path.join(releaseDir, 'assets'));
+      saved.push('assets/');
     }
     // ledgers
     for (const ledger of ['claims.md', 'sources.md']) {
       const lf = path.join(projectDir, ledger);
-      if (fs.existsSync(lf)) fs.copyFileSync(lf, path.join(releaseDir, ledger));
+      if (fs.existsSync(lf)) {
+        fs.copyFileSync(lf, path.join(releaseDir, ledger));
+        saved.push(ledger);
+      }
     }
   }
 
-  return { name: safeName, dir: releaseDir, created: new Date().toISOString() };
+  return { name: safeName, dir: releaseDir, created: new Date().toISOString(), files: saved };
 }
 
 function list() {
@@ -127,7 +155,12 @@ function list() {
 
 /* Restore a named release into destDir (the project's out/ directory).
  * Manifest goes to destDir/manifest.json. Source files go to the project
- * root (one level above destDir by default). */
+ * root (resolved via resolveProjectDir, not guessed from out/).
+
+ * Policies (set via opts):
+ *   overwrite: true → replace existing files
+ *   newProject: <dir> → restore into a fresh directory instead
+ *   dryRun: true → log what would happen without writing */
 function restore(name, destDir, opts = {}) {
   const srcDir = releasePath(name);
   if (!fs.existsSync(srcDir) || !fs.statSync(srcDir).isDirectory()) {
@@ -136,13 +169,26 @@ function restore(name, destDir, opts = {}) {
   const manifestSrc = path.join(srcDir, 'manifest.json');
   if (!fs.existsSync(manifestSrc)) throw new Error(`release "${name}" has no manifest.json`);
 
-  // Restore manifest to out/
-  const manifestDest = path.join(destDir, 'manifest.json');
-  fs.copyFileSync(manifestSrc, manifestDest);
+  const overwrite = opts.overwrite === true;
+  const dryRun = opts.dryRun === true;
+  const log = opts.log || console.log;
 
-  // Restore source files to project root.
-  const projectDir = opts.projectDir || path.resolve(destDir, '..');
-  const results = { manifest: manifestDest, restored: [] };
+  const projectDir = opts.newProject
+    ? path.resolve(opts.newProject)
+    : opts.projectDir
+      ? resolveProjectDir(opts.projectDir)
+      : resolveProjectDir(path.resolve(destDir, '..'));
+
+  // For new-project restore, put the manifest in the new project's out/.
+  const manifestDestDir = opts.newProject ? path.join(projectDir, 'out') : destDir;
+  if (!dryRun) fs.mkdirSync(manifestDestDir, { recursive: true });
+  const manifestDest = path.join(manifestDestDir, 'manifest.json');
+  if (!dryRun) fs.copyFileSync(manifestSrc, manifestDest);
+
+  // Ensure the project directory exists before copying source files.
+  if (!dryRun && !fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
+
+  const results = { manifest: manifestDest, restored: [], skipped: [], conflicts: [] };
 
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     if (entry.name === 'manifest.json') continue;
@@ -150,13 +196,29 @@ function restore(name, destDir, opts = {}) {
     const dest = path.join(projectDir, entry.name);
 
     if (entry.isDirectory()) {
-      if (fs.existsSync(dest)) continue; // don't overwrite existing dirs
-      copyDir(src, dest);
+      if (fs.existsSync(dest)) {
+        results.conflicts.push(entry.name + '/');
+        if (!overwrite) continue;
+      }
+      if (!dryRun) {
+        if (overwrite && fs.existsSync(dest)) rmDir(dest);
+        copyDir(src, dest);
+      }
     } else {
-      if (fs.existsSync(dest)) continue;
-      fs.copyFileSync(src, dest);
+      if (fs.existsSync(dest)) {
+        results.conflicts.push(entry.name);
+        if (!overwrite) continue;
+      }
+      if (!dryRun) fs.copyFileSync(src, dest);
     }
     results.restored.push(entry.name);
+  }
+
+  if (dryRun) {
+    log(`dry-run: would restore ${results.restored.length} file(s) to ${projectDir}`);
+    if (results.conflicts.length) log(`  conflicts (skipped without --overwrite): ${results.conflicts.join(', ')}`);
+  } else {
+    if (results.conflicts.length) log(`  skipped ${results.conflicts.length} existing file(s) (use --overwrite to replace): ${results.conflicts.join(', ')}`);
   }
 
   return results;
@@ -169,4 +231,4 @@ function remove(name) {
   return p;
 }
 
-module.exports = { save, list, restore, remove, RELEASES_DIR, releasePath };
+module.exports = { save, list, restore, remove, RELEASES_DIR, releasePath, resolveProjectDir };

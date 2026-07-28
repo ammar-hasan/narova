@@ -22,7 +22,7 @@ const { loadProjectConfig } = require('./config');
 
 const STAGE = {
   NONE:    { label: 'no change',         icon: '=', tts: false, align: false, mix: false, compose: false, render: false },
-  CONFIG:  { label: 'config-only',       icon: '~', tts: false, align: false, mix: true,  compose: true,  render: true  },
+  CONFIG:  { label: 'config-only',       icon: '~', tts: false, align: false, mix: false, compose: true,  render: true  },
   MIX:     { label: 'audio-mix only',    icon: '♪', tts: false, align: false, mix: true,  compose: true,  render: true  },
   ALIGN:   { label: 'alignment changed', icon: '↻', tts: false, align: true,  mix: true,  compose: true,  render: true  },
   VISUAL:  { label: 'visual-only',       icon: '>', tts: false, align: false, mix: false, compose: true,  render: true  },
@@ -112,7 +112,7 @@ function plan(fromManifestPath, toConfig, opts = {}) {
     }
     if (sc.voChanged) { s.voChanged = sc.voChanged; hasVoChange = true; }
     if (sc.bodyChanged) { s.bodyChanged = true; hasVisualChange = true; }
-    if (sc.clipChanged) s.clipChanged = true;
+    if (sc.clipChanged) { s.clipChanged = true; hasVisualChange = true; }
     if (sc.transitionChanged) s.transitionChanged = true;
     changes.push(s);
   }
