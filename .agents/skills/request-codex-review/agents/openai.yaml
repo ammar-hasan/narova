@@ -1,0 +1,4 @@
+interface:
+  display_name: "Codex Review"
+  short_description: "Get an independent Codex implementation review"
+  default_prompt: "Use $request-codex-review to review my current implementation and verify the findings."

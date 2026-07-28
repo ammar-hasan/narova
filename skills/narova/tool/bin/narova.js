@@ -9,7 +9,7 @@ const fs = require('fs');
 const { spawnSync } = require('child_process');
 const { loadProjectConfig } = require('../src/config');
 const { resolveConfig } = require('../src/schema');
-const { synth, writeStageInputs, build, findPython, resolveReuse } = require('../src/pipeline');
+const { synth, writeStageInputs, build, findPython, resolveReuse, compileTimeline, enrichTimeline } = require('../src/pipeline');
 const { compose } = require('../src/compose');
 const { composeData } = require('../src/compose/data');
 const { writeCaptions } = require('../src/captions');
@@ -121,8 +121,11 @@ Usage: narova <command> [options]
 Commands:
   init <dir>            scaffold a project (config + one example scene)
   ingest <url>          fetch a source page: download images into assets/,
-                          screenshot it (if Chrome), append sources.md,
-                          seed claims.md — the mechanical pass of url-to-source
+                           screenshot it (if Chrome), append sources.md,
+                           seed claims.md — the mechanical pass of url-to-source
+  compile               compile reel.config -> out/timeline.json
+                           (versioned intermediate representation; also written
+                           automatically by synth, compose, and build)
   check                validate config fast — no TTS, no browser, no writes
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> out/hf/ (HyperFrames project) + captions
@@ -186,6 +189,14 @@ async function main() {
       return;
     }
 
+    case 'compile': {
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      compileTimeline(config, { out });
+      console.log(`timeline -> ${path.join(out, 'timeline.json')}`);
+      return;
+    }
+
     case 'check': {
       let config;
       try { ({ config } = await loadResolved(flags)); }
@@ -205,6 +216,7 @@ async function main() {
       const reuse = resolveReuse(config, out, flags.reuse);
       writeStageInputs(config, out);
       synth(out, { backend: flags.backend, reuse, projectDir });
+      enrichTimeline(out);   // merge measured timings into timeline.json
       console.log(`synth complete -> ${out}/audio (incl. full.wav), ${out}/timings.json`);
       return;
     }

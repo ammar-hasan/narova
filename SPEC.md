@@ -258,7 +258,7 @@ each variant renders `out/video-<id>.mp4`), `--fps`,
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.7.11 shipped
+## Status: 0.8.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -274,7 +274,45 @@ Since 0.7.0: per-turn `lang` for multilingual TTS, voice sample management,
 silent scenes, per-voice `gainDb`, b-roll as HyperFrames-native clips,
 partial word alignment for mixed-language scenes, RTL captions, CSS
 externalization, `captions.maxWords`, XTTS multilingual `lang` support,
-version sync automation, and documentation remediation across all surfaces.
+version sync automation, platform qualification, and documentation remediation
+across all surfaces.
+
+Since 0.8.0: versioned timeline intermediate representation beneath the
+friendly `reel.config.*` surface.
+
+## Timeline intermediate representation
+
+`narova compile` converts `reel.config.*` → `out/timeline.json`, a versioned
+JSON document that captures every datum the pipeline needs in one self-contained
+file. The timeline is also written automatically during `synth` and `build`,
+and enriched with measured word timings after synthesis.
+
+**Versioning:** `narova` (tool version) and `version` (schema `"1.0"`) keys
+enable forward-compatible consumers to gate on schema changes.
+
+**Schema (top-level keys):** `narova`, `version`, `project`, `format`, `theme`,
+`chrome`, `voices`, `timing`, `audio`, `captions`, `align`, `assets`, `scenes`,
+`variants`, `series`, `variant`, `deliverables`.
+
+- `project` — title, creation timestamp, platform target.
+- `format` — width, height, fps, sampleRate, colorSpace.
+- `voices` — every voice with label, color, backend, speaker, gainDb, lang,
+  instruct, exaggeration, cfg_weight.
+- `scenes` — id, index, start/duration (filled post-synth), transition, vo
+  turns (who, text, lang, start, words), body HTML, clip, dur (silent scenes),
+  per-scene sfx anchors.
+- `variants` — hook variant ids with their full scene definitions (body, vo,
+  transition).
+- `assets` — all file dependencies discovered from `assetsDir/`, bed, sfx,
+  and b-roll clips.
+- `deliverables` — render presets: at least a `default` entry plus one per
+  platform when `platform` is set. Entries carry width, height, fps, codec,
+  bitrate, sampleRate.
+- `stages.synth` — ISO timestamp set after synthesis completes.
+
+**Consumers:** `validate(timeline)` checks schema compliance; `mergeTimings()`
+merges `out/timings.json` word-level data into the scene tree; future tooling
+reads the timeline as the canonical project snapshot.
 
 ## Future work (decided, not started)
 

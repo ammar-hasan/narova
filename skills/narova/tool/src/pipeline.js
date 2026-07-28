@@ -10,6 +10,7 @@ const { narration } = require('./schema');
 const { compose } = require('./compose');
 const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
+const { compile, read, write, mergeTimings } = require('./timeline');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
@@ -53,7 +54,8 @@ function ensureVenv(projectDir, log = console.log) {
   }
 }
 
-/* Write the two Python stage inputs (narration.json + config.resolved.json). */
+/* Write the two Python stage inputs (narration.json + config.resolved.json)
+ * plus the versioned timeline.json intermediate representation. */
 function writeStageInputs(config, outDir) {
   ensureDir(outDir);
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
@@ -61,6 +63,10 @@ function writeStageInputs(config, outDir) {
   // nor should a generated manifest embed a machine-specific path.
   const { assetsDir: _assetsDir, ...serializableConfig } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
+  // timeline.json — versioned intermediate representation that supersedes
+  // narration.json + config.resolved.json for downstream consumers.
+  const tl = compile(config, { toolVersion: require('../package.json').version });
+  fs.writeFileSync(path.join(outDir, 'timeline.json'), JSON.stringify(tl, null, 2));
 }
 
 /* `--reuse` replays the previous synth's audio + timings. If the spoken text
@@ -118,6 +124,7 @@ function build(config, opts = {}) {
     backend: opts.backend, reuse,
     projectDir: opts.projectDir, python: opts.python, log,
   });
+  enrichTimeline(outDir);   // merge measured timings into timeline.json
 
   log('[2/3] compose');
   const c = compose(config, outDir);
@@ -137,4 +144,27 @@ function build(config, opts = {}) {
   return { mp4, seconds, hf: c.dir };
 }
 
-module.exports = { build, synth, writeStageInputs, resolveReuse, findPython, ensureVenv, TOOL_ROOT };
+/* ---- compile: reel.config → timeline.json --------------------------------- */
+
+function compileTimeline(config, opts = {}) {
+  const outDir = path.resolve(opts.out || 'out');
+  ensureDir(outDir);
+  writeStageInputs(config, outDir);
+  const tl = JSON.parse(fs.readFileSync(path.join(outDir, 'timeline.json'), 'utf8'));
+  return { timeline: tl, outDir };
+}
+
+/* ---- enrich timeline with timings post-synth ------------------------------ */
+
+function enrichTimeline(outDir) {
+  const tp = path.join(outDir, 'timeline.json');
+  const tlp = path.join(outDir, 'timings.json');
+  if (!fs.existsSync(tp)) return null;
+  if (!fs.existsSync(tlp)) return JSON.parse(fs.readFileSync(tp, 'utf8'));
+  const tl = read(tp);
+  const enriched = mergeTimings(tl, tlp);
+  fs.writeFileSync(tp, JSON.stringify(enriched, null, 2));
+  return enriched;
+}
+
+module.exports = { build, synth, writeStageInputs, resolveReuse, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline };
