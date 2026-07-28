@@ -51,9 +51,9 @@ const PRESETS = {
     width:    1080, height: 1920, fps: 30,
     enc:      { videoBitrate: '4M', audioBitrate: '128k', sampleRate: 48000,
                 loudness: { target: -14, peak: -1.0, lra: 11 },
-                codec: 'h264', pixelFormat: 'yuv420p',
-                safeArea: { top: 0.1, bottom: 0.15 } },
+                codec: 'h264', pixelFormat: 'yuv420p' },
     thumbnail: { width: 720, at: 1 },
+    safeArea:  { top: 0.1, bottom: 0.15 },
   },
   'reels-1080p': {
     label:    'Instagram Reels 1080p',
@@ -120,10 +120,16 @@ function presetsFor(config) {
 
 /* ---- ffmpeg post-processing ----------------------------------------------- */
 
-/* Build the ffmpeg argument array for post-processing. Pure — no side effects. */
-function buildFfmpegArgs(inputPath, outputPath, preset) {
+/* Build the ffmpeg argument array for post-processing. Pure — no side effects.
+
+ * Always inserts a scale+pad filter matching the preset dimensions so the
+ * encoded deliverable is exactly the declared size. Safe-area guides are
+ * ONLY applied when opts.safeAreaGuides is true — they are authoring
+ * lint hints, not default burn-in elements. */
+function buildFfmpegArgs(inputPath, outputPath, preset, opts = {}) {
   const enc = preset.enc || {};
   const loud = enc.loudness;
+  const hasSafeArea = opts.safeAreaGuides && preset.safeArea;
 
   const args = ['-y', '-loglevel', 'error', '-i', inputPath];
 
@@ -137,6 +143,26 @@ function buildFfmpegArgs(inputPath, outputPath, preset) {
     args.push('-c:v', 'copy');
   }
 
+  // Scale + pad to enforce exact preset dimensions.
+  if (preset.width && preset.height) {
+    const scaleFilter = `scale=${preset.width}:${preset.height}:force_original_aspect_ratio=decrease,pad=${preset.width}:${preset.height}:(ow-iw)/2:(oh-ih)/2`;
+    if (hasSafeArea) {
+      const sa = preset.safeArea;
+      const drawExpr = [];
+      if (sa.top) drawExpr.push(`drawbox=0:0:iw:ih*${sa.top}:t=fill:c=black@0.15`);
+      if (sa.bottom) drawExpr.push(`drawbox=0:ih-ih*${sa.bottom}:iw:ih*${sa.bottom}:t=fill:c=black@0.15`);
+      args.push('-vf', [scaleFilter, ...drawExpr].join(','));
+    } else {
+      args.push('-vf', scaleFilter);
+    }
+  } else if (hasSafeArea) {
+    const sa = preset.safeArea;
+    const drawExpr = [];
+    if (sa.top) drawExpr.push(`drawbox=0:0:iw:ih*${sa.top}:t=fill:c=black@0.15`);
+    if (sa.bottom) drawExpr.push(`drawbox=0:ih-ih*${sa.bottom}:iw:ih*${sa.bottom}:t=fill:c=black@0.15`);
+    if (drawExpr.length) args.push('-vf', drawExpr.join(','));
+  }
+
   // Audio: loudness normalize + encode.
   if (loud) {
     args.push(
@@ -148,23 +174,14 @@ function buildFfmpegArgs(inputPath, outputPath, preset) {
     args.push('-c:a', 'aac', '-b:a', enc.audioBitrate || '128k');
   }
 
-  // Safe-area letterbox.
-  if (enc.safeArea) {
-    const sa = enc.safeArea;
-    const drawExpr = [];
-    if (sa.top) drawExpr.push(`drawbox=0:0:iw:ih*${sa.top}:t=fill:c=black@0.15`);
-    if (sa.bottom) drawExpr.push(`drawbox=0:ih-ih*${sa.bottom}:iw:ih*${sa.bottom}:t=fill:c=black@0.15`);
-    if (drawExpr.length) args.push('-vf', drawExpr.join(','));
-  }
-
   args.push('-movflags', '+faststart', outputPath);
   return args;
 }
 
 /* Loudness-normalize + encode the audio track of an already-rendered
  * source mp4, emitting a delivery-ready mp4. */
-function postProcess(inputPath, outputPath, preset) {
-  sh('ffmpeg', buildFfmpegArgs(inputPath, outputPath, preset));
+function postProcess(inputPath, outputPath, preset, opts = {}) {
+  sh('ffmpeg', buildFfmpegArgs(inputPath, outputPath, preset, opts));
   return outputPath;
 }
 
@@ -215,11 +232,10 @@ function renderDeliverable(hfDir, outDir, preset, opts = {}) {
 
   const hasEncode = preset.enc && preset.enc.codec === 'h264';
   const hasLoudness = preset.enc && preset.enc.loudness;
-  const hasSafeArea = preset.enc && preset.enc.safeArea;
+  const hasSafeArea = opts.safeAreaGuides && preset.safeArea;
 
   if (hasEncode || hasLoudness || hasSafeArea) {
-    postProcess(sourceMp4, tempMp4, preset);
-    // Replace source with post-processed version.
+    postProcess(sourceMp4, tempMp4, preset, { safeAreaGuides: opts.safeAreaGuides });
     try { fs.unlinkSync(sourceMp4); } catch {}
     try { fs.renameSync(tempMp4, sourceMp4); } catch {}
   }

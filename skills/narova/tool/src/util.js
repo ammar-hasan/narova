@@ -55,6 +55,7 @@ const PLATFORMS = {
   shorts:   { size: { w: 1080, h: 1920 }, band: [30, 50],  label: 'YouTube Shorts' },
   linkedin: { size: { w: 1080, h: 1080 }, band: [30, 90],  label: 'LinkedIn' },
   x:        { size: { w: 1080, h: 1920 }, band: [0, 140],  label: 'X' },
+  youtube:  { size: { w: 1920, h: 1080 }, band: [0, 720],  label: 'YouTube' },
 };
 
 /* #rrggbb -> "rgba(r,g,b,a)" for text-shadow tints. */

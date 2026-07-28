@@ -100,11 +100,17 @@ test('buildFfmpegArgs narova-standard: no loudnorm, no CRF', () => {
   assert.ok(!a.some(x => x.includes('loudnorm')), 'narova-standard should NOT have loudnorm');
 });
 
-test('buildFfmpegArgs tiktok-1080p: safeArea drawbox', () => {
-  const a = buildFfmpegArgs('/tmp/in.mp4', '/tmp/out.mp4', PRESETS['tiktok-1080p']);
+test('buildFfmpegArgs tiktok-1080p: safeArea drawbox (when guides enabled)', () => {
+  const a = buildFfmpegArgs('/tmp/in.mp4', '/tmp/out.mp4', PRESETS['tiktok-1080p'], { safeAreaGuides: true });
   assert.ok(a.includes('-vf'), 'should have video filter for safe area');
   const vfIdx = a.indexOf('-vf');
   assert.ok(a[vfIdx + 1].includes('drawbox'), `drawbox not found: ${a[vfIdx + 1]}`);
+});
+
+test('buildFfmpegArgs tiktok-1080p: no drawbox when guides not requested', () => {
+  const a = buildFfmpegArgs('/tmp/in.mp4', '/tmp/out.mp4', PRESETS['tiktok-1080p']);
+  const hasDrawbox = a.some(x => x.includes('drawbox'));
+  assert.ok(!hasDrawbox, 'safe area guides should NOT be burned in by default');
 });
 
 test('buildFfmpegArgs linkedin-1080p: louder loudness target', () => {
@@ -150,11 +156,11 @@ test('landscape presets have width > height', () => {
   assert.ok(p.width > p.height, 'youtube-1080p should be landscape');
 });
 
-test('safe-area presets have safeArea configured', () => {
+test('safe-area presets have safeArea configured (authoring hint, not default burn-in)', () => {
   const p = PRESETS['tiktok-1080p'];
-  assert.ok(p.enc.safeArea, 'tiktok should have safeArea');
-  assert.ok(p.enc.safeArea.top > 0);
-  assert.ok(p.enc.safeArea.bottom > 0);
+  assert.ok(p.safeArea, 'tiktok should have safeArea as top-level preset property');
+  assert.ok(p.safeArea.top > 0);
+  assert.ok(p.safeArea.bottom > 0);
 });
 
 // ---- round-trip -------------------------------------------------------------

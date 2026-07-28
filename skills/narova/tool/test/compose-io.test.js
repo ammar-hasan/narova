@@ -89,6 +89,8 @@ test('--reuse holds only while the spoken text is unchanged', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-reuse-'));
   assert.equal(resolveReuse(config, out, true), false, 'no previous synth -> full synth');
   writeStageInputs(config, out);                      // what the last synth consumed
+  // synth writes timings.json — the test needs a dummy one so reuse can match.
+  fs.writeFileSync(path.join(out, 'timings.json'), '{}', 'utf8');
   assert.equal(resolveReuse(config, out, true), true, 'same vo -> reuse the audio');
   const edited = { ...config, scenes: [{ ...config.scenes[0], vo: [{ who: 'a', text: 'Changed.' }] }] };
   assert.equal(resolveReuse(edited, out, true), false, 'changed vo -> force a full synth');

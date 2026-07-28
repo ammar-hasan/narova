@@ -20,7 +20,7 @@ compatibility: >
   First-time model and renderer setup requires internet access.
 metadata:
   author: ammar-hasan
-  version: "0.8.3"
+  version: "0.9.0"
 ---
 
 # narova — prompt to narrated, captioned video

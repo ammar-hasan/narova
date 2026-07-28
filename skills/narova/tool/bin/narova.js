@@ -234,7 +234,10 @@ async function main() {
       const projectDir = flags.project || '.';
       const out = outDirOf(flags, projectDir);
       const mp = path.join(out, 'manifest.json');
-      if (!fs.existsSync(mp)) {
+      // restore and list don't require an existing manifest
+      // save and restore need a project context, but list/remove work globally
+      const needsManifest = sub === 'save';
+      if (needsManifest && !fs.existsSync(mp)) {
         console.error(`no manifest found in ${out} — run narova compile or build first`);
         process.exit(1);
       }
@@ -245,7 +248,8 @@ async function main() {
         } else {
           for (const e of entries) {
             const kb = (e.size / 1024).toFixed(1);
-            console.log(`  ${e.name.padEnd(24)} ${kb.padStart(6)}KB  ${new Date(e.created).toISOString().slice(0,16).replace('T',' ')}`);
+            const dur = e.duration ? `  ${e.duration.toFixed(1)}s` : '';
+            console.log(`  ${e.name.padEnd(24)} ${kb.padStart(6)}KB${dur}  ${new Date(e.created).toISOString().slice(0,16).replace('T',' ')}  ${e.title || ''}`);
           }
           console.log(`\n${entries.length} release(s) in ${require('../src/releases').RELEASES_DIR}`);
         }
@@ -254,15 +258,16 @@ async function main() {
       if (sub === 'save') {
         const name = positionals[2];
         if (!name) { console.error('usage: narova release save <name>'); process.exit(1); }
-        const r = saveRelease(mp, name);
-        console.log(`release "${r.name}" saved -> ${r.path}`);
+        const r = saveRelease(mp, name, { projectDir: path.resolve(flags.project || '.') });
+        console.log(`release "${r.name}" saved -> ${r.dir}`);
         return;
       }
       if (sub === 'restore') {
         const name = positionals[2];
         if (!name) { console.error('usage: narova release restore <name>'); process.exit(1); }
-        const dest = restoreRelease(name, out);
-        console.log(`release "${name}" restored -> ${dest}`);
+        const result = restoreRelease(name, out);
+        console.log(`release "${name}" restored -> ${result.manifest}`);
+        if (result.restored.length) console.log(`  source files: ${result.restored.join(', ')}`);
         return;
       }
       if (sub === 'remove') {

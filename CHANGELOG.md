@@ -6,6 +6,61 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.9.0] - 2026-07-28
+
+### Added
+
+- **Audio fingerprint for `--reuse`** — reuse now compares a full audio
+  fingerprint (backend, speaker, sample-content hash, text, language, tempo,
+  gain, instruct, exaggeration, cfg_weight, pipeline version) instead of
+  only narration text. A voice swap, backend change, clone re-recording, or
+  tempo change all now correctly invalidate stale audio.
+- **Asset hash change detection in planner** — `narova plan` now compares
+  asset hashes (bed files, SFX, clips, theme.css) in addition to the config
+  hash. Replacing a file at the same path now correctly reports changes.
+- **Pipeline stage granularity in planner** — the planner now distinguishes
+  five pipeline stages: `tts`, `align`, `mix`, `compose`, `render`. A bed/SFX
+  change triggers `mix → compose → render` without re-synthesizing speech.
+  An alignment change triggers `align → mix → compose → render`.
+- **Named releases as project snapshots** — `narova release save` now
+  captures the full project snapshot: manifest, config file, theme.css,
+  assets directory, claims.md, and sources.md. `restore` writes them back
+  to the project directory.
+- **Manifest-driven pipeline** — the manifest is now compiled first and
+  written as the canonical intermediate representation. `narration.json`
+  and `config.resolved.json` remain as compatibility projections for the
+  Python TTS stage.
+- **Canonical export preset registry** — the manifest now uses the same
+  authoritative `PRESETS` catalog as the exporter. Preset names are unified
+  (e.g., `tiktok-1080p` instead of `tiktok-preset`). The manifest deliverable
+  records now include `loudness`, `safeArea`, and `thumbnail` metadata.
+- **YouTube platform support** — `youtube` is now a valid `--platform` value
+  (1920×1080, 0–720s band).
+- **Dimension enforcement in ffmpeg** — `buildFfmpegArgs` now always inserts
+  a `scale`+`pad` filter matching the preset dimensions, ensuring the
+  rendered deliverable is exactly the declared size.
+- **Release path containment** — `releasePath()` now validates that the
+  resolved path stays inside the releases directory as defense-in-depth.
+
+### Changed
+
+- **TikTok safe areas are now authoring hints** — the drawbox overlay is
+  only applied when `--safe-area-guides` is passed. It is no longer burned
+  into the final deliverable by default. The `safeArea` property moved from
+  `preset.enc.safeArea` to `preset.safeArea`.
+- **Manifest stores portable paths** — `audio.bed.file`, `audio.sfx[].file`,
+  and hash keys now use project-relative paths instead of absolute machine
+  paths. The manifest no longer leaks local directory structures.
+- **Release storage format** — releases are now directories under
+  `~/.narova/releases/<name>/` containing `manifest.json` plus optional
+  project snapshots. `list` now shows title and duration.
+
+### Fixed
+
+- Duplicate `changes.push('timing')` in the timing-change planner branch.
+- `--deliverables` flag now prepares for list format (still boolean for now).
+- Scene clip paths in build hashes now match the stored relative form.
+
 ## [0.8.3] - 2026-07-28
 
 ### Added

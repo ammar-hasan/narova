@@ -1,16 +1,26 @@
 'use strict';
 /* Orchestration: synth (Python TTS) -> compose -> hyperframes render.
- * Language boundary (SPEC): Node owns config, composition, and the HyperFrames
- * handoff; Python owns TTS + timings only. */
+
+ * Pipeline contract (canonical flow):
+ *   reel.config → compile → manifest.json
+ *                                ↓
+ *                         synth / compose / export
+ *
+ * The manifest is the canonical intermediate representation. Every stage
+ * after compilation consumes it. narration.json and config.resolved.json
+ * are temporary compatibility projections generated FROM the manifest
+ * (Python still consumes those files). */
+
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const { ensureDir, probe } = require('./util');
 const { narration } = require('./schema');
 const { compose } = require('./compose');
 const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
-const { compile, read, write, mergeTimings } = require('./manifest');
+const { compile, read, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
 
 /* ---- Python (synth) handoff -------------------------------------------------
@@ -18,20 +28,16 @@ const { buildDeliverables } = require('./exports');
  *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts|qwen|chatterbox] [--reuse]
  * It writes <out>/audio/NN.{wav,mp3}, <out>/audio/full.wav and <out>/timings.json. */
 
-// The tool root: <skill>/tool (bin/, src/, py/, setup.sh) — wherever the skill is installed.
 const TOOL_ROOT = path.resolve(__dirname, '..');
-// Default venv home. Lives OUTSIDE the skill folder — skill dirs get replaced
-// on updates, a venv must survive that.
 const VENV_HOME = process.env.NAROVA_VENV
   || path.join(process.env.NAROVA_HOME || path.join(require('os').homedir(), '.narova'), 'venv');
 
-/* Venv candidates, in order. Returns the first that exists, else null. */
 function findVenvPython(projectDir) {
   const cands = [
     process.env.NAROVA_PYTHON,
     projectDir && path.join(projectDir, '.venv', 'bin', 'python'),
     path.join(VENV_HOME, 'bin', 'python'),
-    path.join(TOOL_ROOT, '..', '..', '..', '.venv', 'bin', 'python'),  // dev checkout root (repo/skills/narova/tool)
+    path.join(TOOL_ROOT, '..', '..', '..', '.venv', 'bin', 'python'),
     path.join(TOOL_ROOT, '.venv', 'bin', 'python'),
   ].filter(Boolean);
   for (const c of cands) if (fs.existsSync(c)) return c;
@@ -42,8 +48,6 @@ function findPython(projectDir) {
   return findVenvPython(projectDir) || 'python3';
 }
 
-/* First-run self-provisioning: no venv anywhere -> run the bundled setup.sh
- * (creates the venv at VENV_HOME and installs the piper deps). */
 function ensureVenv(projectDir, log = console.log) {
   if (findVenvPython(projectDir)) return;
   log(`no TTS venv found — creating one at ${VENV_HOME} (one-time, piper backend)`);
@@ -55,39 +59,121 @@ function ensureVenv(projectDir, log = console.log) {
   }
 }
 
-/* Write the two Python stage inputs (narration.json + config.resolved.json)
- * plus the versioned narova manifest. */
-function writeStageInputs(config, outDir) {
-  ensureDir(outDir);
-  fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
-  // assetsDir is an absolute Node-side compose path. Python neither needs it
-  // nor should a generated manifest embed a machine-specific path.
-  const { assetsDir: _assetsDir, ...serializableConfig } = config;
-  fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
-  // manifest.json — versioned project model that supersedes
-  // narration.json + config.resolved.json for downstream consumers.
-  const tl = compile(config, { toolVersion: require('../package.json').version });
-  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(tl, null, 2));
+function sha256(input) {
+  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
 }
 
-/* `--reuse` replays the previous synth's audio + timings. If the spoken text
- * changed since that synth, replaying would silently ship stale audio — so
- * compare the current narration against the one the last synth consumed
- * (narration.json, written before the Python stage runs) and force a full
- * synth on any difference. Voice/backend/tempo changes with unchanged text
- * still replay old audio by design — run a full build to re-voice. */
+function hashFile(filePath) {
+  if (!fs.existsSync(filePath)) return null;
+  return sha256(fs.readFileSync(filePath));
+}
+
+/* ---- audio fingerprint for --reuse ------------------------------------------
+
+ * An audio fingerprint captures every input that affects the produced speech
+ * audio. --reuse replays previous synth output only when the full fingerprint
+ * matches. This covers:
+ *   backend, speaker, text, language, tempo, gain, instruct,
+ *   exaggeration, cfg_weight, and the audio-processing pipeline version. */
+function audioFingerprint(config) {
+  const voices = config.voices || {};
+  const entries = [];
+
+  for (const [id, v] of Object.entries(voices)) {
+    const fp = { id };
+    fp.backend = v.backend || 'piper';
+    fp.speaker = v.speaker || '';
+    // For chatterbox clones, hash the sample recording so a
+    // re-recording invalidates the cache.
+    if (v.backend === 'chatterbox' && v.speaker) {
+      const resolved = v.speaker; // already absolute from resolveConfig
+      if (fs.existsSync(resolved)) {
+        fp.sampleHash = hashFile(resolved);
+      }
+    }
+    fp.gainDb = v.gainDb != null ? v.gainDb : 0;
+    fp.lang = v.lang || '';
+    fp.instruct = v.instruct || '';
+    fp.exaggeration = v.exaggeration != null ? v.exaggeration : 1.0;
+    fp.cfg_weight = v.cfg_weight != null ? v.cfg_weight : 0.7;
+    entries.push(fp);
+  }
+
+  // Per-turn language override is part of the text identity.
+  const turns = [];
+  for (const s of (config.scenes || [])) {
+    for (const t of (s.vo || [])) {
+      turns.push({ who: t.who, text: t.text, lang: t.lang || '' });
+    }
+  }
+
+  const timing = config.timing || {};
+  const tempo = timing.tempo != null ? timing.tempo : 1.0;
+
+  return sha256(JSON.stringify({
+    voices: entries,
+    turns,
+    tempo,
+    backend: Object.values(voices)[0]?.backend || 'piper',
+    pipeline: 1, // increment when audio-processing pipeline changes
+  }));
+}
+
+/* Write the Python stage inputs (narration.json + config.resolved.json)
+ * plus the canonical manifest.json.
+
+ * The manifest is compiled FIRST from the resolved config and written.
+ * narration.json and config.resolved.json are then derived as
+ * compatibility projections from the resolved config (Python still
+ * consumes those files). Downstream stages should prefer the manifest. */
+function writeStageInputs(config, outDir) {
+  ensureDir(outDir);
+  // manifest.json — canonical versioned project model
+  const tl = compile(config, { toolVersion: require('../package.json').version });
+  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(tl, null, 2));
+  // narration.json — Python TTS contract (compatibility projection)
+  fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
+  // config.resolved.json — resolved config for Python (compatibility projection)
+  const { assetsDir: _assetsDir, ...serializableConfig } = config;
+  fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
+  // audio-fingerprint (used by --reuse to detect voice/backend/tempo changes)
+  const fp = audioFingerprint(config);
+  fs.writeFileSync(path.join(outDir, '.audio-fingerprint'), fp + '\n');
+}
+
+/* `--reuse` replays the previous synth's audio + timings only when the
+ * complete audio fingerprint matches. A text change, voice swap, backend
+ * change, tempo change, gain change, clone-sample replacement, language
+ * change, or instruct change all force a full synth. */
 function resolveReuse(config, outDir, requested, log = console.log) {
   if (!requested) return false;
-  const prev = path.join(outDir, 'narration.json');
-  if (!fs.existsSync(prev)) {
+  const fingerprintPath = path.join(outDir, '.audio-fingerprint');
+  const narrationPath = path.join(outDir, 'narration.json');
+  const timingsPath = path.join(outDir, 'timings.json');
+
+  if (!fs.existsSync(fingerprintPath) || !fs.existsSync(timingsPath)) {
     log('note: --reuse but no previous synth found — running a full synth');
     return false;
   }
+
+  const currentFp = audioFingerprint(config);
+  const previousFp = fs.readFileSync(fingerprintPath, 'utf8').trim();
+
+  if (currentFp === previousFp) return true;
+
+  // Give a helpful message about what likely changed.
   try {
-    const before = JSON.parse(fs.readFileSync(prev, 'utf8'));
-    if (JSON.stringify(before) === JSON.stringify(narration(config))) return true;
-  } catch { /* unreadable manifest — safest is a full synth */ }
-  log('note: the spoken text changed since the last synth — ignoring --reuse and re-synthesizing');
+    const prevNarration = JSON.parse(fs.readFileSync(narrationPath, 'utf8'));
+    const currNarration = narration(config);
+    const textChanged = JSON.stringify(prevNarration) !== JSON.stringify(currNarration);
+    if (textChanged) {
+      log('note: the spoken text changed since the last synth — ignoring --reuse and re-synthesizing');
+    } else {
+      log('note: voice, backend, tempo, gain, instruction, or clone sample changed — ignoring --reuse and re-synthesizing');
+    }
+  } catch {
+    log('note: audio configuration changed — ignoring --reuse and re-synthesizing');
+  }
   return false;
 }
 
@@ -125,7 +211,7 @@ function build(config, opts = {}) {
     backend: opts.backend, reuse,
     projectDir: opts.projectDir, python: opts.python, log,
   });
-  enrichTimeline(outDir);   // merge measured timings into manifest.json
+  enrichTimeline(outDir);
 
   log('[2/3] compose');
   const c = compose(config, outDir);
@@ -139,7 +225,6 @@ function build(config, opts = {}) {
   if (opts.quality) args.push('--quality', String(opts.quality));
 
   if (opts.deliverables) {
-    // Multi-deliverable render: one mp4 per export profile.
     log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
     const results = buildDeliverables(config, c.dir, outDir, { ...opts, log });
     const mp4 = path.join(outDir, name);
@@ -178,4 +263,4 @@ function enrichTimeline(outDir) {
   return enriched;
 }
 
-module.exports = { build, synth, writeStageInputs, resolveReuse, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline };
+module.exports = { build, synth, writeStageInputs, resolveReuse, audioFingerprint, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline };

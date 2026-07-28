@@ -20,6 +20,12 @@ const path = require('path');
 const fs = require('fs');
 const crypto = require('crypto');
 const { PLATFORMS } = require('./util');
+// Lazy-load exports module to avoid circular dependency at parse time.
+let _exports = null;
+function exportsMod() {
+  if (!_exports) _exports = require('./exports');
+  return _exports;
+}
 
 /* ---- schema version ------------------------------------------------------- */
 const MANIFEST_SCHEMA_VER = '1.0';
@@ -61,33 +67,24 @@ function buildHashes(config, projectDir) {
     }
     walk(assetsRoot, '');
   }
-  // Bed / sfx / clip files
+  // Bed / sfx / clip files — hash by relative path (portable).
+  const pd = projectDir || '.';
   if (config.bed && config.bed.file) {
-    const fp = path.resolve(projectDir || '.', config.bed.file);
-    h[config.bed.file] = hashFile(fp);
+    const rel = path.relative(pd, config.bed.file) || config.bed.file;
+    h[rel] = hashFile(config.bed.file);
   }
   if (config.sfx) config.sfx.forEach(s => {
-    const fp = path.resolve(projectDir || '.', s.file);
-    h[s.file] = hashFile(fp);
+    const rel = path.relative(pd, s.file) || s.file;
+    h[rel] = hashFile(s.file);
   });
   config.scenes.forEach(s => {
     if (s.clip) {
-      const fp = path.resolve(projectDir || '.', s.clip);
-      h[s.clip] = hashFile(fp);
+      const absClip = path.resolve(pd, s.clip);
+      h[s.clip] = hashFile(absClip);
     }
   });
   return h;
 }
-
-/* Platfom-specific deliverable presets (future: codec/bitrate/safe-area).
- * Today they carry the frame size + advisory duration band. */
-const DELIVERABLE_PRESET_MAP = {
-  tiktok:   { size: { w: 1080, h: 1920 }, band: [21, 34] },
-  reels:    { size: { w: 1080, h: 1920 }, band: [15, 30] },
-  shorts:   { size: { w: 1080, h: 1920 }, band: [30, 50] },
-  linkedin: { size: { w: 1080, h: 1080 }, band: [30, 90] },
-  x:        { size: { w: 1080, h: 1920 }, band: [0, 140] },
-};
 
 /* ---- compilation ---------------------------------------------------------- */
 
@@ -131,8 +128,8 @@ function compile(config, opts = {}) {
       tempo:       timing.tempo != null ? timing.tempo : null,
     },
     audio: {
-      bed: bed ? { file: bed.file, volume: bed.volume, fadeIn: bed.fadeIn, fadeOut: bed.fadeOut } : null,
-      sfx: (sfx || []).map(s => ({ file: s.file, scene: s.scene || null, at: s.at, volume: s.volume })),
+      bed: bed ? { file: path.relative(projectDir, bed.file) || bed.file, volume: bed.volume, fadeIn: bed.fadeIn, fadeOut: bed.fadeOut } : null,
+      sfx: (sfx || []).map(s => ({ file: path.relative(projectDir, s.file) || s.file, scene: s.scene || null, at: s.at, volume: s.volume })),
     },
     captions: {
       preset:   (captions && captions.preset)   || 'karaoke',
@@ -265,31 +262,42 @@ function compileVariants(variants) {
 
 function buildDeliverables(config) {
   const { platform, size } = config;
+  const e = exportsMod();
   const list = [];
-  // Always emit a baseline deliverable.
+  // Always emit a baseline deliverable from the canonical narova-standard preset.
+  const standardPreset = e.PRESETS['narova-standard'];
   list.push({
     id:         'default',
     preset:     'narova-standard',
-    width:      size.w,
-    height:     size.h,
+    width:      standardPreset ? standardPreset.width : (size.w || 1280),
+    height:     standardPreset ? standardPreset.height : (size.h || 720),
     fps:        30,
-    codec:      'h264',
-    bitrate:    '4M',
+    codec:      standardPreset && standardPreset.enc ? standardPreset.enc.codec : 'h264',
+    bitrate:    standardPreset && standardPreset.enc ? standardPreset.enc.videoBitrate : '4M',
     sampleRate: 48000,
+    loudness:   standardPreset && standardPreset.enc && standardPreset.enc.loudness ? standardPreset.enc.loudness : null,
+    safeArea:   null,
+    thumbnail:  standardPreset && standardPreset.thumbnail ? { width: standardPreset.thumbnail.width, at: standardPreset.thumbnail.at } : null,
   });
-  if (platform && PLATFORMS[platform]) {
-    const p = PLATFORMS[platform];
-    list.push({
-      id:         platform,
-      preset:     `${platform}-preset`,
-      width:      p.size.w,
-      height:     p.size.h,
-      fps:        30,
-      codec:      'h264',
-      bitrate:    '4M',
-      sampleRate: 48000,
-      durationBand: p.band,
-    });
+  if (platform && e.PLATFORM_TO_PRESET[platform]) {
+    const presetId = e.PLATFORM_TO_PRESET[platform];
+    const preset = e.PRESETS[presetId];
+    if (preset) {
+      list.push({
+        id:         platform,
+        preset:     presetId,
+        width:      preset.width,
+        height:     preset.height,
+        fps:        preset.fps,
+        codec:      preset.enc ? preset.enc.codec : 'h264',
+        bitrate:    preset.enc ? preset.enc.videoBitrate : '4M',
+        sampleRate: preset.enc ? preset.enc.sampleRate : 48000,
+        loudness:   preset.enc && preset.enc.loudness ? preset.enc.loudness : null,
+        safeArea:   preset.enc && preset.enc.safeArea ? preset.enc.safeArea : null,
+        thumbnail:  preset.thumbnail ? { width: preset.thumbnail.width, at: preset.thumbnail.at } : null,
+        ...(PLATFORMS[platform] && PLATFORMS[platform].band ? { durationBand: PLATFORMS[platform].band } : {}),
+      });
+    }
   }
   return list;
 }
