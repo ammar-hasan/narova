@@ -109,6 +109,11 @@ export default {
   downloads any voice from the piper catalog
   (github.com/rhasspy/piper/blob/master/VOICES.md) — you are not limited to
   the listed ones.
+- **Optional external TTS**: an explicitly registered provider name is also a
+  valid `backend`. Set its service voice ID in `speaker` and put only
+  JSON-compatible, non-secret synthesis settings in `providerOptions`.
+  Provider credentials stay in environment variables. Install, register, and
+  configure it from its companion skill; Narova remains local-first.
 - **Styling**: the base look ships built in (background, top bar, captions,
   progress bar) plus a menu of scene-layout classes (below). Add your own
   classes in `theme.css`. Bodies are plain HTML with no scripts. Inline SVG,

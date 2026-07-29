@@ -20,7 +20,7 @@ from pathlib import Path
 from typing import Any
 
 from .align import align_scenes
-from .backends import build_backends
+from .backends import BUILTIN_BACKENDS, build_backends, close_backends
 
 RATE = 22050          # output sample rate (Piper-native; XTTS is resampled to it)
 FADE = 0.012          # ~12ms fade at each sentence edge, or you get clicks (LEARNINGS #4)
@@ -244,6 +244,15 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
         parts.append(f"exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}")
     if kind == "chatterbox" and v.get("lang"):
         parts.append(f"lang={v['lang']}")
+    # External providers are identified by their registered protocol and
+    # implementation version. providerOptions is opaque to Narova, but sorted
+    # JSON makes semantically identical objects hash identically.
+    if kind is not None and kind not in BUILTIN_BACKENDS:
+        parts.append(f"protocol={v.get('providerProtocol', '')}")
+        parts.append(f"providerVersion={v.get('providerVersion', '')}")
+        parts.append("providerOptions=" + json.dumps(
+            v.get("providerOptions", {}), sort_keys=True,
+            separators=(",", ":"), ensure_ascii=False))
     if v.get("gainDb") is not None:
         parts.append(f"gainDb={v['gainDb']}")
     return "|".join(parts)
@@ -320,7 +329,16 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
 def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict[str, Any]:
     voices = config.get("voices", {})
     router = build_backends(voices, default_backend)
+    try:
+        return _synthesize_with_router(
+            scenes, config, timing, audio_dir, tmp, default_backend, voices, router)
+    finally:
+        close_backends(router)
 
+
+def _synthesize_with_router(
+        scenes, config, timing, audio_dir, tmp, default_backend, voices, router
+) -> dict[str, Any]:
     gap_sentence = timing["gapSentence"]
     gap_turn = timing["gapTurn"]
     lead = timing["lead"]

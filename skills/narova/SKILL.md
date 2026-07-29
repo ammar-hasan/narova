@@ -63,6 +63,26 @@ higher-quality voices, run `bash <this-skill-dir>/tool/setup.sh --xtts`
 (or `--qwen`) once. To clone a specific voice from a recording, install the
 chatterbox backend once: `bash <this-skill-dir>/tool/setup.sh --chatterbox`.
 
+### Optional external TTS providers
+
+Narova stays local-first, but explicitly registered companion skills can add
+hosted TTS without changing this skill or its venv. Providers are executable
+workers speaking `narova-tts-provider/v1` as JSON Lines; Narova still owns
+sentence caching and all audio/timing/video processing.
+
+```bash
+narova providers add <provider-manifest.json>
+narova providers list
+narova providers doctor <name>
+narova providers remove <name>
+```
+
+A voice may then use `backend: "<registered-name>"` plus an opaque,
+JSON-compatible `providerOptions` object. Credentials belong only in the
+provider's required environment variables, never in `reel.config.mjs`.
+Provider-specific installation and options live in the optional companion
+skill (for example `narova-elevenlabs`), not here.
+
 ## Workflow: prompt → video
 
 ### 0 — INTAKE: Recommend, don't interrogate

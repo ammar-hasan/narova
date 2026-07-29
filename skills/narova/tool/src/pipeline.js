@@ -26,10 +26,11 @@ const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
 const { compile, read, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
+const { stableStringify } = require('./providers');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
- *   --config <out>/config.resolved.json --out <out> [--backend piper|xtts|qwen|chatterbox] [--reuse]
+ *   --config <out>/config.resolved.json --out <out> [--backend <built-in-or-registered>] [--reuse]
  * It writes <out>/audio/NN.{wav,mp3}, <out>/audio/full.wav and <out>/timings.json. */
 
 const TOOL_ROOT = path.resolve(__dirname, '..');
@@ -101,6 +102,9 @@ function audioFingerprint(config) {
     fp.instruct = v.instruct || '';
     fp.exaggeration = v.exaggeration != null ? v.exaggeration : 1.0;
     fp.cfg_weight = v.cfg_weight != null ? v.cfg_weight : 0.7;
+    fp.providerProtocol = v.providerProtocol || '';
+    fp.providerVersion = v.providerVersion || '';
+    fp.providerOptions = v.providerOptions || {};
     entries.push(fp);
   }
 
@@ -115,7 +119,7 @@ function audioFingerprint(config) {
   const timing = config.timing || {};
   const tempo = timing.tempo != null ? timing.tempo : 1.0;
 
-  return sha256(JSON.stringify({
+  return sha256(stableStringify({
     voices: entries,
     turns,
     tempo,
@@ -312,6 +316,9 @@ function configFromManifest(manifest, resolvedConfig) {
       ...(v.gainDb != null ? { gainDb: v.gainDb } : {}),
       ...(v.lang ? { lang: v.lang } : {}),
       ...(v.instruct ? { instruct: v.instruct } : {}),
+      ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
+      ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
+      ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
     }])),
     theme: { accent: m.theme?.accent, bg: m.theme?.bg },
     mode: m.theme?.mode || 'dark',

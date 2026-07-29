@@ -21,6 +21,10 @@ const { ingest } = require('../src/ingest');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
+const {
+  addProvider, listProviders, removeProvider, doctorProvider, providersDir,
+} = require('../src/providers');
+const { backendHint } = require('../src/tts-backends');
 
 const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release']);
 
@@ -157,6 +161,10 @@ Commands:
   build                synth + compose + hyperframes render -> out/video.mp4
   preview              compose, then open HyperFrames Studio on out/hf
   voices list|get      list / download TTS voices (delegates to narova_tts)
+  providers add <manifest>    register an external TTS provider
+  providers list              list explicitly registered providers
+  providers remove <name>     unregister an external TTS provider
+  providers doctor <name>     verify environment + worker handshake
   voice sample add <file> <name>   save a clone sample for chatterbox
   voice sample list                list saved clone samples
   voice sample remove <name>       remove a saved clone sample
@@ -167,7 +175,7 @@ they work from inside out/ and out/hf too. A detached Studio preview is
 restarted automatically whenever compose/build replaces out/hf.
 
 Options:
-  --backend piper|xtts|qwen|chatterbox   TTS backend (chatterbox = voice cloning)
+  --backend <name>          TTS backend (${backendHint()} or a registered provider)
   --reuse                  skip synth, reuse out/audio + out/timings.json
                            (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)
@@ -472,6 +480,54 @@ async function main() {
       const r = spawnSync(py, args, { stdio: 'inherit', env: { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') } });
       if (r.error) { console.error(`voices failed to launch (${py}): ${r.error.message}`); process.exit(1); }
       process.exitCode = r.status || 0;
+      return;
+    }
+
+    case 'providers': {
+      const sub = positionals[1] || 'list';
+      if (sub === 'list') {
+        const entries = listProviders();
+        if (entries.length === 0) {
+          console.log(`no external TTS providers registered (${providersDir()})`);
+        } else {
+          for (const provider of entries) {
+            const version = provider.providerVersion ? ` ${provider.providerVersion}` : '';
+            const voices = provider.capabilities.voiceListing ? 'voices' : 'no-voice-list';
+            console.log(`${provider.name.padEnd(20)} ${provider.displayName}${version}  ${provider.protocol}  ${voices}`);
+          }
+        }
+        return;
+      }
+      if (sub === 'add') {
+        const manifest = positionals[2];
+        if (!manifest) { console.error('usage: narova providers add <provider-manifest.json>'); process.exit(1); }
+        const added = addProvider(manifest);
+        console.log(`provider "${added.name}" registered -> ${path.join(providersDir(), `${added.name}.json`)}`);
+        if (added.missingEnvironment.length) {
+          console.log(`  set before synthesis: ${added.missingEnvironment.join(', ')}`);
+        }
+        return;
+      }
+      if (sub === 'remove') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova providers remove <name>'); process.exit(1); }
+        removeProvider(name);
+        console.log(`provider "${name}" unregistered`);
+        return;
+      }
+      if (sub === 'doctor') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova providers doctor <name>'); process.exit(1); }
+        const result = doctorProvider(name);
+        console.log(`worker ok: ${name} ${result.hello.providerVersion} speaks ${result.hello.protocol}`);
+        if (result.missingEnvironment.length) {
+          console.error(`missing required environment: ${result.missingEnvironment.join(', ')}`);
+          process.exitCode = 1;
+        }
+        return;
+      }
+      console.error('usage: narova providers add|list|remove|doctor [manifest-or-name]');
+      process.exit(1);
       return;
     }
 

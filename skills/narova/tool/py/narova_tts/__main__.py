@@ -17,7 +17,9 @@ import json
 import sys
 from pathlib import Path
 
+from .backends import BUILTIN_BACKENDS, ExternalProviderBackend
 from .pipeline import run
+from .providers import load_provider
 
 # Well-known starter voices per backend, with a spread of genders/accents so a
 # multi-host cast can sound distinct without the heavy backends. `list` stays
@@ -49,27 +51,57 @@ def _voices(argv: list[str]) -> int:
     ap = argparse.ArgumentParser(prog="narova_tts voices", description="list / get TTS voices")
     ap.add_argument("sub", nargs="?", default="list", choices=["list", "get"])
     ap.add_argument("name", nargs="?", help="voice to get (piper only)")
-    ap.add_argument("--backend", default="piper", choices=["piper", "xtts", "qwen", "chatterbox"])
+    ap.add_argument("--backend", default="piper",
+                    help="built-in backend or explicitly registered external provider")
     args = ap.parse_args(argv)
 
     if args.sub == "list":
-        for name in KNOWN_VOICES.get(args.backend, []):
-            print(name)
-        if args.backend == "xtts":
-            print("… + 58 studio speakers built into the cached XTTS-v2 model", file=sys.stderr)
-        elif args.backend == "qwen":
-            print("… all 9 CustomVoice presets; voice cloning/design not wired into narova yet", file=sys.stderr)
-        elif args.backend == "chatterbox":
-            print("chatterbox has no preset voices — clone your own: set a voice's "
-                  "`speaker` to an ABSOLUTE path to a clean 10–20s recording.", file=sys.stderr)
-        else:
-            print("… more at https://github.com/rhasspy/piper/blob/master/VOICES.md", file=sys.stderr)
+        if args.backend in BUILTIN_BACKENDS:
+            for name in KNOWN_VOICES.get(args.backend, []):
+                print(name)
+            if args.backend == "xtts":
+                print("… + 58 studio speakers built into the cached XTTS-v2 model", file=sys.stderr)
+            elif args.backend == "qwen":
+                print("… all 9 CustomVoice presets; voice cloning/design not wired into narova yet", file=sys.stderr)
+            elif args.backend == "chatterbox":
+                print("chatterbox has no preset voices — clone your own: set a voice's "
+                      "`speaker` to an ABSOLUTE path to a clean 10–20s recording.", file=sys.stderr)
+            else:
+                print("… more at https://github.com/rhasspy/piper/blob/master/VOICES.md", file=sys.stderr)
+            return 0
+        provider = load_provider(args.backend)
+        if provider is None:
+            print(
+                f"unknown backend or unregistered provider {args.backend!r} — "
+                "register it with `narova providers add <manifest>`",
+                file=sys.stderr,
+            )
+            return 2
+        try:
+            for voice in ExternalProviderBackend.list_voices(provider):
+                print(f"{voice['id']}\t{voice['name']}")
+        except (RuntimeError, ValueError) as exc:
+            print(str(exc), file=sys.stderr)
+            return 2
         return 0
 
     # get
     if args.backend == "chatterbox":
         print("chatterbox has no downloadable preset voices — set `speaker` to an "
               "ABSOLUTE path to a clean 10–20s recording.", file=sys.stderr)
+        return 2
+    if args.backend not in BUILTIN_BACKENDS:
+        if load_provider(args.backend) is None:
+            print(
+                f"unknown backend or unregistered provider {args.backend!r}",
+                file=sys.stderr,
+            )
+        else:
+            print(
+                f"provider {args.backend!r} does not support `voices get`; "
+                "provider voices are managed by that service",
+                file=sys.stderr,
+            )
         return 2
     if args.backend != "piper":
         print(f"{args.backend} speakers are built into the model — nothing to download", file=sys.stderr)
@@ -97,8 +129,8 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--narration", required=True, type=Path, help="path to narration.json")
     ap.add_argument("--config", required=True, type=Path, help="path to config JSON (voices, timing)")
     ap.add_argument("--out", required=True, type=Path, help="output directory")
-    ap.add_argument("--backend", default="piper", choices=["piper", "xtts", "qwen", "chatterbox"],
-                    help="default backend; per-voice config.backend overrides it")
+    ap.add_argument("--backend", default="piper",
+                    help="default built-in backend or registered provider; per-voice config.backend overrides it")
     ap.add_argument("--reuse", action="store_true",
                     help="skip synth; rescale existing timings to existing audio")
     ns = ap.parse_args(argv)

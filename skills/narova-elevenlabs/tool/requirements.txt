@@ -1,0 +1,2 @@
+# No third-party Python packages are required.
+# The worker uses the documented ElevenLabs HTTP API through Python's stdlib.

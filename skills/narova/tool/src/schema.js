@@ -3,10 +3,13 @@
 const fs = require('fs');
 const path = require('path');
 const { resolveSize, PLATFORMS, resolveVoiceSample } = require('./util');
+const { isBuiltinBackend, backendHint } = require('./tts-backends');
+const {
+  getProvider, jsonCompatibilityError, containsRequiredEnvironmentValue,
+} = require('./providers');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
-const TTS_BACKENDS = new Set(['piper', 'xtts', 'qwen', 'chatterbox']);
 const CAPTION_PRESETS = new Set(['karaoke', 'slam', 'pop', 'rise']);
 const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 
@@ -121,8 +124,31 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         || v.gainDb < -24 || v.gainDb > 24)) {
       errs.push(`${at}.gainDb: must be a number from -24 to 24`);
     }
-    if (!TTS_BACKENDS.has(v.backend)) {
-      errs.push(`${at}.backend: unknown backend ${JSON.stringify(v.backend)} (piper|xtts|qwen|chatterbox)`);
+    const optionsError = v.providerOptions == null
+      ? null
+      : (typeof v.providerOptions !== 'object' || Array.isArray(v.providerOptions)
+        ? `${at}.providerOptions: expected a JSON-compatible object`
+        : jsonCompatibilityError(v.providerOptions, `${at}.providerOptions`));
+    if (optionsError) errs.push(optionsError);
+
+    if (!isBuiltinBackend(v.backend)) {
+      let provider = null;
+      try { provider = getProvider(v.backend); }
+      catch (e) { errs.push(`${at}.backend: registered provider is invalid: ${e.message}`); }
+      if (!provider) {
+        errs.push(`${at}.backend: unknown backend ${JSON.stringify(v.backend)} (unregistered external provider; built-ins: ${backendHint()}; register with "narova providers add <manifest>")`);
+      } else {
+        if (v.providerOptions != null
+            && containsRequiredEnvironmentValue(v.providerOptions, provider)) {
+          errs.push(`${at}.providerOptions: must not contain a value from the provider's required environment; keep secrets out of reel.config.mjs`);
+        }
+        // Generic provider metadata travels with the resolved config so the
+        // Python sentence cache and manifest can include implementation
+        // version changes without importing provider code.
+        v.providerProtocol = provider.protocol;
+        v.providerVersion = provider.providerVersion || '';
+        if (v.providerOptions == null) v.providerOptions = {};
+      }
     }
     if (v.backend !== 'chatterbox') return;
     const resolved = resolveVoiceSample(v.speaker);

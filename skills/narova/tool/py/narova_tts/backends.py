@@ -22,11 +22,15 @@ from __future__ import annotations
 import json
 import math
 import os
+import queue
 import subprocess
 import sys
+import threading
 import wave
 from pathlib import Path
-from typing import Protocol
+from typing import Callable, Protocol
+
+from .providers import PROVIDER_PROTOCOL, load_provider
 
 
 CLONE_EXTS = (".wav", ".mp3", ".flac", ".m4a")
@@ -54,6 +58,323 @@ class Backend(Protocol):
     """A backend synthesizes one utterance for one speaker to a raw wav."""
 
     def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path: ...
+
+
+def _provider_error(response: dict, fallback: str) -> str:
+    error = response.get("error")
+    if isinstance(error, str):
+        return error
+    if isinstance(error, dict) and isinstance(error.get("message"), str):
+        return error["message"]
+    return fallback
+
+
+class _ProviderWorker:
+    """Persistent JSONL subprocess channel for one registered provider."""
+
+    def __init__(self, manifest: dict, startup_timeout: float, request_timeout: float):
+        self.manifest = manifest
+        self.startup_timeout = startup_timeout
+        self.request_timeout = request_timeout
+        self.process: subprocess.Popen | None = None
+        self.lines: queue.Queue[str | None] = queue.Queue()
+        self.provider_version = manifest.get("providerVersion", "")
+
+    def _sanitize(self, message: str) -> str:
+        clean = str(message)
+        for name in self.manifest.get("requiredEnvironment", []):
+            value = os.environ.get(name)
+            if value:
+                clean = clean.replace(value, "[redacted]")
+        return clean
+
+    def start(self) -> None:
+        if self.process is not None and self.process.poll() is None:
+            return
+        missing = [
+            name for name in self.manifest.get("requiredEnvironment", [])
+            if not os.environ.get(name)
+        ]
+        if missing:
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} is missing required environment: "
+                f"{', '.join(missing)}")
+        try:
+            # stderr intentionally inherits the parent terminal for provider
+            # diagnostics; stdout remains exclusively the JSONL protocol.
+            self.process = subprocess.Popen(
+                self.manifest["command"],
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=None,
+                text=True,
+                encoding="utf-8",
+                bufsize=1,
+                shell=False,
+            )
+        except OSError as exc:
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} failed to start: {exc}") from exc
+        assert self.process.stdout is not None
+
+        def read_lines() -> None:
+            try:
+                for line in self.process.stdout:
+                    self.lines.put(line)
+            finally:
+                self.lines.put(None)
+
+        threading.Thread(
+            target=read_lines,
+            name=f"narova-provider-{self.manifest['name']}",
+            daemon=True,
+        ).start()
+        response = self.exchange(
+            {"operation": "hello", "protocol": PROVIDER_PROTOCOL},
+            timeout=self.startup_timeout,
+            operation="handshake",
+        )
+        if response.get("ok") is not True:
+            message = self._sanitize(_provider_error(response, "unknown worker error"))
+            self.terminate()
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} handshake failed: {message}")
+        if response.get("protocol") != PROVIDER_PROTOCOL:
+            actual = response.get("protocol")
+            self.terminate()
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} uses unsupported protocol "
+                f"{actual!r}; expected {PROVIDER_PROTOCOL}")
+        if response.get("provider") != self.manifest["name"]:
+            actual = response.get("provider")
+            self.terminate()
+            raise RuntimeError(
+                f"provider handshake name mismatch: expected {self.manifest['name']!r}, "
+                f"got {actual!r}")
+        version = response.get("providerVersion")
+        if not isinstance(version, str) or not version:
+            self.terminate()
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} handshake omitted providerVersion")
+        self.provider_version = version
+
+    def exchange(self, request: dict, timeout: float | None = None,
+                 operation: str = "request") -> dict:
+        process = self.process
+        if process is None:
+            raise RuntimeError("provider worker has not started")
+        if process.poll() is not None:
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} worker exited with "
+                f"status {process.returncode}")
+        assert process.stdin is not None
+        try:
+            process.stdin.write(json.dumps(request, separators=(",", ":")) + "\n")
+            process.stdin.flush()
+        except (BrokenPipeError, OSError) as exc:
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} worker exited while sending "
+                f"{operation}") from exc
+        try:
+            line = self.lines.get(timeout=self.request_timeout if timeout is None else timeout)
+        except queue.Empty as exc:
+            self.terminate()
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} {operation} timed out") from exc
+        if line is None:
+            status = process.poll()
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} worker exited unexpectedly"
+                f"{'' if status is None else f' with status {status}'}")
+        try:
+            response = json.loads(line)
+        except json.JSONDecodeError as exc:
+            self.terminate()
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} returned invalid JSON "
+                f"during {operation}") from exc
+        if not isinstance(response, dict):
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} returned a non-object response")
+        return response
+
+    def close(self) -> None:
+        process = self.process
+        if process is None:
+            return
+        if process.poll() is None:
+            try:
+                assert process.stdin is not None
+                process.stdin.close()
+            except (BrokenPipeError, OSError):
+                pass
+            try:
+                process.wait(timeout=5)
+            except subprocess.TimeoutExpired:
+                self.terminate()
+        self._close_streams(process)
+        self.process = None
+
+    def terminate(self) -> None:
+        process = self.process
+        if process is None:
+            return
+        if process.poll() is None:
+            try:
+                process.terminate()
+                process.wait(timeout=2)
+            except subprocess.TimeoutExpired:
+                process.kill()
+                process.wait(timeout=2)
+            except OSError:
+                pass
+        self._close_streams(process)
+
+    @staticmethod
+    def _close_streams(process: subprocess.Popen) -> None:
+        for stream in (process.stdin, process.stdout):
+            if stream is not None:
+                try:
+                    stream.close()
+                except OSError:
+                    pass
+
+
+class ExternalProviderBackend:
+    """Generic registered provider implementing Narova's raw-wav backend seam.
+
+    The worker starts lazily on first synthesis and is shared by every voice
+    that names this provider. Narova continues to own all post-processing.
+    """
+
+    def __init__(self, manifest: dict, speakers: dict[str, str],
+                 provider_options: dict[str, dict] | None = None,
+                 startup_timeout: float = 10.0, request_timeout: float | None = None):
+        self.manifest = dict(manifest)
+        if self.manifest.get("protocol") != PROVIDER_PROTOCOL:
+            raise ValueError(
+                f"provider {self.manifest.get('name')!r}: unsupported protocol "
+                f"{self.manifest.get('protocol')!r}")
+        self._speakers = dict(speakers)
+        self._options = {
+            who: json.loads(json.dumps(options or {}))
+            for who, options in (provider_options or {}).items()
+        }
+        request_timeout = request_timeout or float(
+            os.environ.get("NAROVA_PROVIDER_TIMEOUT", "120"))
+        self._startup_timeout = float(startup_timeout)
+        self._request_timeout = float(request_timeout)
+        self._worker: _ProviderWorker | None = None
+        self._request_number = 0
+
+    def _ensure_worker(self) -> _ProviderWorker:
+        if self._worker is None:
+            worker = _ProviderWorker(
+                self.manifest, self._startup_timeout, self._request_timeout)
+            worker.start()
+            self._worker = worker
+        return self._worker
+
+    @staticmethod
+    def _validate_output(path: Path) -> Path:
+        if not path.is_absolute():
+            raise ValueError("external provider output path must be absolute")
+        if not path.parent.is_dir():
+            raise ValueError(
+                f"external provider output directory does not exist: {path.parent}")
+        if os.path.lexists(path) and path.is_symlink():
+            raise ValueError("external provider output path must not be a symlink")
+        if path.exists() and not path.is_file():
+            raise ValueError("external provider output path must be a regular file")
+        path.unlink(missing_ok=True)
+        return path
+
+    @staticmethod
+    def _validate_wav(path: Path) -> None:
+        try:
+            with wave.open(str(path), "rb") as audio:
+                if audio.getnchannels() < 1 or audio.getsampwidth() < 1 \
+                        or audio.getframerate() < 1 or audio.getnframes() < 1:
+                    raise ValueError("empty or invalid WAV stream")
+        except (OSError, EOFError, wave.Error, ValueError) as exc:
+            raise RuntimeError(
+                f"provider output is not a valid WAV file: {path}") from exc
+
+    def synthesize(self, who: str, text: str, out_path: Path,
+                   lang: str | None = None) -> Path:
+        output = self._validate_output(Path(out_path))
+        worker = self._ensure_worker()
+        self._request_number += 1
+        request_id = f"request-{self._request_number}"
+        request = {
+            "id": request_id,
+            "operation": "synthesize",
+            "text": text,
+            "speaker": self._speakers[who],
+            "language": lang,
+            "output": str(output),
+            "options": self._options.get(who, {}),
+        }
+        response = worker.exchange(request, operation=f"synthesis {request_id}")
+        if response.get("id") != request_id:
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} returned a mismatched request id")
+        if response.get("ok") is not True:
+            message = worker._sanitize(
+                _provider_error(response, "unknown synthesis error"))
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} synthesis failed: {message}")
+        response_output = response.get("output")
+        if not isinstance(response_output, str) \
+                or Path(response_output).resolve() != output.resolve():
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} returned an unexpected output path")
+        if not output.is_file():
+            raise RuntimeError(
+                f"provider {self.manifest['name']!r} did not create the requested output file")
+        self._validate_wav(output)
+        return output
+
+    @classmethod
+    def list_voices(cls, manifest: dict, timeout: float = 10.0) -> list[dict]:
+        if not manifest.get("capabilities", {}).get("voiceListing"):
+            raise RuntimeError(
+                f"provider {manifest.get('name')!r} does not support voice listing")
+        worker = _ProviderWorker(manifest, timeout, timeout)
+        try:
+            worker.start()
+            response = worker.exchange(
+                {"operation": "listVoices"}, timeout=timeout,
+                operation="voice listing")
+            if response.get("ok") is not True:
+                raise RuntimeError(
+                    f"provider {manifest['name']!r} voice listing failed: "
+                    f"{worker._sanitize(_provider_error(response, 'unknown worker error'))}")
+            voices = response.get("voices")
+            if not isinstance(voices, list):
+                raise RuntimeError(
+                    f"provider {manifest['name']!r} returned an invalid voice list")
+            normalized = []
+            for item in voices:
+                if not isinstance(item, dict) or not isinstance(item.get("id"), str):
+                    raise RuntimeError(
+                        f"provider {manifest['name']!r} returned an invalid voice entry")
+                normalized.append({
+                    "id": item["id"],
+                    "name": item.get("name") if isinstance(item.get("name"), str) else item["id"],
+                })
+            return normalized
+        finally:
+            worker.close()
+
+    def close(self) -> None:
+        worker = getattr(self, "_worker", None)
+        if worker is not None:
+            worker.close()
+            self._worker = None
+
+    def __del__(self):
+        self.close()
 
 
 class PiperBackend:
@@ -319,18 +640,29 @@ class ChatterboxBackend:
         self.close()
 
 
-BACKENDS = {"piper": PiperBackend, "xtts": XttsBackend, "qwen": QwenBackend,
-            "chatterbox": ChatterboxBackend}
+BUILTIN_BACKENDS = {
+    "piper": PiperBackend,
+    "xtts": XttsBackend,
+    "qwen": QwenBackend,
+    "chatterbox": ChatterboxBackend,
+}
+# Backwards-compatible module alias; the registry itself is authoritative.
+BACKENDS = BUILTIN_BACKENDS
 
 
-def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, Backend]:
+def build_backends(
+        voices: dict[str, dict], default_backend: str,
+        provider_loader: Callable[[str], dict | None] = load_provider,
+) -> dict[str, Backend]:
     """Map each `who` -> a backend instance, one shared instance per backend
     type. `voices` is the config's voices block: {who: {backend?, speaker, lang?}}."""
     by_type: dict[str, dict[str, str]] = {}
     for who, v in voices.items():
         kind = v.get("backend", default_backend)
-        if kind not in BACKENDS:
-            raise ValueError(f"voice {who!r}: unknown backend {kind!r} (want {'|'.join(BACKENDS)})")
+        if kind not in BUILTIN_BACKENDS and provider_loader(kind) is None:
+            raise ValueError(
+                f"voice {who!r}: external provider {kind!r} is not registered "
+                f"(built-ins: {'|'.join(BUILTIN_BACKENDS)})")
         speaker = v.get("speaker")
         if not speaker:
             raise ValueError(f"voice {who!r}: missing 'speaker'")
@@ -352,10 +684,34 @@ def build_backends(voices: dict[str, dict], default_backend: str) -> dict[str, B
         elif kind == "xtts":
             langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
             instances[kind] = XttsBackend(speakers, langs)
+        elif kind in BUILTIN_BACKENDS:
+            instances[kind] = BUILTIN_BACKENDS[kind](speakers)
         else:
-            instances[kind] = BACKENDS[kind](speakers)
+            manifest = provider_loader(kind)
+            if manifest is None:
+                raise ValueError(f"external provider {kind!r} is not registered")
+            for who in speakers:
+                voices[who].setdefault("providerProtocol", manifest["protocol"])
+                voices[who].setdefault(
+                    "providerVersion", manifest.get("providerVersion", ""))
+            options = {
+                who: voices[who].get("providerOptions", {})
+                for who in speakers
+            }
+            instances[kind] = ExternalProviderBackend(manifest, speakers, options)
 
     router: dict[str, Backend] = {}
     for who, v in voices.items():
         router[who] = instances[v.get("backend", default_backend)]
     return router
+
+
+def close_backends(router: dict[str, Backend]) -> None:
+    seen: set[int] = set()
+    for backend in router.values():
+        if id(backend) in seen:
+            continue
+        seen.add(id(backend))
+        close = getattr(backend, "close", None)
+        if callable(close):
+            close()

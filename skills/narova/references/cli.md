@@ -19,7 +19,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, clipped audio. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
-| `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. | piper: fast; xtts/qwen/chatterbox: slow + one-time 1–2GB model |
+| `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. | built-ins are local; external-provider cost depends on its service |
 | `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project) + `out/captions.srt`/`.vtt`, and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) into `out/hf/snapshots/review/` via `hyperframes snapshot`. `--at t1,t2,…` picks explicit times (see the scene table from `compose`). | seconds (opens a browser) |
@@ -27,6 +27,10 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova preview` | compose, print the Studio URL, then run it in the foreground | runs until Ctrl-C |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
+| `narova providers add <manifest>` | validate, handshake with, and explicitly register an external TTS worker under `~/.narova/providers/`. | instant; starts the worker for its handshake |
+| `narova providers list` | list explicitly registered external TTS providers. | instant |
+| `narova providers doctor <name>` | verify manifest, executable, required environment, and protocol handshake. | provider startup |
+| `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
 | `narova doctor` | check ffmpeg, python, venv, hyperframes. Exit 1 if something is missing. | first run downloads the HyperFrames CLI |
 | `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |
 | `narova release list` | list all saved releases with size and date. | instant |
@@ -37,8 +41,9 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 
 ## Flags
 
-- `--backend piper|xtts|qwen|chatterbox` — TTS backend for all voices. Default
-  piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
+- `--backend <name>` — TTS backend for all voices: a built-in
+  (`piper|xtts|qwen|chatterbox`) or an explicitly registered external
+  provider. Default piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
   path to a clean 10–20s recording (install once: `tool/setup.sh --chatterbox`).
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
   Meant for visual-only edits; if the spoken text changed since the last

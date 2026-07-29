@@ -150,6 +150,22 @@ The rules:
 Pick voices that sound clearly different. Give each a `color`.
 List voices with `narova voices list --backend <name>`.
 
+### Optional external TTS
+
+External services are separate companion skills, not Narova dependencies.
+Narova only runs providers explicitly registered from a manifest:
+
+```bash
+narova providers add <provider-manifest.json>
+narova providers doctor <name>
+narova voices list --backend <name>
+```
+
+Use the registered name as a voice's `backend` and pass an opaque
+`providerOptions` object. Keep credentials in the provider's required
+environment variables—never in `reel.config.mjs`. The optional
+`skills/narova-elevenlabs/` skill is the first implementation.
+
 ## Commands
 
 ```
@@ -162,6 +178,7 @@ narova build          synth + compose + render -> out/video.mp4
 narova preview        open HyperFrames Studio and print its URL
 narova preview --detach   keep Studio alive; stop with preview --stop
 narova voices         list or download voices
+narova providers      add/list/remove/doctor external TTS providers
 narova doctor         check your machine
 ```
 
@@ -169,7 +186,7 @@ Commands find the project from any folder inside it (they walk up to the
 nearest `reel.config.*`). `check` also prints an estimated narration length,
 so a target duration can be tuned before any audio exists.
 
-Useful flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (keep old audio),
+Useful flags: `--backend <built-in-or-registered-provider>`, `--reuse` (keep old audio),
 `--tempo`, `--size`, `--fps`, `--quality draft|standard|high`,
 `--deliverables` (per-platform export presets via scale+pad — see
 [`references/cli.md`](skills/narova/references/cli.md) for the full list).
