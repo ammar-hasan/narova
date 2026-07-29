@@ -41,4 +41,12 @@ update(['SPEC.md'], (s, ver) =>
   s.replace(/^(## Status: +)[0-9.]+( +shipped)/m, `$1${ver}$2`)
 );
 
+// Website — current-version markers on the landing page and changelog.
+update(['docs/index.html', 'docs/changelog/index.html'], (s, ver) =>
+  s.replace(
+    /(<[^>]+data-narova-version[^>]*>v?)[0-9.]+(<\/[^>]+>)/g,
+    `$1${ver}$2`
+  )
+);
+
 console.log('Done.');

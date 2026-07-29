@@ -20,7 +20,7 @@ compatibility: >
   First-time model and renderer setup requires internet access.
 metadata:
   author: ammar-hasan
-  version: "0.11.0"
+  version: "0.12.0"
 ---
 
 # narova — prompt to narrated, captioned video
@@ -276,6 +276,17 @@ changed sentences re-synthesize). Spoken-text edit → plain `build`: the
 sentence cache re-synthesizes ONLY the changed sentences, so untouched
 scenes keep their exact audio. Details:
 `references/prompt-to-video.md` §Iterating.
+
+## Urdu dialogue
+
+When a project contains meaningful Urdu dialogue, use the `urdu-voice-director`
+skill before finalizing `vo` text. It will improve conversational naturalness,
+age-appropriate wording, phrase rhythm, hesitation and pauses, emotional
+progression, and cultural and religious phrasing.
+
+Use its clean spoken-Urdu output for Narova's built-in local TTS backends (piper,
+xtts, qwen, chatterbox). Do not insert unsupported performance tags into
+`vo.text`. For provider-specific tags, follow the relevant provider skill.
 
 ## Read it to…
 

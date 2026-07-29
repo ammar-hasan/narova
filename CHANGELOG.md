@@ -6,6 +6,55 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.12.0] - 2026-07-29
+
+### Added
+
+- **Versioned external TTS provider architecture** — Narova can now use
+  explicitly registered executable workers speaking
+  `narova-tts-provider/v1` as JSON Lines over stdin/stdout. Provider-specific
+  code, authentication, models, endpoints, and dependencies remain outside
+  the main skill.
+- **Provider registry CLI** — `narova providers add|list|doctor|remove`
+  validates normalized manifests under `~/.narova/providers/`, required
+  environment variables, executable commands, and worker handshakes.
+- **Generic external voice listing** — registered providers can implement
+  `listVoices`, exposed through
+  `narova voices list --backend <provider>`.
+- **Optional `narova-elevenlabs` companion skill** — isolated stdlib HTTP
+  worker with environment-only `ELEVENLABS_API_KEY`, ElevenLabs voice IDs,
+  opaque provider options, WAV conversion, structured errors, and mocked
+  tests that make no paid calls.
+- External provider identity, protocol, implementation version, speaker,
+  language, gain, tempo, and deterministically serialized options now
+  participate in audio fingerprints and sentence-cache identity.
+
+- **Urdu sentence punctuation support** — the Python `sentences()` and Node
+  `countSentencesPerTurn()` functions now recognize Urdu full stop `۔` (U+06D4)
+  and question mark `؟` (U+061F) as terminal punctuation, splitting
+  multi-sentence Urdu turns into the same sentence-level units as English
+  text. Previously, Urdu sentences joined by native punctuation were treated
+  as one long sentence, which could cause incorrect word-to-turn assignment
+  when merging timings.
+- **`urdu-voice-director` skill delegation** — SKILL.md now instructs agents
+  to use the `urdu-voice-director` skill before finalizing `vo` text in
+  projects with meaningful Urdu dialogue. The skill improves conversational
+  naturalness without adding provider-specific tags to Narova's config.
+- **Tests for Urdu sentence splitting** — Python: Urdu full stop, question
+  mark, ellipsis behavior, mixed English/Urdu, English unchanged. Node:
+  matching mergeTimings tests with word-level `si` assignment.
+
+### Changed
+
+- **Website refreshed through the current product surface** — accurate
+  local-first/provider language, manifest planning, release gates, export
+  profiles, current changelog entries, improved mobile layout, keyboard
+  focus, reduced-motion behavior, and caption-track accessibility.
+- `pipeline.py`: `sentences()` regex compiled once as module-level
+  `_SENTENCE_RE`.
+- `manifest.js`: `countSentencesPerTurn()` regex extracted to module-level
+  `SENTENCE_SPLIT_RE` constant.
+
 ## [0.11.0] - 2026-07-29
 
 ### Added
@@ -547,9 +596,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.8.1...HEAD
-[0.8.1]: https://github.com/ammar-hasan/narova/compare/v0.8.0...v0.8.1
-[0.8.0]: https://github.com/ammar-hasan/narova/compare/v0.7.11...v0.8.0
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/main...HEAD
+[0.12.0]: https://github.com/ammar-hasan/narova/compare/be28b04...HEAD
+[0.11.0]: https://github.com/ammar-hasan/narova/compare/ae2945d...be28b04
+[0.10.0]: https://github.com/ammar-hasan/narova/compare/3c1e85f...ae2945d
+[0.9.0]: https://github.com/ammar-hasan/narova/compare/ea7056a...3c1e85f
+[0.8.3]: https://github.com/ammar-hasan/narova/compare/60295cc...ea7056a
+[0.8.2]: https://github.com/ammar-hasan/narova/compare/13ee0f6...60295cc
+[0.8.1]: https://github.com/ammar-hasan/narova/compare/943bedc...13ee0f6
+[0.8.0]: https://github.com/ammar-hasan/narova/compare/ddc6829...943bedc
 [0.7.11]: https://github.com/ammar-hasan/narova/compare/v0.7.10...v0.7.11
 [0.7.10]: https://github.com/ammar-hasan/narova/commit/40723f9
 [0.7.9]: https://github.com/ammar-hasan/narova/commit/ba9880c

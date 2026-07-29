@@ -173,8 +173,11 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
     print(f"mix   {total:5.1f}s  {' '.join(what)} -> audio/mix.wav", flush=True)
 
 
+_SENTENCE_RE = re.compile(r"(?<=[.!?۔؟])\s+")
+
+
 def sentences(text: str) -> list[str]:
-    return [p for p in re.split(r"(?<=[.!?])\s+", text.strip()) if p]
+    return [p for p in _SENTENCE_RE.split(text.strip()) if p]
 
 
 # ---- timing rescale (LEARNINGS #1) -------------------------------------------

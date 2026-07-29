@@ -117,7 +117,10 @@ export default {
 
 Rules:
 
-- `vo` is the spoken dialogue, in order. One narrator = one `who`.
+- `vo` is the spoken dialogue, in order. One narrator = one `who`. Sentence
+  segmentation recognizes English terminal punctuation plus Urdu full stop
+  `۔` and question mark `؟`, so synthesis, timings, and caption groups stay
+  aligned for Urdu and mixed-language turns.
 - `body` is HTML, placed into the scene clip as-is.
 - `data-cue="k"`: hidden until turn `k` starts. `k` counts from 0.
 - `class="reveal"` (no cue): animates in when the scene starts.
@@ -294,7 +297,7 @@ timing rescaling, captions, composition, and rendering. Provider-specific
 code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`.
 
-## Status: 0.11.0 shipped
+## Status: 0.12.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

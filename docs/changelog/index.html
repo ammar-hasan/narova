@@ -6,6 +6,7 @@
 <title>Changelog — narova</title>
 <meta name="description" content="Every notable change to narova, version by version.">
 <meta property="og:title" content="narova changelog">
+<meta property="og:description" content="Narova releases: external TTS providers, release gates, manifest planning, export profiles, local voice backends, and the narration-first video workflow.">
 <meta property="og:url" content="https://ammar-hasan.github.io/narova/changelog/">
 <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2312061d'/%3E%3Cpath d='M24 18l22 14-22 14z' fill='%23d6f94c'/%3E%3C/svg%3E">
 <link rel="stylesheet" href="../style.css">
@@ -13,6 +14,7 @@
 </head>
 <body>
 
+<a class="skip-link" href="#main">Skip to content</a>
 <div class="cursor-dot" aria-hidden="true"></div>
 <div class="cursor-ring" aria-hidden="true"></div>
 <div class="progress" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
@@ -23,7 +25,7 @@
     <svg viewBox="0 0 64 64" width="26" height="26" aria-hidden="true"><rect width="64" height="64" rx="14" fill="none" stroke="currentColor" stroke-width="4"/><path d="M24 18l22 14-22 14z" fill="#d6f94c"/></svg>
     narova
   </a>
-  <nav class="nav-links">
+  <nav class="nav-links" aria-label="Primary navigation">
     <a href="../#demo" data-hover>Demo</a>
     <a href="../#features" data-hover>Features</a>
     <a href="../#how" data-hover>How it works</a>
@@ -35,7 +37,7 @@
   </a>
 </header>
 
-<main>
+<main id="main">
 
   <section class="cl-hero">
     <p class="kicker sr-title">Every move, logged</p>
@@ -49,13 +51,124 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version unreleased">Unreleased</span>
-        <span class="rel-date">next</span>
+        <span class="rel-version" data-narova-version>0.12.0</span>
+        <span class="rel-date">2026-07-29</span>
       </div>
       <div class="rel-body">
-        <h4><span class="tag planned">Planned (0.8.1)</span></h4>
+        <h4><span class="tag added">Added</span></h4>
         <ul>
-          <li>Comprehensive export profiles — codec, bitrate, frame-rate, audio-loudness, safe-area, color, file-size, and thumbnail profiles per platform.</li>
+          <li><strong>External TTS provider protocol</strong> — explicitly registered executable workers speak versioned <code>narova-tts-provider/v1</code> JSON Lines without placing provider code in Narova core.</li>
+          <li><code>narova providers add|list|doctor|remove</code> plus generic external voice listing through <code>narova voices list --backend &lt;provider&gt;</code>.</li>
+          <li><strong>Optional ElevenLabs companion skill</strong> — isolated HTTP worker, environment-only API key, voice IDs, provider options, WAV conversion, and mocked tests with no paid calls.</li>
+          <li>Provider protocol/version/options are included deterministically in audio fingerprints and sentence-cache identity.</li>
+          <li><strong>Urdu sentence punctuation</strong> — native full stops (<code>۔</code>) and question marks (<code>؟</code>) now split speech and timing groups consistently in Python synthesis and Node manifest processing.</li>
+          <li><strong>Urdu voice direction</strong> — Narova’s skill instructions now delegate meaningful Urdu dialogue polishing to the optional <code>urdu-voice-director</code> skill while keeping caption text free of provider-specific performance tags.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Narova remains local-first: Piper is still the default, and external workers run only after explicit registration.</li>
+          <li>The website now covers the current provider architecture, planning and release workflow, export profiles, Urdu-aware dialogue, and accessibility improvements.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.11.0</span>
+        <span class="rel-date">2026-07-29</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Clear URL-to-video boundary: agents interpret sources and write the story; <code>narova ingest</code> performs the mechanical HTML, image, and screenshot pass.</li>
+          <li>Complete CLI documentation for <code>--deliverables</code> and <code>--safe-area-guides</code>.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Export behavior now documents scale-and-pad limitations, canonical platform presets, and when HyperFrames receives an explicit resolution.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.10.0</span>
+        <span class="rel-date">2026-07-29</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><code>narova check --strict</code> verifies detected claims against <code>claims.md</code>; <code>check --release</code> fails builds with remote dependencies, missing evidence, unsupported markup, or empty frames.</li>
+          <li>Voice-less silent projects, claims-ledger table parsing, and YouTube as a first-class platform.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Release asset gating, visual-content detection, platform duration behavior, and Pexels authentication documentation.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.9.0</span>
+        <span class="rel-date">2026-07-28</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Complete audio fingerprints for safe <code>--reuse</code>, asset-content hashing, and five-stage rebuild planning.</li>
+          <li>Manifest-first pipeline, canonical export preset registry, YouTube profiles, named project release snapshots, and exact preset dimensions.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Portable manifest paths and authoring-only safe-area guides keep projects reproducible without leaking machine-local paths.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.8.3</span>
+        <span class="rel-date">2026-07-28</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Render-path CSS compatibility lint, automatic looping for short b-roll clips, and long-video wipe warnings.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Built-in b-roll styling and WebM looping now stay on HyperFrames’ fast, compatible render path.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.8.2</span>
+        <span class="rel-date">2026-07-28</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><code>timeline.json</code> became the canonical <code>manifest.json</code>.</li>
+        </ul>
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Content hashes, <code>narova plan</code>, and named manifest releases under <code>~/.narova/releases/</code>.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.8.1</span>
+        <span class="rel-date">2026-07-28</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li>Comprehensive YouTube, TikTok, Reels, Shorts, LinkedIn, X, and Narova-standard export profiles with ffmpeg encoding, loudness targets, safe-area metadata, and thumbnails.</li>
         </ul>
       </div>
     </article>
@@ -292,7 +405,7 @@
 </main>
 
 <footer class="footer">
-  <span>MIT · built with narova, narrated by narova</span>
+  <span>MIT · local-first · extensible by explicit registration</span>
   <a href="https://github.com/ammar-hasan/narova" data-hover>github.com/ammar-hasan/narova</a>
 </footer>
 

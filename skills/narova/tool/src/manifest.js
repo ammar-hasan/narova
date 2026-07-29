@@ -409,11 +409,12 @@ function mergeTimings(tl, timingsPath) {
   return updated;
 }
 
+const SENTENCE_SPLIT_RE = /(?<=[.?!۔؟]["'»)]*)\s+/;
+
 function countSentencesPerTurn(vo) {
   return vo.map(t => {
     if (!t.text) return 1;
-    // Match Python's sentences() in pipeline.py: split on terminal punctuation.
-    const parts = t.text.split(/(?<=[.?!]["'»)]*)\s+/);
+    const parts = t.text.split(SENTENCE_SPLIT_RE);
     const nonEmpty = parts.filter(p => p.trim());
     return nonEmpty.length || 1;
   });

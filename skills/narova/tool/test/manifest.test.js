@@ -365,6 +365,137 @@ test('mergeTimings handles silent scenes gracefully', () => {
   }
 });
 
+// ---- Urdu sentence splitting -----------------------------------------------
+
+test('mergeTimings splits Urdu . (U+06D4) correctly', () => {
+  const raw = makeRaw({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'یہ ایک جملہ ہے۔ یہ دوسرا جملہ ہے۔' }], body: '<div/>' }],
+  });
+  const tl = compile(resolve(raw));
+  const tmp = path.join(os.tmpdir(), 'narova-urdu-' + Date.now());
+  fs.mkdirSync(tmp, { recursive: true });
+  const tp = path.join(tmp, 'timings.json');
+  fs.writeFileSync(tp, JSON.stringify({
+    s1: {
+      dur: 4.0,
+      turns: [0.16],
+      words: [
+        { w: 'یہ', t0: 0.16, t1: 0.30, who: 'a', si: 0 },
+        { w: 'ایک', t0: 0.30, t1: 0.44, who: 'a', si: 0 },
+        { w: 'جملہ', t0: 0.44, t1: 0.58, who: 'a', si: 0 },
+        { w: 'ہے۔', t0: 0.58, t1: 0.72, who: 'a', si: 0 },
+        { w: 'یہ', t0: 0.88, t1: 1.02, who: 'a', si: 1 },
+        { w: 'دوسرا', t0: 1.02, t1: 1.30, who: 'a', si: 1 },
+        { w: 'جملہ', t0: 1.30, t1: 1.58, who: 'a', si: 1 },
+        { w: 'ہے۔', t0: 1.58, t1: 1.84, who: 'a', si: 1 },
+      ],
+    },
+  }, null, 2));
+  try {
+    const merged = mergeTimings(tl, tp);
+    assert.equal(merged.scenes[0].duration, 4.0);
+    assert.equal(merged.scenes[0].vo[0].words.length, 8);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('mergeTimings splits Urdu ? (U+061F) correctly', () => {
+  const raw = makeRaw({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'کیا تم نے دیکھا؟ میں نے نہیں دیکھا۔' }], body: '<div/>' }],
+  });
+  const tl = compile(resolve(raw));
+  const tmp = path.join(os.tmpdir(), 'narova-urdu2-' + Date.now());
+  fs.mkdirSync(tmp, { recursive: true });
+  const tp = path.join(tmp, 'timings.json');
+  fs.writeFileSync(tp, JSON.stringify({
+    s1: {
+      dur: 3.0,
+      turns: [0.16],
+      words: [
+        { w: 'کیا', t0: 0.16, t1: 0.30, who: 'a', si: 0 },
+        { w: 'تم', t0: 0.30, t1: 0.44, who: 'a', si: 0 },
+        { w: 'نے', t0: 0.44, t1: 0.58, who: 'a', si: 0 },
+        { w: 'دیکھا؟', t0: 0.58, t1: 0.72, who: 'a', si: 0 },
+        { w: 'میں', t0: 0.88, t1: 1.02, who: 'a', si: 1 },
+        { w: 'نے', t0: 1.02, t1: 1.16, who: 'a', si: 1 },
+        { w: 'نہیں', t0: 1.16, t1: 1.44, who: 'a', si: 1 },
+        { w: 'دیکھا۔', t0: 1.44, t1: 1.72, who: 'a', si: 1 },
+      ],
+    },
+  }, null, 2));
+  try {
+    const merged = mergeTimings(tl, tp);
+    assert.equal(merged.scenes[0].duration, 3.0);
+    assert.equal(merged.scenes[0].vo[0].words.length, 8);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('mergeTimings handles Urdu ellipsis without broken fragments', () => {
+  const raw = makeRaw({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'اوہ... یعنی تم یہاں تھے؟' }], body: '<div/>' }],
+  });
+  const tl = compile(resolve(raw));
+  const tmp = path.join(os.tmpdir(), 'narova-urdu3-' + Date.now());
+  fs.mkdirSync(tmp, { recursive: true });
+  const tp = path.join(tmp, 'timings.json');
+  fs.writeFileSync(tp, JSON.stringify({
+    s1: {
+      dur: 2.0,
+      turns: [0.16],
+      words: [
+        { w: 'اوہ...', t0: 0.16, t1: 0.40, who: 'a', si: 0 },
+        { w: 'یعنی', t0: 0.56, t1: 0.76, who: 'a', si: 1 },
+        { w: 'تم', t0: 0.76, t1: 0.92, who: 'a', si: 1 },
+        { w: 'یہاں', t0: 0.92, t1: 1.12, who: 'a', si: 1 },
+        { w: 'تھے؟', t0: 1.12, t1: 1.32, who: 'a', si: 1 },
+      ],
+    },
+  }, null, 2));
+  try {
+    const merged = mergeTimings(tl, tp);
+    assert.equal(merged.scenes[0].duration, 2.0);
+    assert.equal(merged.scenes[0].vo[0].words.length, 5);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+test('mergeTimings handles mixed English and Urdu sentence splitting', () => {
+  const raw = makeRaw({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Hello world. آپ کیسے ہیں؟ میں ٹھیک ہوں۔' }], body: '<div/>' }],
+  });
+  const tl = compile(resolve(raw));
+  const tmp = path.join(os.tmpdir(), 'narova-urdu4-' + Date.now());
+  fs.mkdirSync(tmp, { recursive: true });
+  const tp = path.join(tmp, 'timings.json');
+  fs.writeFileSync(tp, JSON.stringify({
+    s1: {
+      dur: 5.0,
+      turns: [0.16],
+      words: [
+        { w: 'Hello', t0: 0.16, t1: 0.35, who: 'a', si: 0 },
+        { w: 'world.', t0: 0.35, t1: 0.60, who: 'a', si: 0 },
+        { w: 'آپ', t0: 0.76, t1: 0.90, who: 'a', si: 1 },
+        { w: 'کیسے', t0: 0.90, t1: 1.10, who: 'a', si: 1 },
+        { w: 'ہیں؟', t0: 1.10, t1: 1.30, who: 'a', si: 1 },
+        { w: 'میں', t0: 1.46, t1: 1.60, who: 'a', si: 2 },
+        { w: 'ٹھیک', t0: 1.60, t1: 1.80, who: 'a', si: 2 },
+        { w: 'ہوں۔', t0: 1.80, t1: 2.00, who: 'a', si: 2 },
+      ],
+    },
+  }, null, 2));
+  try {
+    const merged = mergeTimings(tl, tp);
+    assert.equal(merged.scenes[0].duration, 5.0);
+    assert.equal(merged.scenes[0].vo[0].words.length, 8);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
 // ---- round-trip -------------------------------------------------------------
 
 test('compile → validate → read back is stable', () => {

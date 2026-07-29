@@ -8,7 +8,7 @@ A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that t
 prompts, scripts, and web pages into narrated, captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.11.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.12.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -21,10 +21,11 @@ prompts, scripts, and web pages into narrated, captioned video. Rendered on your
 
 ## Why narova
 
-- **Two voices, one conversation** — neural TTS dialogue synthesized locally. Give each speaker a color; narova writes the banter and the timing.
+- **Two voices, one conversation** — local-first neural TTS dialogue, with optional registered providers when a project needs them. Give each speaker a color; narova writes the banter and the timing.
 - **Karaoke captions** — every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.
 - **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
-- **Local rendering, local speech.** — ffmpeg and neural TTS run entirely on your machine. [HyperFrames](https://www.npmjs.com/package/hyperframes) renders the video. Model downloads, stock assets, and HyperFrames need network access on first run.
+- **Urdu-aware dialogue** — native `۔` and `؟` punctuation split sentence audio and timing correctly. For meaningful Urdu scripts, Narova can delegate dialogue polishing to the optional [`urdu-voice-director`](https://github.com/ammar-hasan/urdu-voice-director) skill.
+- **Local-first, extensible by choice.** — ffmpeg, rendering, and the four built-in TTS backends run on your machine. Optional cloud voices execute only after explicit provider registration. Model downloads, stock assets, HyperFrames, and external providers need network access when used.
 
 ## Install
 
@@ -34,7 +35,7 @@ that reads skills can use it:
 [![skills.sh](https://skills.sh/b/ammar-hasan/narova)](https://skills.sh/ammar-hasan/narova)
 
 ```bash
-npx skills add ammar-hasan/narova -g
+npx skills add ammar-hasan/narova --skill narova -g
 # check for updates: npx skills update narova -g (only when you're ready — upgrading replaces the skill files)
 ```
 
@@ -164,7 +165,12 @@ narova voices list --backend <name>
 Use the registered name as a voice's `backend` and pass an opaque
 `providerOptions` object. Keep credentials in the provider's required
 environment variables—never in `reel.config.mjs`. The optional
-`skills/narova-elevenlabs/` skill is the first implementation.
+`skills/narova-elevenlabs/` skill is the first implementation and is installed
+separately only when you want ElevenLabs:
+
+```bash
+npx skills add ammar-hasan/narova --skill narova-elevenlabs -g
+```
 
 ## Commands
 

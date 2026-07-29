@@ -75,6 +75,36 @@ class TestSentences(unittest.TestCase):
         self.assertEqual(sentences("  Hello.  "), ["Hello."])
         self.assertEqual(sentences(""), [])
 
+    def test_splits_urdu_full_stop(self):
+        self.assertEqual(
+            sentences("یہ ایک جملہ ہے۔ یہ دوسرا جملہ ہے۔"),
+            ["یہ ایک جملہ ہے۔", "یہ دوسرا جملہ ہے۔"],
+        )
+
+    def test_splits_urdu_question_mark(self):
+        self.assertEqual(
+            sentences("کیا تم نے دیکھا؟ میں نے نہیں دیکھا۔"),
+            ["کیا تم نے دیکھا؟", "میں نے نہیں دیکھا۔"],
+        )
+
+    def test_urdu_ellipsis_not_broken(self):
+        self.assertEqual(
+            sentences("اوہ... یعنی تم یہاں تھے؟"),
+            ["اوہ...", "یعنی تم یہاں تھے؟"],
+        )
+
+    def test_mixed_english_and_urdu(self):
+        self.assertEqual(
+            sentences("Hello world. آپ کیسے ہیں؟ میں ٹھیک ہوں۔"),
+            ["Hello world.", "آپ کیسے ہیں؟", "میں ٹھیک ہوں۔"],
+        )
+
+    def test_english_punctuation_still_works(self):
+        self.assertEqual(
+            sentences("First. Second! Third? Fourth."),
+            ["First.", "Second!", "Third?", "Fourth."],
+        )
+
 
 class TestSentenceCacheKey(unittest.TestCase):
     def test_stable_for_same_inputs(self):

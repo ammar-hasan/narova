@@ -55,7 +55,10 @@
     document.querySelectorAll(".ht-line:not(.grad)").forEach(function (line) {
       var text = line.textContent;
       line.textContent = "";
-      line.setAttribute("aria-label", text);
+      var accessible = document.createElement("span");
+      accessible.className = "visually-hidden";
+      accessible.textContent = text;
+      line.appendChild(accessible);
       text.split("").forEach(function (ch) {
         var s = document.createElement("span");
         s.className = "char";
@@ -64,18 +67,24 @@
         line.appendChild(s);
       });
     });
-    gsap.from(".ht-line .char", {
-      yPercent: 110, opacity: 0, rotateX: -50,
-      duration: 0.9, ease: "power4.out", stagger: 0.018, delay: 0.15
-    });
+    if (document.querySelector(".ht-line .char")) {
+      gsap.from(".ht-line .char", {
+        yPercent: 110, opacity: 0, rotateX: -50,
+        duration: 0.9, ease: "power4.out", stagger: 0.018, delay: 0.15
+      });
+    }
     /* gradient line animates as one block: per-char transforms break
        background-clip:text compositing in Chrome */
-    gsap.from(".ht-line.grad", {
-      y: 60, opacity: 0, duration: 1.1, ease: "power4.out", delay: 0.5
-    });
-    gsap.from(".reveal-line", {
-      y: 26, opacity: 0, duration: 0.9, ease: "power3.out", stagger: 0.12, delay: 0.55
-    });
+    if (document.querySelector(".ht-line.grad")) {
+      gsap.from(".ht-line.grad", {
+        y: 60, opacity: 0, duration: 1.1, ease: "power4.out", delay: 0.5
+      });
+    }
+    if (document.querySelector(".reveal-line")) {
+      gsap.from(".reveal-line", {
+        y: 26, opacity: 0, duration: 0.9, ease: "power3.out", stagger: 0.12, delay: 0.55
+      });
+    }
   }
 
   /* ---------------- scroll progress ---------------- */
@@ -94,22 +103,29 @@
         scrollTrigger: { trigger: el, start: "top 85%" }
       });
     });
-    gsap.from(".card", {
-      y: 44, opacity: 0, duration: 0.85, ease: "power3.out", stagger: 0.09,
-      scrollTrigger: { trigger: ".bento", start: "top 82%" }
-    });
-    gsap.from(".step", {
-      y: 44, opacity: 0, duration: 0.85, ease: "power3.out", stagger: 0.14,
-      scrollTrigger: { trigger: ".steps", start: "top 82%" }
-    });
-    gsap.from(".terminal", {
-      y: 44, opacity: 0, duration: 0.9, ease: "power3.out",
-      scrollTrigger: { trigger: ".terminal", start: "top 85%" }
-    });
+    if (document.querySelector(".bento")) {
+      gsap.from(".card", {
+        y: 44, opacity: 0, duration: 0.85, ease: "power3.out", stagger: 0.09,
+        scrollTrigger: { trigger: ".bento", start: "top 82%" }
+      });
+    }
+    if (document.querySelector(".steps")) {
+      gsap.from(".step", {
+        y: 44, opacity: 0, duration: 0.85, ease: "power3.out", stagger: 0.14,
+        scrollTrigger: { trigger: ".steps", start: "top 82%" }
+      });
+    }
+    if (document.querySelector(".terminal")) {
+      gsap.from(".terminal", {
+        y: 44, opacity: 0, duration: 0.9, ease: "power3.out",
+        scrollTrigger: { trigger: ".terminal", start: "top 85%" }
+      });
+    }
   }
 
   /* ---------------- video: 3D scroll-in ---------------- */
-  if (!REDUCED && !TOUCH && hasGsap && window.ScrollTrigger) {
+  if (!REDUCED && !TOUCH && hasGsap && window.ScrollTrigger
+      && document.querySelector("#videoCard")) {
     gsap.set("#videoCard", { transformPerspective: 1200, rotateX: 22, scale: 0.82, transformOrigin: "50% 100%" });
     gsap.to("#videoCard", {
       rotateX: 0, scale: 1, ease: "none",
@@ -173,6 +189,12 @@
         spans.push(s);
       });
     });
+    if (REDUCED) {
+      spans.forEach(function (s) {
+        s.classList.add("on-" + s.dataset.who);
+      });
+      return;
+    }
     var i = 0;
     function tick() {
       if (i < spans.length) {
@@ -254,9 +276,14 @@
       }
     });
   }
-  var INSTALL = "npx skills add ammar-hasan/narova";
+  var INSTALL = "npx skills add ammar-hasan/narova --skill narova -g";
   bindCopy("copyInstall", INSTALL, document.querySelector("#copyInstall .copy-label"));
   bindCopy("copyInstall2", INSTALL, document.querySelector("#copyInstall2 .copy-label"));
+  bindCopy(
+    "copyEleven",
+    "npx skills add ammar-hasan/narova --skill narova-elevenlabs -g",
+    document.getElementById("copyElevenLabel")
+  );
 
   var PROMPT_EXAMPLES = {
     idea: {
@@ -283,6 +310,16 @@
       mode: "# script → two-host reel",
       prompt: "Turn the script below into a fast two-host vertical reel. Keep the exchange natural, use distinct caption colors, and let the visuals change with each speaker.\\n\\n[paste script]",
       reply: "I’ll shape the dialogue into short, energetic turns, give each host a distinct voice and caption color, and cue the visual changes to the speaker handoffs."
+    },
+    urdu: {
+      mode: "# Urdu dialogue → voice-directed reel",
+      prompt: "Turn this Urdu dialogue into a warm two-host reel. Use the urdu-voice-director skill to preserve each speaker’s voice and make the conversation sound natural, keep clean spoken text in captions, and show me a preview before rendering.\\n\\n[paste Urdu dialogue]",
+      reply: "I’ll refine the Urdu for believable spoken delivery without changing its meaning, keep performance direction separate from caption-safe text, and let Narova handle sentence timing, voices, captions, and the preview."
+    },
+    cloud: {
+      mode: "# optional companion → premium voice",
+      prompt: "Use my registered ElevenLabs provider and voice ID [voice-id] for the narrator. Keep the project config free of credentials, list the available voices first, and show me a preview before rendering.",
+      reply: "I’ll verify the explicitly registered provider, list voices through Narova’s generic provider protocol, keep the API key in the environment, and preserve Narova’s normal cache, timing, captions, and render pipeline."
     }
   };
   var activePrompt = PROMPT_EXAMPLES.idea;
