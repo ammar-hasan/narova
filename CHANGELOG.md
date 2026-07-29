@@ -6,6 +6,32 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.11.0] - 2026-07-29
+
+### Added
+
+- **URL-to-video boundary documented** — README quickstart now clearly separates
+  AI agent responsibilities (reading, classifying, interpreting sources,
+  writing scene scripts) from Narova's `ingest` command (mechanical pass:
+  fetch HTML, extract up to five images, optional browser screenshot).
+- **`--deliverables` documented in CLI reference** — `cli.md` now describes
+  the flag, preset selection behavior, and the scale+pad (pillarbox/letterbox)
+  limitation explicitly.
+- **`--safe-area-guides` documented in CLI reference** — requires
+  `--deliverables` to take effect; only applies to the `tiktok-1080p` preset.
+
+### Changed
+
+- **CLI reference accuracy fixes** (Codex-reviewed):
+  - `--deliverables` (bare) renders `narova-standard` plus the platform's single
+    canonical preset, not "all presets for the platform" — `youtube-4k` is
+    never auto-selected.
+  - `--safe-area-guides` has no effect on a bare `narova build`; documented
+    that it requires `--deliverables`.
+  - Only `youtube-4k` passes its resolution to HyperFrames; other presets
+    render at the composition's natural size and are resized in ffmpeg.
+- **`--deliverables` limitation added to SPEC.md flags section.**
+
 ## [0.10.0] - 2026-07-29
 
 ### Added

@@ -8,7 +8,7 @@ A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that t
 prompts, scripts, and web pages into narrated, captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.10.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.11.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -58,6 +58,13 @@ Narova supports different starting points:
 - **Script or dialogue:** “Turn the script below into a fast two-host vertical
   reel. Keep the exchange natural, use distinct caption colors, and let the
   visuals change with each speaker.”
+
+For URL-based prompts (product pages, articles, repos), the AI agent reads the
+source, classifies it, extracts evidence, and writes the scene script. Narova's
+`ingest` command handles the mechanical pass — fetching the HTML page, extracting
+up to five images, and optionally capturing a browser screenshot — but
+interpretation, repository analysis, PDF reading, and content selection remain
+the agent's responsibility.
 
 Your agent uses Narova to recommend the creative direction, create the editable
 project, synthesize the narration, check the result, and show you a preview.
@@ -163,7 +170,9 @@ nearest `reel.config.*`). `check` also prints an estimated narration length,
 so a target duration can be tuned before any audio exists.
 
 Useful flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (keep old audio),
-`--tempo`, `--size`, `--fps`, `--quality draft|standard|high`.
+`--tempo`, `--size`, `--fps`, `--quality draft|standard|high`,
+`--deliverables` (per-platform export presets via scale+pad — see
+[`references/cli.md`](skills/narova/references/cli.md) for the full list).
 
 ## How it works
 

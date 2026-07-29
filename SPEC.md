@@ -254,8 +254,10 @@ spoken text changed since the last synth), `--tempo`, `--size`,
 `--platform tiktok|reels|shorts|linkedin|x|youtube` (frame preset + duration-band
 lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
 each variant renders `out/video-<id>.mp4`), `--deliverables` (multi-render
-with per-platform export presets + ffmpeg post-processing + thumbnails),
-`--fps`, `--quality draft|standard|high`, `--at` (shots), `--out`, `--project`,
+with per-platform export presets + ffmpeg post-processing + thumbnails;
+renders the SAME composition at each preset's aspect ratio via scale+pad —
+this does NOT re-art-direct layouts; for truly platform-specific compositions,
+render separate projects at each aspect ratio), `--fps`, `--quality draft|standard|high`, `--at` (shots), `--out`, `--project`,
 `--config`, `--voice-a`, `--voice-b`.
 
 ## Backends
@@ -277,7 +279,7 @@ with per-platform export presets + ffmpeg post-processing + thumbnails),
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.10.0 shipped
+## Status: 0.11.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

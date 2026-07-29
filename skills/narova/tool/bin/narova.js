@@ -184,8 +184,8 @@ Options:
                             for all profiles (e.g. --deliverables youtube-1080p,reels-1080p)
   --fps N                  render fps (hyperframes; default 30)
   --quality draft|standard|high   render quality (hyperframes)
-  --safe-area-guides       build: overlay TikTok safe-area zones on the output
-                            (authoring/QA only — not burned in by default)
+  --safe-area-guides       build: overlay TikTok safe-area zones on the
+                            TikTok deliverable (requires --deliverables)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
   --port N                 Studio port (default 3002)
   --detach                 keep Studio running and return its URL + pid

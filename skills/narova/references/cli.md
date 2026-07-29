@@ -61,6 +61,22 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 - `--port N` — Studio port (default 3002).
 - `--detach` / `preview --stop` — start or stop persistent Studio.
 - `--voice-a <s>`, `--voice-b <s>` — replace the first two voices (add more voices directly in the config).
+- `--deliverables` — `build` only: render per-platform export presets. The
+  renderer produces the SAME composition at its authored aspect ratio; ffmpeg
+  then scale+pads (pillarbox/letterbox) to each preset's target dimensions —
+  this does NOT re-art-direct layouts. A 16:9 scene will appear as a
+  letterboxed strip in a vertical deliverable. For true platform-specific
+  compositions, render separate projects at each aspect ratio. Bare
+  `--deliverables` renders `narova-standard` plus the single canonical preset
+  for the configured platform (e.g. `youtube-1080p`, not 4K); use a
+  comma-separated list of preset IDs (e.g. `youtube-1080p,reels-1080p`) to
+  select specific profiles. Only `youtube-4k` passes its resolution to
+  HyperFrames; all others render at the composition's natural size and are
+  resized in ffmpeg.
+- `--safe-area-guides` — `build` only, requires `--deliverables`: overlay
+  TikTok safe-area zones as authoring hints on the TikTok deliverable (only
+  the `tiktok-1080p` preset defines safe-area guides; a bare `narova build`
+  ignores this flag).
 
 ## What lands in `out/` (never edit — regenerated every run)
 
