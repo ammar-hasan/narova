@@ -21,7 +21,7 @@ export default {
   },
   chrome: { topbar: true, counter: true, progress: true },  // or false to strip all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
-  platform: "tiktok",                // optional: tiktok|reels|shorts|linkedin|x — picks the frame size
+  platform: "tiktok",                // optional: tiktok|reels|shorts|linkedin|x|youtube — picks the frame size
                                      // (when size is unset) and a target duration band for `check`
   captions: {
     preset: "karaoke",               // karaoke (default) | slam | pop | rise — the caption word style

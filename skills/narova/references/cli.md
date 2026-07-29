@@ -16,7 +16,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | Command | Does | Cost |
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
-| `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. Exit 1 if invalid. | instant |
+| `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, clipped audio. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. | piper: fast; xtts/qwen/chatterbox: slow + one-time 1–2GB model |
@@ -45,7 +45,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
   synth, `--reuse` is ignored with a note and a full synth runs instead.
 - `--tempo N` — speech speed (1.1–1.2 reads well).
 - `--size 16:9|1:1|9:16` — frame shape.
-- `--platform tiktok|reels|shorts|linkedin|x` — frame preset plus the target
+- `--platform tiktok|reels|shorts|linkedin|x|youtube` — frame preset plus the target
   duration band `check` lints against. An explicit `--size` (or `config.size`)
   wins over the platform preset.
 - `--variant <id>` — apply a declared hook variant (`config.variants`) as

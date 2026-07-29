@@ -98,7 +98,8 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const voices = { ...(raw.voices || {}) };
   const voiceIds = Object.keys(voices);
-  if (voiceIds.length === 0) errs.push('config.voices: at least one voice required');
+  // Voices are optional when every scene is silent; turn.who references will
+  // still be validated against voices when the scene has any vo turns.
   voiceIds.forEach(id => {
     if (!ID_RE.test(id)) errs.push(`config.voices.${id}: voice id must match ${ID_RE}`);
   });

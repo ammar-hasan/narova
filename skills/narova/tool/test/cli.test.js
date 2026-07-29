@@ -63,8 +63,8 @@ test('check exits 1 with the full error list on an invalid config', () => {
     JSON.stringify({ voices: {}, scenes: [{ id: 'x', body: 1, vo: [] }] }));
   const r = run(['check', '--project', dir]);
   assert.equal(r.status, 1);
-  assert.match(r.stderr, /at least one voice required/);
   assert.match(r.stderr, /body: HTML string required/);
+  assert.match(r.stderr, /empty turn list requires a positive explicit dur/);
 });
 
 test('commands work from a subdirectory (config discovered by walking up)', () => {

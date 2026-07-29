@@ -6,7 +6,7 @@ description: >
   videos sourced from web pages and agent-readable sources (product sites,
   articles, docs, repositories), word-synced karaoke captions,
   voice-triggered reveals, background beds and sound effects, per-platform
-  presets and comprehensive export profiles (TikTok/Reels/Shorts/LinkedIn/X),
+  presets and comprehensive export profiles (TikTok/Reels/Shorts/LinkedIn/X/YouTube),
   SRT/VTT sidecar captions,
   hook A/B variants, or local neural TTS with no API keys. It turns a
   prompt or scene script into an MP4 with local piper/xtts/qwen/chatterbox
@@ -20,7 +20,7 @@ compatibility: >
   First-time model and renderer setup requires internet access.
 metadata:
   author: ammar-hasan
-  version: "0.9.0"
+  version: "0.10.0"
 ---
 
 # narova — prompt to narrated, captioned video
@@ -30,7 +30,7 @@ metadata:
 **Version check (read-only):** This skill is pinned to the version in the
 frontmatter above — do NOT auto-update. Before starting, check whether a
 newer version is available without modifying anything:
-`curl -s https://raw.githubusercontent.com/ammar-hasan/narova/main/skills/narova/SKILL.md | head -5`
+`curl -s https://raw.githubusercontent.com/ammar-hasan/narova/main/skills/narova/SKILL.md | grep 'version:' | head -1`
 
 If a newer version exists, tell the user and ask whether they want to
 upgrade. Only run `npx skills update narova -g` when the user explicitly
@@ -166,6 +166,10 @@ No TTS, no browser, no writes.
    Exit 0 = valid. Run it after **every** config edit. The `ok:` line also
    prints an **estimated narration length** — if the user gave a target
    duration, tune word count and `timing.tempo` here, before any audio exists.
+   `check --strict` verifies that every detected factual claim appears in the
+   claims ledger. `check --release` adds a build gate: remote dependencies,
+   unresolved assets, missing claims, unsupported HTML, black frames, and
+   clipped audio all fail the check (exit 1).
 
 ### 5 — `synth` — audio & word timings
 

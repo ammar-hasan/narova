@@ -35,8 +35,8 @@ Follow this order so the highest-qaulity, most reliable sources are used first:
 
 1. **NASA API** — galaxies, Earth, scientific visuals (public domain)
 2. **Wikimedia Commons API** — diagrams, artwork, encyclopedic imagery
-3. **Pexels / Mixkit / Coverr** — contemporary cinematic footage
-4. **Pixabay** — abstract animations, music, SFX
+3. **Unsplash / Pixabay (website)** — contemporary photography (agent-browser)
+4. **Mixkit / Coverr** — cinematic video clips (CLI, no key)
 5. **Museum APIs** (Smithsonian, The Met, Cleveland, Wellcome, ARTIC) — art, culture
 6. **Mixkit Music / Pixabay Music / Incompetech** — background score
 7. **Google Fonts** — typography
@@ -45,23 +45,20 @@ Follow this order so the highest-qaulity, most reliable sources are used first:
 
 ## Photos & images
 
-### Pexels Photos
+### Pexels Photos (API key required)
 
 ```
-curl -s "https://api.pexels.com/v1/search?query=ocean&per_page=5&orientation=landscape&size=large"
+curl -H "Authorization: YOUR_API_KEY" -s "https://api.pexels.com/v1/search?query=ocean&per_page=5&orientation=landscape&size=large"
 ```
 
-- **Key rule: use single-word queries.** `?query=ocean` works; `?query=ocean+wave`
-  returns 401. Search each word separately and pick the best.
-- No API key. ~15–20 req before throttling. Wait 30–60s between bursts.
+- **API key required.** Register at pexels.com (free, email only) for 200 req/hr.
+  Unauthenticated requests return 401 — there is no anonymous access tier.
+  Use `--header` with the key; the `--header` shown above passes Authorization.
 - Response sizes: `original` (full-res), `large2x` (2× DPR, good for 4K),
   `large` (~940px), `landscape` (16:9 crop), `portrait` (9:16 crop).
 - `total_results` capped at 8000. Use `&page=N`.
-
-**Reliable single-word terms:** `ocean forest sunrise mountain desert fire city
-light water earth space sky rain snow star wave cloud ice flower beach river
-autumn winter spring summer night dawn sunset abstract texture nature landscape
-architecture animal bird tree grass rock sand wind storm moon`
+- **Prefer no-key alternatives first:** Unsplash/Pixabay (website via agent-browser),
+  Openverse (API, no key), Wikimedia Commons (API, no key).
 
 ### NASA Images
 
@@ -156,23 +153,24 @@ agent-browser --session pb open "https://pixabay.com/images/search/nature/"
 
 ## Video clips
 
-### Pexels Videos (API)
+### Pexels Videos (API key required)
 
 ```
-curl -s "https://api.pexels.com/videos/search?query=ocean&per_page=5"
+curl -H "Authorization: YOUR_API_KEY" -s "https://api.pexels.com/videos/search?query=ocean&per_page=5"
 ```
 
-- Same single-word rule as photos. Same ~15–20 req anonymous rate limit.
+- **API key required** — same 200 req/hr as photos. Unauthenticated requests
+  return 401.
 - `videos[].video_files[]` — direct MP4 download links. HD (1920×1080 or
   1280×720, 30fps), SD (640×360, 960×540). 60fps often available.
 
-### Pexels Videos (website)
+### Pexels Videos (website, fallback)
 
 ```
 agent-browser --session px open "https://www.pexels.com/search/videos/galaxy/"
 ```
 
-- Website is the primary unkeyed path when API throttles.
+- Website is a fallback path when API quota is exhausted (browser automation).
 
 ### Mixkit Videos (CLI, no browser)
 
@@ -895,9 +893,11 @@ For prototyping before real assets are sourced:
 
 ---
 
-## API key tier (when anonymous limits are hit)
+## API key tier (optional registration)
 
-These require free registration (email only, no payment):
+These require free registration (email only, no payment). Pexels requires one for
+all requests; the others have generous anonymous limits but authenticated tiers
+have higher quotas:
 
 | Service | Key needed | Rate limit | Best for |
 |---------|------------|------------|----------|
@@ -941,8 +941,8 @@ unsplash: silhouette, contemplation, looking up
 ```
 mixkit: domino, chain, gear, clock, mechanism, construction
 pixabay: domino effect, chain reaction, gears, clock mechanism
-coverr: domino, chain, mechanism
-pexels: domino (one word — if 401, use website)
+  coverr: domino, chain, mechanism
+  pexels: domino
 ```
 
 ### Light / abstract / transcendence

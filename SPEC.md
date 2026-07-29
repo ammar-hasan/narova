@@ -90,7 +90,7 @@ export default {
   theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional; mode: "light" flips the base palette
   chrome: { topbar: true, counter: true, progress: true },        // optional; false strips all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
-  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x — size preset + duration-band lint
+  platform: "tiktok",                     // optional: tiktok|reels|shorts|linkedin|x|youtube — size preset + duration-band lint
   captions: { preset: "karaoke",          // optional: karaoke|slam|pop|rise
               emphasis: ["narova"],       //   words auto-highlighted in every caption line
               maxWords: 5 },             //   optional: cap words per caption line
@@ -156,7 +156,10 @@ Rules:
   `narova build --variant <id>` / `--variants` render them.
 - Old fields `caption` and `dur` are accepted and ignored.
 
-`narova check` catches all of this.
+`narova check` catches all of this. `narova check --strict` also verifies
+that every detected claim actually appears in `claims.md`. `narova check
+--release` adds a build gate: remote dependencies, unresolved assets, missing
+claims, unsupported HTML, black frames, and clipped audio all fail the check.
 
 ## The generated page (out/hf contract)
 
@@ -225,7 +228,10 @@ narova compile        reel.config.* -> out/manifest.json (versioned project
 narova plan           compare current config against last manifest; classify
                       what changed and predict which stages will rebuild
 narova check          validate the config (fast, no side effects); prints an
-                      estimated narration length for target-duration tuning
+                       estimated narration length for target-duration tuning
+                       --strict: verify every claim in the claims.md ledger
+                       --release: strict + fail on remote deps, missing claims,
+                       unsupported HTML, black frames, clipped audio (exit 1)
 narova synth          Python TTS -> out/audio/*, out/timings.json
 narova compose        -> out/hf/ + out/captions.srt|.vtt; prints per-scene start times
 narova captions       (re)write out/captions.srt + out/captions.vtt from timings.json
@@ -245,7 +251,7 @@ is restarted automatically whenever `compose`/`build` replaces `out/hf`.
 
 Flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (ignored automatically when the
 spoken text changed since the last synth), `--tempo`, `--size`,
-`--platform tiktok|reels|shorts|linkedin|x` (frame preset + duration-band
+`--platform tiktok|reels|shorts|linkedin|x|youtube` (frame preset + duration-band
 lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
 each variant renders `out/video-<id>.mp4`), `--deliverables` (multi-render
 with per-platform export presets + ffmpeg post-processing + thumbnails),
@@ -271,7 +277,7 @@ with per-platform export presets + ffmpeg post-processing + thumbnails),
 The backend interface is one function: `synthesize(who, text) -> wav`.
 New backends plug in there.
 
-## Status: 0.8.1 shipped
+## Status: 0.10.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

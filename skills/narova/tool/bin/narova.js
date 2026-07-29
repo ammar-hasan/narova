@@ -22,7 +22,7 @@ const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
 
-const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite']);
+const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -140,6 +140,10 @@ Commands:
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
   check                validate config fast — no TTS, no browser, no writes
+                            --strict: verify every claim in claims.md ledger
+                            --release: strict + fail on remote deps, missing
+                              claims, unsupported HTML, black frames, clipped
+                              audio (exit 1 on failure, for build gates)
   plan                 compare current config against the last manifest;
                            classify what changed and which stages will rebuild
   release save <name>  save out/manifest.json as a named release
@@ -168,7 +172,7 @@ Options:
                            (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)
   --size 16:9|1:1|9:16     frame aspect
-  --platform tiktok|reels|shorts|linkedin|x   frame preset + target duration band
+  --platform tiktok|reels|shorts|linkedin|x|youtube   frame preset + target duration band
                            (--size wins over the platform preset)
   --variant <id>           apply a declared hook variant as scene 1 (check/synth/
                            compose/build; build renders out/video-<id>.mp4)
@@ -226,7 +230,8 @@ async function main() {
       let config;
       try { ({ config } = await loadResolved(flags)); }
       catch (e) { console.error(e.message); process.exit(1); }
-      check(config);
+      const ok = check(config, { strict: flags.strict, release: flags.release });
+      if (!ok) process.exitCode = 1;
       return;
     }
 

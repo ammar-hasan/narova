@@ -110,10 +110,10 @@ test('resolveConfig aggregates every error', () => {
     ],
   };
   assert.throws(() => resolveConfig(bad, {}, '.'), err => {
-    assert.match(err.message, /voices: at least one voice required/);
     assert.match(err.message, /body: HTML string required/);
     assert.match(err.message, /duplicate "x"/);
     assert.match(err.message, /"ghost" not in config.voices/);
+    assert.match(err.message, /empty turn list requires a positive explicit dur/);
     return true;
   });
 });

@@ -8,7 +8,7 @@ A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that t
 prompts, scripts, and web pages into narrated, captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.8.3-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.10.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">

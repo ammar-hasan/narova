@@ -36,4 +36,9 @@ update(['README.md'], (s, ver) =>
   s.replace(/(badge\/version-)[0-9.]+(-)/, `$1${ver}$2`)
 );
 
+// SPEC.md — Status line
+update(['SPEC.md'], (s, ver) =>
+  s.replace(/^(## Status: +)[0-9.]+( +shipped)/m, `$1${ver}$2`)
+);
+
 console.log('Done.');
