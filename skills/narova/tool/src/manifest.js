@@ -225,6 +225,9 @@ function compileVoices(voices) {
       ...(v.instruct ? { instruct: v.instruct } : {}),
       ...(v.exaggeration != null ? { exaggeration: v.exaggeration } : {}),
       ...(v.cfg_weight != null ? { cfg_weight: v.cfg_weight } : {}),
+      ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
+      ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
+      ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
     };
   }
   return out;

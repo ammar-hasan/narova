@@ -45,6 +45,9 @@ narova/                          # the repo
 │       ├── py/narova_tts/       # TTS backends + timing
 │       ├── setup.sh             # creates the venv (auto-run by first synth)
 │       └── test/                # test suite (npm test)
+├── skills/narova-elevenlabs/    # optional, separately installable provider
+│   ├── SKILL.md  references/    # ElevenLabs-only setup/configuration
+│   └── tool/                    # provider manifest + isolated HTTP worker
 └── generated/                   # agent-created sample projects (narova-skill-reel is the flagship)
 ```
 
@@ -240,6 +243,8 @@ narova build          synth + compose + render -> out/video.mp4
 narova preview        compose + HyperFrames Studio; prints the exact URL
 narova preview --detach   persistent Studio (PID/log); --stop ends it
 narova voices         list or download voices
+narova providers      add/list/remove/doctor explicitly registered external
+                      TTS workers in ~/.narova/providers/
 narova release        save/list/restore/remove named manifest snapshots
                       in ~/.narova/releases/
 narova doctor         check ffmpeg, python, venv, hyperframes
@@ -249,7 +254,7 @@ Commands find the config by walking up from the current directory, so they
 work from inside `out/` and `out/hf`. A detached Studio preview left running
 is restarted automatically whenever `compose`/`build` replaces `out/hf`.
 
-Flags: `--backend piper|xtts|qwen|chatterbox`, `--reuse` (ignored automatically when the
+Flags: `--backend <built-in-or-registered-provider>`, `--reuse` (ignored automatically when the
 spoken text changed since the last synth), `--tempo`, `--size`,
 `--platform tiktok|reels|shorts|linkedin|x|youtube` (frame preset + duration-band
 lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
@@ -276,8 +281,18 @@ render separate projects at each aspect ratio), `--fps`, `--quality draft|standa
   Pinned to git master for Chatterbox Multilingual v3 (per-voice `lang`;
   outputs carry Resemble's PerTh watermark by default).
 
-The backend interface is one function: `synthesize(who, text) -> wav`.
-New backends plug in there.
+The backend interface is
+`synthesize(who, text, out_path, lang=None) -> Path`.
+
+Built-ins are resolved from one in-skill registry. Optional external backends
+are never imported: the user explicitly registers a manifest under
+`~/.narova/providers/`, then Narova spawns its command as an argument array
+and speaks the versioned `narova-tts-provider/v1` JSON Lines protocol. External
+workers produce one raw WAV utterance; Narova retains sentence caching, tempo,
+gain, fades, resampling, loudness normalization, concatenation, alignment,
+timing rescaling, captions, composition, and rendering. Provider-specific
+code, credentials, dependencies, endpoints, models, and configuration rules
+remain in self-contained companion skills such as `skills/narova-elevenlabs/`.
 
 ## Status: 0.11.0 shipped
 
