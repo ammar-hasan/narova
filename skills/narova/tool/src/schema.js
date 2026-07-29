@@ -197,6 +197,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (!turn || !turn.who) errs.push(`${at}.vo[${j}].who: required`);
       else if (!voices[turn.who]) errs.push(`${at}.vo[${j}].who: "${turn.who}" not in config.voices`);
       if (typeof turn.text !== 'string' || !turn.text.trim()) errs.push(`${at}.vo[${j}].text: required`);
+      // Optional synthesis text: sent to TTS instead of text when present.
+      // Used by external providers for performance tags that must not appear in captions.
+      if (turn.synthesisText != null && (typeof turn.synthesisText !== 'string' || !turn.synthesisText.trim())) {
+        errs.push(`${at}.vo[${j}].synthesisText: must be a non-empty string`);
+      }
       // Per-turn language override for multilingual TTS (chatterbox/qwen/xtts).
       // Accepted but not validated against a list — the backend decides.
       if (turn.lang != null && typeof turn.lang !== 'string') {
@@ -326,6 +331,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       sc.vo.forEach((turn, j) => {
         if (!turn || !turn.who || !voices[turn.who]) { errs.push(`${at}.scene.vo[${j}].who: ${turn && turn.who ? `"${turn.who}" not in config.voices` : 'required'}`); ok = false; }
         if (!turn || typeof turn.text !== 'string' || !turn.text.trim()) { errs.push(`${at}.scene.vo[${j}].text: required`); ok = false; }
+        if (turn && turn.synthesisText != null && (typeof turn.synthesisText !== 'string' || !turn.synthesisText.trim())) {
+          errs.push(`${at}.scene.vo[${j}].synthesisText: must be a non-empty string`); ok = false;
+        }
       });
       if (ok) variants.push({ id: v.id, scene: { body: sc.body, vo: sc.vo, ...(sc.transition ? { transition: sc.transition } : {}) } });
     });

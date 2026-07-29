@@ -112,7 +112,7 @@ function audioFingerprint(config) {
   const turns = [];
   for (const s of (config.scenes || [])) {
     for (const t of (s.vo || [])) {
-      turns.push({ who: t.who, text: t.text, lang: t.lang || '' });
+      turns.push({ who: t.who, text: t.text, ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}), lang: t.lang || '' });
     }
   }
 
@@ -328,7 +328,7 @@ function configFromManifest(manifest, resolvedConfig) {
     scenes: (m.scenes || []).map(s => ({
       id: s.id, body: s.body || '', clip: s.clip || null, dur: s.dur || null,
       transition: s.transition || 'fade',
-      vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}) })),
+      vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}) })),
     })),
     captions: m.captions || {},
     align: m.align || false,

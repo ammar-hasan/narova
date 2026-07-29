@@ -180,8 +180,8 @@ function diffScenes(fromScenes, toScenes) {
     if (!f) { results.push({ id: t.id, fromIndex: i, toIndex: i, added: true }); continue; }
     if (!t) { results.push({ id: f.id, fromIndex: i, toIndex: i, removed: true }); continue; }
     const entry = { id: t.id, fromIndex: f.index, toIndex: t.index };
-    const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang })));
-    const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang })));
+    const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
+    const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
     if (fvo !== tvo) entry.voChanged = true;
     if (f.body !== t.body) entry.bodyChanged = true;
     if (f.clip !== t.clip) entry.clipChanged = true;

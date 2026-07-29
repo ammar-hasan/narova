@@ -386,7 +386,28 @@ def _synthesize_with_router(
                 pieces.append(sil["t"])
                 clock += gap_turn
             turns.append(round(clock, 3))
-            for k, sent in enumerate(sentences(turn["text"])):
+
+            backend_kind = voice_kind.get(who, default_backend)
+            is_external = backend_kind not in BUILTIN_BACKENDS
+            synth_text = turn.get("synthesisText") if is_external else None
+
+            if synth_text:
+                # External provider with separate synthesis text.
+                # Split both texts; use synth for TTS, text for caption words.
+                synth_sents = sentences(synth_text)
+                clean_sents = sentences(turn["text"])
+                if len(synth_sents) != len(clean_sents):
+                    print(f"[narova] scene {nn} turn {ti}: synthesisText sentence count"
+                          f" ({len(synth_sents)}) != text count ({len(clean_sents)})"
+                          f" — falling back to text-only for {who!r}", flush=True)
+                    synth_sents = clean_sents
+                sent_pairs = list(zip(synth_sents, clean_sents))
+            else:
+                # Local backend or no synthesisText: use text for everything.
+                clean_sents = sentences(turn["text"])
+                sent_pairs = [(s, s) for s in clean_sents]
+
+            for k, (synth_sent, clean_sent) in enumerate(sent_pairs):
                 if k > 0:
                     pieces.append(sil["s"])
                     clock += gap_sentence
@@ -395,18 +416,18 @@ def _synthesize_with_router(
                 key = sentence_cache_key(
                     voice_kind.get(who, default_backend),
                     voice_speaker.get(who, who),
-                    sent,
+                    synth_sent,
                     tempo,
                     lang=turn_lang,
                 )
                 d = synth_sentence(
-                    router[who], who, sent, tmp, w, tempo,
+                    router[who], who, synth_sent, tmp, w, tempo,
                     cache_key=key, lang=turn_lang,
                     gain_db=voice_gain_db.get(who, 0.0),
                 )
                 pieces.append(w)
-                # distribute words across the sentence's real duration, weighted by length
-                toks = sent.split()
+                # Distribute clean text words across the sentence's real duration
+                toks = clean_sent.split()
                 wts = [len(tok) + 1 for tok in toks]
                 tot = sum(wts)
                 wt = clock

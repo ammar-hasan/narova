@@ -410,3 +410,44 @@ test('gainDb: out of range throws', () => {
   const raw2 = { ...validRaw(), voices: { a: { speaker: 'v1', gainDb: -30 } } };
   assert.throws(() => resolveConfig(raw2, {}, '.'), /gainDb: must be a number from -24 to 24/);
 });
+
+// ---- synthesisText validation -----------------------------------------------
+
+test('synthesisText: accepted as optional non-empty string on turn', () => {
+  const raw = validRaw();
+  raw.scenes[0].vo[0].synthesisText = '[whispering] Hello there.';
+  const c = resolveConfig(raw, {}, '.');
+  assert.equal(c.scenes[0].vo[0].synthesisText, '[whispering] Hello there.');
+});
+
+test('synthesisText: rejected if present but empty', () => {
+  const raw = validRaw();
+  raw.scenes[0].vo[0].synthesisText = '  ';
+  assert.throws(() => resolveConfig(raw, {}, '.'), /synthesisText: must be a non-empty string/);
+});
+
+test('synthesisText: rejected if present but not a string', () => {
+  const raw = validRaw();
+  raw.scenes[0].vo[0].synthesisText = 123;
+  assert.throws(() => resolveConfig(raw, {}, '.'), /synthesisText: must be a non-empty string/);
+});
+
+test('synthesisText: turn without it is valid (backward compat)', () => {
+  const raw = validRaw();
+  const c = resolveConfig(raw, {}, '.');
+  assert.equal(c.scenes[0].vo[0].synthesisText, undefined);
+});
+
+test('synthesisText: passes through narration projection', () => {
+  const raw = validRaw();
+  raw.scenes[0].vo[0].synthesisText = '[whispering] Hello there.';
+  const c = resolveConfig(raw, {}, '.');
+  const n = narration(c);
+  assert.equal(n[0].segments[0].synthesisText, '[whispering] Hello there.');
+});
+
+test('synthesisText: absent from narration when not set', () => {
+  const c = resolveConfig(validRaw(), {}, '.');
+  const n = narration(c);
+  assert.equal(n[0].segments[0].synthesisText, undefined);
+});

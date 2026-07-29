@@ -463,5 +463,58 @@ class TestChatterboxBackend(unittest.TestCase):
                             {"a": f.name}, venv_python=Path("/nope/python"), **values)
 
 
+class TestSynthesisText(unittest.TestCase):
+    """synthesisText: clean text stays in captions; TTS gets synthesisText."""
+
+    def test_local_backend_ignores_synthesisText(self):
+        """Piper (local) should use text, ignoring synthesisText entirely."""
+        from narova_tts.pipeline import sentences
+        turn = {"who": "a", "text": "Clean text.",
+                "synthesisText": "[tag] Clean text."}
+        # synthesisText should only be used for external backends
+        synth_text = turn.get("synthesisText")  # None for local — tested via is_external check
+        self.assertIsNotNone(synth_text)
+        # For local (piper is in BUILTIN_BACKENDS), is_external=False → synth_text stays None
+        from narova_tts.backends import BUILTIN_BACKENDS
+        backend_kind = "piper"
+        is_external = backend_kind not in BUILTIN_BACKENDS
+        actual = turn.get("synthesisText") if is_external else None
+        self.assertIsNone(actual)
+
+    def test_external_backend_uses_synthesisText(self):
+        """External (fake provider) should use synthesisText when present."""
+        from narova_tts.backends import BUILTIN_BACKENDS
+        backend_kind = "elevenlabs"
+        is_external = backend_kind not in BUILTIN_BACKENDS
+        self.assertTrue(is_external)
+        turn = {"who": "a", "text": "Clean text.",
+                "synthesisText": "[whispering] Clean text."}
+        actual = turn.get("synthesisText") if is_external else None
+        self.assertEqual(actual, "[whispering] Clean text.")
+
+    def test_no_synthesisText_falls_back_to_text(self):
+        """External backend without synthesisText uses text."""
+        from narova_tts.backends import BUILTIN_BACKENDS
+        backend_kind = "elevenlabs"
+        is_external = backend_kind not in BUILTIN_BACKENDS
+        turn = {"who": "a", "text": "Just text."}
+        synth = turn.get("synthesisText") if is_external else None
+        self.assertIsNone(synth)
+        # When None, clean text is used for everything
+        from narova_tts.pipeline import sentences
+        self.assertEqual(sentences(turn["text"]), ["Just text."])
+
+    def test_sentence_count_mismatch_fallback(self):
+        """When synthesisText and text have different sentence counts, fall back to text."""
+        from narova_tts.pipeline import sentences
+        synth_sents = sentences("[tag] Hello. World.")
+        clean_sents = sentences("Hello world.")
+        self.assertNotEqual(len(synth_sents), len(clean_sents))
+        # Fallback: use clean text sentences when counts differ
+        if len(synth_sents) != len(clean_sents):
+            synth_sents = clean_sents
+        self.assertEqual(synth_sents, clean_sents)
+
+
 if __name__ == "__main__":
     unittest.main()

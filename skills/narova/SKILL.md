@@ -280,13 +280,18 @@ scenes keep their exact audio. Details:
 ## Urdu dialogue
 
 When a project contains meaningful Urdu dialogue, use the `urdu-voice-director`
-skill before finalizing `vo` text. It will improve conversational naturalness,
-age-appropriate wording, phrase rhythm, hesitation and pauses, emotional
-progression, and cultural and religious phrasing.
+skill before finalizing `vo` text. Route its output artifacts as follows:
 
-Use its clean spoken-Urdu output for Narova's built-in local TTS backends (piper,
-xtts, qwen, chatterbox). Do not insert unsupported performance tags into
-`vo.text`. For provider-specific tags, follow the relevant provider skill.
+- **Artifact A (Clean spoken Urdu)** → `vo.text` — used for captions
+  (SRT/VTT/karaoke) and for TTS when no `synthesisText` is set.
+- **Artifact D (Provider adapter)** canonical utterance → `vo.text`;
+  inline controls and provider request payload → `vo.synthesisText`
+  (processed for external backends only; local backends ignore it).
+
+Narova sends `synthesisText` to the TTS engine when present, keeping `text`
+clean for captions. For ElevenLabs or other external providers, map voice
+characteristics through `providerOptions.voiceSettings` rather than embedding
+tags in `vo.text`.
 
 ## Read it to…
 

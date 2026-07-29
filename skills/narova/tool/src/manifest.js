@@ -244,6 +244,7 @@ function compileScenes(scenes) {
       who:  turn.who,
       text: turn.text,
       ...(turn.lang ? { lang: turn.lang } : {}),
+      ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
       start: 0,            // filled after synth
       words: [],           // filled after synth
     })),
@@ -263,6 +264,7 @@ function compileVariants(variants) {
         who: turn.who,
         text: turn.text,
         ...(turn.lang ? { lang: turn.lang } : {}),
+        ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
       })),
       ...(v.scene.transition ? { transition: v.scene.transition } : {}),
     } : null,

@@ -129,3 +129,29 @@ unchanged.
 Requires Narova with `narova-tts-provider/v1`, Python 3.10+, ffmpeg, network
 access to the ElevenLabs API, and an ElevenLabs account/API key. The worker has
 no third-party Python dependency and does not modify Narova's venv.
+
+## Performance text and captions
+
+The `narova-tts-provider/v1` protocol currently sends a single `text` field
+that Narova uses for both TTS synthesis and captions (SRT, VTT, karaoke
+overlay). If you embed performance directions in `vo.text` (e.g. `[excited]
+hello`), they will appear verbatim in visible captions.
+
+When using the `urdu-voice-director` skill, route its output artifacts as
+follows:
+
+- **Artifact A (Clean spoken Urdu)** → `vo.text`
+- **Artifact D (Provider adapter)** canonical utterance → `vo.text`;
+  inline controls and provider request payload → `vo.synthesisText`
+  (supported since Narova 0.12.0; only processed for external backends)
+
+For voice characteristics (stability, similarity, style, speed), use
+`providerOptions.voiceSettings` instead, which maps to ElevenLabs API fields
+without touching the synthesis text. These controls carry performance intent
+while keeping `vo.text` clean for captions.
+
+When synthesisText is set on a turn, Narova sends it to the external
+provider as the text to synthesize, while `vo.text` remains the clean
+caption source. For voice characteristics (stability, similarity, style,
+speed), use `providerOptions.voiceSettings` instead, which maps to ElevenLabs
+API fields without touching the synthesis text.

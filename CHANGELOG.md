@@ -40,6 +40,17 @@ versions follow [Semantic Versioning](https://semver.org/).
   to use the `urdu-voice-director` skill before finalizing `vo` text in
   projects with meaningful Urdu dialogue. The skill improves conversational
   naturalness without adding provider-specific tags to Narova's config.
+- **ElevenLabs performance-text boundary documented** — the ElevenLabs
+  configuration now explains that `vo.text` serves both synthesis and captions;
+  performance directions should use `providerOptions.voiceSettings` until a
+  dual-text protocol field exists.
+- **`synthesisText` — separate caption and synthesis text** — `vo` turns can
+  now carry an optional `synthesisText` field. When present on an external
+  provider, `synthesisText` is sent to TTS (allowing performance tags like
+  `[whispering]`) while `text` remains the clean source for captions, SRT,
+  and VTT. When absent, `text` is used for everything. Local backends always
+  ignore `synthesisText`. Sentence-count mismatch between the two texts falls
+  back safely to text-only with a warning.
 - **Tests for Urdu sentence splitting** — Python: Urdu full stop, question
   mark, ellipsis behavior, mixed English/Urdu, English unchanged. Node:
   matching mergeTimings tests with word-level `si` assignment.
@@ -54,6 +65,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   `_SENTENCE_RE`.
 - `manifest.js`: `countSentencesPerTurn()` regex extracted to module-level
   `SENTENCE_SPLIT_RE` constant.
+- ElevenLabs configuration: added performance-text/captions boundary note.
 
 ## [0.11.0] - 2026-07-29
 

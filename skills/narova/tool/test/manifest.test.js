@@ -498,6 +498,52 @@ test('mergeTimings handles mixed English and Urdu sentence splitting', () => {
 
 // ---- round-trip -------------------------------------------------------------
 
+// ---- synthesisText ---------------------------------------------------------
+
+test('compile passes synthesisText through when present', () => {
+  const raw = makeRaw({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Clean text.', synthesisText: '[excited] Clean text.' }], body: '<div/>' }],
+  });
+  const tl = compile(resolve(raw));
+  assert.equal(tl.scenes[0].vo[0].text, 'Clean text.');
+  assert.equal(tl.scenes[0].vo[0].synthesisText, '[excited] Clean text.');
+});
+
+test('compile omits synthesisText when absent', () => {
+  const tl = compile(resolve(makeRaw()));
+  assert.equal(tl.scenes[0].vo[0].synthesisText, undefined);
+});
+
+test('mergeTimings with synthesisText: word assignment uses text, not synthesisText', () => {
+  const raw = makeRaw({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Clean text.', synthesisText: '[excited] Clean text.' }], body: '<div/>' }],
+  });
+  const tl = compile(resolve(raw));
+  const tmp = path.join(os.tmpdir(), 'narova-st-' + Date.now());
+  fs.mkdirSync(tmp, { recursive: true });
+  const tp = path.join(tmp, 'timings.json');
+  fs.writeFileSync(tp, JSON.stringify({
+    s1: {
+      dur: 2.0,
+      turns: [0.16],
+      words: [
+        { w: 'Clean', t0: 0.16, t1: 0.50, who: 'a', si: 0 },
+        { w: 'text.', t0: 0.50, t1: 0.84, who: 'a', si: 0 },
+      ],
+    },
+  }, null, 2));
+  try {
+    const merged = mergeTimings(tl, tp);
+    assert.equal(merged.scenes[0].vo[0].words.length, 2);
+    assert.equal(merged.scenes[0].vo[0].words[0].w, 'Clean');
+    assert.equal(merged.scenes[0].vo[0].text, 'Clean text.');
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+  }
+});
+
+// ---- round-trip (continued) ------------------------------------------------
+
 test('compile → validate → read back is stable', () => {
   const tl = compile(resolve(makeRaw()));
   const tmp = path.join(os.tmpdir(), 'narova-rt-' + Date.now());

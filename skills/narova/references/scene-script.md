@@ -49,6 +49,12 @@ export default {
 - At least one voice. Every `vo[].who` must be a declared voice.
 - At least one scene. Every scene needs a unique `id` and a `body` string.
   - `vo` is normally a non-empty list of `{ who, text }` turns.
+  - Each turn may optionally set `lang` (a language code string, e.g. `"ur"`)
+    for per-turn language override.
+  - Each turn may optionally set `synthesisText` — when present and the voice
+    uses an external provider, this text is sent to TTS (allowing performance
+    tags like `[whispering]`) while `text` remains the clean caption source.
+    Local backends ignore `synthesisText`.
   - **Silent scenes**: `vo: []` with an explicit positive `dur` (e.g. `dur: 2`
     for a 2-second reference screen). The synth stage generates silence.
 - Per-voice `gainDb` (-24 to +24): trim a quieter voice (e.g. Arabic) up
