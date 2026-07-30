@@ -7,27 +7,30 @@
  *   tts       — text-to-speech synthesis (narration audio)
  *   align     — forced word alignment (optional, post-synth)
  *   mix       — audio mixing (bed + SFX + narration into full.wav)
+ *   capture   — narration-timed walkthrough recording (explicit)
  *   compose   — HyperFrames project generation
  *   render    — video rendering + ffmpeg delivery encode
  *
  * Rationale: a bed/SFX change should re-trigger the audio mix but
  * not re-run TTS. A captions-only change should avoid synth entirely.
- * The planner now distinguishes all five stages. */
+ * The planner now distinguishes all six stages. */
 
 const fs = require('fs');
 const path = require('path');
 const { compile, read, hashConfig, buildHashes } = require('./manifest');
 const { resolveConfig } = require('./schema');
 const { loadProjectConfig } = require('./config');
+const { captureStatus } = require('./walkthrough');
 
 const STAGE = {
-  NONE:    { label: 'no change',         icon: '=', tts: false, align: false, mix: false, compose: false, render: false },
-  CONFIG:  { label: 'config-only',       icon: '~', tts: false, align: false, mix: false, compose: true,  render: true  },
-  MIX:     { label: 'audio-mix only',    icon: '♪', tts: false, align: false, mix: true,  compose: true,  render: true  },
-  ALIGN:   { label: 'alignment changed', icon: '↻', tts: false, align: true,  mix: true,  compose: true,  render: true  },
-  VISUAL:  { label: 'visual-only',       icon: '>', tts: false, align: false, mix: false, compose: true,  render: true  },
-  AUDIO:   { label: 'script changed',    icon: '+', tts: true,  align: true,  mix: true,  compose: true,  render: true  },
-  FULL:    { label: 'full rebuild',      icon: '!', tts: true,  align: true,  mix: true,  compose: true,  render: true  },
+  NONE:    { label: 'no change',             icon: '=', tts: false, align: false, mix: false, capture: false, compose: false, render: false },
+  CONFIG:  { label: 'config-only',           icon: '~', tts: false, align: false, mix: false, capture: false, compose: true,  render: true  },
+  MIX:     { label: 'audio-mix only',        icon: '♪', tts: false, align: false, mix: true,  capture: false, compose: true,  render: true  },
+  ALIGN:   { label: 'alignment changed',     icon: '↻', tts: false, align: true,  mix: true,  capture: false, compose: true,  render: true  },
+  CAPTURE: { label: 'walkthrough recapture', icon: '◉', tts: false, align: false, mix: false, capture: true,  compose: true,  render: true  },
+  VISUAL:  { label: 'visual-only',           icon: '>', tts: false, align: false, mix: false, capture: false, compose: true,  render: true  },
+  AUDIO:   { label: 'script changed',        icon: '+', tts: true,  align: true,  mix: true,  capture: false, compose: true,  render: true  },
+  FULL:    { label: 'full rebuild',          icon: '!', tts: true,  align: true,  mix: true,  capture: false, compose: true,  render: true  },
 };
 
 const CHANGE_LEVELS = STAGE; // legacy alias
@@ -36,6 +39,14 @@ function plan(fromManifestPath, toConfig, opts = {}) {
   const from = read(fromManifestPath);
   const to = compile(toConfig, { toolVersion: opts.toolVersion });
   const projectDir = toConfig.projectDir || '.';
+  const hasWalkthroughs = Object.keys(to.walkthroughs || {}).length > 0;
+  const withCapture = (level, needed) => needed && hasWalkthroughs
+    ? { ...level, capture: true }
+    : level;
+  // Alignment can change measured word/turn timings without changing the
+  // narration-audio fingerprint. Until synth rewrites the manifest with the
+  // new align config, a currently fresh take still needs a post-align capture.
+  const hasAlignConfigChange = diffObj(from.align, to.align);
 
   const changes = [];
   const detail = {};
@@ -59,9 +70,24 @@ function plan(fromManifestPath, toConfig, opts = {}) {
       }
     }
   }
+  const staleWalkthroughAssets = hasWalkthroughs
+    && walkthroughAssetsNeedCapture(fromManifestPath, toConfig);
+  const captureRequired = staleWalkthroughAssets
+    || (hasWalkthroughs && hasAlignConfigChange);
 
-  // If only config hash matches but assets changed, it's still a change.
+  // Capture freshness is an independent project invariant: a missing take has
+  // no asset hash to differ, while a newly captured fresh take does. Do not
+  // make recapture depend on whether the asset tree happened to change.
   if (fromHash === toHash && !hasAssetChange) {
+    if (staleWalkthroughAssets) {
+      return {
+        level: STAGE.CAPTURE,
+        changes: ['walkthrough capture stale'],
+        detail: { capture: 'missing or stale' },
+        fromHash,
+        toHash,
+      };
+    }
     return { level: STAGE.NONE, changes: [], detail: {}, fromHash, toHash };
   }
 
@@ -75,17 +101,26 @@ function plan(fromManifestPath, toConfig, opts = {}) {
   if (diffObj(from.voices, to.voices)) {
     changes.push('voices');
     detail.voices = diffDetail(from.voices, to.voices);
-    return { level: STAGE.FULL, changes, detail, fromHash, toHash };
+    return {
+      level: withCapture(STAGE.FULL, captureRequired),
+      changes, detail, fromHash, toHash,
+    };
   }
   if (diffObj(from.format, to.format)) {
     changes.push('format');
     detail.format = diffDetail(from.format, to.format);
-    return { level: STAGE.FULL, changes, detail, fromHash, toHash };
+    return {
+      level: withCapture(STAGE.FULL, captureRequired),
+      changes, detail, fromHash, toHash,
+    };
   }
   if (diffObj(from.timing, to.timing)) {
     changes.push('timing');
     detail.timing = diffDetail(from.timing, to.timing);
-    return { level: STAGE.FULL, changes, detail, fromHash, toHash };
+    return {
+      level: withCapture(STAGE.FULL, captureRequired),
+      changes, detail, fromHash, toHash,
+    };
   }
 
   // Backend change → full rebuild
@@ -94,7 +129,10 @@ function plan(fromManifestPath, toConfig, opts = {}) {
   if (fromBackend !== toBackend) {
     changes.push('backend (' + fromBackend + ' \u2192 ' + toBackend + ')');
     detail.backend = { from: fromBackend, to: toBackend };
-    return { level: STAGE.FULL, changes, detail, fromHash, toHash };
+    return {
+      level: withCapture(STAGE.FULL, captureRequired),
+      changes, detail, fromHash, toHash,
+    };
   }
 
   // Scene-level diffs
@@ -110,10 +148,20 @@ function plan(fromManifestPath, toConfig, opts = {}) {
       s.removed = sc.removed;
       hasStructureChange = true;
     }
+    if (sc.idChanged) {
+      s.idChanged = true;
+      s.fromId = sc.fromId;
+      s.toId = sc.toId;
+      hasStructureChange = true;
+    }
     if (sc.voChanged) { s.voChanged = sc.voChanged; hasVoChange = true; }
     if (sc.bodyChanged) { s.bodyChanged = true; hasVisualChange = true; }
     if (sc.clipChanged) { s.clipChanged = true; hasVisualChange = true; }
-    if (sc.transitionChanged) s.transitionChanged = true;
+    if (sc.walkthroughChanged) {
+      s.walkthroughChanged = true;
+      hasVisualChange = true;
+    }
+    if (sc.transitionChanged) { s.transitionChanged = true; hasVisualChange = true; }
     changes.push(s);
   }
   detail.scenes = sceneChanges;
@@ -121,37 +169,78 @@ function plan(fromManifestPath, toConfig, opts = {}) {
   // ---- config-level changes (bed, sfx, captions, align, chrome, theme) ----
   const configDiffs = diffConfigTopLevel(from, to, fromHash, toHash, hasAssetChange);
   detail.configDiff = configDiffs;
+  const walkthroughConfigDiff = configDiffs.find(d => d.key === 'walkthroughs');
+  const hasWalkthroughConfigChange = Boolean(
+    walkthroughConfigDiff
+    && diffObj(
+      walkthroughExecutionProjection(walkthroughConfigDiff.from),
+      walkthroughExecutionProjection(walkthroughConfigDiff.to),
+    ),
+  );
+  const hasBedSfxChange = configDiffs.some(d => d.key === 'bed' || d.key === 'sfx');
+  const hasAssetBedSfxChange = assetDiffs.some(d => d.file && (
+    d.file.endsWith('.mp3') || d.file.endsWith('.wav') || d.file.endsWith('.ogg')
+    || d.file.endsWith('.flac') || d.file.endsWith('.m4a') || d.file.endsWith('.aac')
+  ));
+  const needsMix = hasBedSfxChange || (hasAssetChange && hasAssetBedSfxChange);
+  const withMix = level => needsMix && !level.mix ? { ...level, mix: true } : level;
 
   // Structure change → full rebuild
   if (hasStructureChange) {
-    return { level: STAGE.FULL, changes, detail, fromHash, toHash };
+    return {
+      level: withCapture(STAGE.FULL, captureRequired),
+      changes, detail, fromHash, toHash,
+    };
   }
 
   // Config-only changes with bed/SFX → MIX (audio mix, no TTS)
   if (!hasVoChange && !hasVisualChange && !hasStructureChange) {
-    const hasBedSfxChange = configDiffs.some(d => d.key === 'bed' || d.key === 'sfx');
-    const hasAlignChange = configDiffs.some(d => d.key === 'align');
-    const hasAssetBedSfxChange = assetDiffs.some(d => d.file && (d.file.endsWith('.mp3') || d.file.endsWith('.wav') || d.file.endsWith('.ogg') || d.file.endsWith('.flac') || d.file.endsWith('.m4a') || d.file.endsWith('.aac')));
-
-    if (hasAlignChange) {
-      return { level: STAGE.ALIGN, changes, detail, fromHash, toHash };
+    if (hasAlignConfigChange) {
+      return {
+        level: withCapture(STAGE.ALIGN, captureRequired),
+        changes, detail, fromHash, toHash,
+      };
     }
-    if (hasBedSfxChange || (hasAssetChange && hasAssetBedSfxChange)) {
-      return { level: STAGE.MIX, changes, detail, fromHash, toHash };
+    if (hasWalkthroughConfigChange) {
+      return {
+        level: withMix(captureRequired ? STAGE.CAPTURE : STAGE.CONFIG),
+        changes, detail, fromHash, toHash,
+      };
+    }
+    if (needsMix) {
+      return {
+        level: withCapture(STAGE.MIX, captureRequired),
+        changes, detail, fromHash, toHash,
+      };
     }
     if (hasAssetChange) {
-      return { level: STAGE.CONFIG, changes, detail, fromHash, toHash };
+      return {
+        level: withCapture(STAGE.CONFIG, captureRequired),
+        changes, detail, fromHash, toHash,
+      };
     }
-    return { level: STAGE.CONFIG, changes, detail, fromHash, toHash };
+    return {
+      level: withCapture(STAGE.CONFIG, captureRequired),
+      changes, detail, fromHash, toHash,
+    };
   }
 
   // Visual-only → compose + render, no synth
   if (hasVisualChange && !hasVoChange) {
-    return { level: STAGE.VISUAL, changes, detail, fromHash, toHash };
+    return {
+      level: withMix(withCapture(
+        STAGE.VISUAL,
+        captureRequired,
+      )),
+      changes, detail, fromHash, toHash,
+    };
   }
 
   // Script change → synth + align + mix + compose + render
-  return { level: STAGE.AUDIO, changes, detail, fromHash, toHash };
+  return {
+    level: withCapture(STAGE.AUDIO, captureRequired),
+    changes, detail, fromHash, toHash,
+  };
 }
 
 /* ---- helpers -------------------------------------------------------------- */
@@ -179,14 +268,24 @@ function diffScenes(fromScenes, toScenes) {
     const t = toScenes[i];
     if (!f) { results.push({ id: t.id, fromIndex: i, toIndex: i, added: true }); continue; }
     if (!t) { results.push({ id: f.id, fromIndex: i, toIndex: i, removed: true }); continue; }
-    const entry = { id: t.id, fromIndex: f.index, toIndex: t.index };
+    const entry = {
+      id: t.id,
+      fromId: f.id,
+      toId: t.id,
+      fromIndex: f.index,
+      toIndex: t.index,
+    };
+    if (f.id !== t.id) entry.idChanged = true;
     const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
     const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
     if (fvo !== tvo) entry.voChanged = true;
     if (f.body !== t.body) entry.bodyChanged = true;
     if (f.clip !== t.clip) entry.clipChanged = true;
+    if (JSON.stringify(f.walkthrough) !== JSON.stringify(t.walkthrough)) {
+      entry.walkthroughChanged = true;
+    }
     if (f.transition !== t.transition) entry.transitionChanged = true;
-    if (entry.voChanged || entry.bodyChanged || entry.clipChanged || entry.transitionChanged) {
+    if (entry.idChanged || entry.voChanged || entry.bodyChanged || entry.clipChanged || entry.walkthroughChanged || entry.transitionChanged) {
       results.push(entry);
     }
   }
@@ -203,6 +302,7 @@ function diffConfigTopLevel(from, to, fromHash, toHash, hasAssetChange) {
     { key: 'series',   from: from.series,            to: to.series },
     { key: 'chrome',   from: from.chrome,            to: to.chrome },
     { key: 'theme',    from: from.theme,             to: to.theme },
+    { key: 'walkthroughs', from: from.walkthroughs || {}, to: to.walkthroughs || {} },
   ];
   const diffs = [];
   for (const chk of checks) {
@@ -211,6 +311,28 @@ function diffConfigTopLevel(from, to, fromHash, toHash, hasAssetChange) {
     }
   }
   return diffs;
+}
+
+function walkthroughExecutionProjection(walkthroughs) {
+  return Object.fromEntries(Object.entries(walkthroughs || {}).map(([id, flow]) => {
+    // `title` is generated Narova browser chrome, not browser execution.
+    const { title: _title, ...execution } = flow || {};
+    return [id, execution];
+  }));
+}
+
+function walkthroughAssetsNeedCapture(fromManifestPath, config) {
+  const outDir = path.dirname(fromManifestPath);
+  const timingsPath = path.join(outDir, 'timings.json');
+  let timings = null;
+  try {
+    timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+  } catch {
+    return true;
+  }
+  return Object.keys(config.walkthroughs || {}).some(
+    id => !captureStatus(config, id, timings, { outDir }).ok,
+  );
 }
 
 /* ---- CLI integration helpers --------------------------------------------- */
@@ -242,7 +364,7 @@ function formatPlan(result, opts = {}) {
   if (result.changes.length) {
     for (const c of result.changes) {
       if (typeof c === 'string') lines.push(`  • ${c}`);
-      else if (c.scene) lines.push(`  • scene "${c.scene}":${c.voChanged ? ' vo' : ''}${c.bodyChanged ? ' body' : ''}${c.clipChanged ? ' clip' : ''}${c.added ? ' (added)' : ''}${c.removed ? ' (removed)' : ''}`);
+      else if (c.scene) lines.push(`  • scene "${c.scene}":${c.voChanged ? ' vo' : ''}${c.bodyChanged ? ' body' : ''}${c.clipChanged ? ' clip' : ''}${c.walkthroughChanged ? ' walkthrough' : ''}${c.added ? ' (added)' : ''}${c.removed ? ' (removed)' : ''}`);
     }
   }
   if (result.detail?.configDiff?.length) {
@@ -252,6 +374,7 @@ function formatPlan(result, opts = {}) {
   if (l.tts) steps.push('tts');
   if (l.align) steps.push('align');
   if (l.mix) steps.push('mix');
+  if (l.capture) steps.push('walkthrough capture');
   if (l.compose) steps.push('compose');
   if (l.render) steps.push('render');
   lines.push(`  steps: ${steps.join(' → ') || 'none'}`);

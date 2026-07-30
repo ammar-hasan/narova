@@ -69,6 +69,13 @@ strengthening · `[ ]` gap.
   project `assets/` are copied into the render bundle.
   `references/url-to-source.md`, `tool/src/schema.js`,
   `tool/src/compose/index.js`.
+- [x] **Real product walkthroughs** — a driver-neutral action recipe can be
+  explored and explicitly captured through agent-browser, timed from measured
+  narration, then framed with voiceover and word-synced captions. Semantic
+  locators, evidence screenshots, action-drift measurements, content hashes,
+  per-variant takes, and release gates keep the result reproducible without
+  replaying mutating browser actions during a build.
+  `references/product-walkthroughs.md`, `tool/src/walkthrough.js`.
 - [x] **Asks the user only when genuinely ambiguous** — intake guidance with
   a short list of decision-critical questions; otherwise the skill decides.
   `references/prompt-to-video.md` §"When to ask".
@@ -104,7 +111,11 @@ strengthening · `[ ]` gap.
 
 ## Proof (all verified on this machine)
 
-- [x] `npm test` exits 0 (200+ JS tests + 50+ Python tests).
+- [x] `npm test` exits 0 (300+ JS tests + 50+ Python tests).
+- [x] Real walkthrough eval: a local demo product is explored and recorded,
+  semantic actions stay within the timing-drift budget, the capture manifest
+  and evidence frames validate, and the resulting 1280×720 MP4 passes media and
+  black-frame checks. `tool/evals/walkthrough-eval.js`.
 - [x] End-to-end: a project written from a plain natural-language prompt
   builds to `out/video.mp4`; `ffprobe` duration ≈ `out/audio/full.wav`
   (±0.15s). See `generated/`.

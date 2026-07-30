@@ -222,6 +222,7 @@ function renderDeliverable(hfDir, outDir, preset, opts = {}) {
   // Step 1: HyperFrames render (source-quality).
   const hf = preset.hf || {};
   const args = ['render', '--output', path.join('..', outName)];
+  if (opts.videoFrameFormat) args.push('--video-frame-format', opts.videoFrameFormat);
   if (preset.fps) args.push('--fps', String(preset.fps));
   if (hf.quality) args.push('--quality', hf.quality);
   if (hf.format) args.push('--format', hf.format);

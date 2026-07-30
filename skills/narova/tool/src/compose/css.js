@@ -65,6 +65,16 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 /* clips */
 .scene{position:absolute;inset:0;z-index:1}
 .broll{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.52;pointer-events:none}
+.walkthrough-media{position:absolute;z-index:0;pointer-events:none;opacity:var(--walkthrough-opacity,1);object-position:var(--walkthrough-position,50% 50%);background:#05070b}
+.walkthrough-full{inset:0;width:100%;height:100%}
+.walkthrough-window{left:4.5%;right:4.5%;top:calc(5% + clamp(30px,4.5vw,44px));bottom:var(--walkthrough-bottom,clamp(112px,20vh,190px));width:91%;height:calc(95% - clamp(30px,4.5vw,44px) - var(--walkthrough-bottom,clamp(112px,20vh,190px)));border-radius:0 0 clamp(10px,1.6vw,18px) clamp(10px,1.6vw,18px)}
+.walkthrough-shell{position:absolute;left:4.5%;right:4.5%;top:5%;bottom:var(--walkthrough-bottom,clamp(112px,20vh,190px));z-index:2;border:1px solid rgba(255,255,255,.24);border-radius:clamp(10px,1.6vw,18px);box-shadow:0 20px 70px rgba(0,0,0,.38);pointer-events:none;overflow:hidden}
+.scene.walkthrough-layout-full::after{content:"";position:absolute;left:0;right:0;bottom:0;height:34%;z-index:2;pointer-events:none;background:linear-gradient(180deg,transparent 0%,rgba(3,7,14,.72) 68%,rgba(3,7,14,.92) 100%)}
+.walkthrough-titlebar{height:clamp(30px,4.5vw,44px);display:grid;grid-template-columns:auto 1fr auto;gap:clamp(8px,1.3vw,16px);align-items:center;padding:0 clamp(10px,1.5vw,16px);font-family:var(--mono);font-size:clamp(8px,1vw,11px);letter-spacing:.04em;color:var(--muted);background:color-mix(in srgb,var(--panel) 94%,transparent);border-bottom:1px solid rgba(255,255,255,.15)}
+.walkthrough-titlebar small{font:inherit;color:var(--faint);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.walkthrough-dots{display:flex;gap:clamp(4px,.55vw,6px)}
+.walkthrough-dots i{display:block;width:clamp(6px,.75vw,9px);height:clamp(6px,.75vw,9px);border-radius:50%;background:var(--faint)}
+.walkthrough-dots i:first-child{background:var(--red)}.walkthrough-dots i:nth-child(2){background:var(--amber)}.walkthrough-dots i:last-child{background:var(--green)}
 .overlay{position:absolute;inset:0;z-index:5;pointer-events:none}
 
 .chrome{position:absolute;inset:0;padding:clamp(16px,3.1vw,32px);display:flex;flex-direction:column;z-index:3}

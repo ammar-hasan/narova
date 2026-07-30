@@ -22,7 +22,36 @@ test('help shows on no command, help, and -h', () => {
     const r = run(args);
     assert.equal(r.status, 0, args.join(' '));
     assert.match(r.stdout, /Usage: narova/);
+    assert.match(r.stdout, /walkthrough explore/);
+    assert.match(r.stdout, /walkthrough capture/);
   }
+});
+
+test('walkthrough status reports a missing take; capture requires synth timings', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-walkthrough-'));
+  fs.writeFileSync(path.join(dir, 'reel.config.json'), JSON.stringify({
+    title: 'Demo',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    walkthroughs: {
+      app: {
+        url: 'https://example.com',
+        steps: [{ at: 0.5, action: 'click', target: { text: 'More information' } }],
+      },
+    },
+    scenes: [{
+      id: 'demo',
+      body: '<p>See the product.</p>',
+      walkthrough: 'app',
+      vo: [{ who: 'a', text: 'See how it works.' }],
+    }],
+  }));
+  const status = run(['walkthrough', 'status', '--project', dir]);
+  assert.equal(status.status, 0, status.stderr);
+  assert.match(status.stdout, /app: recording missing/);
+
+  const capture = run(['walkthrough', 'capture', 'app', '--project', dir]);
+  assert.equal(capture.status, 1);
+  assert.match(capture.stderr, /narova synth/);
 });
 
 test('render is gone with a pointer to compose/build', () => {

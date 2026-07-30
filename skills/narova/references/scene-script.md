@@ -61,6 +61,10 @@ export default {
   against louder ones after loudnorm. Included in the sentence cache identity.
 - Per-scene `clip`: a project-relative video file played as a full-bleed
   background behind the HTML overlay (looped, dimmed to 52%, seek-safe).
+- Per-scene `walkthrough`: a declared product capture id, or
+  `{ id, layout, fit, opacity, position }`. It cannot be combined with
+  `clip`. See [product-walkthroughs.md](product-walkthroughs.md) for semantic
+  actions, narration anchors, authentication, capture, and stale-media rules.
 - If `theme.css` is set, the file must exist.
 - Old fields `caption` and `dur` are ignored. Do not write them.
 

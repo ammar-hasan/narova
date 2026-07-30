@@ -10,6 +10,7 @@ const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
 const { composeDoc } = require('./html');
+const { assertFreshCaptures } = require('../walkthrough');
 
 function compose(config, outDir) {
   const timingsPath = path.join(outDir, 'timings.json');
@@ -18,6 +19,7 @@ function compose(config, outDir) {
     throw new Error('compose needs out/timings.json and out/audio/full.wav — run `narova synth` first');
   }
   const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+  assertFreshCaptures(config, timings, outDir);
 
   const size = config.size;
   const data = composeData(config, timings);

@@ -32,6 +32,7 @@ frames/
 
 # README showcase video is a shipped repository asset, not build output.
 !assets/narova-skill-reel.mp4
+!assets/narova-product-walkthrough-demo.mp4
 
 # Narova generated projects keep editable source, including local source media.
 # generated/.gitignore excludes each project's output and scratch directories.

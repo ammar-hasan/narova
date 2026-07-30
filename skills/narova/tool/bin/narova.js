@@ -25,6 +25,9 @@ const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
 const { backendHint } = require('../src/tts-backends');
+const {
+  captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
+} = require('../src/walkthrough');
 
 const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release']);
 
@@ -146,8 +149,8 @@ Commands:
   check                validate config fast — no TTS, no browser, no writes
                             --strict: verify every claim in claims.md ledger
                             --release: strict + fail on remote deps, missing
-                              claims, unsupported HTML, black frames, clipped
-                              audio (exit 1 on failure, for build gates)
+                              claims, unsupported HTML, black frames, or stale
+                              walkthrough captures (exit 1, for build gates)
   plan                 compare current config against the last manifest;
                            classify what changed and which stages will rebuild
   release save <name>  save out/manifest.json as a named release
@@ -157,6 +160,9 @@ Commands:
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> out/hf/ (HyperFrames project) + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
+  walkthrough explore <id>  open source and print agent-readable interactive page state
+  walkthrough capture [id]  record narration-timed product actions with agent-browser
+  walkthrough status [id]   report missing/stale/fresh captured walkthrough assets
   shots                snapshot one QA frame per scene into out/hf/snapshots/
   build                synth + compose + hyperframes render -> out/video.mp4
   preview              compose, then open HyperFrames Studio on out/hf
@@ -168,7 +174,7 @@ Commands:
   voice sample add <file> <name>   save a clone sample for chatterbox
   voice sample list                list saved clone samples
   voice sample remove <name>       remove a saved clone sample
-  doctor               check ffmpeg, ffprobe, python venv, npx hyperframes
+  doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
 they work from inside out/ and out/hf too. A detached Studio preview is
@@ -236,10 +242,75 @@ async function main() {
 
     case 'check': {
       let config;
-      try { ({ config } = await loadResolved(flags)); }
+      let projectDir;
+      try { ({ config, projectDir } = await loadResolved(flags)); }
       catch (e) { console.error(e.message); process.exit(1); }
-      const ok = check(config, { strict: flags.strict, release: flags.release });
+      const ok = check(config, {
+        strict: flags.strict,
+        release: flags.release,
+        outDir: outDirOf(flags, projectDir),
+      });
       if (!ok) process.exitCode = 1;
+      return;
+    }
+
+    case 'walkthrough': {
+      const action = positionals[1] || 'status';
+      if (!['explore', 'capture', 'status'].includes(action)) {
+        console.error('usage: narova walkthrough explore|capture|status [id]');
+        process.exit(1);
+      }
+      const { config, projectDir } = await loadResolved(flags);
+      const declared = Object.keys(config.walkthroughs || {});
+      const requested = positionals[2];
+      if (action === 'explore' && !requested && declared.length > 1) {
+        console.error(`walkthrough explore needs an id — declared: ${declared.join(', ')}`);
+        process.exit(1);
+      }
+      const ids = requested && requested !== 'all'
+        ? [requested]
+        : (action === 'explore' ? declared.slice(0, 1) : declared);
+      if (ids.length === 0) {
+        console.error('no walkthroughs declared in reel.config');
+        process.exit(1);
+      }
+      for (const id of ids) {
+        if (!config.walkthroughs[id]) {
+          console.error(`unknown walkthrough "${id}" — declared: ${declared.join(', ') || '(none)'}`);
+          process.exit(1);
+        }
+      }
+      const out = outDirOf(flags, projectDir);
+      const timingsPath = path.join(out, 'timings.json');
+      const timings = fs.existsSync(timingsPath)
+        ? JSON.parse(fs.readFileSync(timingsPath, 'utf8'))
+        : null;
+      if (action === 'explore') {
+        const result = exploreWalkthrough(config, ids[0]);
+        console.log(result.snapshot || '(no interactive elements found)');
+        console.log(`\nsession stays open: agent-browser --session ${result.session} snapshot -i`);
+        return;
+      }
+      if (action === 'status') {
+        for (const id of ids) {
+          const status = captureStatus(config, id, timings, { outDir: out });
+          console.log(`${status.ok ? '✓' : '○'} ${id}: ${status.ok ? 'fresh' : status.reason}${status.ok && status.manifest ? ` (${status.manifest.media.width}x${status.manifest.media.height}, ${status.manifest.media.duration.toFixed(1)}s)` : ''}`);
+        }
+        return;
+      }
+      if (!timings) {
+        console.error(`walkthrough capture needs ${timingsPath} — run \`narova synth\` first`);
+        process.exit(1);
+      }
+      for (const id of ids) {
+        const flow = config.walkthroughs[id];
+        console.log(`walkthrough "${id}" -> ${safeUrl(flow.url)}`);
+        if (flow.mutates) {
+          console.log('  note: this walkthrough declares mutating actions; use a disposable demo account and seeded data');
+        }
+        const result = captureWalkthrough(config, id, timings, { outDir: out });
+        console.log(`captured -> ${result.recording} (${result.manifest.media.width}x${result.manifest.media.height}, ${result.manifest.media.duration.toFixed(1)}s, ${result.manifest.steps.length} actions)`);
+      }
       return;
     }
 

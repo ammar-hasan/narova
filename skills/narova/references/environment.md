@@ -13,8 +13,12 @@ everything below. Exit 0 = ready.
 | Python 3.10+ | the TTS venv | `brew install python@3.12` (macOS system 3.9 is too old) |
 | TTS venv | speech synthesis | nothing — the first `synth` creates it at `~/.narova/venv` |
 | HyperFrames CLI | preview + render | nothing — `npx` downloads it on first use |
+| agent-browser 0.33+ (optional) | explore and capture real product walkthroughs | `npm install -g agent-browser && agent-browser install` |
 
-Chrome is not needed. HyperFrames brings its own browser.
+Chrome is not needed for narration-only projects. HyperFrames brings its own
+render browser. Product walkthrough capture is opt-in and uses agent-browser's
+separate managed browser; keeping it optional preserves Narova's Node 18
+baseline.
 
 ## How the CLI finds Python
 
@@ -48,3 +52,5 @@ HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
 - qwen: ~1.2GB model (`tool/setup.sh --qwen` first).
 - chatterbox: separate venv + ~1GB model (`tool/setup.sh --chatterbox` first).
 - HyperFrames CLI: fetched by npx on the first doctor / build / preview.
+- agent-browser browser runtime: fetched by `agent-browser install` when a
+  project first needs real product capture.

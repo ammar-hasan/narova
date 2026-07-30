@@ -7,6 +7,7 @@ const { isBuiltinBackend, backendHint } = require('./tts-backends');
 const {
   getProvider, jsonCompatibilityError, containsRequiredEnvironmentValue,
 } = require('./providers');
+const { resolveWalkthroughs } = require('./walkthrough');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
@@ -15,7 +16,7 @@ const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
  * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, timing,
- * scenes, assetsDir, projectDir, platform, bed, sfx, captions, align,
+ * scenes, walkthroughs, assetsDir, projectDir, platform, bed, sfx, captions, align,
  * variants, variant } and throws on anything the pipeline can't render. */
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
@@ -222,7 +223,6 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       }
     }
   });
-
   // Sound: an optional background bed plus spot SFX, mixed into the narration
   // track by the Python stage. Accepts `bed` or the legacy `music` key.
   let bed = null;
@@ -361,24 +361,29 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
-  if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
-
-  // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
-  scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
-
-  // --variant <id>: swap the variant's scene in as scene 1 (keeping its id).
+  // --variant <id>: swap the variant's scene in as scene 1 (keeping its id)
+  // before resolving walkthroughs. Narration anchors must be validated against
+  // the selected variant's actual turn list, not the base scene.
   let variant = null;
   if (overrides.variant != null) {
     const v = variants.find(x => x.id === overrides.variant);
     if (!v) {
       const ids = variants.map(x => x.id).join(', ') || '(none declared)';
-      throw new Error(`unknown variant "${overrides.variant}" — declared variants: ${ids}`);
+      errs.push(`unknown variant "${overrides.variant}" — declared variants: ${ids}`);
+    } else {
+      variant = v.id;
+      scenes[0] = { ...scenes[0], body: v.scene.body, vo: v.scene.vo, ...(v.scene.transition ? { transition: v.scene.transition } : {}) };
     }
-    variant = v.id;
-    scenes[0] = { ...scenes[0], body: v.scene.body, vo: v.scene.vo, ...(v.scene.transition ? { transition: v.scene.transition } : {}) };
   }
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series };
+  const walkthroughs = resolveWalkthroughs(raw.walkthroughs, scenes, baseDir, ID_RE, errs);
+
+  if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
+
+  // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
+  scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
+
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series };
 }
 
 /* The narration.json contract for the Python TTS stage. */

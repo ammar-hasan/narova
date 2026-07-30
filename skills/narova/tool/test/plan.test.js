@@ -194,6 +194,29 @@ test('plan detects MIX level when bed is added to existing manifest', () => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+test('plan preserves a required mix when visual and bed changes coincide', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const assetsDir = path.join(tmp, 'assets');
+  fs.mkdirSync(assetsDir, { recursive: true });
+  fs.writeFileSync(path.join(assetsDir, 'bed.mp3'), 'fake-bed');
+  const cfg1 = resolveConfig({
+    title: 'Test', size: '16:9',
+    voices: { a: { label: 'A', color: '#0ff', backend: 'piper', speaker: 'x' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>Before</h1></div>' }],
+  }, {}, tmp);
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = resolveConfig({
+    title: 'Test', size: '16:9',
+    voices: { a: { label: 'A', color: '#0ff', backend: 'piper', speaker: 'x' } },
+    bed: { file: 'assets/bed.mp3', volume: 0.2 },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>After</h1></div>' }],
+  }, {}, tmp);
+  const result = plan(mp, cfg2);
+  assert.equal(result.level.label, STAGE.VISUAL.label);
+  assert.equal(result.level.mix, true, 'a visual edit must not hide a changed audio bed');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
 test('plan detects ALIGN level when align changes', () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
   const cfg1 = makeConfig({ align: false });

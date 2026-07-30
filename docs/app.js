@@ -296,6 +296,11 @@
       prompt: "Turn this product page into a 30-second LinkedIn launch video: [product URL]. Lead with the user outcome, use the site’s visual identity, and show me a preview before rendering.",
       reply: "I’ll study the page, pull its visual language and strongest product outcome, then build a concise launch story for LinkedIn. I’ll show you the direction before the final render."
     },
+    walkthrough: {
+      mode: "# product flow → narrated walkthrough",
+      prompt: "Make a 45-second narrated demo of [app URL]. Explore it first, then show how a new user completes [task]. Use a disposable demo account, keep the real UI readable, add word-synced captions, and show me the evidence frames before the final render.",
+      reply: "I’ll inspect the interactive page, define semantic actions on the narration clock, capture the flow explicitly against demo data, and compose the real UI with browser framing, captions, and a release-freshness check."
+    },
     research: {
       mode: "# paper → sourced explainer",
       prompt: "Turn this paper into a 60-second explainer: [paper URL]. Separate the authors’ findings from inference, cite the source on screen, and keep the language accessible.",

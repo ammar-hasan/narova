@@ -17,7 +17,6 @@
 
 const fs = require('fs');
 const path = require('path');
-const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const { ensureDir, probe } = require('./util');
 const { narration } = require('./schema');
@@ -26,7 +25,7 @@ const { writeCaptions } = require('./captions');
 const { runHf } = require('./hf');
 const { compile, read, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
-const { stableStringify } = require('./providers');
+const { audioFingerprint } = require('./audio-fingerprint');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
@@ -64,15 +63,6 @@ function ensureVenv(projectDir, log = console.log) {
   }
 }
 
-function sha256(input) {
-  return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
-}
-
-function hashFile(filePath) {
-  if (!fs.existsSync(filePath)) return null;
-  return sha256(fs.readFileSync(filePath));
-}
-
 /* ---- audio fingerprint for --reuse ------------------------------------------
 
  * An audio fingerprint captures every input that affects the produced speech
@@ -81,57 +71,6 @@ function hashFile(filePath) {
  *   backend, speaker, text, language, tempo, gain, instruct,
  *   exaggeration, cfg_weight, gapSentence, gapTurn, lead, tail,
  *   clone-sample contents (XTTS and chatterbox), and pipeline version. */
-function audioFingerprint(config) {
-  const voices = config.voices || {};
-  const entries = [];
-
-  for (const [id, v] of Object.entries(voices)) {
-    const fp = { id };
-    fp.backend = v.backend || 'piper';
-    fp.speaker = v.speaker || '';
-    // Hash clone samples for any backend that supports cloning (chatterbox, XTTS).
-    // XTTS also clones from a recording — one path change should invalidate.
-    if ((v.backend === 'chatterbox' || v.backend === 'xtts') && v.speaker) {
-      const resolved = v.speaker; // already absolute from resolveConfig
-      if (fs.existsSync(resolved)) {
-        fp.sampleHash = hashFile(resolved);
-      }
-    }
-    fp.gainDb = v.gainDb != null ? v.gainDb : 0;
-    fp.lang = v.lang || '';
-    fp.instruct = v.instruct || '';
-    fp.exaggeration = v.exaggeration != null ? v.exaggeration : 1.0;
-    fp.cfg_weight = v.cfg_weight != null ? v.cfg_weight : 0.7;
-    fp.providerProtocol = v.providerProtocol || '';
-    fp.providerVersion = v.providerVersion || '';
-    fp.providerOptions = v.providerOptions || {};
-    entries.push(fp);
-  }
-
-  // Per-turn language override is part of the text identity.
-  const turns = [];
-  for (const s of (config.scenes || [])) {
-    for (const t of (s.vo || [])) {
-      turns.push({ who: t.who, text: t.text, ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}), lang: t.lang || '' });
-    }
-  }
-
-  const timing = config.timing || {};
-  const tempo = timing.tempo != null ? timing.tempo : 1.0;
-
-  return sha256(stableStringify({
-    voices: entries,
-    turns,
-    tempo,
-    gapSentence: timing.gapSentence != null ? timing.gapSentence : 0.24,
-    gapTurn: timing.gapTurn != null ? timing.gapTurn : 0.44,
-    lead: timing.lead != null ? timing.lead : 0.16,
-    tail: timing.tail != null ? timing.tail : 0.58,
-    backend: Object.values(voices)[0]?.backend || 'piper',
-    pipeline: 3, // increment when audio-processing pipeline changes
-  }));
-}
-
 /* Write the Python stage inputs (narration.json + config.resolved.json)
  * plus the canonical manifest.json.
 
@@ -258,12 +197,21 @@ function build(config, opts = {}) {
   log('[3/3] hyperframes render (first run downloads the CLI — not a hang)');
   const name = opts.name || 'video.mp4';
   const args = ['render', '--output', path.join('..', name)];
+  const hasWalkthroughs = Object.keys(cc.walkthroughs || {}).length > 0;
+  // Browser recordings contain fine UI text. PNG frame extraction avoids
+  // compounding the recorder's JPEG source frames with another lossy decode.
+  if (hasWalkthroughs) args.push('--video-frame-format', 'png');
   if (opts.fps) args.push('--fps', String(opts.fps));
   if (opts.quality) args.push('--quality', String(opts.quality));
 
   if (opts.deliverables) {
     log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
-    const results = buildDeliverables(cc, c.dir, outDir, { ...opts, log, safeAreaGuides: opts.safeAreaGuides });
+    const results = buildDeliverables(cc, c.dir, outDir, {
+      ...opts,
+      log,
+      safeAreaGuides: opts.safeAreaGuides,
+      videoFrameFormat: hasWalkthroughs ? 'png' : null,
+    });
     const mp4 = path.join(outDir, name);
     const seconds = probe(mp4);
     log(`done -> ${results.map(r => r.mp4).join(', ')}  (${seconds.toFixed(1)}s base)`);
@@ -311,11 +259,13 @@ function configFromManifest(manifest, resolvedConfig) {
     title: m.project?.title || 'narova',
     platform: m.project?.platform || null,
     size: m.format ? { w: m.format.width, h: m.format.height } : { w: 1280, h: 720 },
-    voices: Object.fromEntries(Object.entries(m.voices || {}).map(([id, v]) => [id, {
+    voices: resolvedConfig ? resolvedConfig.voices : Object.fromEntries(Object.entries(m.voices || {}).map(([id, v]) => [id, {
       label: v.label, color: v.color, backend: v.backend, speaker: v.speaker,
       ...(v.gainDb != null ? { gainDb: v.gainDb } : {}),
       ...(v.lang ? { lang: v.lang } : {}),
       ...(v.instruct ? { instruct: v.instruct } : {}),
+      ...(v.exaggeration != null ? { exaggeration: v.exaggeration } : {}),
+      ...(v.cfg_weight != null ? { cfg_weight: v.cfg_weight } : {}),
       ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
       ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
@@ -327,6 +277,7 @@ function configFromManifest(manifest, resolvedConfig) {
     timing: m.timing || {},
     scenes: (m.scenes || []).map(s => ({
       id: s.id, body: s.body || '', clip: s.clip || null, dur: s.dur || null,
+      walkthrough: s.walkthrough || null,
       transition: s.transition || 'fade',
       vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}) })),
     })),
@@ -339,6 +290,7 @@ function configFromManifest(manifest, resolvedConfig) {
     })),
     variant: m.variant || null,
     series: m.series || null,
+    walkthroughs: resolvedConfig ? resolvedConfig.walkthroughs : (m.walkthroughs || {}),
     // Preserve resolved filesystem paths from the original config.
     // These are needed by compose for asset copying and clip resolution.
     assetsDir: resolvedConfig ? resolvedConfig.assetsDir : undefined,

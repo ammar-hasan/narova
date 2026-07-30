@@ -1,0 +1,96 @@
+{
+  "version": "1.0",
+  "id": "orbit",
+  "variant": null,
+  "capturedAt": "2026-07-29T22:52:48.869Z",
+  "driver": {
+    "name": "agent-browser",
+    "version": "0.33.0"
+  },
+  "url": "http://127.0.0.1:4173/",
+  "urlHash": "622cdbe9728c9d2dccf9fdc8bef1f62c2363429b02dc5e518b1ab40d438da445",
+  "viewport": {
+    "w": 1200,
+    "h": 760
+  },
+  "configHash": "2432f06d86a46c3d2d028e9ecf7bcd2dd7b618985a8a46d29e805d73f212fb34",
+  "synthesisHash": "6eceacfcad24e7d4a1204b0d473be2300ee5ae7aba748450cad515a82348db60",
+  "timingHash": "e7e9ce6e1603ed6d1c568b5ac153b426cb8185396a224c801c4770803aca5382",
+  "recording": "recording.webm",
+  "recordingSha256": "5e34feb9655a53d9b64b608e2c48f7a90a9e04b943340d34ae39709cd8b861e9",
+  "media": {
+    "duration": 15.2,
+    "width": 1200,
+    "height": 760,
+    "codec": "vp8",
+    "fps": "10/1"
+  },
+  "timeline": {
+    "preRoll": 0.5,
+    "readyLead": 0.009,
+    "sourceOrigin": 0.509,
+    "postRoll": 0.7,
+    "originScene": "create",
+    "duration": 13.943,
+    "scenes": [
+      {
+        "id": "create",
+        "start": 0,
+        "dur": 6.129
+      },
+      {
+        "id": "result",
+        "start": 6.129,
+        "dur": 7.814
+      }
+    ]
+  },
+  "timelineSha256": "97133a7c1e3ac9aaac1ea94e0e7252a69e516f04eaa0a875524cf1a4dcd5b914",
+  "mutates": true,
+  "steps": [
+    {
+      "index": 0,
+      "action": "click",
+      "planned": 1.06,
+      "started": 0.79,
+      "actionAt": 1.1,
+      "completed": 1.189,
+      "driftMs": 40,
+      "screenshot": "states/01-click.png",
+      "screenshotSha256": "98dccc0de7b9a2e4200fdcc119b0f53c587ebec3845e4a4c3aa8c91d624a1a30"
+    },
+    {
+      "index": 1,
+      "action": "type",
+      "planned": 2.36,
+      "started": 2.086,
+      "actionAt": 2.387,
+      "completed": 2.461,
+      "driftMs": 27,
+      "screenshot": "states/02-type.png",
+      "screenshotSha256": "91491e25c125264c85a0ca4c52c700bff0bab11d0fd19e999984768e72bec4f3"
+    },
+    {
+      "index": 2,
+      "action": "click",
+      "planned": 4.26,
+      "started": 3.986,
+      "actionAt": 4.281,
+      "completed": 4.378,
+      "driftMs": 21,
+      "screenshot": "states/03-click.png",
+      "screenshotSha256": "1b485e1b969ec7363d47e28a19f0a392f8f0067e13db133513843388fd8223d8"
+    },
+    {
+      "index": 3,
+      "action": "wait",
+      "planned": 6.639,
+      "started": 6.648,
+      "actionAt": 6.648,
+      "completed": 6.707,
+      "driftMs": 9,
+      "screenshot": "states/04-project-ready.png",
+      "screenshotSha256": "6d7f03b4a1afd7339f9d1cf5f8a7f9dc6658c995990b8e063eff3171f21a2c40"
+    }
+  ]
+}

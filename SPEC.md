@@ -11,7 +11,8 @@ by word. Screen elements appear when the voice reaches them.
 The work is split in three parts:
 
 - **Python** (`skills/narova/tool/py/narova_tts`): speech and word timings. Nothing else.
-- **Node** (`skills/narova/tool/src`): config validation and the composition generator.
+- **Node** (`skills/narova/tool/src`): config validation, optional product
+  walkthrough orchestration, and the composition generator.
 - **HyperFrames** (`npx hyperframes@<pin>`): preview, lint, and the final render.
 
 The goal: an agent takes a user prompt, writes the scene script, and
@@ -63,6 +64,8 @@ reel.config.mjs
    ▼
    │  narova synth       Python: per-scene wavs + full.wav + timings.json
    ▼
+   │  narova walkthrough capture   optional explicit browser take, timed to narration
+   ▼
    │  narova compose     out/hf/: index.html + assets/narration.wav + package.json
    ▼
    │  narova build       synth + compose + `npx hyperframes render`
@@ -75,8 +78,9 @@ backend + speaker + text + tempo) so a revision re-synthesizes only the
 changed sentences — untouched scenes keep byte-identical audio. This is the
 iteration-consistency contract.
 
-`out/` and `out/hf/` are build folders. Every run regenerates them. The
-config file is the only source of truth.
+`out/` and `out/hf/` are build folders. Every run regenerates them. The config
+plus project `assets/` are source of truth. Walkthrough WebM, capture manifest,
+and evidence frames are durable source assets, never build output.
 
 ## The scene script
 
@@ -103,10 +107,23 @@ export default {
   variants: [ { id: "cold-open",          // optional hook variants for A/B tests (narova build --variants)
                 scene: { vo: [ { who: "a", text: "Different opener." } ], body: `<div class="s-title"><h1>Hook B</h1></div>` } } ],
   series: { part: 1, total: 5 },           // optional: multi-episode badge "Part 1 / 5"
+  walkthroughs: {                          // optional narrated website/app capture
+    onboarding: {
+      driver: "agent-browser",
+      url: "https://app.example.com/projects",
+      viewport: { w: 1440, h: 900 },
+      ready: { text: "New project", timeout: 30000 },
+      steps: [
+        { at: { scene: "title", cue: 0, offset: 0.25 },
+          action: "click", target: { role: "button", name: "New project" } },
+      ],
+    },
+  },
   scenes: [
     { id: "title",
       transition: "wipe",                 // optional: fade (default) | wipe | slide | zoom
       clip: "assets/bg.mp4",              // optional: b-roll video behind the scene
+      // walkthrough: "onboarding",        // optional instead of clip
       vo: [ { who: "a", text: "This is narova." },
             { who: "b", text: "Scenes in, video out.", lang: "en" } ],  // lang: optional per-turn TTS language
       body: `<div class="s-title"><h1 class="reveal">narova</h1>
@@ -160,12 +177,22 @@ Rules:
   (faster-whisper or whisper.cpp; `references/audio.md`). Off by default.
 - `variants` are alternate scene-1 definitions for hook A/B tests;
   `narova build --variant <id>` / `--variants` render them.
+- `walkthroughs` declare a driver-neutral URL, viewport, ready condition,
+  authentication/containment options, cursor, and semantic action steps.
+  Steps anchor to capture-relative seconds or measured scene/turn timing.
+  A scene references one with `walkthrough: "id"` or
+  `{id, layout, fit, opacity, position}` and cannot also use `clip`.
+  Exploration/capture are explicit; compose/build only consume fresh,
+  hash-verified assets. Base and hook-variant takes use separate paths, so
+  every walkthrough-bearing variant is synthesized and captured explicitly
+  before `build --variants`. Full contract:
+  `skills/narova/references/product-walkthroughs.md`.
 - Old fields `caption` and `dur` are accepted and ignored.
 
 `narova check` catches all of this. `narova check --strict` also verifies
 that every detected claim actually appears in `claims.md`. `narova check
 --release` adds a build gate: remote dependencies, unresolved assets, missing
-claims, unsupported HTML, black frames, and clipped audio all fail the check.
+claims, unsupported HTML, black frames, and stale walkthroughs fail the check.
 
 ## The generated page (out/hf contract)
 
@@ -176,6 +203,10 @@ claims, unsupported HTML, black frames, and clipped audio all fail the check.
   the renderer can drop it (frame turns black).
 - One `<section class="clip scene">` per scene, starts chained exactly; scene
   tracks contain at most three clips to keep Studio's timeline readable.
+- A walkthrough scene adds a direct-root `<video>` clip with the scene's
+  start/duration and a source trim offset into the continuous take. Window
+  layout adds a generated browser shell; full layout is edge-to-edge. Captures
+  never loop.
 - One overlay clip on track 1000, full length: captions + progress bar.
 - `<audio src="assets/narration.wav">` as a direct child of the root, track
   1001; HyperFrames infers its intrinsic duration.
@@ -237,8 +268,13 @@ narova check          validate the config (fast, no side effects); prints an
                        estimated narration length for target-duration tuning
                        --strict: verify every claim in the claims.md ledger
                        --release: strict + fail on remote deps, missing claims,
-                       unsupported HTML, black frames, clipped audio (exit 1)
+                       unsupported HTML, black frames, or stale walkthrough
+                       captures (exit 1)
 narova synth          Python TTS -> out/audio/*, out/timings.json
+narova walkthrough explore <id>  open a declared product source in a named
+                      agent-browser session and print its interactive snapshot
+narova walkthrough capture [id]  record narration-timed semantic actions
+narova walkthrough status [id]   report missing, stale, or fresh captures
 narova compose        -> out/hf/ + out/captions.srt|.vtt; prints per-scene start times
 narova captions       (re)write out/captions.srt + out/captions.vtt from timings.json
 narova shots          snapshot one QA frame per scene -> out/hf/snapshots/
@@ -250,7 +286,8 @@ narova providers      add/list/remove/doctor explicitly registered external
                       TTS workers in ~/.narova/providers/
 narova release        save/list/restore/remove named manifest snapshots
                       in ~/.narova/releases/
-narova doctor         check ffmpeg, python, venv, hyperframes
+narova doctor         check ffmpeg, python, venv, hyperframes, and optional
+                      walkthrough capture support
 ```
 
 Commands find the config by walking up from the current directory, so they
@@ -297,7 +334,7 @@ timing rescaling, captions, composition, and rendering. Provider-specific
 code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`.
 
-## Status: 0.12.0 shipped
+## Status: 0.13.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -323,6 +360,11 @@ Since 0.8.1: comprehensive export profiles with per-platform render presets,
 ffmpeg post-processing (loudness normalization, h264 encode, safe-area
 guides, thumbnails), and `--deliverables` multi-render builds.
 
+Since 0.13.0: narration-timed product walkthroughs with semantic
+agent-browser actions, named exploration sessions, restore/profile support,
+capture evidence and drift manifests, stale-capture gates, generated browser
+framing, full-bleed composition, and a real browser-to-MP4 eval.
+
 ## Timeline intermediate representation
 
 `narova compile` converts `reel.config.*` → `out/manifest.json`, a versioned
@@ -334,27 +376,30 @@ and enriched with measured word timings after synthesis.
 enable forward-compatible consumers to gate on schema changes.
 
 **Schema (top-level keys):** `narova`, `version`, `project`, `format`, `theme`,
-`chrome`, `voices`, `timing`, `audio`, `captions`, `align`, `assets`, `scenes`,
+`chrome`, `voices`, `timing`, `audio`, `captions`, `align`, `assets`,
+`walkthroughs`, `scenes`,
 `variants`, `series`, `variant`, `environment`, `hashes`, `deliverables`.
 
 - `project` — title, creation timestamp, platform target.
 - `format` — width, height, fps, sampleRate, colorSpace.
 - `voices` — every voice with label, color, backend, speaker, gainDb, lang,
   instruct, exaggeration, cfg_weight.
+- `walkthroughs` — portable semantic action plans, capture policy, viewport,
+  timing anchors, and the content-addressed capture manifest.
 - `scenes` — id, index, start/duration (filled post-synth), transition, vo
-  turns (who, text, lang, start, words), body HTML, clip, dur (silent scenes),
-  per-scene sfx anchors.
+  turns (who, text, lang, start, words), body HTML, clip or walkthrough
+  presentation, dur (silent scenes), per-scene sfx anchors.
 - `variants` — hook variant ids with their full scene definitions (body, vo,
   transition).
 - `assets` — all file dependencies discovered from `assetsDir/`, bed, sfx,
-  and b-roll clips.
+  b-roll clips, and captured walkthrough media/evidence.
 - `deliverables` — render presets: at least a `default` entry plus one per
   platform when `platform` is set. Entries carry width, height, fps, codec,
   bitrate, sampleRate.
 - `stages.synth` — ISO timestamp set after synthesis completes.
 - `environment` — narova version, TTS backend, and compile timestamp.
 - `hashes` — SHA-256 content hashes for config, theme CSS, assets/ tree,
-  and bed/sfx/clip source files.
+  bed/sfx/clip source files, and walkthrough capture inputs/media.
 
 **Consumers:** `validate(manifest)` checks schema compliance; `mergeTimings()`
 merges `out/timings.json` word-level data into the scene tree; `narova plan`

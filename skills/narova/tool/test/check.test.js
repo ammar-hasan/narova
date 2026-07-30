@@ -452,6 +452,21 @@ test('release: truly empty body IS a black frame', () => {
   assert.ok(lines.some(l => l.includes('black frame')), lines.join('\n'));
 });
 
+test('release: a zero-opacity walkthrough does not hide an empty black frame', () => {
+  const config = { title: 'R', size: { w: 100, h: 100 }, themeCss: '',
+    voices: { a: { backend: 'piper' } },
+    scenes: [{
+      id: 's',
+      body: '',
+      walkthrough: { id: 'demo', opacity: 0 },
+      vo: [{ who: 'a', text: 'hello' }],
+    }],
+  };
+  const { ok, lines } = run(config, { release: true });
+  assert.equal(ok, false);
+  assert.ok(lines.some(l => l.includes('black frame')), lines.join('\n'));
+});
+
 test('release: platform duration bands stay as warnings not errors', () => {
   const longBody = Array(400).fill('word').join(' ');
   const config = { title: 'R', size: { w: 100, h: 100 }, themeCss: '', platform: 'tiktok',

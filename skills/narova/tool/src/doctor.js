@@ -47,6 +47,17 @@ function chatterboxVersion(py) {
   return r.status === 0 ? r.stdout.trim() : null;
 }
 
+function versionAtLeast(found, required) {
+  const value = String(found || '').match(/\d+\.\d+\.\d+/);
+  if (!value) return false;
+  const have = value[0].split('.').map(Number);
+  const want = required.split('.').map(Number);
+  for (let i = 0; i < 3; i++) {
+    if (have[i] !== want[i]) return have[i] > want[i];
+  }
+  return true;
+}
+
 function doctor(projectDir) {
   const rows = [];
   const add = (name, ok, detail, optional = false) => rows.push({ name, ok, detail, optional });
@@ -83,13 +94,18 @@ function doctor(projectDir) {
     add('chatterbox venv', false, 'not installed — only needed for the chatterbox backend: <skill>/tool/setup.sh --chatterbox', true);
   }
 
-  // Optional: agent-browser for stock asset sourcing (references/stock-assets.md Tier 2).
+  // Optional: agent-browser is the walkthrough capture adapter. It remains
+  // optional so narration-only projects keep Narova's Node 18 baseline.
   const ab = which('agent-browser');
   if (ab) {
     const abv = spawnSync(ab, ['--version'], { encoding: 'utf8' });
-    add('agent-browser', true, abv.status === 0 ? abv.stdout.trim() : ab, true);
+    const detail = abv.status === 0 ? abv.stdout.trim() : ab;
+    const supported = abv.status === 0 && versionAtLeast(detail, '0.33.0');
+    add('agent-browser', supported,
+      supported ? detail : `${detail} — walkthroughs require >=0.33.0`,
+      true);
   } else {
-    add('agent-browser', false, 'not installed — optional; `npm install -g agent-browser` for stock footage download', true);
+    add('agent-browser', false, 'not installed — optional; required only for walkthrough capture: `npm install -g agent-browser && agent-browser install`', true);
   }
 
   const npx = which('npx');

@@ -3,6 +3,7 @@ name: narova
 description: >
   Use narova for narration-first video: narrated or captioned explainers,
   multi-host dialogue (0 to N narrators), prompt/script/README-to-video,
+  narrated product demos and sales walkthroughs with real browser actions,
   videos sourced from web pages and agent-readable sources (product sites,
   articles, docs, repositories), word-synced karaoke captions,
   voice-triggered reveals, background beds and sound effects, per-platform
@@ -18,9 +19,10 @@ license: MIT
 compatibility: >
   Requires Node.js 18+, Python 3.10+ and ffmpeg.
   First-time model and renderer setup requires internet access.
+  Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.12.0"
+  version: "0.13.0"
 ---
 
 # narova — prompt to narrated, captioned video
@@ -122,7 +124,8 @@ why. The user should only need to say "yes" or tweak one thing.
   caption animation style (slam for punchy, karaoke for explainers),
   transitions between scenes
 - **Motion:** b‑roll clips behind scenes if the prompt suggests
-  visual richness, hand-drawn annotations for explainer content
+  visual richness, hand-drawn annotations for explainer content; for a
+  product/app demo, use a real walkthrough capture instead of imitating UI
 - **Structure:** hook variants if the user cares about social reach,
   series if the script is naturally long
 
@@ -164,6 +167,10 @@ with your own is the normal flow. Keep editable source
    A search result or prose page summary is not source evidence. Then read
     `references/prompt-to-video.md` (intake and
     script craft) and `references/scene-script.md` (the config format).
+    For a product/app walkthrough, also read
+    `references/product-walkthroughs.md`, declare the source, then run
+    `walkthrough explore <id>` to inspect real semantic controls before
+    writing action steps.
     For projects needing cinematic stock footage, also read
     `references/stock-assets.md` before sourcing visuals.
    Use the voice/engine/count decisions from the intake step. Short turns,
@@ -192,6 +199,12 @@ No TTS, no browser, no writes.
    clipped audio all fail the check (exit 1).
 
 ### 5 — `synth` — audio & word timings
+
+For a declared product walkthrough, capture only after synth:
+`walkthrough capture <id>`. Actions anchor to measured scene/turn timing.
+Capture is explicit and may mutate a demo account; compose/build never replay
+it. `walkthrough status` reports freshness. Follow
+`references/product-walkthroughs.md` for auth, containment, and evidence.
 
 ### 6 — `compose` — generate HyperFrames project
 
@@ -227,6 +240,13 @@ Generates `out/hf/` and prints the per-scene start times.
   to `out/hf/assets/`; use `src="assets/logo.svg"` or
   `url("assets/fonts/brand.woff2")`. Inline SVG and small `data:` URIs are
   also valid. Never depend on a remote URL during preview or render.
+- **Walkthrough capture is a source step, never a build side effect.** Explore
+  semantically, synth, then run `walkthrough capture`. Never put credentials
+  in action values; authenticate through a dedicated agent-browser restore or
+  profile. A narration/recipe change makes the take stale and compose/build
+  stop until it is recaptured. Hook variants use separate capture assets;
+  synth and explicitly capture every walkthrough-bearing variant before a
+  multi-variant build.
 - **No looping CSS motion in theme.css** (`animation: ... infinite`, hover
   effects, transitions as state). The renderer jumps between frames, so those
   break. Motion comes from the timeline: `reveal`/`data-cue` entrances plus
@@ -276,6 +296,9 @@ changed sentences re-synthesize). Spoken-text edit → plain `build`: the
 sentence cache re-synthesizes ONLY the changed sentences, so untouched
 scenes keep their exact audio. Details:
 `references/prompt-to-video.md` §Iterating.
+For scenes with walkthrough media, changing narration timing or browser actions
+also requires `walkthrough capture` before compose/build; changing only the
+scene's `layout`, `fit`, opacity, body, or theme does not.
 
 ## Urdu dialogue
 
@@ -300,6 +323,7 @@ tags in `vo.text`.
 | `references/prompt-to-video.md`| decide what to make: intake, script craft, casting, iterating|
 | `references/url-to-source.md`   | classify a web page or agent-readable source and extract the right factual and visual evidence|
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
+| `references/product-walkthroughs.md` | explore, capture, secure, compose, and QA narrated website/app demos |
 | `references/stock-assets.md`  | source images and video clips from CLI (Pexels, NASA, Mixkit, Wikimedia, Archive.org) |
 | `references/audio.md`          | background beds, spot SFX, forced word alignment, chatterbox v3   |
 | `references/cli.md`            | see every command, flag, `out/` file, and rough cost         |

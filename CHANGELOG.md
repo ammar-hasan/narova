@@ -6,6 +6,58 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.13.0] - 2026-07-30
+
+### Added
+
+- **Narration-timed product walkthroughs** — declare reusable walkthroughs
+  with semantic `role`, `label`, `text`, `placeholder`, `testid`, or CSS
+  locators; anchor actions to absolute seconds or scene/cue speech timing.
+- **Explore, capture, and status CLI** —
+  `narova walkthrough explore|capture|status` uses optional agent-browser
+  sessions for agent-readable exploration and explicit recording.
+- **Real capture composition** — recordings can appear in generated browser
+  windows or full-bleed, with trim offsets, contain/cover positioning,
+  opacity, Narova overlays, narration, and word-synced captions.
+- **Reproducibility and evidence** — each take stores `recording.webm`,
+  redacted `capture.json`, action drift, media metadata, screenshots, and
+  config/synthesis/timing/media/evidence hashes. Compose and release checks
+  reject missing, changed, incomplete, or stale captures.
+- **Variant-safe takes** — base and hook-variant walkthrough captures live at
+  separate paths, so preparing one narration timing no longer overwrites
+  another.
+- **Authenticated exploration controls** — named sessions, storage-state
+  restore, persistent profiles, domain containment, action-policy files,
+  ready conditions, secret-redacted logs, and explicit mutation warnings.
+- **Real browser-to-MP4 eval** — a local interactive product fixture exercises
+  semantic actions, recording, evidence frames, composition, 1280×720 render,
+  audio retention, timing drift, and black-frame detection.
+
+### Changed
+
+- The rebuild planner now includes a capture stage. Narration/timing or
+  walkthrough-action changes require recapture; presentation-only changes
+  recompose without touching the browser. Capture freshness is evaluated
+  independently of asset diffs, successful current takes clear recapture
+  immediately, and pending alignment cannot be hidden by another change class.
+- HyperFrames renders walkthrough projects with lossless PNG video-frame
+  extraction to preserve UI text and fine product details.
+- Documentation, CLI help, environment guidance, manifest specification, and
+  the website now cover the complete explore → synth → capture → compose
+  workflow.
+
+### Security
+
+- Typed values and URL query strings are redacted from capture logs and the
+  portable manifest; embedded URL credentials are rejected and stripped
+  defensively. The resolved config remains local and is documented as
+  sensitive.
+- Capture remains an explicit command; `compose` and `build` never replay
+  browser actions. Mutating flows are intended for disposable demo data.
+- Ready conditions are re-applied inside agent-browser's fresh recording
+  context, early cursor travel must fit the configured pre-roll, and the
+  recorded setup/trim map is content-hashed.
+
 ## [0.12.0] - 2026-07-29
 
 ### Added
@@ -609,6 +661,7 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
 [Unreleased]: https://github.com/ammar-hasan/narova/compare/main...HEAD
+[0.13.0]: https://github.com/ammar-hasan/narova/compare/v0.12.0...HEAD
 [0.12.0]: https://github.com/ammar-hasan/narova/compare/be28b04...HEAD
 [0.11.0]: https://github.com/ammar-hasan/narova/compare/ae2945d...be28b04
 [0.10.0]: https://github.com/ammar-hasan/narova/compare/3c1e85f...ae2945d

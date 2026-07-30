@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1">
+  <title>Orbit — project workspace</title>
+  <style>
+    *{box-sizing:border-box}
+    :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#182033;background:#f5f7fb}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 80% 0,#e2fbf5,transparent 32%),#f5f7fb}
+    button,input{font:inherit}
+    .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
+    aside{padding:26px 20px;background:#101628;color:#fff}
+    .brand{font-size:20px;font-weight:800;letter-spacing:-.04em;margin-bottom:38px}
+    .brand i{display:inline-block;width:13px;height:13px;border-radius:4px;background:#68e7c2;margin-right:8px;transform:rotate(12deg)}
+    nav{display:grid;gap:8px}
+    nav a{padding:11px 13px;border-radius:9px;color:#9ca8c5;text-decoration:none;font-size:14px}
+    nav a.active{color:#fff;background:#202a42}
+    main{padding:28px 34px}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
+    .eyebrow{font-size:12px;color:#77829b;text-transform:uppercase;letter-spacing:.12em}
+    h1{margin:4px 0 0;font-size:30px;letter-spacing:-.04em}
+    .primary{border:0;border-radius:10px;padding:11px 17px;font-weight:750;background:#1dcb9b;color:#07271f;box-shadow:0 8px 20px rgba(29,203,155,.24);cursor:pointer}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:20px}
+    .card{background:rgba(255,255,255,.9);border:1px solid #e3e7f0;border-radius:14px;padding:18px;box-shadow:0 10px 35px rgba(22,31,52,.05)}
+    .stat b{display:block;font-size:25px;margin-top:10px}.stat span{color:#7d879c;font-size:12px}
+    .projects h2{font-size:16px;margin:0 0 15px}
+    .project{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid #e8ebf2;border-radius:11px}
+    .project-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#e6fbf4;color:#129873;font-weight:900}
+    .project small{display:block;color:#8992a6;margin-top:3px}
+    .status{margin-left:auto;padding:5px 9px;border-radius:999px;background:#eef1f6;color:#737d92;font-size:11px;font-weight:700}
+    dialog{width:min(480px,calc(100vw - 40px));border:0;border-radius:18px;padding:0;box-shadow:0 30px 100px rgba(10,17,35,.28)}
+    dialog::backdrop{background:rgba(12,18,34,.48)}
+    .modal{padding:25px}.modal h2{margin:0 0 7px}.modal p{margin:0 0 22px;color:#768096;font-size:14px}
+    label{display:block;font-size:12px;font-weight:750;color:#505a70;margin-bottom:8px}
+    input{width:100%;border:1px solid #ccd3df;border-radius:10px;padding:12px 13px;outline:none}
+    input:focus{border-color:#1dcb9b;box-shadow:0 0 0 3px rgba(29,203,155,.15)}
+    .actions{display:flex;justify-content:flex-end;gap:9px;margin-top:22px}
+    .secondary{border:1px solid #d5dae5;background:white;border-radius:10px;padding:10px 15px;color:#59637a;cursor:pointer}
+    .toast{position:fixed;right:30px;bottom:28px;display:flex;align-items:center;gap:11px;padding:15px 18px;border-radius:12px;background:#121a2d;color:white;box-shadow:0 18px 50px rgba(8,14,28,.3);transform:translateY(30px);opacity:0;transition:.25s ease}
+    .toast.show{transform:none;opacity:1}.check{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#1dcb9b;color:#06251d;font-weight:900}
+    #created{display:none}.created #created{display:flex}.created #empty{display:none}
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand"><i></i>Orbit</div>
+      <nav aria-label="Workspace">
+        <a class="active" href="#">Overview</a>
+        <a href="#">Projects</a>
+        <a href="#">Automations</a>
+        <a href="#">Team</a>
+      </nav>
+    </aside>
+    <main>
+      <header>
+        <div><div class="eyebrow">Acme workspace</div><h1>Projects</h1></div>
+        <button class="primary" id="new-project">New project</button>
+      </header>
+      <section class="stats" aria-label="Workspace stats">
+        <div class="card stat"><span>Active projects</span><b id="project-count">3</b></div>
+        <div class="card stat"><span>Automations</span><b>12</b></div>
+        <div class="card stat"><span>Hours saved</span><b>46</b></div>
+      </section>
+      <section class="card projects">
+        <h2>Recent projects</h2>
+        <div id="empty" class="project"><div class="project-icon">W</div><div><b>Website launch</b><small>Updated 8 minutes ago</small></div><span class="status">In review</span></div>
+        <div id="created" class="project"><div class="project-icon">L</div><div><b id="created-name">Launch plan</b><small>Created just now</small></div><span class="status">Ready</span></div>
+      </section>
+    </main>
+  </div>
+
+  <dialog id="create-dialog">
+    <form class="modal" method="dialog">
+      <h2>Create a project</h2>
+      <p>Start with a clean workspace. You can invite the team next.</p>
+      <label for="project-name">Project name</label>
+      <input id="project-name" autocomplete="off" placeholder="e.g. Q4 campaign">
+      <div class="actions">
+        <button class="secondary" value="cancel">Cancel</button>
+        <button class="primary" id="create" value="default">Create</button>
+      </div>
+    </form>
+  </dialog>
+  <div class="toast" role="status"><span class="check">✓</span><span>Project ready</span></div>
+
+  <script>
+    const dialog = document.querySelector('#create-dialog');
+    document.querySelector('#new-project').addEventListener('click', () => dialog.showModal());
+    document.querySelector('#create').addEventListener('click', event => {
+      event.preventDefault();
+      const name = document.querySelector('#project-name').value.trim() || 'Untitled project';
+      document.querySelector('#created-name').textContent = name;
+      document.querySelector('#project-count').textContent = '4';
+      document.querySelector('.projects').classList.add('created');
+      dialog.close();
+      const toast = document.querySelector('.toast');
+      toast.classList.add('show');
+    });
+  </script>
+</body>
+</html>

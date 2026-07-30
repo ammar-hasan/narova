@@ -6,6 +6,7 @@
  * timeline registered under the root's data-composition-id. */
 const { runtimeScript } = require('./runtime');
 const path = require('path');
+const { capturePaths, readCaptureManifest } = require('../walkthrough');
 
 const fmt = n => String(Math.round(n * 1000) / 1000);
 
@@ -50,10 +51,28 @@ function composeDoc(config, size, data, css) {
   // B-roll video clips must be direct children of the composition root so
   // HyperFrames can discover and seek them. Place them alongside scene clips
   // with the same start/duration; z-index puts them behind the HTML overlay.
+  const captureManifests = Object.fromEntries(
+    Object.keys(config.walkthroughs || {}).map(id => [id, readCaptureManifest(config, id)]),
+  );
   const mediaClips = config.scenes.map((s, i) => {
-    if (!s.clip) return '';
     const sc = data.scenes[i];
     const id = escapeHtml(s.id);
+    if (s.walkthrough) {
+      const ref = s.walkthrough;
+      const capture = captureManifests[ref.id];
+      const capturedScene = capture && capture.timeline && capture.timeline.scenes
+        ? capture.timeline.scenes.find(item => item.id === s.id)
+        : null;
+      if (!capture || !capturedScene) {
+        throw new Error(`walkthrough "${ref.id}" capture manifest has no timing for scene "${s.id}"`);
+      }
+      const mediaStart = (capture.timeline.sourceOrigin ?? capture.timeline.preRoll ?? 0)
+        + capturedScene.start;
+      const position = `${fmt(ref.position.x * 100)}% ${fmt(ref.position.y * 100)}%`;
+      const source = capturePaths(config, ref.id).assetRecording;
+      return `  <video id="walkthrough-${id}" class="walkthrough-media walkthrough-${ref.layout}" src="${escapeHtml(source)}" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-media-start="${fmt(mediaStart)}" data-track-index="${200 + i}" muted playsinline preload="auto" style="--walkthrough-opacity:${fmt(ref.opacity)};--walkthrough-position:${position};object-fit:${ref.fit}"></video>`;
+    }
+    if (!s.clip) return '';
     const ext = escapeHtml(path.extname(s.clip));
     return `  <video id="broll-${id}" class="broll" src="assets/clip-${id}${ext}" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${100 + i}" muted loop playsinline preload="auto"></video>`;
   }).filter(Boolean).join('\n');
@@ -65,7 +84,20 @@ function composeDoc(config, size, data, css) {
       ? `<div class="topbar"><div class="wordmark"><b>${title}</b></div>${
         chrome.counter ? `<div class="counter">${String(i + 1).padStart(2, '0')} / ${nn}</div>` : ''}</div>`
       : '';
-    return `  <section id="scene-${s.id}" class="clip scene" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
+    const walkthroughClass = s.walkthrough
+      ? ` has-walkthrough walkthrough-layout-${s.walkthrough.layout}`
+      : '';
+    let walkthroughShell = '';
+    if (s.walkthrough && s.walkthrough.layout === 'window') {
+      const flow = config.walkthroughs[s.walkthrough.id];
+      let host = '';
+      try { host = new URL(flow.url).host; } catch { /* validated by schema */ }
+      walkthroughShell = `<div class="walkthrough-shell" aria-hidden="true">
+      <div class="walkthrough-titlebar"><span class="walkthrough-dots"><i></i><i></i><i></i></span><span>${escapeHtml(flow.title)}</span><small>${escapeHtml(host)}</small></div>
+    </div>`;
+    }
+    return `  <section id="scene-${s.id}" class="clip scene${walkthroughClass}" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${track}">
+    ${walkthroughShell}
     <div class="chrome">
       ${bar}
       <div class="canvas"><div class="scenebody">${namespaceIds(s.body, s.id)}</div></div>

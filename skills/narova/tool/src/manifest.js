@@ -42,7 +42,24 @@ function hashFile(filePath) {
 }
 
 function hashConfig(config) {
-  const { assetsDir: _a, projectDir: _p, ...serializable } = config;
+  const { assetsDir: _a, projectDir = '.', ...serializable } = config;
+  // Resolved action-policy paths are absolute so the capture adapter can use
+  // them from any working directory. Keep the config fingerprint portable:
+  // moving an otherwise-identical project must not make every capture stale.
+  if (serializable.walkthroughs) {
+    serializable.walkthroughs = Object.fromEntries(
+      Object.entries(serializable.walkthroughs).map(([id, flow]) => [
+        id,
+        flow && flow.actionPolicy
+          ? {
+              ...flow,
+              actionPolicy: path.relative(projectDir, flow.actionPolicy) || path.basename(flow.actionPolicy),
+              actionPolicyHash: hashFile(flow.actionPolicy),
+            }
+          : flow,
+      ]),
+    );
+  }
   return sha256(JSON.stringify(serializable));
 }
 
@@ -92,7 +109,7 @@ function compile(config, opts = {}) {
   const { title, size, voices, theme = {}, mode = 'dark', chrome = {},
     themeCss = '', timing = {}, scenes, platform = null, bed = null, sfx = [],
     captions = {}, align = false, variants = [], variant = null, series = null,
-    projectDir = '.' } = config;
+    walkthroughs = {}, projectDir = '.' } = config;
 
   const assets = collectAssets(config, projectDir);
   const deliverables = buildDeliverables(config);
@@ -138,6 +155,7 @@ function compile(config, opts = {}) {
     },
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
+    walkthroughs: compileWalkthroughs(walkthroughs, projectDir),
     scenes: compileScenes(scenes || []),
     variants: compileVariants(variants || []),
     series: series || null,
@@ -250,9 +268,87 @@ function compileScenes(scenes) {
     })),
     body: s.body || '',
     clip: s.clip || null,
+    walkthrough: s.walkthrough || null,
     dur:  s.dur || null,   // silent scene fixed duration
     sfx:  [],              // per-scene SFX anchors (filled by audio.sfx resolution)
   }));
+}
+
+function portableUrl(value) {
+  if (!value) return value;
+  try {
+    const url = new URL(value);
+    url.username = '';
+    url.password = '';
+    url.search = '';
+    url.hash = '';
+    return url.toString();
+  } catch {
+    return '<invalid-url>';
+  }
+}
+
+function privateReference(value) {
+  if (!value) return { value, hash: null };
+  return { value: '<configured>', hash: sha256(String(value)) };
+}
+
+function compileWait(value) {
+  if (!value) return value;
+  if (!value.url) return { ...value };
+  return {
+    ...value,
+    url: portableUrl(value.url),
+    urlHash: sha256(value.url),
+  };
+}
+
+function compileWalkthroughs(walkthroughs, projectDir) {
+  const out = {};
+  for (const [id, flow] of Object.entries(walkthroughs || {})) {
+    const session = privateReference(flow.session);
+    const profile = privateReference(flow.profile);
+    const restore = typeof flow.restore === 'string'
+      ? privateReference(flow.restore)
+      : { value: flow.restore, hash: null };
+    out[id] = {
+      id: flow.id,
+      driver: flow.driver,
+      url: portableUrl(flow.url),
+      urlHash: sha256(flow.url),
+      title: flow.title,
+      session: session.value,
+      ...(session.hash ? { sessionHash: session.hash } : {}),
+      restore: restore.value,
+      ...(restore.hash ? { restoreHash: restore.hash } : {}),
+      profile: profile.value,
+      ...(profile.hash ? { profileHash: profile.hash } : {}),
+      viewport: flow.viewport,
+      ready: compileWait(flow.ready),
+      preRoll: flow.preRoll,
+      postRoll: flow.postRoll,
+      cursor: flow.cursor,
+      screenshots: flow.screenshots,
+      mutates: flow.mutates,
+      allowedDomains: flow.allowedDomains,
+      actionPolicy: flow.actionPolicy
+        ? path.relative(projectDir, flow.actionPolicy) || path.basename(flow.actionPolicy)
+        : null,
+      actionPolicyHash: flow.actionPolicy ? hashFile(flow.actionPolicy) : null,
+      // Typed/selected input and URL queries never belong in a portable build
+      // manifest. Digests retain deterministic change detection.
+      steps: (flow.steps || []).map(step => {
+        const compiled = compileWait(step);
+        if (!['fill', 'type', 'select'].includes(step.action)) return compiled;
+        return {
+          ...compiled,
+          value: '<redacted>',
+          valueHash: sha256(JSON.stringify(step.value)),
+        };
+      }),
+    };
+  }
+  return out;
 }
 
 function compileVariants(variants) {
@@ -341,6 +437,9 @@ function validate(tl) {
   else {
     tl.scenes.forEach((s, i) => {
       if (!s.id) errs.push(`manifest.scenes[${i}].id: required`);
+      if (s.walkthrough && (!tl.walkthroughs || !tl.walkthroughs[s.walkthrough.id])) {
+        errs.push(`manifest.scenes[${i}].walkthrough.id: "${s.walkthrough.id}" is not declared`);
+      }
       if (!Array.isArray(s.vo)) errs.push(`manifest.scenes[${i}].vo: required (array)`);
       else {
         s.vo.forEach((turn, j) => {
@@ -349,6 +448,10 @@ function validate(tl) {
         });
       }
     });
+  }
+  if (tl.walkthroughs != null
+      && (typeof tl.walkthroughs !== 'object' || Array.isArray(tl.walkthroughs))) {
+    errs.push('manifest.walkthroughs: expected an object');
   }
   if (!Array.isArray(tl.deliverables)) errs.push('manifest.deliverables: required (array)');
   return errs;

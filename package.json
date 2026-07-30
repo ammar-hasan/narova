@@ -1,7 +1,7 @@
 {
   "name": "narova",
-  "version": "0.12.0",
-  "description": "A scene script becomes a narrated, captioned video. narova writes the words and the voice; HyperFrames draws the pictures.",
+  "version": "0.13.0",
+  "description": "Narration-first video with real product walkthroughs, local voices, word-synced captions, and HyperFrames rendering.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"
   },
@@ -13,6 +13,7 @@
     "test:js": "node --test 'skills/narova/tool/test/*.test.js'",
     "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests",
     "test:elevenlabs": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-elevenlabs/tests",
+    "eval:walkthrough": "node skills/narova/tool/evals/walkthrough-eval.js",
     "version:sync": "node scripts/sync-version.js",
     "version": "node scripts/sync-version.js"
   },

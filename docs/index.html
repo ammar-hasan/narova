@@ -4,9 +4,9 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 <title>narova — Prompt in. Narrated video out.</title>
-<meta name="description" content="narova is the narration-first video skill for AI agents: prompts, scripts, and sources become narrated, captioned videos with local-first TTS, optional registered cloud voices, and local rendering.">
+<meta name="description" content="narova is the narration-first video skill for AI agents: prompts, scripts, sources, and real product walkthroughs become narrated, captioned videos with local-first TTS and rendering.">
 <meta property="og:title" content="narova — Prompt in. Narrated video out.">
-<meta property="og:description" content="The narration-first video skill for AI agents. Local-first voices, optional registered cloud TTS, word-synced captions, and local rendering.">
+<meta property="og:description" content="The narration-first video skill for AI agents. Real product walkthroughs, local-first voices, word-synced captions, and local rendering.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ammar-hasan.github.io/narova/">
 <meta property="og:image" content="https://ammar-hasan.github.io/narova/assets/poster.jpg">
@@ -51,9 +51,9 @@
       <div class="hero-layout">
         <div class="hero-text">
           <p class="kicker reveal-line">The narration-first video skill</p>
-          <a class="release-pill reveal-line" href="#providers" data-hover>
-            <span class="release-version" data-narova-version>v0.12.0</span>
-            <span>optional cloud voices are here</span>
+          <a class="release-pill reveal-line" href="#walkthroughs" data-hover>
+            <span class="release-version" data-narova-version>v0.13.0</span>
+            <span>real product walkthroughs are here</span>
             <span aria-hidden="true">→</span>
           </a>
           <h1 class="hero-title" id="heroTitle">
@@ -61,7 +61,7 @@
             <span class="ht-line grad">Narrated video out.</span>
           </h1>
           <p class="hero-sub reveal-line">A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
-            prompts, scripts, and agent-readable sources into narrated, captioned video. Local-first speech, optional registered cloud voices, and local rendering.</p>
+            prompts, scripts, agent-readable sources, and real product flows into narrated, captioned video. Local-first speech and rendering; optional tools only when the project needs them.</p>
           <div class="cta-row reveal-line">
             <button class="install magnetic" id="copyInstall" data-hover aria-label="Copy install command">
               <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova --skill narova -g</code>
@@ -144,6 +144,11 @@
       <article class="card tilt" data-hover>
         <h3>Sources, with an agent in the loop</h3>
         <p>Your agent reads product sites, articles, papers, docs, and repos, then selects the story and evidence. Narova handles the mechanical ingest and video workflow.</p>
+      </article>
+
+      <article class="card card-wide tilt" id="walkthroughs" data-hover>
+        <h3>Show the product doing the work</h3>
+        <p>Explore an app in an agent-readable browser, then record semantic clicks, typing, waits, and scrolling on the narration clock. Narova frames the real UI, adds voice and word-synced captions, and refuses stale takes.</p>
       </article>
 
       <article class="card tilt" data-hover>
@@ -231,7 +236,7 @@
       <div class="step" data-hover>
         <span class="step-num">02</span>
         <h3>Build with receipts</h3>
-        <p>Your agent shapes the story and visuals. Narova validates the config, tracks sources and claims, and compiles a portable manifest.</p>
+        <p>Your agent shapes the story and visuals. For demos, it explores the product and records declared actions after narration timing is known. Narova tracks the evidence in a portable manifest.</p>
       </div>
       <div class="step" data-hover>
         <span class="step-num">03</span>
@@ -248,6 +253,7 @@
     <div class="prompt-tabs" role="group" aria-label="Example Narova prompts">
       <button class="prompt-tab active" type="button" aria-pressed="true" data-prompt="idea">Idea</button>
       <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="product">Product page</button>
+      <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="walkthrough">Product demo</button>
       <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="research">Research</button>
       <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="repo">Repository</button>
       <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="script">Script / dialogue</button>

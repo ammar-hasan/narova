@@ -16,11 +16,14 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | Command | Does | Cost |
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
-| `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives (warns when no `claims.md`). The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, clipped audio. Exit 1 on release-mode failures. | instant |
+| `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, and stale walkthrough captures. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
-| `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
+| `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. | built-ins are local; external-provider cost depends on its service |
-| `narova compose` | config + timings + audio → `out/hf/` (a HyperFrames project) + `out/captions.srt`/`.vtt`, and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
+| `narova walkthrough explore <id>` | open a declared URL in an isolated agent-browser session and print its interactive accessibility snapshot. The session stays open so an author/agent can inspect real roles, labels, text, and test ids before scripting. | browser startup |
+| `narova walkthrough capture [id]` | execute declared semantic actions on measured narration anchors and write a WebM, capture manifest, and evidence PNGs under project assets. Omit id (or use `all`) for every declaration. Explicit only; build never runs actions. | live walkthrough duration + browser startup |
+| `narova walkthrough status [id]` | report whether each capture is fresh, missing, recipe-stale, timing-stale, or modified. | instant |
+| `narova compose` | config + timings + audio + fresh walkthrough captures → `out/hf/` (a HyperFrames project) + `out/captions.srt`/`.vtt`, and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) into `out/hf/snapshots/review/` via `hyperframes snapshot`. `--at t1,t2,…` picks explicit times (see the scene table from `compose`). | seconds (opens a browser) |
 | `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4` (+ captions). `--variant <id>` renders `out/video-<id>.mp4` instead; `--variants` renders the base plus one `out/video-<id>.mp4` per declared variant. Restarts a live detached preview afterwards. | synth cost + render (~1–2x video length) |
@@ -31,13 +34,15 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova providers list` | list explicitly registered external TTS providers. | instant |
 | `narova providers doctor <name>` | verify manifest, executable, required environment, and protocol handshake. | provider startup |
 | `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
-| `narova doctor` | check ffmpeg, python, venv, hyperframes. Exit 1 if something is missing. | first run downloads the HyperFrames CLI |
+| `narova doctor` | check ffmpeg, python, venv, optional agent-browser, and HyperFrames. Exit 1 if a required core tool is missing; missing optional adapters/backends are reported separately. | first run downloads the HyperFrames CLI |
 | `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |
 | `narova release list` | list all saved releases with size and date. | instant |
 | `narova release restore <name>` | copy a saved release back to `out/manifest.json`. | instant |
 | `narova release remove <name>` | delete a saved release. | instant |
 
 `narova render` was removed in 0.3.0. Use `compose` or `build`.
+Walkthrough config, auth, semantic locator, security, timing, and layout details:
+[`product-walkthroughs.md`](product-walkthroughs.md).
 
 ## Flags
 
@@ -60,7 +65,10 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
   `out/video-<id>.mp4` per declared variant, sequentially. The sentence-level
   TTS cache makes shared sentences free, so each extra pass only pays for the
   variant's scene-1 lines. With no variants declared it says so and builds
-  just the base. Mutually exclusive with `--variant`.
+  just the base. Mutually exclusive with `--variant`. Walkthrough takes are
+  namespaced per variant. Prepare the base and each walkthrough-bearing
+  variant with `synth` then `walkthrough capture --variant <id>` before using
+  `build --variants`; the build remains read-only and never records implicitly.
 - `--fps N`, `--quality draft|standard|high` — render settings.
 - `--at t1,t2,…` — `shots`: explicit frame times in seconds.
 - `--port N` — Studio port (default 3002).
@@ -129,6 +137,10 @@ times for you.
   consistency guarantee; don't reword lines the user didn't ask you to touch.
   (`--reuse` with changed text is caught and ignored, so the wrong command
   degrades to the right one.)
+- Product walkthrough: declare → `walkthrough explore <id>` → script/check →
+  synth → `walkthrough capture <id>` → compose/shots/preview → release check →
+  `build --reuse`. A narration/action change needs recapture; body/theme or
+  window/full presentation edits reuse the recording.
 - Visual QA: `narova shots` snapshots one mid-scene frame per scene into
   `out/hf/snapshots/review/` (`--at t1,t2` for explicit times; the `compose`
   scene table lists every start). Then LOOK at the frames — box-based overlap

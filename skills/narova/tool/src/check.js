@@ -13,6 +13,7 @@
 const fs = require('fs');
 const path = require('path');
 const { PLATFORMS } = require('./util');
+const { captureStatus } = require('./walkthrough');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -96,8 +97,9 @@ function releaseChecks(config, errors) {
     const body = String(s.body);
     const hasText = body.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, '').trim().length > 0;
     const hasVisual = /<(?:img|video|svg|path|circle|rect|ellipse|polygon|line|use)\b/i.test(body);
-    if (!hasText && !hasVisual && !s.clip) {
-      errors.push(`scene "${s.id}": body has no visible content and no b-roll clip — scene will render as a black frame`);
+    const hasVisibleWalkthrough = s.walkthrough && s.walkthrough.opacity !== 0;
+    if (!hasText && !hasVisual && !s.clip && !hasVisibleWalkthrough) {
+      errors.push(`scene "${s.id}": body has no visible content and no b-roll or walkthrough media — scene will render as a black frame`);
     }
 
     // Remote dependencies in body HTML.
@@ -194,6 +196,7 @@ function estimateSeconds(config) {
       total += t.text.trim().split(/\s+/).length / wps + gapS + (i ? gapT : 0);
     });
   }
+
   return total;
 }
 
@@ -213,7 +216,13 @@ const MARK_KINDS = new Set(['underline', 'circle', 'box', 'highlight']);
 
 /* HyperFrames-reserved class names — if used in body HTML they collide with
  * the generated composition structure and silently break layout. */
-const HF_RESERVED_CLASSES = new Set(['scene', 'clip', 'chrome', 'overlay', 'canvas', 'scenebody', 'capzone', 'progress', 'topbar', 'wordmark', 'counter', 'cap-stage', 'cap-group', 'spk', 'cap-w', 'caption2', 'marklayer']);
+const HF_RESERVED_CLASSES = new Set([
+  'scene', 'clip', 'chrome', 'overlay', 'canvas', 'scenebody', 'capzone',
+  'progress', 'topbar', 'wordmark', 'counter', 'cap-stage', 'cap-group',
+  'spk', 'cap-w', 'caption2', 'marklayer', 'walkthrough-media',
+  'walkthrough-shell', 'walkthrough-titlebar', 'walkthrough-dots',
+  'has-walkthrough', 'walkthrough-window', 'walkthrough-full',
+]);
 
 /* Hook enforcement (§Hook doctrine in the skill references).
  * Viral video mechanics in 2026: muted autoplay is 80%+, hooks are measured at
@@ -234,7 +243,9 @@ function checkHook(config, warnings) {
   const body = String(s1.body);
   const textEls = body.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
   if (!textEls || textEls.length === 0) {
-    warnings.push('hook: scene 1 has no visible text — muted viewers (80%+ of autoplay) see a blank screen; add hook text on-screen');
+    warnings.push(s1.walkthrough
+      ? 'hook: scene 1 shows the product but has no on-screen hook text — add a short claim so muted viewers know why the action matters'
+      : 'hook: scene 1 has no visible text — muted viewers (80%+ of autoplay) see a blank screen; add hook text on-screen');
   }
 
   // 3 — platform duration band already checked (see check() below).
@@ -336,6 +347,23 @@ function check(config, opts = {}) {
       if (!['.mp4', '.webm', '.mov'].includes(ext)) {
         warnings.push(`scene "${s.id}": clip "${s.clip}" has unusual extension ${ext} — HyperFrames supports .mp4, .webm, .mov`);
       }
+    }
+  }
+
+  const timingsPath = path.join(opts.outDir || path.join(config.projectDir || '.', 'out'), 'timings.json');
+  let timings = null;
+  if (fs.existsSync(timingsPath)) {
+    try { timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8')); } catch { /* synth will report malformed timings */ }
+  }
+  for (const [id, flow] of Object.entries(config.walkthroughs || {})) {
+    const status = captureStatus(config, id, timings, {
+      outDir: opts.outDir || path.join(config.projectDir || '.', 'out'),
+    });
+    if (!status.ok) {
+      issue(`walkthrough "${id}": ${status.reason} — run \`narova walkthrough capture ${id}\` after synth`);
+    }
+    if (flow.mutates) {
+      warnings.push(`walkthrough "${id}" declares mutating actions — capture against disposable demo data, never a production account`);
     }
   }
 
@@ -455,7 +483,9 @@ function check(config, opts = {}) {
   const backends = [...new Set(Object.values(config.voices).map(v => v.backend))].join('+') || 'silent';
   const est = fmtDuration(estimateSeconds(config));
   const tempo = (config.timing && config.timing.tempo) || 1.18;
-  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
+  const walkthroughCount = Object.keys(config.walkthroughs || {}).length;
+  const walkthroughSummary = walkthroughCount ? `, ${walkthroughCount} walkthrough${walkthroughCount === 1 ? '' : 's'}` : '';
+  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns${walkthroughSummary}, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
 
   return !(release && errors.length > 0);
 }
