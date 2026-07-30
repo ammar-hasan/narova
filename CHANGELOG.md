@@ -32,6 +32,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **Real browser-to-MP4 eval** — a local interactive product fixture exercises
   semantic actions, recording, evidence frames, composition, 1280×720 render,
   audio retention, timing drift, and black-frame detection.
+- **Complete walkthrough showcase** — an 83-second narrated browser take
+  demonstrates project creation and configuration, search, task assignment,
+  automation, and teammate invitation with 24 timed operations and captions.
 
 ### Changed
 

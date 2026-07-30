@@ -108,7 +108,7 @@ function rawConfig(url) {
           {
             at: 2.35,
             action: 'click',
-            target: { role: 'button', name: 'Create' },
+            target: { role: 'button', name: 'Create project' },
           },
           {
             at: { scene: 'result', offset: 0.25 },

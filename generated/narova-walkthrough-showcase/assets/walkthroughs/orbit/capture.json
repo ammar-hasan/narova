@@ -2,7 +2,7 @@
   "version": "1.0",
   "id": "orbit",
   "variant": null,
-  "capturedAt": "2026-07-29T22:52:48.869Z",
+  "capturedAt": "2026-07-30T04:26:09.143Z",
   "driver": {
     "name": "agent-browser",
     "version": "0.33.0"
@@ -13,84 +13,334 @@
     "w": 1200,
     "h": 760
   },
-  "configHash": "2432f06d86a46c3d2d028e9ecf7bcd2dd7b618985a8a46d29e805d73f212fb34",
-  "synthesisHash": "6eceacfcad24e7d4a1204b0d473be2300ee5ae7aba748450cad515a82348db60",
-  "timingHash": "e7e9ce6e1603ed6d1c568b5ac153b426cb8185396a224c801c4770803aca5382",
+  "configHash": "792b4e6008a90010d40f37528d3c318f8ec055b1c3e86f89a841c8ac40010936",
+  "synthesisHash": "750698bb0b5afa3bff42c530a95662298b0cf79af4a3df15447627fd94f3a273",
+  "timingHash": "58c9819be4deb1ceca0347bc52b65280162d600c44310e405c3011689d37eb0d",
   "recording": "recording.webm",
-  "recordingSha256": "5e34feb9655a53d9b64b608e2c48f7a90a9e04b943340d34ae39709cd8b861e9",
+  "recordingSha256": "aa0b403fba4ebcb385c659ddedc7337072d31322c23e4e44546273e07a17f85c",
   "media": {
-    "duration": 15.2,
+    "duration": 84.5,
     "width": 1200,
     "height": 760,
     "codec": "vp8",
     "fps": "10/1"
   },
   "timeline": {
-    "preRoll": 0.5,
-    "readyLead": 0.009,
-    "sourceOrigin": 0.509,
-    "postRoll": 0.7,
-    "originScene": "create",
-    "duration": 13.943,
+    "preRoll": 0.6,
+    "readyLead": 0.01,
+    "sourceOrigin": 0.61,
+    "postRoll": 0.9,
+    "originScene": "hook",
+    "duration": 83.352,
     "scenes": [
       {
-        "id": "create",
+        "id": "hook",
         "start": 0,
-        "dur": 6.129
+        "dur": 10.417
       },
       {
-        "id": "result",
-        "start": 6.129,
-        "dur": 7.814
+        "id": "configure",
+        "start": 10.417,
+        "dur": 8.951
+      },
+      {
+        "id": "create",
+        "start": 19.368,
+        "dur": 8.48
+      },
+      {
+        "id": "find",
+        "start": 27.848,
+        "dur": 7.408
+      },
+      {
+        "id": "task",
+        "start": 35.256,
+        "dur": 10.155
+      },
+      {
+        "id": "automate",
+        "start": 45.411,
+        "dur": 9.351
+      },
+      {
+        "id": "collaborate",
+        "start": 54.762,
+        "dur": 11.421
+      },
+      {
+        "id": "close",
+        "start": 66.183,
+        "dur": 17.169
       }
     ]
   },
-  "timelineSha256": "97133a7c1e3ac9aaac1ea94e0e7252a69e516f04eaa0a875524cf1a4dcd5b914",
+  "timelineSha256": "15323b3bc4b04797bea971cafbeb47f6b5b97d2781896f99338d784c06116799",
   "mutates": true,
   "steps": [
     {
       "index": 0,
       "action": "click",
-      "planned": 1.06,
-      "started": 0.79,
-      "actionAt": 1.1,
-      "completed": 1.189,
-      "driftMs": 40,
-      "screenshot": "states/01-click.png",
-      "screenshotSha256": "98dccc0de7b9a2e4200fdcc119b0f53c587ebec3845e4a4c3aa8c91d624a1a30"
+      "planned": 3.98,
+      "started": 3.685,
+      "actionAt": 4.049,
+      "completed": 4.337,
+      "driftMs": 69,
+      "screenshot": "states/01-new-project.png",
+      "screenshotSha256": "6b280bcbcb6d3334d1dda55c406fe263ea95c6304ce572575639ba54e808ebdc"
     },
     {
       "index": 1,
       "action": "type",
-      "planned": 2.36,
-      "started": 2.086,
-      "actionAt": 2.387,
-      "completed": 2.461,
-      "driftMs": 27,
+      "planned": 11.497,
+      "started": 11.185,
+      "actionAt": 11.556,
+      "completed": 11.681,
+      "driftMs": 59,
       "screenshot": "states/02-type.png",
-      "screenshotSha256": "91491e25c125264c85a0ca4c52c700bff0bab11d0fd19e999984768e72bec4f3"
+      "screenshotSha256": "66d185e42a569c56401cf4adfc1d62310f0cb791d39b7daf184efda85851e416"
     },
     {
       "index": 2,
-      "action": "click",
-      "planned": 4.26,
-      "started": 3.986,
-      "actionAt": 4.281,
-      "completed": 4.378,
-      "driftMs": 21,
-      "screenshot": "states/03-click.png",
-      "screenshotSha256": "1b485e1b969ec7363d47e28a19f0a392f8f0067e13db133513843388fd8223d8"
+      "action": "select",
+      "planned": 13.997,
+      "started": 14.003,
+      "actionAt": 14.003,
+      "completed": 14.114,
+      "driftMs": 6,
+      "screenshot": "states/03-select.png",
+      "screenshotSha256": "3ef1c16e9790146e2ed055958e3fe26cb47d12c31d5a74df939149355a92961e"
     },
     {
       "index": 3,
+      "action": "click",
+      "planned": 16.097,
+      "started": 15.783,
+      "actionAt": 16.147,
+      "completed": 16.347,
+      "driftMs": 50,
+      "screenshot": "states/04-project-configured.png",
+      "screenshotSha256": "2f526d44efee9f743fcfad36c2fdf67ab32a56b63524ea1dedf1362368f0eaa9"
+    },
+    {
+      "index": 4,
+      "action": "click",
+      "planned": 20.648,
+      "started": 20.337,
+      "actionAt": 20.672,
+      "completed": 20.97,
+      "driftMs": 24,
+      "screenshot": "states/05-click.png",
+      "screenshotSha256": "06843868ee98fc41c1e336bda6f7255c7aa98f675624bb17d5d37cdf111934d7"
+    },
+    {
+      "index": 5,
       "action": "wait",
-      "planned": 6.639,
-      "started": 6.648,
-      "actionAt": 6.648,
-      "completed": 6.707,
+      "planned": 22.648,
+      "started": 22.656,
+      "actionAt": 22.656,
+      "completed": 22.78,
+      "driftMs": 8,
+      "screenshot": "states/06-project-ready.png",
+      "screenshotSha256": "b1939de925dd879a7fc50be70ffc67412967c500934f3297eedbbf33bdef0180"
+    },
+    {
+      "index": 6,
+      "action": "fill",
+      "planned": 28.828,
+      "started": 28.519,
+      "actionAt": 28.857,
+      "completed": 29.082,
+      "driftMs": 29,
+      "screenshot": "states/07-fill.png",
+      "screenshotSha256": "18fcfc77cf66f74ebd674bba93f9b6dd6e41ced581f0ff1c1684038aefe5c7eb"
+    },
+    {
+      "index": 7,
+      "action": "wait",
+      "planned": 30.828,
+      "started": 30.834,
+      "actionAt": 30.834,
+      "completed": 30.89,
+      "driftMs": 6,
+      "screenshot": "states/08-wait.png",
+      "screenshotSha256": "705fc0cc903aabf8bb4f490c4b750d6fc04bc915c61ebb4850f372c6b1c4991f"
+    },
+    {
+      "index": 8,
+      "action": "hover",
+      "planned": 32.228,
+      "started": 32.234,
+      "actionAt": 32.234,
+      "completed": 32.379,
+      "driftMs": 6,
+      "screenshot": "states/09-hover.png",
+      "screenshotSha256": "cc37a623f454825e66ab1e81ff73d8073356b81869a165c66db016bcc69c158e"
+    },
+    {
+      "index": 9,
+      "action": "click",
+      "planned": 33.328,
+      "started": 33.014,
+      "actionAt": 33.348,
+      "completed": 33.477,
+      "driftMs": 20,
+      "screenshot": "states/10-project-open.png",
+      "screenshotSha256": "3f6bb40bf06c1261dff38516bc2c8451b2917229ade6b3f5ceb5d25bb13e5086"
+    },
+    {
+      "index": 10,
+      "action": "click",
+      "planned": 36.236,
+      "started": 35.922,
+      "actionAt": 36.278,
+      "completed": 36.398,
+      "driftMs": 42,
+      "screenshot": "states/11-click.png",
+      "screenshotSha256": "9cad146448476f99c6ef674a29d551cec4157ac8f635db9f6d5ea4c4538b57ff"
+    },
+    {
+      "index": 11,
+      "action": "type",
+      "planned": 37.936,
+      "started": 37.624,
+      "actionAt": 37.986,
+      "completed": 38.095,
+      "driftMs": 50,
+      "screenshot": "states/12-type.png",
+      "screenshotSha256": "2508bd2b358de24f586bfe4fb548a006adf39a39bf43e43ceb84c1cca657c406"
+    },
+    {
+      "index": 12,
+      "action": "select",
+      "planned": 40.436,
+      "started": 40.443,
+      "actionAt": 40.443,
+      "completed": 40.555,
+      "driftMs": 7,
+      "screenshot": "states/13-select.png",
+      "screenshotSha256": "06a93cf81170ed39c68d562f8934dfc1b2200ada33721099b7fff8e06e71942b"
+    },
+    {
+      "index": 13,
+      "action": "click",
+      "planned": 42.336,
+      "started": 42.037,
+      "actionAt": 42.379,
+      "completed": 42.502,
+      "driftMs": 43,
+      "screenshot": "states/14-click.png",
+      "screenshotSha256": "364ab49cdef47111649e71b65f11c7f99100207805beb80dc9d9c386e1a53cf0"
+    },
+    {
+      "index": 14,
+      "action": "wait",
+      "planned": 43.636,
+      "started": 43.642,
+      "actionAt": 43.642,
+      "completed": 43.774,
+      "driftMs": 6,
+      "screenshot": "states/15-task-added.png",
+      "screenshotSha256": "364ab49cdef47111649e71b65f11c7f99100207805beb80dc9d9c386e1a53cf0"
+    },
+    {
+      "index": 15,
+      "action": "click",
+      "planned": 46.391,
+      "started": 46.078,
+      "actionAt": 46.444,
+      "completed": 46.567,
+      "driftMs": 53,
+      "screenshot": "states/16-click.png",
+      "screenshotSha256": "996d6bce2fc4e7c15af3ff63c1b73a81545282ea5fdc4ac2ae33e5c4a4a4e0ca"
+    },
+    {
+      "index": 16,
+      "action": "click",
+      "planned": 48.591,
+      "started": 48.278,
+      "actionAt": 48.643,
+      "completed": 48.776,
+      "driftMs": 52,
+      "screenshot": "states/17-click.png",
+      "screenshotSha256": "aae8f3fcb010e1016dce01f096265955b91db628aad4e41e97b616ee62df9c07"
+    },
+    {
+      "index": 17,
+      "action": "wait",
+      "planned": 50.091,
+      "started": 50.097,
+      "actionAt": 50.097,
+      "completed": 50.21,
+      "driftMs": 6,
+      "screenshot": "states/18-automation-enabled.png",
+      "screenshotSha256": "aae8f3fcb010e1016dce01f096265955b91db628aad4e41e97b616ee62df9c07"
+    },
+    {
+      "index": 18,
+      "action": "click",
+      "planned": 55.742,
+      "started": 55.429,
+      "actionAt": 55.77,
+      "completed": 55.88,
+      "driftMs": 28,
+      "screenshot": "states/19-click.png",
+      "screenshotSha256": "01737a5c0a170942de46b78e63f7d7e82c7c604c2d2340069745038a456f5043"
+    },
+    {
+      "index": 19,
+      "action": "click",
+      "planned": 57.042,
+      "started": 56.731,
+      "actionAt": 57.08,
+      "completed": 57.422,
+      "driftMs": 38,
+      "screenshot": "states/20-click.png",
+      "screenshotSha256": "10fcee04fba3a00fc782b0a1f350cd4db4ad719b386f399c348b08617cca5ae5"
+    },
+    {
+      "index": 20,
+      "action": "type",
+      "planned": 58.642,
+      "started": 58.328,
+      "actionAt": 58.687,
+      "completed": 58.782,
+      "driftMs": 45,
+      "screenshot": "states/21-type.png",
+      "screenshotSha256": "613e6550413f0a3fa481564d7f87c10f45690d38c432fe39073c350ee6301b0c"
+    },
+    {
+      "index": 21,
+      "action": "select",
+      "planned": 61.342,
+      "started": 61.351,
+      "actionAt": 61.351,
+      "completed": 61.415,
       "driftMs": 9,
-      "screenshot": "states/04-project-ready.png",
-      "screenshotSha256": "6d7f03b4a1afd7339f9d1cf5f8a7f9dc6658c995990b8e063eff3171f21a2c40"
+      "screenshot": "states/22-select.png",
+      "screenshotSha256": "73e188262bd11b21ae0107a1fc101e693eabd97e28d6831f09525279cc95375a"
+    },
+    {
+      "index": 22,
+      "action": "click",
+      "planned": 63.342,
+      "started": 63.031,
+      "actionAt": 63.369,
+      "completed": 63.445,
+      "driftMs": 27,
+      "screenshot": "states/23-click.png",
+      "screenshotSha256": "4c13d7ecd4c24b46cdd18476d60d8f313124032b224c6d7d60d2c69a35f590b6"
+    },
+    {
+      "index": 23,
+      "action": "wait",
+      "planned": 66.863,
+      "started": 66.869,
+      "actionAt": 66.869,
+      "completed": 66.91,
+      "driftMs": 6,
+      "screenshot": "states/24-collaboration-complete.png",
+      "screenshotSha256": "4c13d7ecd4c24b46cdd18476d60d8f313124032b224c6d7d60d2c69a35f590b6"
     }
   ]
 }

@@ -7,39 +7,63 @@
   <style>
     *{box-sizing:border-box}
     :root{font-family:Inter,ui-sans-serif,system-ui,sans-serif;color:#182033;background:#f5f7fb}
-    body{margin:0;min-height:100vh;background:radial-gradient(circle at 80% 0,#e2fbf5,transparent 32%),#f5f7fb}
-    button,input{font:inherit}
-    .app{display:grid;grid-template-columns:232px 1fr;min-height:100vh}
-    aside{padding:26px 20px;background:#101628;color:#fff}
-    .brand{font-size:20px;font-weight:800;letter-spacing:-.04em;margin-bottom:38px}
+    body{margin:0;min-height:100vh;background:radial-gradient(circle at 82% 0,#ddfbf3,transparent 34%),#f5f7fb}
+    button,input,select{font:inherit}
+    button{cursor:pointer}
+    .app{display:grid;grid-template-columns:224px 1fr;min-height:100vh}
+    aside{display:flex;flex-direction:column;padding:24px 18px;background:#101628;color:#fff}
+    .brand{font-size:20px;font-weight:850;letter-spacing:-.04em;margin:0 4px 34px}
     .brand i{display:inline-block;width:13px;height:13px;border-radius:4px;background:#68e7c2;margin-right:8px;transform:rotate(12deg)}
-    nav{display:grid;gap:8px}
-    nav a{padding:11px 13px;border-radius:9px;color:#9ca8c5;text-decoration:none;font-size:14px}
-    nav a.active{color:#fff;background:#202a42}
-    main{padding:28px 34px}
-    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:28px}
-    .eyebrow{font-size:12px;color:#77829b;text-transform:uppercase;letter-spacing:.12em}
-    h1{margin:4px 0 0;font-size:30px;letter-spacing:-.04em}
-    .primary{border:0;border-radius:10px;padding:11px 17px;font-weight:750;background:#1dcb9b;color:#07271f;box-shadow:0 8px 20px rgba(29,203,155,.24);cursor:pointer}
-    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:15px;margin-bottom:20px}
-    .card{background:rgba(255,255,255,.9);border:1px solid #e3e7f0;border-radius:14px;padding:18px;box-shadow:0 10px 35px rgba(22,31,52,.05)}
-    .stat b{display:block;font-size:25px;margin-top:10px}.stat span{color:#7d879c;font-size:12px}
-    .projects h2{font-size:16px;margin:0 0 15px}
-    .project{display:flex;align-items:center;gap:12px;padding:14px;border:1px solid #e8ebf2;border-radius:11px}
-    .project-icon{display:grid;place-items:center;width:36px;height:36px;border-radius:10px;background:#e6fbf4;color:#129873;font-weight:900}
-    .project small{display:block;color:#8992a6;margin-top:3px}
-    .status{margin-left:auto;padding:5px 9px;border-radius:999px;background:#eef1f6;color:#737d92;font-size:11px;font-weight:700}
+    nav{display:grid;gap:7px}
+    .nav-link{width:100%;border:0;padding:11px 13px;border-radius:9px;color:#9ca8c5;background:transparent;text-align:left;font-size:14px}
+    .nav-link.active{color:#fff;background:#202a42}
+    .account{margin-top:auto;padding:14px 12px;border-top:1px solid #273149;color:#aab4cc;font-size:12px}
+    .account b{display:block;color:#fff;margin-bottom:3px}
+    main{padding:27px 32px 34px;overflow:hidden}
+    header{display:flex;align-items:center;justify-content:space-between;margin-bottom:24px}
+    .eyebrow{font-size:11px;color:#77829b;text-transform:uppercase;letter-spacing:.13em}
+    h1{margin:4px 0 0;font-size:29px;letter-spacing:-.04em}
+    h2{font-size:16px;margin:0}
+    .primary{border:0;border-radius:10px;padding:11px 17px;font-weight:780;background:#1dcb9b;color:#07271f;box-shadow:0 8px 20px rgba(29,203,155,.24)}
+    .secondary{border:1px solid #d5dae5;background:white;border-radius:10px;padding:10px 15px;color:#59637a}
+    .ghost{border:0;background:transparent;color:#5d6880;font-weight:700;padding:8px}
+    .stats{display:grid;grid-template-columns:repeat(3,1fr);gap:14px;margin-bottom:18px}
+    .card{background:rgba(255,255,255,.92);border:1px solid #e3e7f0;border-radius:14px;padding:17px;box-shadow:0 10px 35px rgba(22,31,52,.05)}
+    .stat b{display:block;font-size:24px;margin-top:9px}.stat span{color:#7d879c;font-size:12px}
+    .toolbar{display:flex;align-items:center;justify-content:space-between;gap:16px;margin-bottom:14px}
+    .search-wrap{min-width:260px}
+    .search-wrap label{position:absolute;clip:rect(0 0 0 0);clip-path:inset(50%);width:1px;height:1px;overflow:hidden}
+    .search-wrap input{width:100%;background:#fff}
+    .result-count{font-size:12px;color:#7c879c;white-space:nowrap}
+    .projects{padding:0;overflow:hidden}
+    .projects h2{padding:17px 18px 13px}
+    .project{display:flex;align-items:center;gap:12px;width:100%;padding:14px 18px;border:0;border-top:1px solid #e8ebf2;background:transparent;text-align:left;color:inherit}
+    .project:hover{background:#f8fafc}
+    .project-icon{display:grid;place-items:center;width:37px;height:37px;border-radius:10px;background:#e6fbf4;color:#129873;font-weight:900}
+    .project small{display:block;color:#8992a6;margin-top:3px}.status{margin-left:auto;padding:5px 9px;border-radius:999px;background:#eef1f6;color:#59637a;font-size:11px;font-weight:750}
+    .status.priority{background:#fff0dc;color:#9b5e00}
+    .empty{padding:30px;text-align:center;color:#8992a6}
+    [hidden]{display:none!important}
+    .section-title{display:flex;align-items:center;justify-content:space-between;margin-bottom:16px}
+    .detail-grid{display:grid;grid-template-columns:1.35fr .85fr;gap:16px}
+    .hero-card{padding:22px}.hero-card h2{font-size:24px;letter-spacing:-.03em;margin:5px 0 7px}.hero-card p{color:#758097;font-size:13px;margin:0}
+    .meta{display:grid;gap:12px}.meta-row{display:flex;justify-content:space-between;font-size:13px}.meta-row span{color:#7d879c}.meta-row b{font-weight:750}
+    .tasks{margin-top:16px;padding:0;overflow:hidden}.tasks-head{display:flex;justify-content:space-between;align-items:center;padding:16px 18px}
+    .task{display:flex;align-items:center;gap:12px;padding:14px 18px;border-top:1px solid #e8ebf2}.task-check{display:grid;place-items:center;width:23px;height:23px;border-radius:7px;background:#e6fbf4;color:#129873;font-weight:900}.task small{display:block;color:#8a94a8;margin-top:2px}
+    .automation-grid,.team-grid{display:grid;grid-template-columns:repeat(2,1fr);gap:15px}
+    .feature-card{padding:20px}.feature-card .icon{display:grid;place-items:center;width:38px;height:38px;border-radius:11px;background:#edf2ff;color:#536bd6;font-weight:900;margin-bottom:18px}.feature-card h2{margin-bottom:7px}.feature-card p{margin:0 0 18px;color:#7a859a;font-size:13px;line-height:1.5}
+    .state{display:inline-flex;align-items:center;gap:7px;font-size:12px;font-weight:750;color:#7f899e}.state i{width:8px;height:8px;border-radius:50%;background:#c3cad7}.state.active{color:#138c6b}.state.active i{background:#1dcb9b;box-shadow:0 0 0 4px rgba(29,203,155,.14)}
+    .member{display:flex;align-items:center;gap:12px;padding:15px 0;border-bottom:1px solid #e7eaf1}.member:last-child{border-bottom:0}.avatar{display:grid;place-items:center;width:37px;height:37px;border-radius:50%;background:#202a42;color:white;font-weight:800}.member small{display:block;color:#8791a6;margin-top:2px}.member .role{margin-left:auto;color:#68738b;font-size:12px}
     dialog{width:min(480px,calc(100vw - 40px));border:0;border-radius:18px;padding:0;box-shadow:0 30px 100px rgba(10,17,35,.28)}
     dialog::backdrop{background:rgba(12,18,34,.48)}
-    .modal{padding:25px}.modal h2{margin:0 0 7px}.modal p{margin:0 0 22px;color:#768096;font-size:14px}
-    label{display:block;font-size:12px;font-weight:750;color:#505a70;margin-bottom:8px}
-    input{width:100%;border:1px solid #ccd3df;border-radius:10px;padding:12px 13px;outline:none}
-    input:focus{border-color:#1dcb9b;box-shadow:0 0 0 3px rgba(29,203,155,.15)}
+    .modal{padding:25px}.modal h2{font-size:22px;margin:0 0 7px}.modal>p{margin:0 0 21px;color:#768096;font-size:14px}
+    .field{margin-top:15px}.field label,.check-field label{display:block;font-size:12px;font-weight:760;color:#505a70;margin-bottom:8px}
+    input,select{width:100%;border:1px solid #ccd3df;border-radius:10px;padding:11px 12px;outline:none;background:#fff;color:#263047}
+    input:focus,select:focus{border-color:#1dcb9b;box-shadow:0 0 0 3px rgba(29,203,155,.15)}
+    .check-field{display:flex;align-items:center;gap:9px;margin-top:17px}.check-field input{width:17px;height:17px;margin:0}.check-field label{margin:0}
     .actions{display:flex;justify-content:flex-end;gap:9px;margin-top:22px}
-    .secondary{border:1px solid #d5dae5;background:white;border-radius:10px;padding:10px 15px;color:#59637a;cursor:pointer}
-    .toast{position:fixed;right:30px;bottom:28px;display:flex;align-items:center;gap:11px;padding:15px 18px;border-radius:12px;background:#121a2d;color:white;box-shadow:0 18px 50px rgba(8,14,28,.3);transform:translateY(30px);opacity:0;transition:.25s ease}
-    .toast.show{transform:none;opacity:1}.check{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#1dcb9b;color:#06251d;font-weight:900}
-    #created{display:none}.created #created{display:flex}.created #empty{display:none}
+    .toast{position:fixed;right:27px;bottom:25px;display:flex;align-items:center;gap:11px;padding:14px 17px;border-radius:12px;background:#121a2d;color:white;box-shadow:0 18px 50px rgba(8,14,28,.3);transform:translateY(30px);opacity:0;transition:.25s ease;z-index:10}
+    .toast.show{transform:none;opacity:1}.toast-check{display:grid;place-items:center;width:24px;height:24px;border-radius:50%;background:#1dcb9b;color:#06251d;font-weight:900}
   </style>
 </head>
 <body>
@@ -47,56 +71,222 @@
     <aside>
       <div class="brand"><i></i>Orbit</div>
       <nav aria-label="Workspace">
-        <a class="active" href="#">Overview</a>
-        <a href="#">Projects</a>
-        <a href="#">Automations</a>
-        <a href="#">Team</a>
+        <button class="nav-link active" data-view="projects">Projects</button>
+        <button class="nav-link" data-view="automations">Automations</button>
+        <button class="nav-link" data-view="team">Team</button>
       </nav>
+      <div class="account"><b>Acme workspace</b>Product operations</div>
     </aside>
+
     <main>
-      <header>
-        <div><div class="eyebrow">Acme workspace</div><h1>Projects</h1></div>
-        <button class="primary" id="new-project">New project</button>
-      </header>
-      <section class="stats" aria-label="Workspace stats">
-        <div class="card stat"><span>Active projects</span><b id="project-count">3</b></div>
-        <div class="card stat"><span>Automations</span><b>12</b></div>
-        <div class="card stat"><span>Hours saved</span><b>46</b></div>
+      <section id="projects-view">
+        <header>
+          <div><div class="eyebrow">Acme workspace</div><h1>Projects</h1></div>
+          <button class="primary" id="new-project">New project</button>
+        </header>
+        <div class="stats" role="region" aria-label="Workspace stats">
+          <div class="card stat"><span>Active projects</span><b id="project-count">3</b></div>
+          <div class="card stat"><span>Open tasks</span><b id="task-count">12</b></div>
+          <div class="card stat"><span>Automations</span><b id="automation-count">2</b></div>
+        </div>
+        <div class="toolbar">
+          <div class="search-wrap">
+            <label for="project-search">Search projects</label>
+            <input id="project-search" placeholder="Search projects">
+          </div>
+          <div class="result-count" id="result-count">3 projects</div>
+        </div>
+        <section class="card projects" aria-label="Recent projects">
+          <h2>Recent projects</h2>
+          <button class="project" data-project="Website launch" aria-label="Open Website launch">
+            <span class="project-icon">W</span><span><b>Website launch</b><small>Updated 8 minutes ago</small></span><span class="status">In review</span>
+          </button>
+          <button class="project" data-project="Customer research" aria-label="Open Customer research">
+            <span class="project-icon">C</span><span><b>Customer research</b><small>Updated yesterday</small></span><span class="status">Active</span>
+          </button>
+          <button class="project" data-project="Launch plan" id="created-project" aria-label="Open Launch plan" hidden>
+            <span class="project-icon">L</span><span><b id="created-name">Launch plan</b><small id="created-template">Campaign template · created now</small></span><span class="status priority" id="created-status">Priority</span>
+          </button>
+          <div class="empty" id="no-projects" hidden>No projects match this search.</div>
+        </section>
       </section>
-      <section class="card projects">
-        <h2>Recent projects</h2>
-        <div id="empty" class="project"><div class="project-icon">W</div><div><b>Website launch</b><small>Updated 8 minutes ago</small></div><span class="status">In review</span></div>
-        <div id="created" class="project"><div class="project-icon">L</div><div><b id="created-name">Launch plan</b><small>Created just now</small></div><span class="status">Ready</span></div>
+
+      <section id="detail-view" hidden>
+        <div class="section-title">
+          <button class="ghost" id="back-projects">← Projects</button>
+          <button class="primary" id="add-task">Add task</button>
+        </div>
+        <div class="detail-grid">
+          <div class="card hero-card">
+            <div class="eyebrow">Project overview</div>
+            <h2>Launch plan</h2>
+            <p>A focused campaign workspace with milestones, owners, and status automation.</p>
+          </div>
+          <div class="card meta">
+            <div class="meta-row"><span>Template</span><b>Campaign</b></div>
+            <div class="meta-row"><span>Owner</span><b>Amara Chen</b></div>
+            <div class="meta-row"><span>Priority</span><b>High</b></div>
+            <div class="meta-row"><span>Status</span><b>Active</b></div>
+          </div>
+        </div>
+        <section class="card tasks">
+          <div class="tasks-head"><h2>Tasks</h2><span class="result-count" id="task-summary">2 open</span></div>
+          <div class="task"><span class="task-check">✓</span><span><b>Draft launch brief</b><small>Amara · Today</small></span></div>
+          <div class="task" id="created-task" hidden><span class="task-check">•</span><span><b id="created-task-name">Review campaign assets</b><small id="created-task-meta">Jordan · New</small></span></div>
+        </section>
+      </section>
+
+      <section id="automations-view" hidden>
+        <header><div><div class="eyebrow">Workflow engine</div><h1>Automations</h1></div></header>
+        <div class="automation-grid">
+          <article class="card feature-card">
+            <div class="icon">↗</div>
+            <h2>Status alerts</h2>
+            <p>Notify the project channel whenever work moves into review or becomes blocked.</p>
+            <button class="primary" id="enable-alerts">Enable status alerts</button>
+            <div class="state" id="alerts-state" hidden><i></i><span>Status alerts active</span></div>
+          </article>
+          <article class="card feature-card">
+            <div class="icon">✓</div>
+            <h2>Completed-task digest</h2>
+            <p>Send a concise progress digest every Friday afternoon.</p>
+            <div class="state active"><i></i><span>Already active</span></div>
+          </article>
+        </div>
+      </section>
+
+      <section id="team-view" hidden>
+        <header>
+          <div><div class="eyebrow">Workspace access</div><h1>Team</h1></div>
+          <button class="primary" id="invite-teammate">Invite teammate</button>
+        </header>
+        <section class="card">
+          <div class="member"><span class="avatar">AC</span><span><b>Amara Chen</b><small>amara@orbit.test</small></span><span class="role">Owner</span></div>
+          <div class="member"><span class="avatar">JR</span><span><b>Jordan Reed</b><small>jordan@orbit.test</small></span><span class="role">Editor</span></div>
+          <div class="member" id="invited-member" hidden><span class="avatar">MK</span><span><b>Mina Khan</b><small id="invited-email">mina@orbit.test</small></span><span class="role" id="invited-role">Viewer · Invite sent</span></div>
+        </section>
       </section>
     </main>
   </div>
 
   <dialog id="create-dialog">
-    <form class="modal" method="dialog">
+    <form class="modal">
       <h2>Create a project</h2>
-      <p>Start with a clean workspace. You can invite the team next.</p>
-      <label for="project-name">Project name</label>
-      <input id="project-name" autocomplete="off" placeholder="e.g. Q4 campaign">
-      <div class="actions">
-        <button class="secondary" value="cancel">Cancel</button>
-        <button class="primary" id="create" value="default">Create</button>
-      </div>
+      <p>Start with a structured workspace your team can use immediately.</p>
+      <div class="field"><label for="project-name">Project name</label><input id="project-name" autocomplete="off" placeholder="e.g. Q4 campaign"></div>
+      <div class="field"><label for="project-template">Template</label><select id="project-template"><option value="blank">Blank project</option><option value="campaign">Campaign</option><option value="product">Product launch</option></select></div>
+      <div class="check-field"><input type="checkbox" id="project-priority"><label for="project-priority">Mark as priority</label></div>
+      <div class="actions"><button class="secondary" type="button" data-close="create-dialog">Cancel</button><button class="primary" id="create-project" type="submit">Create project</button></div>
     </form>
   </dialog>
-  <div class="toast" role="status"><span class="check">✓</span><span>Project ready</span></div>
+
+  <dialog id="task-dialog">
+    <form class="modal">
+      <h2>Add a task</h2>
+      <p>Capture the next action and make ownership explicit.</p>
+      <div class="field"><label for="task-name">Task name</label><input id="task-name" autocomplete="off" placeholder="What needs to happen?"></div>
+      <div class="field"><label for="task-assignee">Assignee</label><select id="task-assignee"><option value="amara">Amara Chen</option><option value="jordan">Jordan Reed</option><option value="mina">Mina Khan</option></select></div>
+      <div class="actions"><button class="secondary" type="button" data-close="task-dialog">Cancel</button><button class="primary" id="save-task" type="submit">Save task</button></div>
+    </form>
+  </dialog>
+
+  <dialog id="invite-dialog">
+    <form class="modal">
+      <h2>Invite teammate</h2>
+      <p>Add someone to this workspace with the right level of access.</p>
+      <div class="field"><label for="invite-email">Work email</label><input id="invite-email" type="email" autocomplete="off" placeholder="name@company.com"></div>
+      <div class="field"><label for="invite-role">Role</label><select id="invite-role"><option value="viewer">Viewer</option><option value="editor">Editor</option><option value="admin">Admin</option></select></div>
+      <div class="actions"><button class="secondary" type="button" data-close="invite-dialog">Cancel</button><button class="primary" id="send-invite" type="submit">Send invite</button></div>
+    </form>
+  </dialog>
+
+  <div class="toast" role="status"><span class="toast-check">✓</span><span id="toast-message">Project ready</span></div>
 
   <script>
-    const dialog = document.querySelector('#create-dialog');
-    document.querySelector('#new-project').addEventListener('click', () => dialog.showModal());
-    document.querySelector('#create').addEventListener('click', event => {
+    const views = ['projects', 'detail', 'automations', 'team'];
+    const showView = name => {
+      views.forEach(view => {
+        const section = document.querySelector(`#${view}-view`);
+        if (section) section.hidden = view !== name;
+      });
+      document.querySelectorAll('.nav-link').forEach(button => {
+        button.classList.toggle('active', button.dataset.view === name || (name === 'detail' && button.dataset.view === 'projects'));
+      });
+    };
+    const toast = message => {
+      document.querySelector('#toast-message').textContent = message;
+      const node = document.querySelector('.toast');
+      node.classList.remove('show');
+      requestAnimationFrame(() => node.classList.add('show'));
+    };
+
+    document.querySelectorAll('.nav-link').forEach(button => button.addEventListener('click', () => showView(button.dataset.view)));
+    document.querySelectorAll('[data-close]').forEach(button => button.addEventListener('click', () => document.querySelector(`#${button.dataset.close}`).close()));
+    document.querySelector('#new-project').addEventListener('click', () => document.querySelector('#create-dialog').showModal());
+    document.querySelector('#create-project').addEventListener('click', event => {
       event.preventDefault();
       const name = document.querySelector('#project-name').value.trim() || 'Untitled project';
+      const template = document.querySelector('#project-template').selectedOptions[0].textContent;
+      const priority = document.querySelector('#project-priority').checked;
       document.querySelector('#created-name').textContent = name;
+      document.querySelector('#created-template').textContent = `${template} template · created now`;
+      document.querySelector('#created-project').dataset.project = name;
+      document.querySelector('#created-project').setAttribute('aria-label', `Open ${name}`);
+      document.querySelector('#created-status').textContent = priority ? 'Priority' : 'Active';
+      document.querySelector('#created-status').classList.toggle('priority', priority);
+      document.querySelector('#created-project').hidden = false;
       document.querySelector('#project-count').textContent = '4';
-      document.querySelector('.projects').classList.add('created');
-      dialog.close();
-      const toast = document.querySelector('.toast');
-      toast.classList.add('show');
+      document.querySelector('#result-count').textContent = '4 projects';
+      document.querySelector('#create-dialog').close();
+      toast('Project ready');
+    });
+
+    document.querySelector('#project-search').addEventListener('input', event => {
+      const query = event.target.value.trim().toLowerCase();
+      const projects = [...document.querySelectorAll('.project')].filter(project => !project.hidden);
+      let visible = 0;
+      projects.forEach(project => {
+        const match = !query || project.dataset.project.toLowerCase().includes(query);
+        project.style.display = match ? '' : 'none';
+        if (match) visible++;
+      });
+      document.querySelector('#result-count').textContent = query
+        ? `${visible} project${visible === 1 ? '' : 's'} found`
+        : `${visible} projects`;
+      document.querySelector('#no-projects').hidden = visible !== 0;
+    });
+    document.querySelector('#created-project').addEventListener('click', () => showView('detail'));
+    document.querySelector('#back-projects').addEventListener('click', () => showView('projects'));
+    document.querySelector('#add-task').addEventListener('click', () => document.querySelector('#task-dialog').showModal());
+    document.querySelector('#save-task').addEventListener('click', event => {
+      event.preventDefault();
+      const name = document.querySelector('#task-name').value.trim() || 'Untitled task';
+      const assignee = document.querySelector('#task-assignee').selectedOptions[0].textContent;
+      document.querySelector('#created-task-name').textContent = name;
+      document.querySelector('#created-task-meta').textContent = `${assignee} · New`;
+      document.querySelector('#created-task').hidden = false;
+      document.querySelector('#task-summary').textContent = '3 open';
+      document.querySelector('#task-count').textContent = '13';
+      document.querySelector('#task-dialog').close();
+      toast('Task added');
+    });
+    document.querySelector('#enable-alerts').addEventListener('click', event => {
+      event.currentTarget.hidden = true;
+      document.querySelector('#alerts-state').hidden = false;
+      document.querySelector('#alerts-state').classList.add('active');
+      document.querySelector('#automation-count').textContent = '3';
+      toast('Automation enabled');
+    });
+    document.querySelector('#invite-teammate').addEventListener('click', () => document.querySelector('#invite-dialog').showModal());
+    document.querySelector('#send-invite').addEventListener('click', event => {
+      event.preventDefault();
+      const email = document.querySelector('#invite-email').value.trim() || 'mina@orbit.test';
+      const role = document.querySelector('#invite-role').selectedOptions[0].textContent;
+      document.querySelector('#invited-email').textContent = email;
+      document.querySelector('#invited-role').textContent = `${role} · Invite sent`;
+      document.querySelector('#invited-member').hidden = false;
+      document.querySelector('#invite-dialog').close();
+      toast('Invite sent');
     });
   </script>
 </body>

@@ -483,6 +483,7 @@ section > .kicker { text-align: center; }
   will-change: transform;
   transition: border-color 0.3s;
 }
+.card[id] { scroll-margin-top: 96px; }
 .card::before {
   content: "";
   position: absolute; inset: 0;
@@ -498,9 +499,35 @@ section > .kicker { text-align: center; }
 .card p { color: var(--muted); font-size: 15px; }
 .card code { color: var(--cyan); font-size: 0.92em; }
 .card a { color: var(--cyan); text-decoration: underline; text-underline-offset: 3px; }
+.walkthrough-demo {
+  position: relative;
+  max-width: 920px;
+  margin: 28px auto 0;
+  padding: 8px;
+  border: 1px solid rgba(214,249,76,0.2);
+  border-radius: 18px;
+  background: rgba(7,3,14,0.72);
+  box-shadow: 0 24px 70px rgba(0,0,0,0.34);
+}
+.walkthrough-demo video {
+  display: block;
+  width: 100%;
+  aspect-ratio: 16 / 9;
+  border-radius: 12px;
+  background: #070b16;
+}
+.card .walkthrough-demo-cap {
+  margin: 10px 4px 2px;
+  color: #b9c49e;
+  font-size: 12px;
+  letter-spacing: 0.04em;
+  text-align: center;
+}
 @media (max-width: 860px) {
   .bento { grid-template-columns: 1fr; }
   .card, .card-big, .card-wide { grid-column: span 1; min-height: 0; }
+  .walkthrough-demo { margin-top: 22px; padding: 5px; border-radius: 14px; }
+  .walkthrough-demo video { border-radius: 10px; }
 }
 
 /* waveform bars in big card */
