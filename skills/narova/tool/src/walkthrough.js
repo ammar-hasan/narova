@@ -18,6 +18,7 @@ const { ensureDir, probe, which } = require('./util');
 const { audioFingerprint } = require('./audio-fingerprint');
 
 const WALKTHROUGH_SCHEMA_VERSION = '1.0';
+const CURSOR_RENDERER_VERSION = '2';
 const DRIVER = 'agent-browser';
 const DEFAULT_VIEWPORT = { w: 1440, h: 900 };
 const DEFAULT_CURSOR = { enabled: true, travelMs: 280, color: '#d9ff57' };
@@ -581,6 +582,7 @@ function captureConfigHash(config, id) {
   return sha256(stableStringify({
     schema: WALKTHROUGH_SCHEMA_VERSION,
     variant: config.variant || null,
+    ...(flow.cursor.enabled ? { cursorRenderer: CURSOR_RENDERER_VERSION } : {}),
     flow: portableFlow,
     sceneRefs,
   }));
@@ -646,6 +648,12 @@ function captureStatus(config, id, timings = null, opts = {}) {
   }
   if ((manifest.variant || null) !== (config.variant || null)) {
     return { ok: false, reason: 'capture belongs to a different narration variant', paths, manifest };
+  }
+  const cursorRenderer = config.walkthroughs[id].cursor.enabled
+    ? CURSOR_RENDERER_VERSION
+    : null;
+  if ((manifest.cursorRenderer || null) !== cursorRenderer) {
+    return { ok: false, reason: 'cursor renderer changed', paths, manifest };
   }
   const configHash = captureConfigHash(config, id);
   if (manifest.configHash !== configHash) {
@@ -760,42 +768,43 @@ function cursorScript(cursor) {
       position: 'fixed', left: '0', top: '0', width: '0', height: '0',
       zIndex: '2147483647', pointerEvents: 'none',
     });
+    host.style.setProperty('--narova-click-color', ${color});
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = \`
       :host{all:initial}
-      .c{position:fixed;left:0;top:0;width:18px;height:18px;border-radius:50%;
-         border:2px solid ${color};background:rgba(16,7,43,.72);
-         box-shadow:0 0 0 4px rgba(255,255,255,.28),0 4px 18px rgba(0,0,0,.38);
+      .c{position:fixed;left:0;top:0;width:18px;height:24px;
+         background:#fff;clip-path:polygon(0 0,0 20px,5px 15px,9px 24px,13px 22px,9px 14px,16px 14px);
+         filter:drop-shadow(0 0 1px rgba(0,0,0,.95)) drop-shadow(0 3px 4px rgba(0,0,0,.55));
          transform:translate3d(-40px,-40px,0);transition:transform ${travelMs}ms cubic-bezier(.2,.85,.25,1);
          will-change:transform}
-      .r{position:fixed;left:0;top:0;width:26px;height:26px;border:3px solid ${color};
-         border-radius:50%;opacity:0;transform:translate3d(-40px,-40px,0) scale(.4);
-         box-shadow:0 0 0 3px rgba(255,255,255,.72)}
-      .r.go{animation:narova-ripple .6s ease-out}
-      @keyframes narova-ripple{0%{opacity:1;transform:var(--p) scale(.4)}
-        100%{opacity:0;transform:var(--p) scale(2.5)}}
+      .r{position:fixed;left:0;top:0;width:24px;height:24px;border:3px solid var(--narova-click-color);
+         border-radius:50%;box-shadow:0 0 0 2px rgba(255,255,255,.88);
+         opacity:.96;will-change:transform,opacity;
+         animation:narova-click-ripple .38s cubic-bezier(.16,.72,.3,1) forwards}
+      @keyframes narova-click-ripple{
+        from{opacity:.96;transform:var(--p) scale(.25)}
+        to{opacity:0;transform:var(--p) scale(2.15)}
+      }
     \`;
     const cursor = document.createElement('div');
     cursor.className = 'c';
-    const ripple = document.createElement('div');
-    ripple.className = 'r';
-    root.append(style, ripple, cursor);
+    root.append(style, cursor);
     document.documentElement.appendChild(host);
     let x = -40, y = -40;
     const move = event => {
       x = event.clientX; y = event.clientY;
-      const p = \`translate3d(\${x - 9}px,\${y - 9}px,0)\`;
-      const r = \`translate3d(\${x - 13}px,\${y - 13}px,0)\`;
-      cursor.style.transform = p;
-      ripple.style.setProperty('--p', r);
-      ripple.style.transform = r;
+      cursor.style.transform = \`translate3d(\${x}px,\${y}px,0)\`;
     };
     const pulse = event => {
       move(event);
-      ripple.classList.remove('go');
-      void ripple.offsetWidth;
-      ripple.classList.add('go');
+      const ripple = document.createElement('div');
+      ripple.className = 'r';
+      ripple.style.setProperty('--p', \`translate3d(\${x - 12}px,\${y - 12}px,0)\`);
+      root.appendChild(ripple);
+      const remove = () => ripple.remove();
+      ripple.addEventListener('animationend', remove, { once: true });
+      setTimeout(remove, 500);
     };
     addEventListener('mousemove', move, true);
     addEventListener('pointermove', move, true);
@@ -1295,6 +1304,7 @@ function captureWalkthrough(config, id, timings, opts = {}) {
       version: WALKTHROUGH_SCHEMA_VERSION,
       id,
       variant: config.variant || null,
+      ...(flow.cursor.enabled ? { cursorRenderer: CURSOR_RENDERER_VERSION } : {}),
       capturedAt: new Date().toISOString(),
       driver: { name: DRIVER, version: driverVersion },
       url: sourceUrl.toString(),
@@ -1379,6 +1389,7 @@ function exploreWalkthrough(config, id, opts = {}) {
 }
 
 module.exports = {
+  CURSOR_RENDERER_VERSION,
   WALKTHROUGH_SCHEMA_VERSION,
   ACTIONS,
   resolveWalkthroughs,

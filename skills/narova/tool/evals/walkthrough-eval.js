@@ -94,6 +94,7 @@ function rawConfig(url) {
         ready: { text: 'New project', timeout: 10000 },
         preRoll: 0.4,
         postRoll: 0.6,
+        cursor: { enabled: true, travelMs: 280, color: '#ff3d81' },
         steps: [
           {
             at: 0.55,

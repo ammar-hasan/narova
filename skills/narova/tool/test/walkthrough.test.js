@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const vm = require('node:vm');
 
 const { resolveConfig } = require('../src/schema');
 const { composeData } = require('../src/compose/data');
@@ -15,6 +16,7 @@ const { compile } = require('../src/manifest');
 const { plan, STAGE, formatPlan } = require('../src/plan');
 const { check } = require('../src/check');
 const {
+  CURSOR_RENDERER_VERSION,
   capturePaths,
   captureConfigHash,
   captureTimingHash,
@@ -147,6 +149,9 @@ function writeFreshCapture(config, timingData, recording = Buffer.from('fake-web
     version: '1.0',
     id: 'demo',
     variant: config.variant || null,
+    ...(config.walkthroughs.demo.cursor.enabled
+      ? { cursorRenderer: CURSOR_RENDERER_VERSION }
+      : {}),
     recording: 'recording.webm',
     recordingSha256: sha256(recording),
     configHash: captureConfigHash(config, 'demo'),
@@ -291,8 +296,6 @@ test('walkthrough target commands prefer semantic locators and cursor is isolate
   assert.match(script, /attachShadow/);
   assert.match(script, /pointerEvents: 'none'/);
   assert.match(script, /transition:transform 250ms/);
-  assert.match(script, /narova-ripple \.6s ease-out/);
-  assert.match(script, /addEventListener\('pointerdown', pulse, true\)/);
   assert.ok(!/Math\.random|setInterval/.test(script));
   const diagnostic = redactDiagnostic(
     'failed at https://example.com/app?token=do-not-persist with Secret demo value',
@@ -314,6 +317,105 @@ test('walkthrough target commands prefer semantic locators and cursor is isolate
     ),
     'Timed out waiting for <redacted>',
   );
+});
+
+test('cursor creates independent click ripples and removes them promptly', () => {
+  const windowListeners = new Map();
+  const timers = [];
+  let cursorHost = null;
+
+  function element(tagName) {
+    const listeners = new Map();
+    const node = {
+      tagName,
+      className: '',
+      children: [],
+      parentNode: null,
+      style: {
+        setProperty(name, value) { this[name] = value; },
+      },
+      setAttribute() {},
+      append(...children) {
+        children.forEach(child => this.appendChild(child));
+      },
+      appendChild(child) {
+        child.parentNode = this;
+        this.children.push(child);
+        return child;
+      },
+      attachShadow() {
+        this.shadow = element('#shadow-root');
+        return this.shadow;
+      },
+      addEventListener(type, listener) {
+        listeners.set(type, listener);
+      },
+      dispatch(type, event = {}) {
+        const listener = listeners.get(type);
+        if (listener) listener(event);
+      },
+      remove() {
+        if (!this.parentNode) return;
+        this.parentNode.children = this.parentNode.children.filter(child => child !== this);
+        this.parentNode = null;
+      },
+    };
+    return node;
+  }
+
+  const documentElement = element('html');
+  documentElement.appendChild = child => {
+    child.parentNode = documentElement;
+    documentElement.children.push(child);
+    if (child.id === '__narova_cursor_host__') cursorHost = child;
+    return child;
+  };
+  const context = {
+    document: {
+      documentElement,
+      createElement: element,
+      getElementById: id => (cursorHost && cursorHost.id === id ? cursorHost : null),
+    },
+    addEventListener: (type, listener) => windowListeners.set(type, listener),
+    setTimeout: (listener, delay) => {
+      timers.push({ listener, delay });
+      return timers.length;
+    },
+  };
+
+  vm.runInNewContext(cursorScript({ color: '#d9ff57', travelMs: 250 }), context);
+  const root = cursorHost.shadow;
+  assert.equal(cursorHost.style['--narova-click-color'], '#d9ff57');
+  assert.deepEqual(root.children.map(child => child.className), ['', 'c']);
+  assert.match(root.children[0].textContent, /border:3px solid var\(--narova-click-color\)/);
+  assert.match(root.children[0].textContent, /narova-click-ripple \.38s/);
+
+  const pointerdown = windowListeners.get('pointerdown');
+  pointerdown({ clientX: 100, clientY: 80 });
+  pointerdown({ clientX: 220, clientY: 160 });
+  const ripples = root.children.filter(child => child.className === 'r');
+  assert.equal(ripples.length, 2);
+  assert.notEqual(ripples[0], ripples[1]);
+  assert.equal(ripples[0].style['--p'], 'translate3d(88px,68px,0)');
+  assert.equal(ripples[1].style['--p'], 'translate3d(208px,148px,0)');
+  assert.deepEqual(timers.map(timer => timer.delay), [500, 500]);
+
+  ripples[0].dispatch('animationend');
+  assert.deepEqual(
+    root.children.filter(child => child.className === 'r'),
+    [ripples[1]],
+  );
+  timers[1].listener();
+  assert.equal(root.children.filter(child => child.className === 'r').length, 0);
+});
+
+test('cursor renderer revisions do not invalidate cursor-disabled takes', () => {
+  const raw = rawProject();
+  raw.walkthroughs.demo.cursor = false;
+  const { config } = makeProject(raw);
+  const { manifest } = writeFreshCapture(config, timings());
+  assert.equal(Object.hasOwn(manifest, 'cursorRenderer'), false);
+  assert.equal(captureStatus(config, 'demo', timings()).ok, true);
 });
 
 test('explore opens the declared source and leaves a named session available', () => {
@@ -400,6 +502,7 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
 
   assert.ok(fs.existsSync(result.recording));
   assert.equal(result.manifest.steps.length, 3);
+  assert.equal(result.manifest.cursorRenderer, CURSOR_RENDERER_VERSION);
   assert.ok(result.manifest.steps.every(step => Math.abs(step.driftMs) <= 30));
   assert.equal(result.manifest.url, 'https://example.com/app');
   assert.ok(result.manifest.urlHash);
@@ -410,6 +513,14 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
   assert.ok(!logs.join('\n').includes('do-not-persist'));
   assert.equal(captureStatus(config, 'demo', timings()).ok, true);
   assert.equal(captureStatus(config, 'demo').reason, 'narration timings unavailable');
+  const previousCursorManifest = JSON.parse(manifestText);
+  delete previousCursorManifest.cursorRenderer;
+  fs.writeFileSync(
+    capturePaths(config, 'demo').manifest,
+    JSON.stringify(previousCursorManifest),
+  );
+  assert.equal(captureStatus(config, 'demo', timings()).reason, 'cursor renderer changed');
+  fs.writeFileSync(capturePaths(config, 'demo').manifest, manifestText);
   assert.ok(calls.some(call => call.includes('record') && call.includes('start')));
   assert.ok(calls.some(call => call.includes('record') && call.includes('stop')));
   assert.ok(calls.some(call => call.includes('find') && call.includes('role')));

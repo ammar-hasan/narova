@@ -206,9 +206,10 @@ Because agent-browser records in a fresh context, Narova repeats `ready` after
 recording starts and records the setup lead separately; composition trims it
 before the configured pre-roll and narration origin. With `cursor.enabled`,
 Narova installs its isolated cursor immediately before each scheduled step, so
-full navigations cannot remove it, and semantic clicks produce a 600 ms
-high-contrast ripple at the real pointer target. Cursor setup uses
-agent-browser's `evaluate` policy action. If a restrictive `actionPolicy`
+full navigations cannot remove it. Each semantic click creates a 380 ms
+high-contrast ripple at the real pointer target; the ring expands, fades, and
+is removed after the animation (with a 500 ms cleanup fallback). Cursor setup
+uses agent-browser's `evaluate` policy action. If a restrictive `actionPolicy`
 denies it, Narova warns and continues the capture without the optional cursor;
 user-declared browser actions always remain policy-gated.
 The portable project manifest also strips queries/fragments from source,
@@ -216,7 +217,9 @@ ready, and wait URLs; hashes preserve change detection without publishing the
 original values. Action-policy file contents participate in freshness.
 
 `narova walkthrough status [id]` reports `fresh`, `recording missing`,
-`walkthrough recipe changed`, `narration timings changed`, or tampering.
+`walkthrough recipe changed`, `cursor renderer changed`, `narration timings
+changed`, or tampering. Cursor renderer revisions invalidate cursor-enabled
+takes so an older cursor or click effect is never silently reused.
 `check` warns; `check --release`, compose, preview, and build require a fresh
 take. Final rendering uses PNG video-frame extraction to avoid another lossy
 generation on fine UI text.

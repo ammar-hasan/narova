@@ -46,7 +46,10 @@ versions follow [Semantic Versioning](https://semver.org/).
 - HyperFrames renders walkthrough projects with lossless PNG video-frame
   extraction to preserve UI text and fine product details.
 - The isolated walkthrough cursor is reinstalled inside agent-browser's fresh
-  recording context, and semantic clicks emit a visible 600 ms target ripple.
+  recording context, and semantic clicks emit a 380 ms expanding, fading
+  target ripple that is removed after each click. Cursor-enabled captures made
+  with the previous renderer are marked stale so they cannot silently reuse the
+  old persistent highlight.
 - Documentation, CLI help, environment guidance, manifest specification, and
   the website now cover the complete explore → synth → capture → compose
   workflow.
