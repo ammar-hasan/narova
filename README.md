@@ -158,7 +158,7 @@ cursor movement, and evidence frames all share the measured narration clock.
 
 When the walkthrough cursor is enabled, semantic clicks now emit a short,
 high-contrast ripple at the real target. It expands, fades, and disappears in
-under half a second. [Watch the focused real-browser click proof.](assets/narova-click-highlight-proof.mp4)
+under half a second. [Watch the voiced, captioned real-browser click proof.](assets/narova-click-highlight-proof.mp4)
 
 Product demos add a driver-neutral `walkthroughs` recipe and point scenes at
 it. Narova uses optional `agent-browser` for the live exploration/capture pass,
