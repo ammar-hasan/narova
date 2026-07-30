@@ -291,6 +291,8 @@ test('walkthrough target commands prefer semantic locators and cursor is isolate
   assert.match(script, /attachShadow/);
   assert.match(script, /pointerEvents: 'none'/);
   assert.match(script, /transition:transform 250ms/);
+  assert.match(script, /narova-ripple \.6s ease-out/);
+  assert.match(script, /addEventListener\('pointerdown', pulse, true\)/);
   assert.ok(!/Math\.random|setInterval/.test(script));
   const diagnostic = redactDiagnostic(
     'failed at https://example.com/app?token=do-not-persist with Secret demo value',
@@ -341,7 +343,23 @@ test('explore opens the declared source and leaves a named session available', (
 });
 
 test('capture runs timed actions, writes an auditable take, and detects staleness', () => {
-  const { dir, config } = makeProject();
+  const raw = rawProject();
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-walkthrough-policy-capture-'));
+  fs.mkdirSync(path.join(dir, 'assets'));
+  fs.writeFileSync(
+    path.join(dir, 'walkthrough-policy.json'),
+    JSON.stringify({
+      default: 'deny',
+      allow: [
+        'launch', 'close', 'viewport', 'recording_start', 'recording_stop',
+        'navigate', 'snapshot', 'getbyrole', 'getbylabel',
+        'click', 'fill', 'interact', 'wait', 'evaluate', 'screenshot',
+        'keyboard',
+      ],
+    }),
+  );
+  raw.walkthroughs.demo.actionPolicy = 'walkthrough-policy.json';
+  const config = resolveConfig(raw, {}, dir);
   const calls = [];
   const logs = [];
   let clock = 0;
@@ -398,10 +416,42 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
   const recordStart = calls.findIndex(
     call => call.includes('record') && call.includes('start'),
   );
+  const cursorInstalls = calls
+    .map((call, index) => ({ call, index }))
+    .filter(({ call, index }) => index > recordStart
+      && call.includes('eval')
+      && call.some(arg => String(arg).includes('__narova_cursor_host__')));
+  const firstRecordedAction = calls.findIndex(
+    (call, index) => index > recordStart && call.includes('find'),
+  );
+  const cursorInstall = cursorInstalls[0].index;
+  assert.equal(cursorInstalls.length, config.walkthroughs.demo.steps.length,
+    'cursor is reinstalled before every step so full navigations cannot remove it');
+  assert.ok(cursorInstall > recordStart, 'cursor is installed in the current recorded document');
+  assert.ok(calls[cursorInstall].includes('--action-policy'),
+    'cursor setup respects the configured action policy');
+  assert.ok(calls.some(call => call.includes('--action-policy')
+    && call.includes('find') && call.includes('click')),
+  'user-authored actions remain policy-gated');
+  assert.ok(cursorInstall < firstRecordedAction, 'cursor is installed before recorded actions');
+  const firstClick = calls.findIndex(
+    (call, index) => index > cursorInstall && call.includes('find') && call.includes('click'),
+  );
+  assert.ok(calls.slice(firstClick + 1, cursorInstalls[1].index).some(
+    call => call.includes('wait') && call.some(arg => /^\d+$/.test(String(arg))),
+  ), 'the next cursor install follows the bulk wait, after a delayed navigation can settle');
+  assert.ok(!calls.some(call => call.includes('--init-script')),
+    'capture does not repeatedly register an init script on every driver command');
   assert.ok(
     calls.slice(recordStart + 1).some(call => call.includes('wait') && call.includes('--load')),
     'readiness is re-applied inside agent-browser’s fresh recording context',
   );
+  assert.ok(!logs.join('\n').includes('__narova_cursor_host__'));
+  const echoedEval = redactDiagnostic(
+    `failed expression: ${cursorScript(config.walkthroughs.demo.cursor)}`,
+    ['--session', 'demo', 'eval', cursorScript(config.walkthroughs.demo.cursor)],
+  );
+  assert.equal(echoedEval, '<redacted eval diagnostic>');
   assert.equal(result.manifest.timeline.readyLead, 0.01);
   assert.equal(result.manifest.timeline.sourceOrigin, 0.41);
 
@@ -426,6 +476,7 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
 
   const changedNarrationRaw = rawProject();
   changedNarrationRaw.scenes[0].vo[0].text = 'Narration changed after the last successful synth.';
+  changedNarrationRaw.walkthroughs.demo.actionPolicy = 'walkthrough-policy.json';
   const changedNarration = resolveConfig(changedNarrationRaw, {}, dir);
   assert.equal(
     captureStatus(changedNarration, 'demo', timings()).reason,
@@ -455,6 +506,64 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
     captureStatus(config, 'demo', timings()).reason,
     'capture action evidence is incomplete',
   );
+});
+
+test('capture degrades to policy-gated actions when evaluate is denied', () => {
+  const raw = rawProject();
+  raw.walkthroughs.demo.steps = [raw.walkthroughs.demo.steps[0]];
+  raw.walkthroughs.demo.screenshots = false;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-walkthrough-denied-cursor-'));
+  fs.mkdirSync(path.join(dir, 'assets'));
+  const policy = path.join(dir, 'walkthrough-policy.json');
+  fs.writeFileSync(policy, JSON.stringify({ default: 'deny', allow: ['click'] }));
+  raw.walkthroughs.demo.actionPolicy = 'walkthrough-policy.json';
+  const config = resolveConfig(raw, {}, dir);
+  const calls = [];
+  const logs = [];
+  let clock = 0;
+  const spawn = (bin, args) => {
+    calls.push([bin, ...args]);
+    if (args[0] === '--version') return { status: 0, stdout: 'agent-browser 0.33.0\n' };
+    const record = args.lastIndexOf('record');
+    if (record >= 0 && args[record + 1] === 'start') {
+      fs.mkdirSync(path.dirname(args[record + 2]), { recursive: true });
+      fs.writeFileSync(args[record + 2], 'captured-webm');
+    }
+    const wait = args.lastIndexOf('wait');
+    if (wait >= 0 && /^\d+$/.test(args[wait + 1] || '')) {
+      clock += Number(args[wait + 1]) / 1000;
+    } else {
+      clock += 0.01;
+    }
+    if (args.includes('eval')) {
+      return {
+        status: 1,
+        stderr: "✗ Action 'evaluate' denied by policy: Action 'evaluate' is not in the allow list",
+      };
+    }
+    return { status: 0, stdout: '' };
+  };
+
+  assert.doesNotThrow(() => captureWalkthrough(config, 'demo', timings(), {
+    agentBrowser: '/fake/agent-browser',
+    spawn,
+    now: () => clock,
+    skipToolCheck: true,
+    scratchDir: path.join(dir, '.capture-work'),
+    inspectRecording: () => ({
+      duration: 8,
+      width: 1440,
+      height: 900,
+      codec: 'vp8',
+      fps: '10/1',
+    }),
+    log: line => logs.push(line),
+  }));
+  assert.equal(calls.filter(call => call.includes('eval')).length, 1);
+  assert.ok(calls.some(call => call.includes('--action-policy')
+    && call.includes('find') && call.includes('click')));
+  assert.ok(!calls.some(call => call.includes('find') && call.includes('hover')));
+  assert.match(logs.join('\n'), /cursor disabled: action policy denies evaluate/);
 });
 
 test('capture and status reject timings from stale synthesis output', () => {

@@ -769,11 +769,12 @@ function cursorScript(cursor) {
          box-shadow:0 0 0 4px rgba(255,255,255,.28),0 4px 18px rgba(0,0,0,.38);
          transform:translate3d(-40px,-40px,0);transition:transform ${travelMs}ms cubic-bezier(.2,.85,.25,1);
          will-change:transform}
-      .r{position:fixed;left:0;top:0;width:18px;height:18px;border:2px solid ${color};
-         border-radius:50%;opacity:0;transform:translate3d(-40px,-40px,0) scale(.5)}
-      .r.go{animation:narova-ripple .48s ease-out}
-      @keyframes narova-ripple{0%{opacity:.9;transform:var(--p) scale(.45)}
-        100%{opacity:0;transform:var(--p) scale(2.8)}}
+      .r{position:fixed;left:0;top:0;width:26px;height:26px;border:3px solid ${color};
+         border-radius:50%;opacity:0;transform:translate3d(-40px,-40px,0) scale(.4);
+         box-shadow:0 0 0 3px rgba(255,255,255,.72)}
+      .r.go{animation:narova-ripple .6s ease-out}
+      @keyframes narova-ripple{0%{opacity:1;transform:var(--p) scale(.4)}
+        100%{opacity:0;transform:var(--p) scale(2.5)}}
     \`;
     const cursor = document.createElement('div');
     cursor.className = 'c';
@@ -785,9 +786,10 @@ function cursorScript(cursor) {
     const move = event => {
       x = event.clientX; y = event.clientY;
       const p = \`translate3d(\${x - 9}px,\${y - 9}px,0)\`;
+      const r = \`translate3d(\${x - 13}px,\${y - 13}px,0)\`;
       cursor.style.transform = p;
-      ripple.style.setProperty('--p', p);
-      ripple.style.transform = p;
+      ripple.style.setProperty('--p', r);
+      ripple.style.transform = r;
     };
     const pulse = event => {
       move(event);
@@ -797,7 +799,6 @@ function cursorScript(cursor) {
     };
     addEventListener('mousemove', move, true);
     addEventListener('pointermove', move, true);
-    addEventListener('mousedown', pulse, true);
     addEventListener('pointerdown', pulse, true);
   };
   if (document.documentElement) install();
@@ -953,6 +954,9 @@ function commandLabel(args) {
   if (args[0] === 'wait' && args[1] === '--url' && args[2]) {
     return `wait --url ${safeUrl(args[2])}`;
   }
+  if (args[0] === 'eval') {
+    return `${args[0]} <narova cursor>`;
+  }
   if (args[0] === 'find' && args.includes('fill')) {
     const copy = args.slice();
     const i = copy.indexOf('fill');
@@ -991,6 +995,10 @@ function sensitiveArgs(args) {
 
 function redactDiagnostic(value, args = []) {
   let output = String(value || '');
+  if (args.includes('eval')) {
+    const policy = output.match(/Action 'evaluate' denied by policy(?::[^\r\n]*)?/);
+    return policy ? policy[0] : '<redacted eval diagnostic>';
+  }
   for (const secret of sensitiveArgs(args)) {
     if (!secret) continue;
     output = output.split(String(secret)).join('<redacted>');
@@ -1135,10 +1143,8 @@ function captureWalkthrough(config, id, timings, opts = {}) {
   const takeDir = ensureDir(path.join(scratchRoot, 'take'));
   const statesDir = ensureDir(path.join(takeDir, 'states'));
   const recordingPath = path.join(takeDir, 'recording.webm');
-  const cursorPath = path.join(scratchRoot, 'cursor.js');
-  fs.writeFileSync(cursorPath, flow.cursor.enabled ? cursorScript(flow.cursor) : 'void 0;\n');
 
-  const { args: globalArgs } = agentBrowserGlobalArgs(config, id, flow, cursorPath);
+  const { args: globalArgs } = agentBrowserGlobalArgs(config, id, flow);
   const agentEnv = {
     ...process.env,
     ...(flow.ready && flow.ready.timeout
@@ -1155,6 +1161,7 @@ function captureWalkthrough(config, id, timings, opts = {}) {
 
   const steps = [];
   let recordingStarted = false;
+  let cursorActive = flow.cursor.enabled;
   const now = opts.now || (() => Number(process.hrtime.bigint()) / 1e9);
   try {
     // A derived, isolated session is safe to reset; never touch other sessions.
@@ -1168,9 +1175,8 @@ function captureWalkthrough(config, id, timings, opts = {}) {
     run(['record', 'start', recordingPath]);
     recordingStarted = true;
     const recordingStartedAt = now();
-    // agent-browser 0.33 starts recording in a fresh browser context. Repeat
-    // readiness inside that recorded context; the elapsed setup is retained in
-    // the source lead and trimmed away during composition.
+    // agent-browser 0.33 starts recording in a fresh browser context and does
+    // not preserve registered init scripts in that context.
     if (flow.ready) {
       const args = waitArgs(flow.ready);
       if (args) run(args);
@@ -1182,7 +1188,39 @@ function captureWalkthrough(config, id, timings, opts = {}) {
     const timelineStart = now() + flow.preRoll;
 
     for (const item of scheduled) {
-      const travelLead = item.step.target && flow.cursor.enabled
+      const plannedTravelLead = item.step.target && cursorActive
+        && ['click', 'fill', 'type', 'press'].includes(item.step.action)
+        ? flow.cursor.travelMs / 1000
+        : 0;
+      // Leave a small setup window so delayed navigation can settle before
+      // the cursor is installed in the document that will receive the action.
+      const cursorSetupLead = cursorActive ? 0.1 : 0;
+      const bulkElapsed = now() - timelineStart;
+      const bulkWaitMs = Math.max(
+        0,
+        Math.round((item.planned - plannedTravelLead - cursorSetupLead - bulkElapsed) * 1000),
+      );
+      if (bulkWaitMs > 0) run(['wait', String(bulkWaitMs)]);
+      // The script is idempotent. Reinstalling immediately before every step
+      // restores the cursor after full navigations while keeping the driver's
+      // documented action policy on every user-authored action.
+      if (cursorActive) {
+        try {
+          run(['eval', cursorScript(flow.cursor)]);
+        } catch (error) {
+          // A restrictive policy may intentionally deny evaluation. Keep the
+          // capture useful and policy-compliant; only the optional highlight
+          // is omitted. Other cursor setup failures remain capture failures.
+          if (flow.actionPolicy
+              && /Action 'evaluate' denied by policy/.test(String(error && error.message))) {
+            cursorActive = false;
+            log('  walkthrough cursor disabled: action policy denies evaluate');
+          } else {
+            throw error;
+          }
+        }
+      }
+      const travelLead = item.step.target && cursorActive
         && ['click', 'fill', 'type', 'press'].includes(item.step.action)
         ? flow.cursor.travelMs / 1000
         : 0;
@@ -1196,7 +1234,9 @@ function captureWalkthrough(config, id, timings, opts = {}) {
         item.step,
         item.index,
         statesDir,
-        flow,
+        cursorActive
+          ? flow
+          : { ...flow, cursor: { ...flow.cursor, enabled: false } },
         () => {
           if (actionAt == null) actionAt = now() - timelineStart;
         },

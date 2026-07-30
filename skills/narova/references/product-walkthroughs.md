@@ -203,8 +203,14 @@ recipe/synthesis/timing hashes, recording SHA-256, scene trim map, action
 drift, and evidence filenames plus SHA-256 hashes. It does not include typed
 values or URL query strings.
 Because agent-browser records in a fresh context, Narova repeats `ready` after
-recording starts and records that setup lead separately; composition trims it
-before the configured pre-roll and narration origin.
+recording starts and records the setup lead separately; composition trims it
+before the configured pre-roll and narration origin. With `cursor.enabled`,
+Narova installs its isolated cursor immediately before each scheduled step, so
+full navigations cannot remove it, and semantic clicks produce a 600 ms
+high-contrast ripple at the real pointer target. Cursor setup uses
+agent-browser's `evaluate` policy action. If a restrictive `actionPolicy`
+denies it, Narova warns and continues the capture without the optional cursor;
+user-declared browser actions always remain policy-gated.
 The portable project manifest also strips queries/fragments from source,
 ready, and wait URLs; hashes preserve change detection without publishing the
 original values. Action-policy file contents participate in freshness.
@@ -244,6 +250,9 @@ scenes needs its matching take before `build --variants`.
   the final composition at the requested output fps, but duplicated frames do
   not create source motion detail. Keep cursor travel deliberate and avoid
   fast scrolling.
+- Long native-recorder sessions can vary by agent-browser patch and machine
+  state. Narova probes the completed media and rejects truncated takes; use
+  selective named milestone screenshots when a long flow stresses the driver.
 - Capture is live-browser work and can vary when the product, account state,
   experiments, network, or data changes. Stable demo tenants, semantic
   locators, explicit ready conditions, and evidence screenshots are the

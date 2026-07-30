@@ -88,6 +88,7 @@ function rawConfig(url) {
       orbit: {
         url,
         title: 'Orbit · Acme workspace',
+        actionPolicy: 'walkthrough-policy.json',
         allowedDomains: ['127.0.0.1'],
         viewport: { w: 1200, h: 760 },
         ready: { text: 'New project', timeout: 10000 },
@@ -147,6 +148,18 @@ async function main() {
   try {
     await waitForServer(port);
     fs.mkdirSync(path.join(temp, 'assets'), { recursive: true });
+    fs.writeFileSync(
+      path.join(temp, 'walkthrough-policy.json'),
+      JSON.stringify({
+        default: 'deny',
+        allow: [
+          'launch', 'close', 'viewport', 'recording_start', 'recording_stop',
+          'navigate', 'snapshot', 'getbyrole', 'getbylabel',
+          'click', 'fill', 'interact', 'wait', 'get', 'evaluate', 'screenshot',
+          'keyboard',
+        ],
+      }),
+    );
     const config = resolveConfig(rawConfig(`http://127.0.0.1:${port}/`), {}, temp);
     const timings = timingFixture();
     const out = path.join(temp, 'out');
