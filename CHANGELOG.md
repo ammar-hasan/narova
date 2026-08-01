@@ -6,6 +6,48 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.14.0] - 2026-08-01
+
+### Added
+
+- **External narration** — `config.narration` lets you use pre-recorded audio
+  instead of TTS. Set `narration.file` to skip synthesis entirely; narova
+  copies the file as the narration track. No voices or TTS backend needed.
+- **External karaoke captions** — `narration.wordTimings` accepts a JSON file
+  of word-timed cues (`[{ start, end, words: [{ text, start, end }] }]`).
+  Narova injects word-level karaoke overlays into every scene at compose
+  time — the spoken word highlights in gold with no caption HTML in your
+  scene bodies.
+- **Auto bed/SFX mixing for external narration** — when `bed` or `sfx` are
+  configured alongside `narration.file`, narova mixes them with the external
+  audio using ffmpeg (same filter chain as the Python mix stage). No TTS
+  venv needed.
+- **WhatsApp export preset** — `whatsapp-compressed`: 540×960, rate-controlled
+  H.264 encode under 16 MB for messaging apps.
+- **Port auto-detection for preview** — `narova preview` finds the next
+  available port starting from 3002 instead of silently failing on conflicts.
+  Explicit `--port` still validated before use.
+
+### Changed
+
+- **`narova check` now reports `"external"` backend** (not `"silent"`) when
+  `config.narration` is set, and estimates duration from explicit scene `dur`
+  values instead of word-count estimation.
+- **`narova check` detects HyperFrames-reserved class names** (`.clip`,
+  `.scene`, etc.) used as CSS selectors in `theme.css` — previously only
+  checked HTML class attributes.
+- **Hook checks skipped for external narration** — lead-in silence and
+  on-screen text warnings don't apply when the recording defines its own
+  pacing.
+
+### Fixed
+
+- **Preview port conflicts** — silent failover to different ports caused
+  confusion when multiple previews were running. Now auto-detects or fails
+  with a clear error.
+- **`preset: "slow"` for WhatsApp encodes** — better compression ratio for
+  rate-limited messaging app uploads.
+
 ## [0.13.0] - 2026-07-30
 
 ### Added

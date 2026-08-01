@@ -178,18 +178,47 @@ function build(config, opts = {}) {
   ensureDir(outDir);
   const log = opts.log || console.log;
 
-  const reuse = resolveReuse(config, outDir, opts.reuse, log);
-  log(`[1/3] synth${reuse ? ' (--reuse)' : ''}`);
-  writeStageInputs(config, outDir);
-  synth(outDir, {
-    backend: opts.backend, reuse,
-    projectDir: opts.projectDir, python: opts.python, log, config,
-  });
+  const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
+
+  if (hasExternalNarration) {
+    log('[1/3] synth (skip — external narration)');
+    writeStageInputs(config, outDir);
+    // Copy external narration into the output.
+    const audioDir = ensureDir(path.join(outDir, 'audio'));
+    const narrationPath = path.join(audioDir, 'full.wav');
+    fs.copyFileSync(config.narrationSource.file, narrationPath);
+
+    // If a bed or SFX is configured, mix it with the external narration using ffmpeg.
+    if (config.bed || (config.sfx && config.sfx.length)) {
+      mixExternalAudio(config, narrationPath, audioDir, log);
+    }
+
+    // Generate minimal timings from scene durations.
+    const sceneTimings = {};
+    let t = 0;
+    for (const s of config.scenes) {
+      const dur = s.dur || 0;
+      sceneTimings[s.id] = { dur };
+      t += dur;
+    }
+    fs.writeFileSync(path.join(outDir, 'timings.json'),
+      JSON.stringify({ total: Math.round(t * 1000) / 1000, ...sceneTimings }, null, 2));
+  } else {
+    const reuse = resolveReuse(config, outDir, opts.reuse, log);
+    log(`[1/3] synth${reuse ? ' (--reuse)' : ''}`);
+    writeStageInputs(config, outDir);
+    synth(outDir, {
+      backend: opts.backend, reuse,
+      projectDir: opts.projectDir, python: opts.python, log, config,
+    });
+  }
   enrichTimeline(outDir);
 
   log('[2/3] compose');
   const manifest = read(path.join(outDir, 'manifest.json'));
   const cc = configFromManifest(manifest, config) || config;
+  // Preserve external narration source through the manifest bridge.
+  if (hasExternalNarration && config.narrationSource) cc.narrationSource = config.narrationSource;
   const c = compose(cc, outDir);
   const caps = writeCaptions(cc, outDir);
   log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
@@ -233,6 +262,67 @@ function compileTimeline(config, opts = {}) {
   writeStageInputs(config, outDir);
   const tl = JSON.parse(fs.readFileSync(path.join(outDir, 'manifest.json'), 'utf8'));
   return { manifest: tl, outDir };
+}
+
+/* ---- external narration audio mixing --------------------------------------- */
+
+/* When using external narration with a bed or SFX, mix them using ffmpeg.
+ * Produces a mix.wav from the narration + bed + sfx sources, same as the
+ * Python pipeline would for TTS narration. */
+function mixExternalAudio(config, narrationPath, audioDir, log) {
+  const { sh, probe } = require('./util');
+  const totalDur = config.scenes.reduce((n, s) => n + (s.dur || 0), 0);
+
+  // Build ffmpeg filter complex for mixing narration + bed + sfx.
+  const filters = [];
+  const inputs = ['-i', narrationPath];
+  let inputIdx = 0;
+  inputIdx++; // narration is input 0
+
+  // Narration: ensure stereo, pad to total duration.
+  filters.push(`[${inputIdx - 1}:a]pan=stereo|c0=c0|c1=c0,apad=whole_dur=${totalDur}[voice]`);
+
+  if (config.bed && config.bed.file) {
+    inputs.push('-i', config.bed.file);
+    const vol = config.bed.volume ?? 0.14;
+    const fadeIn = config.bed.fadeIn ?? 0.5;
+    const fadeOut = config.bed.fadeOut ?? 1.5;
+    let bedFilter = `[${inputIdx}:a]atrim=start=0:end=${totalDur}`;
+    if (fadeIn > 0) bedFilter += `,afade=t=in:d=${fadeIn}`;
+    if (fadeOut > 0) bedFilter += `,afade=t=out:st=${totalDur - fadeOut}:d=${fadeOut}`;
+    bedFilter += `,volume=${vol}[bed]`;
+    filters.push(bedFilter);
+    inputIdx++;
+  }
+
+  for (const sfx of (config.sfx || [])) {
+    inputs.push('-i', sfx.file);
+    const vol = sfx.volume ?? 0.8;
+    const delay = sfx.at ?? 0;
+    filters.push(`[${inputIdx}:a]adelay=${Math.round(delay * 1000)}|${Math.round(delay * 1000)},volume=${vol}[sfx${inputIdx}]`);
+    inputIdx++;
+  }
+
+  // Amix all sources.
+  const mixInputs = ['[voice]'];
+  if (config.bed) mixInputs.push('[bed]');
+  for (let i = 0; i < (config.sfx || []).length; i++) mixInputs.push(`[sfx${i + (config.bed ? 2 : 1)}]`);
+  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=longest:normalize=0,alimiter=limit=0.95[a]`);
+
+  try {
+    sh('ffmpeg', [
+      '-y', '-hide_banner', '-loglevel', 'error',
+      ...inputs,
+      '-filter_complex', filters.join(';'),
+      '-map', '[a]',
+      '-ar', '48000', '-ac', '2',
+      '-t', String(totalDur),
+      path.join(audioDir, 'mix.wav'),
+    ]);
+    log('  mixed: narration + bed/sfx -> mix.wav');
+  } catch (e) {
+    log(`  note: audio mixing failed (${e.message}) — using raw narration (no bed/sfx in preview)`);
+  }
 }
 
 /* ---- enrich manifest with timings post-synth ------------------------------ */

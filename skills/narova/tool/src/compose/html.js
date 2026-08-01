@@ -14,6 +14,42 @@ function escapeHtml(s) {
   return String(s).replace(/[&<>]/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;' }[c]));
 }
 
+/* Build per-scene karaoke caption overlays from external word-timed cues.
+ * Injected into scene bodies at compose time when config.narration.wordTimings
+ * is set. Each cue gets a backdrop pill, a baseline text layer, and per-word
+ * active layers that show one word in gold (hot) with the rest transparent (ghost). */
+function buildKaraokeOverlays(config) {
+  const cues = config.narrationSource?.wordTimings;
+  if (!cues || !cues.length) return { css: '', overlays: null };
+
+  const css = `
+.narration-karaoke-pill{position:absolute;left:34px;right:34px;bottom:74px;z-index:20;min-height:128px;border-radius:28px;background:linear-gradient(180deg,rgba(3,8,18,.68),rgba(2,4,10,.91));border:1px solid rgba(236,202,120,.46);box-shadow:0 18px 55px rgba(0,0,0,.52),inset 0 1px 0 rgba(255,255,255,.09)}
+.narration-karaoke-line{position:absolute;left:54px;right:54px;bottom:83px;z-index:21;min-height:110px;padding:10px 10px 19px;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;column-gap:13px;row-gap:2px;color:#fffdf6;font-size:37px;font-weight:600;line-height:1.72;text-align:center;text-shadow:0 3px 8px rgba(0,0,0,.92),0 0 18px rgba(0,0,0,.48);white-space:normal}
+.narration-karaoke-line span{display:inline-block}.narration-karaoke-active{z-index:22;user-select:none}.narration-karaoke-active .ghost{color:transparent;text-shadow:none}.narration-karaoke-active .hot{color:#ffd56a;transform:translateY(-1px) scale(1.055);text-shadow:0 0 8px rgba(255,203,83,.78),0 2px 7px rgba(0,0,0,.95)}`;
+
+  function overlayForScene(sceneStart, sceneDur) {
+    const sceneEnd = sceneStart + sceneDur;
+    return cues.filter(c => c.start < sceneEnd && c.end > sceneStart).map((cue, ci) => {
+      const start = Math.max(cue.start, sceneStart);
+      const end = Math.min(cue.end, sceneEnd);
+      const duration = Math.max(0.04, end - start);
+      const tb = 3000 + ci * 12;
+      const activeLayers = cue.words.map((w, wi) => {
+        const ws = Math.max(w.start, sceneStart);
+        const we = Math.min(w.end, sceneEnd);
+        if (ws >= we) return '';
+        const wordsHtml = cue.words.map((ww, idx) =>
+          `<span class="${idx === wi ? 'hot' : 'ghost'}">${escapeHtml(ww.text)}</span>`).join(' ');
+        return `<div class="narration-karaoke-line narration-karaoke-active" data-layout-ignore data-start="${fmt(ws)}" data-duration="${fmt(Math.max(0.04, we - ws))}" data-track-index="${tb + 2 + wi}">${wordsHtml}</div>`;
+      }).join('');
+      const baseWords = cue.words.map(w => `<span>${escapeHtml(w.text)}</span>`).join(' ');
+      return `<div class="narration-karaoke-pill" data-start="${fmt(start)}" data-duration="${fmt(duration)}" data-track-index="${tb}"></div><div class="narration-karaoke-line" data-start="${fmt(start)}" data-duration="${fmt(duration)}" data-track-index="${tb + 1}">${baseWords}</div>${activeLayers}`;
+    }).join('');
+  }
+
+  return { css, overlayForScene };
+}
+
 /* Every scene body lands on ONE page, so a hand-authored global-id rule would
  * make reusable SVG (gradient/filter <defs>, symbols) impossible across
  * scenes. Instead, compose namespaces each body's ids to `<sceneId>--<id>` and
@@ -48,13 +84,26 @@ function composeDoc(config, size, data, css) {
   // here we only merge that resolved object over the all-on default.
   const chrome = { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
 
+  // External karaoke captions: build overlays and inject into scene bodies.
+  const karaoke = buildKaraokeOverlays(config);
+  const karaokeCss = karaoke.css; // empty string if no karaoke config
+
+  // Build enriched scenes with karaoke overlays injected as trailing HTML.
+  let sceneCursor = 0;
+  const enrichedScenes = config.scenes.map(s => {
+    const dur = s.dur || 0;
+    const overlay = karaoke.overlayForScene ? karaoke.overlayForScene(sceneCursor, dur) : '';
+    sceneCursor += dur;
+    return { ...s, body: s.body + overlay };
+  });
+
   // B-roll video clips must be direct children of the composition root so
   // HyperFrames can discover and seek them. Place them alongside scene clips
   // with the same start/duration; z-index puts them behind the HTML overlay.
   const captureManifests = Object.fromEntries(
     Object.keys(config.walkthroughs || {}).map(id => [id, readCaptureManifest(config, id)]),
   );
-  const mediaClips = config.scenes.map((s, i) => {
+  const mediaClips = enrichedScenes.map((s, i) => {
     const sc = data.scenes[i];
     const id = escapeHtml(s.id);
     if (s.walkthrough) {
@@ -77,7 +126,7 @@ function composeDoc(config, size, data, css) {
     return `  <video id="broll-${id}" class="broll" src="assets/clip-${id}${ext}" data-start="${fmt(sc.start)}" data-duration="${fmt(sc.dur)}" data-track-index="${100 + i}" muted loop playsinline preload="auto"></video>`;
   }).filter(Boolean).join('\n');
 
-  const sceneClips = config.scenes.map((s, i) => {
+  const sceneClips = enrichedScenes.map((s, i) => {
     const sc = data.scenes[i];
     const track = Math.floor(i / 3) + 1;
     const bar = chrome.topbar
@@ -126,7 +175,7 @@ function composeDoc(config, size, data, css) {
   <meta name="viewport" content="width=${size.w}, height=${size.h}">
   <title>${title}</title>
   <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
 </head>
 <body>
 <div id="root" data-composition-id="main" data-start="0"

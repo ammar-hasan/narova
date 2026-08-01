@@ -91,6 +91,16 @@ const PRESETS = {
                 codec: 'h264', pixelFormat: 'yuv420p' },
     thumbnail: null,
   },
+  'whatsapp-compressed': {
+    label:    'WhatsApp Compressed (under 16MB)',
+    hf:       { format: 'mp4', quality: 'standard' },
+    width:    540, height: 960, fps: 24,
+    enc:      { videoBitrate: '560k', maxRate: '650k', bufSize: '1300k',
+                audioBitrate: '72k', sampleRate: 44100,
+                loudness: null,
+                codec: 'h264', pixelFormat: 'yuv420p' },
+    thumbnail: null,
+  },
 };
 
 /* Map a legacy `platform` config value to the canonical preset id. */
@@ -145,7 +155,9 @@ function buildFfmpegArgs(inputPath, outputPath, preset, opts = {}) {
     args.push('-c:v', 'libx264');
     if (enc.pixelFormat) args.push('-pix_fmt', enc.pixelFormat);
     if (enc.videoBitrate) args.push('-b:v', enc.videoBitrate);
-    args.push('-preset', 'medium');
+    if (enc.maxRate) args.push('-maxrate', enc.maxRate);
+    if (enc.bufSize) args.push('-bufsize', enc.bufSize);
+    args.push('-preset', 'slow');
   } else {
     args.push('-c:v', 'copy');
   }

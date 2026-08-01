@@ -19,7 +19,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, and stale walkthrough captures. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
-| `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. | built-ins are local; external-provider cost depends on its service |
+| `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. **Skipped automatically when `config.narration.file` is set** — external audio is copied directly and mixed with bed/sfx. | built-ins are local; external-provider cost depends on its service |
 | `narova walkthrough explore <id>` | open a declared URL in an isolated agent-browser session and print its interactive accessibility snapshot. The session stays open so an author/agent can inspect real roles, labels, text, and test ids before scripting. | browser startup |
 | `narova walkthrough capture [id]` | execute declared semantic actions on measured narration anchors and write a WebM, capture manifest, and evidence PNGs under project assets. Omit id (or use `all`) for every declaration. Explicit only; build never runs actions. | live walkthrough duration + browser startup |
 | `narova walkthrough status [id]` | report whether each capture is fresh, missing, recipe-stale, timing-stale, or modified. | instant |
@@ -71,7 +71,7 @@ Walkthrough config, auth, semantic locator, security, timing, and layout details
   `build --variants`; the build remains read-only and never records implicitly.
 - `--fps N`, `--quality draft|standard|high` — render settings.
 - `--at t1,t2,…` — `shots`: explicit frame times in seconds.
-- `--port N` — Studio port (default 3002).
+- `--port N` — Studio port (default 3002; auto-detects next available if 3002 is in use).
 - `--detach` / `preview --stop` — start or stop persistent Studio.
 - `--voice-a <s>`, `--voice-b <s>` — replace the first two voices (add more voices directly in the config).
 - `--deliverables` — `build` only: render per-platform export presets. The
@@ -83,9 +83,10 @@ Walkthrough config, auth, semantic locator, security, timing, and layout details
   `--deliverables` renders `narova-standard` plus the single canonical preset
   for the configured platform (e.g. `youtube-1080p`, not 4K); use a
   comma-separated list of preset IDs (e.g. `youtube-1080p,reels-1080p`) to
-  select specific profiles. Only `youtube-4k` passes its resolution to
-  HyperFrames; all others render at the composition's natural size and are
-  resized in ffmpeg.
+  select specific profiles. `whatsapp-compressed` produces a 540×960
+  rate-controlled encode under 16 MB for messaging apps. Only `youtube-4k`
+  passes its resolution to HyperFrames; all others render at the composition's
+  natural size and are resized in ffmpeg.
 - `--safe-area-guides` — `build` only, requires `--deliverables`: overlay
   TikTok safe-area zones as authoring hints on the TikTok deliverable (only
   the `tiktok-1080p` preset defines safe-area guides; a bare `narova build`

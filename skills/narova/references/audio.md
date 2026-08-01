@@ -47,6 +47,46 @@ synth stage (`narova_tts`) does the work; compose picks up the result.
 - A missing/unreadable `file` fails the synth naming the file. Fix the path;
   there is no silent skip.
 
+## External narration (pre-recorded audio)
+
+When you already have voice audio from an external source (a cleaned
+recording, a podcast clip, a speech), skip TTS entirely:
+
+```js
+narration: {
+  file: "assets/voice-clean.wav",
+  // optional: inject word-timed karaoke captions into the video
+  wordTimings: "assets/captions-karaoke.json",
+}
+```
+
+- `narration build` skips TTS synthesis — the file is copied directly as
+  the narration track. No voices or TTS backend needed.
+- When `wordTimings` is set, narova injects per-scene karaoke caption
+  overlays at compose time. Each word gets its own timeline layer: the
+  spoken word highlights in gold while the rest of the cue stays visible
+  but transparent. The karaoke JSON format is:
+  ```json
+  [
+    {
+      "start": 0.0, "end": 2.5,
+      "text": "first spoken phrase",
+      "words": [
+        { "text": "first", "start": 0.0, "end": 0.6 },
+        { "text": "spoken", "start": 0.6, "end": 1.4 },
+        { "text": "phrase", "start": 1.4, "end": 2.5 }
+      ]
+    }
+  ]
+  ```
+- If `bed` or `sfx` are also configured, narova mixes them with the
+  external narration automatically (same ffmpeg filter chain as the Python
+  mix stage). No TTS venv needed.
+- `narova check` reports the backend as `"external"`, not `"silent"`, and
+  estimates duration from explicit scene `dur` values.
+- Hook checks (lead-in silence, on-screen text) are skipped — the external
+  recording defines its own pacing.
+
 ## Forced word alignment
 
 Word timings are estimated (words spread by length across each sentence) —

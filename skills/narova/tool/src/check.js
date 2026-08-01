@@ -371,6 +371,14 @@ function check(config, opts = {}) {
   if (/animation[^;{}]*\binfinite\b/.test(config.themeCss || '')) {
     issue('theme.css uses "animation: … infinite" — not deterministic under frame rendering; move motion to data-cue/.reveal or drop it');
   }
+  // Check for HyperFrames-reserved class names used as CSS selectors in theme.css.
+  for (const klass of HF_RESERVED_CLASSES) {
+    const re = new RegExp('\\.' + klass.replace(/[.*+?^${}()|[\]\\]/g, '\\$&') + '(?![\\w-])', 'g');
+    const matches = (config.themeCss || '').match(re);
+    if (matches && matches.length) {
+      warnings.push(`theme.css uses reserved class name "${klass}" as a selector — this may collide with generated composition classes`);
+    }
+  }
   if (/(?:font-family|--[\w-]*(?:font|serif|sans|mono))\s*:[^;{}]*(?:Georgia|Times New Roman|Arial|Roboto)/i.test(config.themeCss || '')) {
     warnings.push('theme.css uses a named fallback font — HyperFrames may fetch it; use the bundled family plus serif/sans-serif/monospace unless the extra family is intentional');
   }
@@ -417,7 +425,10 @@ function check(config, opts = {}) {
   }
 
   // Hook doctrine
-  checkHook(config, warnings);
+  // Only check hooks when using TTS narration (external narration has its own pacing).
+  if (!config.narrationSource || !config.narrationSource.file) {
+    checkHook(config, warnings);
+  }
 
   // ---- Strict / Release ----
 
@@ -480,12 +491,17 @@ function check(config, opts = {}) {
   const turns = config.scenes.reduce((n, s) => n + s.vo.length, 0);
   const words = config.scenes.reduce((n, s) =>
     n + s.vo.reduce((m, t) => m + t.text.trim().split(/\s+/).length, 0), 0);
-  const backends = [...new Set(Object.values(config.voices).map(v => v.backend))].join('+') || 'silent';
-  const est = fmtDuration(estimateSeconds(config));
+  const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
+  const backends = hasExternalNarration ? 'external'
+    : [...new Set(Object.values(config.voices).map(v => v.backend))].join('+') || 'silent';
+  const est = hasExternalNarration
+    ? fmtDuration(config.scenes.reduce((n, s) => n + (s.dur || 0), 0))
+    : fmtDuration(estimateSeconds(config));
   const tempo = (config.timing && config.timing.tempo) || 1.18;
   const walkthroughCount = Object.keys(config.walkthroughs || {}).length;
   const walkthroughSummary = walkthroughCount ? `, ${walkthroughCount} walkthrough${walkthroughCount === 1 ? '' : 's'}` : '';
-  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns${walkthroughSummary}, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
+  const karaokeNote = config.narrationSource?.wordTimings ? `, ${config.narrationSource.wordTimings.length} karaoke cues` : '';
+  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns${walkthroughSummary}${karaokeNote}, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
 
   return !(release && errors.length > 0);
 }

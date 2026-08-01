@@ -65,6 +65,14 @@ export default {
   `{ id, layout, fit, opacity, position }`. It cannot be combined with
   `clip`. See [product-walkthroughs.md](product-walkthroughs.md) for semantic
   actions, narration anchors, authentication, capture, and stale-media rules.
+- **External narration**: use pre-recorded audio instead of TTS. Set
+  `narration: { file: "assets/voice.wav" }`. narova skips synthesis, copies
+  the file as the narration track, and mixes any configured `bed`/`sfx` on
+  top. Optional `wordTimings: "assets/captions-karaoke.json"` injects
+  word-level karaoke caption overlays into every scene at compose time
+  (gold highlight advancing word by word on a dark pill at the bottom).
+  Format: `[{ start, end, text, words: [{ text, start, end }] }]`.
+  See [audio.md](audio.md) §External narration.
 - If `theme.css` is set, the file must exist.
 - Old fields `caption` and `dur` are ignored. Do not write them.
 

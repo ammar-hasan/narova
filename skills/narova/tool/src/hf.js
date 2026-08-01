@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
+const net = require('net');
 
 const HYPERFRAMES_VERSION = '0.7.64';
 
@@ -15,6 +16,27 @@ const RETRY_DELAY_MS = 1000;
 function sleep(ms) {
   const end = Date.now() + ms;
   while (Date.now() < end) { /* spin */ }
+}
+
+/* Check if a TCP port is available on localhost. Uses a quick connection
+ * attempt — if the connection succeeds, the port is in use. */
+function isPortAvailable(port) {
+  try {
+    const server = net.createServer();
+    server.listen(port, '127.0.0.1');
+    server.close();
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/* Find an available TCP port starting from the given port. */
+function findAvailablePort(startPort = 3002, maxAttempts = 10) {
+  for (let port = startPort; port < startPort + maxAttempts; port++) {
+    if (isPortAvailable(port)) return port;
+  }
+  return startPort; // fallback — let hyperframes report the error
 }
 
 /* npx `spawnSync` with retry for transient DNS/network errors. macOS sees
@@ -67,22 +89,27 @@ function livePreviewPid(pidFile) {
 /* Start Studio in its own process group so an agent shell can return without
  * reaping the preview server. Logs and the process id live outside out/hf,
  * which compose replaces on every run. */
-function startHfPreview(cwd, { port = 3002, logFile, pidFile, projectName } = {}) {
+function startHfPreview(cwd, { port, logFile, pidFile, projectName } = {}) {
   const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
   const log = logFile || path.join(path.dirname(cwd), 'preview.log');
   const pid = pidFile || path.join(path.dirname(cwd), 'preview.pid');
   const existing = livePreviewPid(pid);
   if (existing) throw new Error(`preview already running (pid ${existing}); stop it before starting another`);
+  // Find available port — auto-detect if none specified, or validate the given one.
+  const requestedPort = port || 3002;
+  const actualPort = port != null
+    ? (isPortAvailable(port) ? port : (() => { throw new Error(`port ${port} is in use — stop the conflicting process or choose a different port`); })())
+    : findAvailablePort(requestedPort, 50);
   fs.mkdirSync(path.dirname(log), { recursive: true });
   const fd = fs.openSync(log, 'a');
-  const child = spawn(npx, ['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, 'preview', '--port', String(port)], {
+  const child = spawn(npx, ['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, 'preview', '--port', String(actualPort)], {
     cwd, detached: true, stdio: ['ignore', fd, fd],
   });
   fs.closeSync(fd);
   child.unref();
   fs.writeFileSync(pid, `${child.pid}\n`);
-  fs.writeFileSync(portFileFor(pid), `${port}\n`);
-  return { pid: child.pid, pidFile: pid, logFile: log, url: previewUrl(cwd, port, projectName) };
+  fs.writeFileSync(portFileFor(pid), `${actualPort}\n`);
+  return { pid: child.pid, pidFile: pid, logFile: log, port: actualPort, url: previewUrl(cwd, actualPort, projectName) };
 }
 
 function portFileFor(pidFile) {

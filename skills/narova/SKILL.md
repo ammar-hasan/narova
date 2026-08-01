@@ -22,7 +22,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.13.0"
+  version: "0.14.0"
 ---
 
 # narova — prompt to narrated, captioned video
@@ -47,6 +47,10 @@ timings, and generates a HyperFrames project (`out/hf/`) that renders to
 `out/video.mp4`. The speech drives everything: captions light up word by word
 in each speaker's color, and any element with `data-cue="k"` appears exactly
 when turn `k` starts.
+
+**Or bring your own recording.** Set `narration.file` to a pre-recorded audio
+file with `narration.wordTimings` for word-level karaoke captions — TTS is
+skipped entirely and narova injects timed caption overlays into the composition.
 
 ## The tool is bundled — nothing to install
 

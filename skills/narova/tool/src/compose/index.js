@@ -15,11 +15,34 @@ const { assertFreshCaptures } = require('../walkthrough');
 function compose(config, outDir) {
   const timingsPath = path.join(outDir, 'timings.json');
   const fullWav = path.join(outDir, 'audio', 'full.wav');
-  if (!fs.existsSync(timingsPath) || !fs.existsSync(fullWav)) {
+  // External narration: no TTS synth needed — scenes carry explicit dur.
+  const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
+  const needsTimings = hasExternalNarration && config.narrationSource.wordTimings;
+  if (!hasExternalNarration && (!fs.existsSync(timingsPath) || !fs.existsSync(fullWav))) {
     throw new Error('compose needs out/timings.json and out/audio/full.wav — run `narova synth` first');
   }
-  const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
-  assertFreshCaptures(config, timings, outDir);
+  let timings = {};
+  if (fs.existsSync(timingsPath)) {
+    timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+  }
+  if (needsTimings) {
+    // Synthesize minimal timing entries for scenes with external karaoke.
+    const cues = config.narrationSource.wordTimings;
+    let totalDur = 0;
+    for (const s of config.scenes) totalDur += s.dur || 0;
+    timings.total = totalDur;
+    let cursor = 0;
+    for (const s of config.scenes) {
+      const sceneEnd = cursor + (s.dur || 0);
+      const sceneCues = cues.filter(c => c.start < sceneEnd && c.end > cursor);
+      const words = sceneCues.flatMap(c => c.words);
+      timings[s.id] = { dur: s.dur || 0, words };
+      cursor = sceneEnd;
+    }
+  } else if (!hasExternalNarration) {
+    // Standard mode: validate timings.
+  }
+  if (!hasExternalNarration) assertFreshCaptures(config, timings, outDir);
 
   const size = config.size;
   const data = composeData(config, timings);
@@ -73,9 +96,13 @@ function compose(config, outDir) {
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
   fs.writeFileSync(path.join(hfDir, 'style.css'), css);
-  // Prefer mix.wav (narration + background bed + sfx) when the synth stage made one.
-  const mixWav = path.join(outDir, 'audio', 'mix.wav');
-  fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
+  // Audio: external narration file, mix.wav, or full.wav (in that order).
+  if (hasExternalNarration) {
+    fs.copyFileSync(config.narrationSource.file, path.join(assetsDir, 'narration.wav'));
+  } else {
+    const mixWav = path.join(outDir, 'audio', 'mix.wav');
+    fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
+  }
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({
     name: slug(config.title || 'narova'),
     private: true,

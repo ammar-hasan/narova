@@ -223,6 +223,63 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       }
     }
   });
+  // External narration: use a pre-recorded audio file instead of TTS synthesis.
+  // When set, synth copies this file as the narration track (no TTS run).
+  // Optional wordTimings: a project-relative JSON file with per-word start/end
+  // times for karaoke captions (generates in-story caption overlays during compose).
+  // Format: [{ start, end, text, words: [{ text, start, end }] }].
+  let narrationSource = null;
+  if (raw.narration != null) {
+    const n = raw.narration;
+    if (typeof n !== 'object' || Array.isArray(n)) {
+      errs.push('config.narration: expected an object like { file, wordTimings? }');
+    } else if (typeof n.file !== 'string' || !n.file.trim()) {
+      errs.push('config.narration.file: required (a project-relative audio file)');
+    } else {
+      const np = path.resolve(baseDir, n.file);
+      if (!fs.existsSync(np) || !fs.statSync(np).isFile()) {
+        errs.push(`config.narration.file: not found: ${np}`);
+      } else {
+        narrationSource = { file: np };
+        if (n.wordTimings != null) {
+          if (typeof n.wordTimings !== 'string' || !n.wordTimings.trim()) {
+            errs.push('config.narration.wordTimings: must be a project-relative JSON file path');
+          } else {
+            const wp = path.resolve(baseDir, n.wordTimings);
+            if (!fs.existsSync(wp) || !fs.statSync(wp).isFile()) {
+              errs.push(`config.narration.wordTimings: not found: ${wp}`);
+            } else {
+              try {
+                const karaokeData = JSON.parse(fs.readFileSync(wp, 'utf8'));
+                if (!Array.isArray(karaokeData)) {
+                  errs.push('config.narration.wordTimings: JSON must be an array of cues');
+                } else {
+                  for (let ci = 0; ci < karaokeData.length; ci++) {
+                    const cue = karaokeData[ci];
+                    if (!cue || typeof cue !== 'object') {
+                      errs.push(`config.narration.wordTimings[${ci}]: not an object`);
+                    } else {
+                      if (typeof cue.start !== 'number' || typeof cue.end !== 'number') {
+                        errs.push(`config.narration.wordTimings[${ci}]: start/end must be numbers`);
+                      }
+                      if (!Array.isArray(cue.words)) {
+                        errs.push(`config.narration.wordTimings[${ci}]: words must be an array`);
+                      }
+                    }
+                  }
+                  narrationSource.wordTimingsPath = wp;
+                  narrationSource.wordTimings = karaokeData;
+                }
+              } catch (e) {
+                errs.push(`config.narration.wordTimings: invalid JSON: ${e.message}`);
+              }
+            }
+          }
+        }
+      }
+    }
+  }
+
   // Sound: an optional background bed plus spot SFX, mixed into the narration
   // track by the Python stage. Accepts `bed` or the legacy `music` key.
   let bed = null;
@@ -383,7 +440,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series };
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource };
 }
 
 /* The narration.json contract for the Python TTS stage. */
