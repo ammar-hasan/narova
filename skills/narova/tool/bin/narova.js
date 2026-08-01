@@ -18,6 +18,8 @@ const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check } = require('../src/check');
 const { ingest } = require('../src/ingest');
+const { generateKaraoke } = require('../src/karaoke');
+const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
@@ -174,6 +176,12 @@ Commands:
   voice sample add <file> <name>   save a clone sample for chatterbox
   voice sample list                list saved clone samples
   voice sample remove <name>       remove a saved clone sample
+  karaoke generate <audio>         transcribe audio + transcript -> word-timed karaoke JSON + SRT
+                                     --transcript <file>  map clean text onto Whisper timings
+                                     --max-words N        words per karaoke cue (default 8)
+                                     --engine faster-whisper|whisper-cpp|auto (default auto)
+  retime <config> <karaoke.json>  print scene duration suggestions aligned to word timings
+                                     --apply   rewrite the config file in-place
   doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
@@ -663,6 +671,56 @@ async function main() {
     case 'doctor': {
       const ok = doctor(flags.project || '.');
       process.exitCode = ok ? 0 : 1;
+      return;
+    }
+
+    case 'karaoke': {
+      const sub = positionals[1];
+      if (sub !== 'generate') {
+        console.error('usage: narova karaoke generate <audio-file> [--transcript <file>]');
+        process.exit(1);
+      }
+      const audioFile = positionals[2];
+      if (!audioFile) {
+        console.error('usage: narova karaoke generate <audio-file> [--transcript <file>]');
+        process.exit(1);
+      }
+      const audioPath = path.resolve(audioFile);
+      if (!fs.existsSync(audioPath)) {
+        console.error(`audio file not found: ${audioPath}`);
+        process.exit(1);
+      }
+      try {
+        generateKaraoke(audioPath, {
+          projectDir: flags.project || '.',
+          transcript: flags.transcript,
+          engine: flags.engine,
+          outDir: flags.out || path.dirname(audioPath),
+          maxWords: flags['max-words'] ? Number(flags['max-words']) : undefined,
+        });
+      } catch (e) {
+        console.error(`error: ${e.message}`);
+        process.exit(1);
+      }
+      return;
+    }
+
+    case 'retime': {
+      const configFile = positionals[1];
+      const karaokeFile = positionals[2];
+      if (!configFile || !karaokeFile) {
+        console.error('usage: narova retime <reel.config.mjs> <captions-karaoke.json> [--apply]');
+        process.exit(1);
+      }
+      try {
+        retime(configFile, karaokeFile, {
+          log: console.log,
+          apply: flags.apply,
+        });
+      } catch (e) {
+        console.error(`error: ${e.message}`);
+        process.exit(1);
+      }
       return;
     }
 

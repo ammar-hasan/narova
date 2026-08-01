@@ -22,6 +22,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   configured alongside `narration.file`, narova mixes them with the external
   audio using ffmpeg (same filter chain as the Python mix stage). No TTS
   venv needed.
+- **Voice processing for external narration** — `narration.process` with
+  optional `highpass`, `lowpass`, `compressor`, and `loudness` settings.
+  Applied via ffmpeg before mixing.
+- **`narova karaoke generate <audio>`** — transcribe an audio file to
+  word-timed karaoke JSON + SRT using faster-whisper or whisper-cpp.
+  `--transcript <file>` maps a clean transcript onto Whisper timings.
+- **`narova retime <config> <karaoke.json>`** — auto-derive scene durations
+  from word timing data. `--apply` rewrites the config in-place.
 - **WhatsApp export preset** — `whatsapp-compressed`: 540×960, rate-controlled
   H.264 encode under 16 MB for messaging apps.
 - **Port auto-detection for preview** — `narova preview` finds the next

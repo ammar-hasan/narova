@@ -87,6 +87,67 @@ narration: {
 - Hook checks (lead-in silence, on-screen text) are skipped — the external
   recording defines its own pacing.
 
+### Audio processing for external narration
+
+When bringing your own recording, apply voice cleanup before mixing:
+
+```js
+narration: {
+  file: "assets/voice.wav",
+  process: {
+    highpass: 75,                    // Hz — cut rumble below this
+    lowpass: 14000,                  // Hz — cut hiss above this
+    compressor: { threshold: 0.14, ratio: 2.5 },
+    loudness: { target: -16, peak: -1.5, lra: 11 },
+  },
+}
+```
+
+- All process keys are optional; narova applies them with ffmpeg before mixing
+  the bed/sfx on top.
+- `loudness` runs a linear loudnorm pass (no second analysis — set reasonable
+  target/peak/LRA values for your content).
+
+### Generating karaoke JSON from external audio
+
+Use `narova karaoke generate` to produce word-timed karaoke JSON from an
+audio file — the same format `narration.wordTimings` expects:
+
+```bash
+narova karaoke generate assets/voice.wav --transcript corrected-transcript.txt
+# writes: voice-karaoke.json + voice-captions.srt
+```
+
+- Requires `faster-whisper` (`pip install faster-whisper`) or `whisper-cpp`
+  (`brew install whisper-cpp`). Falls back automatically.
+- `--transcript`: a clean transcript text file. narova maps its tokens onto
+  Whisper word timings using SequenceMatcher — this lets you fix spelling or
+  transcription errors without breaking word alignment.
+- `--max-words N`: words per karaoke cue (default 8).
+- `--engine faster-whisper|whisper-cpp|auto`: pick a specific engine.
+
+Then use the generated file in your config:
+
+```js
+narration: {
+  file: "assets/voice.wav",
+  wordTimings: "voice-karaoke.json",
+}
+```
+
+### Auto-retiming scenes
+
+When using external narration, scene durations must match the spoken beats.
+Instead of trial-and-error, use `narova retime`:
+
+```bash
+narova retime reel.config.mjs voice-karaoke.json --apply
+# reads word timings, snaps scene boundaries to cue ends, rewrites config
+```
+
+- Without `--apply`: prints a plan showing current vs proposed durations.
+- Snaps scene ends to natural cue boundaries (end of the last phrase that fits).
+
 ## Forced word alignment
 
 Word timings are estimated (words spread by length across each sentence) —

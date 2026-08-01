@@ -60,8 +60,11 @@
           <li><strong>External narration</strong> — <code>config.narration.file</code> lets you use pre-recorded audio instead of TTS. No voices or TTS backend needed.</li>
           <li><strong>External karaoke captions</strong> — <code>narration.wordTimings</code> accepts a JSON file of word-timed cues. Narova injects word-level karaoke overlays into every scene at compose time — the spoken word highlights in gold with no caption HTML in your scene bodies.</li>
           <li><strong>Auto bed/SFX mixing for external narration</strong> — when <code>bed</code> or <code>sfx</code> are configured alongside <code>narration.file</code>, narova mixes them with the external audio using ffmpeg. No TTS venv needed.</li>
+          <li><strong>Voice processing for external narration</strong> — <code>narration.process</code> with optional <code>highpass</code>, <code>lowpass</code>, <code>compressor</code>, and <code>loudness</code> settings.</li>
+          <li><strong><code>narova karaoke generate</code></strong> — transcribe an audio file to word-timed karaoke JSON + SRT using faster-whisper or whisper-cpp. <code>--transcript</code> maps a clean transcript onto Whisper timings.</li>
+          <li><strong><code>narova retime</code></strong> — auto-derive scene durations from word timing data. <code>--apply</code> rewrites the config in-place.</li>
           <li><strong>WhatsApp export preset</strong> — <code>whatsapp-compressed</code>: 540×960, rate-controlled H.264 encode under 16 MB for messaging apps.</li>
-          <li><strong>Port auto-detection for preview</strong> — <code>narova preview</code> finds the next available port instead of silently failing on conflicts. Explicit <code>--port</code> still validated before use.</li>
+          <li><strong>Port auto-detection for preview</strong> — <code>narova preview</code> finds the next available port instead of silently failing on conflicts.</li>
         </ul>
         <h4><span class="tag changed">Changed</span></h4>
         <ul>

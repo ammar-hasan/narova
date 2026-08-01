@@ -228,11 +228,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Optional wordTimings: a project-relative JSON file with per-word start/end
   // times for karaoke captions (generates in-story caption overlays during compose).
   // Format: [{ start, end, text, words: [{ text, start, end }] }].
+  // Optional process: voice cleanup settings applied to the external audio before mixing.
   let narrationSource = null;
   if (raw.narration != null) {
     const n = raw.narration;
     if (typeof n !== 'object' || Array.isArray(n)) {
-      errs.push('config.narration: expected an object like { file, wordTimings? }');
+      errs.push('config.narration: expected an object like { file, wordTimings?, process? }');
     } else if (typeof n.file !== 'string' || !n.file.trim()) {
       errs.push('config.narration.file: required (a project-relative audio file)');
     } else {
@@ -274,6 +275,49 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
                 errs.push(`config.narration.wordTimings: invalid JSON: ${e.message}`);
               }
             }
+          }
+        }
+        // Audio processing: optional voice cleanup chain applied to external narration.
+        if (n.process != null) {
+          if (typeof n.process !== 'object' || Array.isArray(n.process)) {
+            errs.push('config.narration.process: expected an object with optional filter settings');
+          } else {
+            const proc = {};
+            if (n.process.loudness != null) {
+              if (typeof n.process.loudness !== 'object' || Array.isArray(n.process.loudness)) {
+                errs.push('config.narration.process.loudness: expected { target, peak, lra }');
+              } else {
+                const t = +n.process.loudness.target || -16;
+                const p = +n.process.loudness.peak || -1.5;
+                const l = +n.process.loudness.lra || 11;
+                if (!Number.isFinite(t) || t > 0) errs.push('config.narration.process.loudness.target: must be ≤ 0');
+                if (!Number.isFinite(p) || p > 0) errs.push('config.narration.process.loudness.peak: must be ≤ 0');
+                if (!Number.isFinite(l) || l < 1 || l > 50) errs.push('config.narration.process.loudness.lra: must be 1–50');
+                proc.loudness = { target: t, peak: p, lra: l };
+              }
+            }
+            if (n.process.highpass != null) {
+              const v = +n.process.highpass;
+              if (!Number.isFinite(v) || v < 20 || v > 500) errs.push('config.narration.process.highpass: must be 20–500 Hz');
+              else proc.highpass = v;
+            }
+            if (n.process.lowpass != null) {
+              const v = +n.process.lowpass;
+              if (!Number.isFinite(v) || v < 1000 || v > 20000) errs.push('config.narration.process.lowpass: must be 1000–20000 Hz');
+              else proc.lowpass = v;
+            }
+            if (n.process.compressor != null) {
+              if (typeof n.process.compressor !== 'object' || Array.isArray(n.process.compressor)) {
+                errs.push('config.narration.process.compressor: expected { threshold, ratio }');
+              } else {
+                const th = +n.process.compressor.threshold || 0.14;
+                const ra = +n.process.compressor.ratio || 2;
+                if (!Number.isFinite(th) || th < 0.01 || th > 1) errs.push('config.narration.process.compressor.threshold: must be 0.01–1');
+                if (!Number.isFinite(ra) || ra < 1 || ra > 20) errs.push('config.narration.process.compressor.ratio: must be 1–20');
+                proc.compressor = { threshold: th, ratio: ra };
+              }
+            }
+            narrationSource.process = Object.keys(proc).length ? proc : null;
           }
         }
       }

@@ -272,10 +272,40 @@ function compileTimeline(config, opts = {}) {
 function mixExternalAudio(config, narrationPath, audioDir, log) {
   const { sh, probe } = require('./util');
   const totalDur = config.scenes.reduce((n, s) => n + (s.dur || 0), 0);
+  const process = config.narrationSource?.process;
+
+  // Apply voice processing to the narration before mixing with bed/sfx.
+  let voicePath = narrationPath;
+  if (process) {
+    const processed = path.join(audioDir, 'voice-processed.wav');
+    const filters = [];
+    if (process.highpass) filters.push(`highpass=f=${process.highpass}`);
+    if (process.lowpass) filters.push(`lowpass=f=${process.lowpass}`);
+    if (process.compressor) {
+      filters.push(`acompressor=threshold=${process.compressor.threshold}:ratio=${process.compressor.ratio}:attack=0.005:release=0.1`);
+    }
+    if (process.loudness) {
+      filters.push(`loudnorm=I=${process.loudness.target}:TP=${process.loudness.peak}:LRA=${process.loudness.lra}:linear=true`);
+    }
+    if (filters.length) {
+      try {
+        sh('ffmpeg', [
+          '-y', '-hide_banner', '-loglevel', 'error',
+          '-i', narrationPath,
+          '-af', filters.join(','),
+          processed,
+        ]);
+        voicePath = processed;
+        log('  processed: voice cleanup applied');
+      } catch (e) {
+        log(`  note: voice processing failed (${e.message}) — using raw narration`);
+      }
+    }
+  }
 
   // Build ffmpeg filter complex for mixing narration + bed + sfx.
   const filters = [];
-  const inputs = ['-i', narrationPath];
+  const inputs = ['-i', voicePath];
   let inputIdx = 0;
   inputIdx++; // narration is input 0
 
