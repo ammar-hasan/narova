@@ -4,7 +4,28 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.15.0] - 2026-08-01
+
+### Changed
+
+- **Skill context re-engineered** — narova's SKILL.md reduced 339 → 127 lines
+  (-62%) based on Anthropic's context engineering best practices for Claude 5
+  models. The skill was over-constraining the agent: detailed intake scripts,
+  redundant hard rules, and example dialogues have been replaced by progressive
+  disclosure through the existing `references/` files.
+- **Fewer, sharper gotchas** — ten "Hard Rules" replaced by four "Key Gotchas"
+  limited to genuinely non-inferrable rendering details. Rules the agent can
+  discover from tool output or context (voice defaults, number of narrators,
+  theme mode conventions) are now in reference docs, not the skill frontmatter.
+- **Workflow compressed** — eight detailed step sections (~150 lines) condensed
+  to a numbered one-line-per-step list with file-pointer references.
+
+### Added
+
+- **AGENTS.md** — lightweight repo-level guidance (`CLAUDE.md` symlinks to it).
+  Six gotchas specific to the narova project: cue indexing, CSS rules, SVG
+  namespacing, output directory hygiene, agent-shell persistence, and ffmpeg
+  `setsar=1` concat requirements.
 
 ## [0.14.0] - 2026-08-01
 

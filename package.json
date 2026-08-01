@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.13.0",
+  "version": "0.15.0",
   "description": "Narration-first video with real product walkthroughs, local voices, word-synced captions, and HyperFrames rendering.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"
