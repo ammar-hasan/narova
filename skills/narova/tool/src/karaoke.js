@@ -44,40 +44,42 @@ function buildCues(words, opts = {}) {
   const cues = [];
   let i = 0;
   while (i < words.length) {
+    const chunk = [words[i]];
     const start = words[i].t0;
-    let end = start;
-    let chunk = [];
-    // Collect words until we hit maxWords or maxDur.
-    for (let j = i; j < words.length && (j - i) < maxWords; j++) {
+    let end = words[i].t1;
+    // Collect subsequent words until we hit maxWords or maxDur.
+    for (let j = i + 1; j < words.length && chunk.length < maxWords; j++) {
       const candidateEnd = words[j].t1;
-      if (j > i && (candidateEnd - start) > maxDur) break;
-      chunk.push({ text: words[j].w, start: words[j].t0, end: words[j].t1 });
+      if (candidateEnd - start > maxDur) break;
+      chunk.push(words[j]);
       end = words[j].t1;
-      i = j + 1;
     }
-    if (chunk.length === 0) { i++; continue; }
+    i += chunk.length;
+
     // Ensure sequential word highlights (no two words at once).
     for (let wi = 1; wi < chunk.length; wi++) {
-      const prevEnd = chunk[wi - 1].end;
-      if (chunk[wi].start < prevEnd + 0.04) chunk[wi].start = prevEnd + 0.04;
-      if (chunk[wi].end < chunk[wi].start + 0.03) chunk[wi].end = chunk[wi].start + 0.03;
+      const prevEnd = chunk[wi - 1].end || chunk[wi - 1].t1;
+      if ((chunk[wi].start || chunk[wi].t0) < prevEnd + 0.04) {
+        chunk[wi].start = prevEnd + 0.04;
+      }
+      if ((chunk[wi].end || chunk[wi].t1) < (chunk[wi].start || chunk[wi].t0) + 0.03) {
+        chunk[wi].end = (chunk[wi].start || chunk[wi].t0) + 0.03;
+      }
     }
-    // De-conflict cue boundaries.
+    // De-conflict cue boundaries with previous cue.
     if (cues.length > 0 && cues[cues.length - 1].end > start) {
       cues[cues.length - 1].end = Math.min(cues[cues.length - 1].end, start - 0.02);
     }
     cues.push({
       start: Math.round(start * 1000) / 1000,
       end: Math.round(end * 1000) / 1000,
-      text: chunk.map(w => w.text).join(' '),
+      text: chunk.map(w => w.w || w.text).join(' '),
       words: chunk.map(w => ({
-        text: w.text,
-        start: Math.round(w.start * 1000) / 1000,
-        end: Math.round(w.end * 1000) / 1000,
+        text: w.w || w.text,
+        start: Math.round((w.t0 || w.start) * 1000) / 1000,
+        end: Math.round((w.t1 || w.end) * 1000) / 1000,
       })),
     });
-    // Reset i if chunk collection didn't advance it.
-    if (i <= chunk.length) i = chunk.length;
   }
   return cues;
 }
@@ -85,10 +87,12 @@ function buildCues(words, opts = {}) {
 /* Generate SRT from karaoke cues. */
 function buildSrt(cues) {
   const stamp = (s, sep) => {
-    const h = Math.floor(s / 3600);
-    const m = Math.floor((s % 3600) / 60);
-    const sec = (s % 60).toFixed(3);
-    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(6, '0')}`.replace('.', sep);
+    const ms = Math.round(s * 1000);
+    const h = Math.floor(ms / 3600000);
+    const m = Math.floor((ms % 3600000) / 60000);
+    const sec = Math.floor((ms % 60000) / 1000);
+    const millis = ms % 1000;
+    return `${String(h).padStart(2, '0')}:${String(m).padStart(2, '0')}:${String(sec).padStart(2, '0')}${sep}${String(millis).padStart(3, '0')}`;
   };
   return cues.map((cue, i) =>
     `${i + 1}\n${stamp(cue.start, ',')} --> ${stamp(cue.end, ',')}\n${cue.text}\n`

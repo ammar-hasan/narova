@@ -96,11 +96,17 @@ function retime(configPath, karaokePath, opts = {}) {
   }
 
   if (opts.apply) {
-    // Rewrite each dur value in-place.
+    // Rewrite each dur value in-place, from LAST to FIRST to preserve positions.
+    const sorted = [...plan].sort((a, b) => {
+      const aIdx = configText.indexOf(`dur: ${a.from}`);
+      const bIdx = configText.indexOf(`dur: ${b.from}`);
+      return (bIdx === -1 ? 0 : bIdx) - (aIdx === -1 ? 0 : aIdx);
+    });
     let out = configText;
-    let offset = 0;
-    for (const r of plan) {
-      const durReLocal = new RegExp(`(dur\\s*:\\s*)${r.from}`);
+    for (const r of sorted) {
+      // Match dur: <number> but not dur: <number>.<number> to avoid matching a
+      // decimal suffix as part of the previous integer replacement.
+      const durReLocal = new RegExp(`(dur\\s*:\\s*)${r.from}(?![\\d.])`);
       const match = durReLocal.exec(out);
       if (!match) {
         log(`warn: could not find dur: ${r.from} for scene "${r.id}"`);

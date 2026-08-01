@@ -106,16 +106,30 @@ def map_transcript(source_words: list[dict], clean_text: str) -> list[dict]:
     si = 0  # cursor in source_words
 
     for tag, i1, i2, j1, j2 in sm.get_opcodes():
-        if tag in ("equal", "replace"):
-            # Map each clean token to the corresponding source word's timing.
+        if tag == "equal":
             for j in range(j1, j2):
-                src_idx = si + (j - j1) if si + (j - j1) < len(source_words) else si
+                src_idx = si + (j - j1)
                 aligned.append({
                     "w": clean_tokens[j],
                     "t0": source_words[src_idx]["t0"],
                     "t1": source_words[src_idx]["t1"],
                 })
-            si += (i2 - i1) if tag == "equal" else max(i2 - i1, j2 - j1)
+            si += i2 - i1
+        elif tag == "replace":
+            # Different words, same span — interpolate timings across the block.
+            span = j2 - j1
+            t_start = source_words[si]["t0"] if si < len(source_words) else (aligned[-1]["t1"] if aligned else 0.0)
+            t_end = source_words[min(si + i2 - i1, len(source_words) - 1)]["t1"] if si < len(source_words) else t_start + 0.5
+            for k, j in enumerate(range(j1, j2)):
+                frac = (k + 0.5) / max(span, 1)
+                mid = t_start + (t_end - t_start) * frac
+                half = max(0.02, (t_end - t_start) / (span * 2.1))
+                aligned.append({
+                    "w": clean_tokens[j],
+                    "t0": round(mid - half, 3),
+                    "t1": round(mid + half, 3),
+                })
+            si += i2 - i1
         elif tag == "delete":
             # Source had words not in clean transcript — skip them.
             si += i2 - i1
