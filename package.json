@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.15.0",
+  "version": "0.16.0",
   "description": "Narration-first video with real product walkthroughs, local voices, word-synced captions, and HyperFrames rendering.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"
@@ -9,10 +9,11 @@
   "main": "skills/narova/tool/src/pipeline.js",
   "scripts": {
     "narova": "node skills/narova/tool/bin/narova.js",
-    "test": "npm run -s test:js && npm run -s test:py && npm run -s test:elevenlabs",
+    "test": "npm run -s test:js && npm run -s test:py && npm run -s test:elevenlabs && npm run -s test:openai",
     "test:js": "node --test 'skills/narova/tool/test/*.test.js'",
     "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests",
     "test:elevenlabs": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-elevenlabs/tests",
+    "test:openai": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-openai/tests",
     "eval:walkthrough": "node skills/narova/tool/evals/walkthrough-eval.js",
     "version:sync": "node scripts/sync-version.js",
     "version": "node scripts/sync-version.js"

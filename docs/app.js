@@ -280,6 +280,11 @@
   bindCopy("copyInstall", INSTALL, document.querySelector("#copyInstall .copy-label"));
   bindCopy("copyInstall2", INSTALL, document.querySelector("#copyInstall2 .copy-label"));
   bindCopy(
+    "copyOpenAI",
+    "npx skills add ammar-hasan/narova --skill narova-openai -g",
+    document.getElementById("copyOpenAILabel")
+  );
+  bindCopy(
     "copyEleven",
     "npx skills add ammar-hasan/narova --skill narova-elevenlabs -g",
     document.getElementById("copyElevenLabel")
@@ -323,8 +328,8 @@
     },
     cloud: {
       mode: "# optional companion → premium voice",
-      prompt: "Use my registered ElevenLabs provider and voice ID [voice-id] for the narrator. Keep the project config free of credentials, list the available voices first, and show me a preview before rendering.",
-      reply: "I’ll verify the explicitly registered provider, list voices through Narova’s generic provider protocol, keep the API key in the environment, and preserve Narova’s normal cache, timing, captions, and render pipeline."
+      prompt: "Use my registered cloud TTS companion for the narrator — OpenAI with marin, or ElevenLabs with [voice-id]. Keep credentials out of the project config and show me a preview before rendering.",
+      reply: "I’ll verify the companion you choose, keep its API key in the environment, apply provider-native voice controls without leaking them into captions, and preserve Narova’s normal cache, timing, captions, and render pipeline."
     }
   };
   var activePrompt = PROMPT_EXAMPLES.idea;

@@ -49,6 +49,9 @@ narova/                          # the repo
 ├── skills/narova-elevenlabs/    # optional, separately installable provider
 │   ├── SKILL.md  references/    # ElevenLabs-only setup/configuration
 │   └── tool/                    # provider manifest + isolated HTTP worker
+├── skills/narova-openai/        # optional, separately installable provider
+│   ├── SKILL.md  references/    # OpenAI-only setup/configuration
+│   └── tool/                    # provider manifest + isolated HTTP worker
 └── generated/                   # agent-created sample projects (narova-skill-reel is the flagship)
 ```
 
@@ -332,9 +335,10 @@ workers produce one raw WAV utterance; Narova retains sentence caching, tempo,
 gain, fades, resampling, loudness normalization, concatenation, alignment,
 timing rescaling, captions, composition, and rendering. Provider-specific
 code, credentials, dependencies, endpoints, models, and configuration rules
-remain in self-contained companion skills such as `skills/narova-elevenlabs/`.
+remain in self-contained companion skills such as `skills/narova-elevenlabs/`
+and `skills/narova-openai/`.
 
-## Status: 0.15.0 shipped
+## Status: 0.16.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

@@ -52,7 +52,7 @@
         <div class="hero-text">
           <p class="kicker reveal-line">The narration-first video skill</p>
           <a class="release-pill reveal-line" href="#walkthroughs" data-hover>
-            <span class="release-version" data-narova-version>v0.15.0</span>
+            <span class="release-version" data-narova-version>v0.16.0</span>
             <span>real product walkthroughs are here</span>
             <span aria-hidden="true">→</span>
           </a>
@@ -195,12 +195,35 @@
         <p class="kicker sr-title">Optional by architecture</p>
         <h2 class="sec-title sr-title">Local by default.<br><em>Extensible on purpose.</em></h2>
         <p class="providers-lede">Narova ships with four local backends and keeps them as the default. Premium cloud TTS lives in separate companion skills, with no provider SDK, endpoint, model, authentication rule, or dependency inside Narova core.</p>
-        <div class="provider-actions">
-          <button class="provider-install magnetic" id="copyEleven" data-hover aria-label="Copy ElevenLabs companion install command">
-            <span>ElevenLabs companion</span>
-            <code id="copyElevenLabel" aria-live="polite">copy install</code>
-          </button>
-          <a class="provider-link" href="https://github.com/ammar-hasan/narova/tree/main/skills/narova-elevenlabs" data-hover>setup &amp; security →</a>
+        <div class="provider-options" role="group" aria-label="Optional cloud TTS companions">
+          <article class="provider-option">
+            <div class="provider-option-copy">
+              <div class="provider-option-heading">
+                <h3>ElevenLabs</h3>
+                <span>voice library</span>
+              </div>
+              <p>Account voices, voice IDs, and provider-native controls.</p>
+            </div>
+            <button class="provider-install magnetic" id="copyEleven" data-hover aria-label="Copy ElevenLabs companion install command">
+              <span>install</span>
+              <code id="copyElevenLabel" aria-live="polite">copy</code>
+            </button>
+            <a class="provider-link" href="https://github.com/ammar-hasan/narova/tree/main/skills/narova-elevenlabs" data-hover><span class="visually-hidden">ElevenLabs </span>setup →</a>
+          </article>
+          <article class="provider-option">
+            <div class="provider-option-copy">
+              <div class="provider-option-heading">
+                <h3>OpenAI</h3>
+                <span>steerable speech</span>
+              </div>
+              <p>Prompted delivery, built-in voices, and direct WAV output.</p>
+            </div>
+            <button class="provider-install magnetic" id="copyOpenAI" data-hover aria-label="Copy OpenAI companion install command">
+              <span>install</span>
+              <code id="copyOpenAILabel" aria-live="polite">copy</code>
+            </button>
+            <a class="provider-link" href="https://github.com/ammar-hasan/narova/tree/main/skills/narova-openai" data-hover><span class="visually-hidden">OpenAI </span>setup →</a>
+          </article>
         </div>
         <p class="provider-note">API keys stay in environment variables. Provider options remain opaque to Narova and still participate in deterministic cache invalidation.</p>
       </div>
@@ -235,6 +258,7 @@
       <span><b>Qwen</b> instruct control</span>
       <span><b>Chatterbox</b> voice cloning</span>
       <span class="external"><b>ElevenLabs</b> optional companion</span>
+      <span class="external"><b>OpenAI</b> optional companion</span>
     </div>
   </section>
 

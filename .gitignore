@@ -3,6 +3,9 @@ node_modules/
 npm-debug.log*
 yarn-error.log*
 
+# Local secrets
+.env.local
+
 # Python venv + caches
 .venv/
 __pycache__/

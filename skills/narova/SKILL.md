@@ -22,7 +22,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.15.0"
+  version: "0.16.0"
 ---
 
 # narova — prompt to narrated, captioned video
@@ -56,8 +56,8 @@ command out every time. No install step. First `synth` or `build` creates
 For richer voices: `bash <this-skill-dir>/tool/setup.sh --xtts` (or `--qwen`,
 `--chatterbox` for voice cloning).
 
-External TTS providers (ElevenLabs, etc.) are optional registered companion
-skills — see `narova-elevenlabs` or `references/cli.md` §providers.
+External TTS providers are optional registered companion skills — see
+`narova-elevenlabs`, `narova-openai`, or `references/cli.md` §providers.
 
 ## Workflow: prompt → video
 

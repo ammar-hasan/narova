@@ -9,7 +9,7 @@ prompts, scripts, web pages, and real product walkthroughs into narrated,
 captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.15.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.16.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -236,13 +236,19 @@ narova voices list --backend <name>
 
 Use the registered name as a voice's `backend` and pass an opaque
 `providerOptions` object. Keep credentials in the provider's required
-environment variables—never in `reel.config.mjs`. The optional
-`skills/narova-elevenlabs/` skill is the first implementation and is installed
-separately only when you want ElevenLabs:
+environment variables—never in `reel.config.mjs`. Install only the companion
+you want:
 
 ```bash
 npx skills add ammar-hasan/narova --skill narova-elevenlabs -g
+npx skills add ammar-hasan/narova --skill narova-openai -g
 ```
+
+- [`narova-elevenlabs`](skills/narova-elevenlabs/) uses ElevenLabs voice IDs
+  and account voice listing.
+- [`narova-openai`](skills/narova-openai/) uses OpenAI's Speech API, defaults
+  to steerable `gpt-4o-mini-tts`, recommends `marin` or `cedar`, accepts
+  existing custom voice IDs, and requests lossless WAV directly.
 
 ## Commands
 
