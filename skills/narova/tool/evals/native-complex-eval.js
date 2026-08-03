@@ -73,7 +73,13 @@ run('ffmpeg', [
 ]);
 run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=120:duration=${duration}`, '-af', 'volume=0.22', '-ar', '48000', path.join(ASSETS, 'bed.wav')]);
 run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=880:duration=0.16', '-af', 'afade=t=out:st=0.04:d=0.12', '-ar', '48000', path.join(ASSETS, 'ping.wav')]);
-fs.copyFileSync(path.join(ROOT, 'docs/assets/poster.jpg'), path.join(ASSETS, 'poster.jpg'));
+// Use a caption-free local raster so the proof contains exactly one visible
+// subtitle system: Narova's karaoke layer.
+run('ffmpeg', [
+  '-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+  'gradients=s=480x720:c0=0x07111c:c1=0x2ee6d6:nb_colors=4:seed=3',
+  '-frames:v', '1', path.join(ASSETS, 'local-art.png'),
+]);
 fs.copyFileSync('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', path.join(ASSETS, 'DejaVuSans.ttf'));
 fs.copyFileSync(
   require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-700-normal.woff2'),
@@ -162,7 +168,7 @@ const config = resolveConfig({
       ],
       visual: {
         type: 'stack', style: { direction: 'row', padding: 34, gap: 28, background: '#07111c' }, children: [
-          { type: 'image', src: 'assets/poster.jpg', drift: 'in', style: { width: 214, height: 246, radius: 18, overflow: 'hidden', fit: 'cover', borderWidth: 2, borderColor: '#2ee6d6' }, enter: { type: 'zoom', at: 0.2 } },
+          { type: 'image', src: 'assets/local-art.png', drift: 'in', style: { width: 214, height: 246, radius: 18, overflow: 'hidden', fit: 'cover', borderWidth: 2, borderColor: '#2ee6d6' }, enter: { type: 'zoom', at: 0.2 } },
           { type: 'stack', style: { direction: 'column', gap: 10 }, children: [
             { type: 'text', text: 'FREE · LOCAL · MULTILINGUAL', style: { ...font, height: 34, color: '#2ee6d6', fontSize: 17, fontWeight: 800 }, enter: { type: 'fade', at: 0.1 } },
             { type: 'text', text: 'ہر کہانی،\nاپنی زبان میں', style: { ...urduFont, direction: 'rtl', textAlign: 'right', height: 108, color: '#ffffff', fontSize: 36, fontWeight: 700, lineHeight: 1.25 }, enter: { type: 'rise', at: 0.35 } },

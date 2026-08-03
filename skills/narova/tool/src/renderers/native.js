@@ -195,13 +195,19 @@ function childRect(style, parent) {
   return { x: parent.x + n(style.x, parent.w, 0), y: parent.y + n(style.y, parent.h, 0), w: width, h: height };
 }
 
-function layoutTree(root, width, height) {
+function layoutTree(root, width, height, rootInset = {}) {
   const frames = new Map();
-  function visit(node, box, forced = false) {
+  function visit(node, box, forced = false, isRoot = false) {
     const style = node.style || {};
     const frame = forced ? box : childRect(style, box);
     frames.set(node, frame);
-    const content = inset(frame, padding(style.padding));
+    let content = inset(frame, padding(style.padding));
+    if (isRoot) {
+      content = inset(content, {
+        t: +rootInset.t || 0, r: +rootInset.r || 0,
+        b: +rootInset.b || 0, l: +rootInset.l || 0,
+      });
+    }
     const children = node.children || [];
     if (!children.length) return;
     if (node.type !== 'stack') {
@@ -246,7 +252,7 @@ function layoutTree(root, width, height) {
       cursor += mainSize + gap;
     }
   }
-  visit(root, { x: 0, y: 0, w: width, h: height }, true);
+  visit(root, { x: 0, y: 0, w: width, h: height }, true, true);
   return frames;
 }
 
@@ -657,6 +663,11 @@ function drawChrome(ctx, project, time, sceneIndex) {
   ctx.restore();
 }
 
+function captionSafeInset(project) {
+  if (!(project.timeline.groups || []).length) return 0;
+  return Math.round(Math.min(170, Math.max(84, project.size.h * 0.26)) * 1000) / 1000;
+}
+
 function registerFonts(project, baseDir, canvas) {
   const refs = new Map();
   function visit(node) {
@@ -733,7 +744,11 @@ function renderCanvas(project, projectDir, time, env) {
       drawRawFrame(ctx, env.canvas, descriptor, Math.floor(localTime * env.fps), project.size.w, project.size.h);
     }
   }
-  const frames = layoutTree(current.source.visual, project.size.w, project.size.h);
+  // Keep root backgrounds and full-frame clips edge-to-edge, but constrain the
+  // root's children to the same caption-safe region HyperFrames reserves.
+  const frames = layoutTree(current.source.visual, project.size.w, project.size.h, {
+    b: captionSafeInset(project),
+  });
   drawNode(ctx, current.source.visual, frames, localTime, current.timeline, { ...env, baseDir: projectDir });
   ctx.restore();
   drawChrome(ctx, project, time, current.index);
@@ -856,6 +871,6 @@ module.exports = {
   shots,
   _internals: {
     layoutTree, animatedState, renderCanvas, qualityOptions,
-    fontSupports, shapingFont, shapeRun, shapedLines,
+    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset,
   },
 };

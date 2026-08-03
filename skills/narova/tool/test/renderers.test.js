@@ -122,6 +122,18 @@ test('external caption transcript must match the declared voiceover', () => {
   }, {}, project), /transcript text does not match scene voiceover/);
 });
 
+test('native reserves one caption-safe band without shrinking the scene background', () => {
+  const native = getRenderer('native');
+  const child = { type: 'rect', style: {} };
+  const root = { type: 'stack', style: { direction: 'column' }, children: [child] };
+  const project = { size: { w: 640, h: 360 }, timeline: { groups: [{ words: [{ w: 'caption' }] }] } };
+  const reserve = native._internals.captionSafeInset(project);
+  const frames = native._internals.layoutTree(root, 640, 360, { b: reserve });
+  assert.deepEqual(frames.get(root), { x: 0, y: 0, w: 640, h: 360 });
+  assert.equal(reserve, 93.6);
+  assert.deepEqual(frames.get(child), { x: 0, y: 0, w: 640, h: 266.4 });
+});
+
 test('native provider renders a real browserless MP4 with local audio', { timeout: 30000 }, t => {
   const ffmpeg = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
   try { require.resolve('@napi-rs/canvas'); }

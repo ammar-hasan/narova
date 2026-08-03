@@ -61,6 +61,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   epsilon-safe scene boundaries no longer duplicate cues as zero-length
   subtitles. The complex eval now consumes the shipped reel's paired VTT
   instead of placing invented caption text over unrelated narration.
+- Native now reserves the caption-safe lower band for scene content while
+  keeping root backgrounds and full-frame clips edge-to-edge, preventing scene
+  copy behind the karaoke overlay from looking like a second caption layer.
+- The complex proof uses caption-free raster artwork, so only Narova's single
+  karaoke layer appears in review frames.
 
 ## [0.16.0] - 2026-08-03
 

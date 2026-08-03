@@ -119,6 +119,9 @@ or `progress`. Each item needs numeric `from`, `to`, `duration`, optional
   browser server.
 - `narova build`, variants, custom narration, beds/SFX, captions, and export
   deliverables work through either renderer.
+- Both renderers reserve the lower caption-safe band for scene content. Native
+  keeps the root background and `scene.clip` full-frame while laying out root
+  visual children above the karaoke overlay.
 
 Native installs the pinned MIT-licensed `@napi-rs/canvas` Skia binding and
 FontKit shaping engine plus the OFL-licensed Noto Sans Arabic fallback as
