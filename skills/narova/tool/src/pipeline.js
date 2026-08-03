@@ -20,9 +20,8 @@ const path = require('path');
 const { spawnSync } = require('child_process');
 const { ensureDir, probe } = require('./util');
 const { narration } = require('./schema');
-const { compose } = require('./compose');
 const { writeCaptions } = require('./captions');
-const { runHf } = require('./hf');
+const { getRenderer } = require('./renderers');
 const { compile, read, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
 const { audioFingerprint } = require('./audio-fingerprint');
@@ -171,7 +170,7 @@ function synth(outDir, opts = {}) {
   return { timings };
 }
 
-/* ---- full build: synth -> compose -> hyperframes render --------------------- */
+/* ---- full build: synth -> compose -> selected local renderer ---------------- */
 
 function build(config, opts = {}) {
   const outDir = path.resolve(opts.out || 'out');
@@ -193,12 +192,27 @@ function build(config, opts = {}) {
       mixExternalAudio(config, narrationPath, audioDir, log);
     }
 
-    // Generate minimal timings from scene durations.
+    // Generate timings from scene durations. When the custom narrator ships
+    // word timings, normalize them into the same scene-local contract as TTS
+    // so captions, manifests, HyperFrames, and native all see identical data.
     const sceneTimings = {};
     let t = 0;
     for (const s of config.scenes) {
       const dur = s.dur || 0;
-      sceneTimings[s.id] = { dur };
+      const cues = (config.narrationSource.wordTimings || [])
+        .filter(cue => cue.start < t + dur && cue.end > t);
+      const turns = (s.vo || []).map((turn, i) => {
+        const cue = cues[i];
+        return cue ? Math.max(0, cue.start - t) : (i * dur / Math.max(1, s.vo.length));
+      });
+      const words = cues.flatMap((cue, si) => (cue.words || []).map(word => ({
+        w: word.text || word.w || '',
+        t0: Math.max(0, word.start - t),
+        t1: Math.max(0, word.end - t),
+        who: cue.who || s.vo[si]?.who || s.vo[0]?.who || Object.keys(config.voices)[0] || 'a',
+        si,
+      })));
+      sceneTimings[s.id] = { dur, turns, words };
       t += dur;
     }
     fs.writeFileSync(path.join(outDir, 'timings.json'),
@@ -214,44 +228,58 @@ function build(config, opts = {}) {
   }
   enrichTimeline(outDir);
 
-  log('[2/3] compose');
+  const selectedRenderer = getRenderer(opts.renderer || config.renderer);
+  log(`[2/3] compose (${selectedRenderer.name})`);
   const manifest = read(path.join(outDir, 'manifest.json'));
   const cc = configFromManifest(manifest, config) || config;
   // Preserve external narration source through the manifest bridge.
   if (hasExternalNarration && config.narrationSource) cc.narrationSource = config.narrationSource;
-  const c = compose(cc, outDir);
   const caps = writeCaptions(cc, outDir);
   log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
 
-  log('[3/3] hyperframes render (first run downloads the CLI — not a hang)');
+  log(`[3/3] ${selectedRenderer.displayName} render${selectedRenderer.name === 'hyperframes' ? ' (first run downloads the CLI — not a hang)' : ' (browserless local Skia + FFmpeg)'}`);
   const name = opts.name || 'video.mp4';
-  const args = ['render', '--output', path.join('..', name)];
   const hasWalkthroughs = Object.keys(cc.walkthroughs || {}).length > 0;
   // Browser recordings contain fine UI text. PNG frame extraction avoids
   // compounding the recorder's JPEG source frames with another lossy decode.
-  if (hasWalkthroughs) args.push('--video-frame-format', 'png');
-  if (opts.fps) args.push('--fps', String(opts.fps));
-  if (opts.quality) args.push('--quality', String(opts.quality));
-
   if (opts.deliverables) {
     log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
-    const results = buildDeliverables(cc, c.dir, outDir, {
-      ...opts,
-      log,
-      safeAreaGuides: opts.safeAreaGuides,
-      videoFrameFormat: hasWalkthroughs ? 'png' : null,
-    });
+    let results;
+    let projectDir;
+    if (selectedRenderer.name === 'hyperframes') {
+      const composed = selectedRenderer.compose(cc, outDir);
+      projectDir = composed.dir;
+      results = buildDeliverables(cc, composed.dir, outDir, {
+        ...opts,
+        log,
+        safeAreaGuides: opts.safeAreaGuides,
+        videoFrameFormat: hasWalkthroughs ? 'png' : null,
+      });
+    } else {
+      const rendered = selectedRenderer.render(cc, outDir, { ...opts, name });
+      projectDir = rendered.dir;
+      const { buildDeliverablesFromSource } = require('./exports');
+      results = buildDeliverablesFromSource(cc, rendered.mp4, outDir, { ...opts, log });
+    }
     const mp4 = path.join(outDir, name);
     const seconds = probe(mp4);
     log(`done -> ${results.map(r => r.mp4).join(', ')}  (${seconds.toFixed(1)}s base)`);
-    return { mp4, seconds, hf: c.dir, deliverables: results };
+    return {
+      mp4, seconds, project: projectDir, renderer: selectedRenderer.name, deliverables: results,
+      ...(selectedRenderer.name === 'hyperframes' ? { hf: projectDir } : {}),
+    };
   }
 
-  runHf(args, c.dir);
-  const mp4 = path.join(outDir, name);
-  const seconds = probe(mp4);
+  const rendered = selectedRenderer.render(cc, outDir, {
+    ...opts, name, videoFrameFormat: hasWalkthroughs ? 'png' : null,
+  });
+  const mp4 = rendered.mp4;
+  const seconds = rendered.seconds == null ? probe(mp4) : rendered.seconds;
   log(`done -> ${mp4}  (${seconds.toFixed(1)}s)`);
-  return { mp4, seconds, hf: c.dir };
+  return {
+    mp4, seconds, project: rendered.dir, renderer: selectedRenderer.name,
+    ...(selectedRenderer.name === 'hyperframes' ? { hf: rendered.dir } : {}),
+  };
 }
 
 /* ---- compile: reel.config → manifest.json --------------------------------- */
@@ -282,7 +310,9 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
     if (process.highpass) filters.push(`highpass=f=${process.highpass}`);
     if (process.lowpass) filters.push(`lowpass=f=${process.lowpass}`);
     if (process.compressor) {
-      filters.push(`acompressor=threshold=${process.compressor.threshold}:ratio=${process.compressor.ratio}:attack=0.005:release=0.1`);
+      // FFmpeg expresses acompressor attack/release in milliseconds and its
+      // accepted attack range starts at 0.01. Five/100 ms are voice-safe.
+      filters.push(`acompressor=threshold=${process.compressor.threshold}:ratio=${process.compressor.ratio}:attack=5:release=100`);
     }
     if (process.loudness) {
       filters.push(`loudnorm=I=${process.loudness.target}:TP=${process.loudness.peak}:LRA=${process.loudness.lra}:linear=true`);
@@ -377,6 +407,7 @@ function configFromManifest(manifest, resolvedConfig) {
   const m = manifest;
   return {
     title: m.project?.title || 'narova',
+    renderer: m.renderer?.provider || m.environment?.renderer || 'hyperframes',
     platform: m.project?.platform || null,
     size: m.format ? { w: m.format.width, h: m.format.height } : { w: 1280, h: 720 },
     voices: resolvedConfig ? resolvedConfig.voices : Object.fromEntries(Object.entries(m.voices || {}).map(([id, v]) => [id, {
@@ -396,7 +427,7 @@ function configFromManifest(manifest, resolvedConfig) {
     themeCss: m.theme?.css || '',
     timing: m.timing || {},
     scenes: (m.scenes || []).map(s => ({
-      id: s.id, body: s.body || '', clip: s.clip || null, dur: s.dur || null,
+      id: s.id, body: s.body || '', visual: s.visual || null, clip: s.clip || null, dur: s.dur || null,
       walkthrough: s.walkthrough || null,
       transition: s.transition || 'fade',
       vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}) })),
@@ -406,7 +437,7 @@ function configFromManifest(manifest, resolvedConfig) {
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
     sfx: (m.audio?.sfx || []).map(s => ({ file: s.file, scene: s.scene, at: s.at, volume: s.volume })),
     variants: (m.variants || []).map(v => ({
-      id: v.id, scene: v.scene ? { body: v.scene.body, vo: v.scene.vo } : null,
+      id: v.id, scene: v.scene ? { body: v.scene.body, visual: v.scene.visual || null, vo: v.scene.vo } : null,
     })),
     variant: m.variant || null,
     series: m.series || null,

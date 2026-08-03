@@ -9,7 +9,7 @@ node <skill-dir>/tool/bin/narova.js <command>
 
 Commands read the project from the current folder **or any parent folder** —
 the nearest ancestor holding a `reel.config.*` wins, so commands work from
-inside `out/` and `out/hf` too. `--project <dir>` picks an exact starting
+inside `out/` and renderer project folders too. `--project <dir>` picks an exact starting
 folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 `--out <dir>`.
 
@@ -23,17 +23,19 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova walkthrough explore <id>` | open a declared URL in an isolated agent-browser session and print its interactive accessibility snapshot. The session stays open so an author/agent can inspect real roles, labels, text, and test ids before scripting. | browser startup |
 | `narova walkthrough capture [id]` | execute declared semantic actions on measured narration anchors and write a WebM, capture manifest, and evidence PNGs under project assets. Omit id (or use `all`) for every declaration. Explicit only; build never runs actions. | live walkthrough duration + browser startup |
 | `narova walkthrough status [id]` | report whether each capture is fresh, missing, recipe-stale, timing-stale, or modified. | instant |
-| `narova compose` | config + timings + audio + fresh walkthrough captures → `out/hf/` (a HyperFrames project) + `out/captions.srt`/`.vtt`, and prints the per-scene start table. A live detached preview is restarted on the new build automatically. | under 1s |
+| `narova compose` | config + timings + audio → the selected renderer project (`out/hf-*` or `out/native-*`) + SRT/VTT, then prints the scene table. HyperFrames also consumes fresh walkthrough captures and restarts a live detached Studio. | usually under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
-| `narova shots` | snapshot one QA frame per scene (mid-scene) into `out/hf/snapshots/review/` via `hyperframes snapshot`. `--at t1,t2,…` picks explicit times (see the scene table from `compose`). | seconds (opens a browser) |
-| `narova build` | synth + compose + `npx hyperframes render` → `out/video.mp4` (+ captions). `--variant <id>` renders `out/video-<id>.mp4` instead; `--variants` renders the base plus one `out/video-<id>.mp4` per declared variant. Restarts a live detached preview afterwards. | synth cost + render (~1–2x video length) |
-| `narova preview` | compose, print the Studio URL, then run it in the foreground | runs until Ctrl-C |
+| `narova shots` | snapshot one QA frame per scene (mid-scene) with the selected renderer. `--at t1,t2,…` picks explicit times. Native needs no browser. | seconds |
+| `narova build` | synth + compose + selected local renderer → `out/video.mp4` (+ captions). Variants and deliverables work with both providers. | synth cost + local render |
+| `narova preview` | HyperFrames: compose and open Studio. Native: render `out/preview-native.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
 | `narova providers add <manifest>` | validate, handshake with, and explicitly register an external TTS worker under `~/.narova/providers/`. | instant; starts the worker for its handshake |
 | `narova providers list` | list explicitly registered external TTS providers. | instant |
 | `narova providers doctor <name>` | verify manifest, executable, required environment, and protocol handshake. | provider startup |
 | `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
+| `narova renderers list` | list the bundled local `hyperframes` and `native` renderer providers. | instant |
+| `narova renderers doctor <name>` | verify provider-local dependencies; native explicitly reports that a browser is unnecessary. | instant |
 | `narova doctor` | check ffmpeg, python, venv, optional agent-browser, and HyperFrames. Exit 1 if a required core tool is missing; missing optional adapters/backends are reported separately. | first run downloads the HyperFrames CLI |
 | `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |
 | `narova release list` | list all saved releases with size and date. | instant |
@@ -47,6 +49,8 @@ Walkthrough config, auth, semantic locator, security, timing, and layout details
 Optional cloud TTS companions are installed and registered separately. Use
 `narova-elevenlabs` for ElevenLabs or `narova-openai` for OpenAI Speech API
 voices; neither provider is a dependency of the main Narova skill.
+Renderer providers are different: both are bundled, local, and free. See
+[`renderers.md`](renderers.md) for the portable scene tree and capability matrix.
 
 ## Flags
 
@@ -54,6 +58,8 @@ voices; neither provider is a dependency of the main Narova skill.
   (`piper|xtts|qwen|chatterbox`) or an explicitly registered external
   provider. Default piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
   path to a clean 10–20s recording (install once: `tool/setup.sh --chatterbox`).
+- `--renderer hyperframes|native` — renderer provider. HyperFrames is the
+  default; native is browserless and requires `scene.visual` on every scene.
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
   Meant for visual-only edits; if the spoken text changed since the last
   synth, `--reuse` is ignored with a note and a full synth runs instead.
@@ -106,10 +112,14 @@ out/
 ├── audio/full.wav         # all scenes joined — the narration track
 ├── timings.json           # word/turn times, scaled to the real audio
 ├── captions.srt|.vtt      # sentence-level captions, global time (compose/build/captions)
-├── hf/                    # the generated HyperFrames project
+├── hf-<project>/          # the generated HyperFrames project (when selected)
 │   ├── index.html         #   scenes, captions, timeline
 │   ├── assets/            #   project assets + narration.wav
 │   └── package.json       #   pins the hyperframes version
+├── native-<project>/      # the generated browserless project (when selected)
+│   ├── project.json       #   portable visual tree + measured timeline
+│   ├── assets/            #   copied local media/fonts
+│   └── audio/narration.wav
 ├── video.mp4              # the final video (build only)
 └── video-<id>.mp4         # per-variant videos (build --variant/--variants)
 ```
@@ -146,8 +156,8 @@ times for you.
   synth → `walkthrough capture <id>` → compose/shots/preview → release check →
   `build --reuse`. A narration/action change needs recapture; body/theme or
   window/full presentation edits reuse the recording.
-- Visual QA: `narova shots` snapshots one mid-scene frame per scene into
-  `out/hf/snapshots/review/` (`--at t1,t2` for explicit times; the `compose`
+- Visual QA: `narova shots` snapshots one mid-scene frame per scene into the
+  selected provider project (`--at t1,t2` for explicit times; the `compose`
   scene table lists every start). Then LOOK at the frames — box-based overlap
   lint misses oversized display type bleeding over neighbors and content
   sliding under the topbar/caption band.

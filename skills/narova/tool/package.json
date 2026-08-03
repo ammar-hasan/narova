@@ -1,8 +1,11 @@
 {
   "name": "narova",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "narova bundled tool — the CLI that ships inside the agent skill.",
   "private": true,
   "type": "commonjs",
-  "bin": { "narova": "bin/narova.js" }
+  "bin": { "narova": "bin/narova.js" },
+  "optionalDependencies": {
+    "@napi-rs/canvas": "1.0.3"
+  }
 }

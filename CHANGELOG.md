@@ -4,6 +4,57 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.17.0] - 2026-08-03
+
+### Added
+
+- **Two bundled free local renderer providers** — HyperFrames remains the
+  default, full browser/HTML/CSS provider; Narova Native adds deterministic,
+  browserless Skia frame drawing and FFmpeg media decode/encoding under the
+  versioned `narova-renderer-provider/v1` boundary.
+- **Provider-neutral `scene.visual` tree** — groups/stacks, text, rectangles,
+  circles, lines, SVG paths, images, SVG, progress graphics, local fonts,
+  shaped RTL text, gradients, borders, clipping, shadows, and flexible
+  row/column layout. Visual-only scenes compile to HyperFrames HTML; a scene
+  can keep a richer `body` beside its native fallback.
+- **Portable motion** — cue- or second-anchored entrances, deterministic
+  keyframes, media drift, and fade/wipe/slide/zoom scene transitions.
+- **Native media and delivery workflow** — full-frame per-scene video,
+  word-synced captions, mixed custom narration/music/SFX, snapshots, draft
+  preview MP4s, H.264/AAC builds, variants, and FFmpeg export deliverables.
+- **Renderer CLI** — `--renderer hyperframes|native`, `narova renderers list`,
+  and `narova renderers doctor <name>` make capabilities and requirements
+  explicit. Native rendering performs no network request.
+- **Complex browserless production eval** — a real 16-second, four-scene video
+  covers custom narration, word timings, audio processing/mixing, product
+  playback, raster/SVG/font assets, multilingual text, charts, cartoon motion,
+  captions, all four transitions, snapshots, and a contact sheet.
+
+### Changed
+
+- Renderer identity and portable visuals now survive config resolution,
+  variants, the canonical manifest, planning fingerprints, composition, QA,
+  preview, builds, and deliverables.
+- `narova check` understands portable visual content and asset references.
+  Native rejects HTML-only scenes and walkthroughs without an explicit clip fallback
+  before writing frames instead of silently producing a lower-fidelity result.
+- External narrator word timings are normalized into the shared timing
+  contract before captions/manifests/rendering, so SRT/VTT and both renderers
+  receive the same cues. External narration mixes now prefer `mix.wav` in the
+  HyperFrames project as documented.
+- Documentation and the landing page now explain the two local render paths,
+  portable contract, installation, honest capability boundaries, and preview
+  behavior without changing the site's established visual language.
+
+### Fixed
+
+- External narration compression uses FFmpeg's millisecond attack/release
+  units and accepted ranges, restoring the intended voice-cleanup pass on
+  current FFmpeg.
+- Native raster and decoded-video frames use explicit RGBA transfer into Skia,
+  avoiding lazy-decoder black frames; long karaoke lines wrap inside the safe
+  caption band.
+
 ## [0.16.0] - 2026-08-03
 
 ### Added

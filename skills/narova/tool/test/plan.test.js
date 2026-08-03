@@ -87,6 +87,30 @@ test('plan detects visual-only change (body edit, no vo change)', () => {
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 
+test('plan detects a portable visual tree edit', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const scene = text => ({
+    id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>Hi</h1></div>',
+    visual: { type: 'text', text, style: { color: '#fff' } },
+  });
+  const cfg1 = makeConfig({ scenes: [scene('Before')] });
+  const mp = writeManifest(cfg1, tmp);
+  const result = plan(mp, makeConfig({ scenes: [scene('After')] }));
+  assert.equal(result.level, STAGE.VISUAL);
+  assert.ok(result.changes.some(change => change.visualChanged));
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('plan treats renderer switching as compose/render-only config work', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig({ renderer: 'hyperframes' });
+  const mp = writeManifest(cfg1, tmp);
+  const result = plan(mp, makeConfig({ renderer: 'native' }));
+  assert.equal(result.level, STAGE.CONFIG);
+  assert.ok(result.detail.configDiff.some(diff => diff.key === 'renderer'));
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
 // ---- script change (audio) ---------------------------------------------------
 
 test('plan detects script change when vo text differs', () => {

@@ -9,7 +9,7 @@ prompts, scripts, web pages, and real product walkthroughs into narrated,
 captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.16.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.17.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -25,6 +25,9 @@ captioned video. Rendered on your machine.
 - **Two voices, one conversation** — local-first neural TTS dialogue, with optional registered providers when a project needs them. Give each speaker a color; narova writes the banter and the timing.
 - **Karaoke captions** — every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.
 - **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
+- **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
+  HyperFrames, or select Narova Native for deterministic Skia + FFmpeg output
+  on machines where no browser is available. No render service or fee.
 - **Real product walkthroughs** — explore a website/app semantically, record
   cursor-guided actions on narration beats, frame or full-bleed the real UI,
   then layer captions, callouts, branding, music, and SFX around it.
@@ -96,9 +99,13 @@ narova build --reuse      # after approval → out/video.mp4
 
 You need: **ffmpeg**, **Node 18+**, **Python 3.10+**.
 
-The first `build` downloads a few things one time: it creates a Python venv
+The first default `build` downloads a few things one time: it creates a Python venv
 at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.
 This can take a minute. It is not stuck.
+
+For the browserless native renderer, run `npm install` once in this checkout
+(standalone skill installs use `npm install --prefix <skill-dir>/tool`) and
+verify it with `narova renderers doctor native`.
 
 Without `npm link`, run `node skills/narova/tool/bin/narova.js` instead of `narova`.
 
@@ -109,6 +116,7 @@ A project is a folder with one config file: `reel.config.mjs`.
 ```js
 export default {
   title: "My Reel",
+  renderer: "hyperframes",                    // default; or "native"
   size: "16:9",                              // "16:9" | "1:1" | "9:16"
   assets: "assets",                          // copied into out/hf/assets/
   voices: {
@@ -146,6 +154,52 @@ The rules:
 - Put logos, images, and local fonts in `assets/`; scene HTML and theme CSS
   reference them as `assets/...`. Inline SVG and small data URIs also work.
   Remote render-time files do not.
+
+### Two local renderer providers
+
+HyperFrames remains the default and full-fidelity path: arbitrary scene
+HTML/CSS, the complete HyperFrames component/effects surface, browser Studio,
+and captured walkthrough composition. Narova Native is the free browserless
+path: it draws a provider-neutral `scene.visual` tree with Skia and encodes it
+with FFmpeg. Both run on your machine.
+
+```js
+{
+  id: "title",
+  vo: [{ who: "a", text: "One project, two local render paths." }],
+  visual: {
+    type: "stack",
+    style: { direction: "column", padding: 56, gap: 18, background: "#080d16" },
+    children: [
+      { type: "text", text: "TWO LOCAL RENDERERS",
+        style: { color: "#fff", fontSize: 64, fontWeight: 800 },
+        enter: { type: "rise", at: { cue: 0 } } },
+      { type: "progress", value: 1, fill: "#2ee6d6",
+        style: { height: 10, background: "#243248", radius: 5 },
+        animate: [{ property: "progress", from: 0, to: 1,
+          at: 0.5, duration: 1.2, ease: "out" }] },
+    ],
+  },
+}
+```
+
+A visual-only scene renders through either provider; Narova compiles the tree
+to HTML for HyperFrames. A scene can also carry both `body` and `visual`:
+HyperFrames uses the richer `body`, while native requires and uses `visual`.
+Native deliberately errors on HTML-only scenes instead of silently lowering
+them. It supports stacks/groups, text, shapes, SVG paths, local raster/SVG
+assets and fonts, shaped RTL text, full-frame scene video, cue/keyframe motion,
+four transitions, captions, audio, snapshots, and deliverables. It does not
+claim parity for arbitrary HTML/CSS/JS, browser walkthrough framing, nested
+video, shaders, 3D, particles, Lottie, or maps.
+
+```bash
+narova renderers list
+narova build --renderer native
+narova preview --renderer native   # writes out/preview-native.mp4
+```
+
+See the exact [renderer capability contract](skills/narova/references/renderers.md).
 
 ### Product walkthroughs
 
@@ -256,14 +310,15 @@ npx skills add ammar-hasan/narova --skill narova-openai -g
 narova init <dir>     new project
 narova check          validate the config (fast, no side effects)
 narova synth          make the audio + word timings
-narova compose        make the HyperFrames project (out/hf/)
+narova compose        make the selected renderer project
 narova walkthrough    explore/capture/status narrated product demos
 narova shots          snapshot one QA frame per scene
 narova build          synth + compose + render -> out/video.mp4
-narova preview        open HyperFrames Studio and print its URL
+narova preview        HyperFrames Studio, or a native draft MP4
 narova preview --detach   keep Studio alive; stop with preview --stop
 narova voices         list or download voices
 narova providers      add/list/remove/doctor external TTS providers
+narova renderers      list/doctor the two bundled local renderers
 narova doctor         check your machine
 ```
 
@@ -271,7 +326,8 @@ Commands find the project from any folder inside it (they walk up to the
 nearest `reel.config.*`). `check` also prints an estimated narration length,
 so a target duration can be tuned before any audio exists.
 
-Useful flags: `--backend <built-in-or-registered-provider>`, `--reuse` (keep old audio),
+Useful flags: `--backend <built-in-or-registered-provider>`,
+`--renderer hyperframes|native`, `--reuse` (keep old audio),
 `--tempo`, `--size`, `--fps`, `--quality draft|standard|high`,
 `--deliverables` (per-platform export presets via scale+pad — see
 [`references/cli.md`](skills/narova/references/cli.md) for the full list).
@@ -285,14 +341,14 @@ reel.config.mjs
    │             Timings are scaled to match the real audio exactly.
    ▼  capture    Optional: agent-browser records declared product actions
    │             against measured narration anchors. Never runs in build.
-   ▼  compose    narova writes a HyperFrames project into out/hf/:
-   │             scene clips, karaoke captions, reveals, one timeline.
-   ▼  render     HyperFrames renders the mp4 with the audio inside.
+   ▼  compose    narova writes the selected local renderer project:
+   │             scene visuals, karaoke captions, reveals, one timeline.
+   ▼  render     HyperFrames or Native renders the mp4 with audio inside.
    │
 out/video.mp4
 ```
 
-`out/` and `out/hf/` are build folders. Never edit them.
+`out/`, `out/hf-*`, and `out/native-*` are build folders. Never edit them.
 The config file is the only source of truth.
 
 ## Repo layout

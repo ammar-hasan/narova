@@ -27,6 +27,13 @@ test('help shows on no command, help, and -h', () => {
   }
 });
 
+test('renderers list exposes both bundled local providers', () => {
+  const r = run(['renderers', 'list']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /^hyperframes\t[^\t]+\tlocal · browser$/m);
+  assert.match(r.stdout, /^native\t1\.0\.0\tlocal · browserless$/m);
+});
+
 test('walkthrough status reports a missing take; capture requires synth timings', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-walkthrough-'));
   fs.writeFileSync(path.join(dir, 'reel.config.json'), JSON.stringify({

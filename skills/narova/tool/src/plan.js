@@ -8,7 +8,7 @@
  *   align     — forced word alignment (optional, post-synth)
  *   mix       — audio mixing (bed + SFX + narration into full.wav)
  *   capture   — narration-timed walkthrough recording (explicit)
- *   compose   — HyperFrames project generation
+ *   compose   — selected renderer project generation
  *   render    — video rendering + ffmpeg delivery encode
  *
  * Rationale: a bed/SFX change should re-trigger the audio mix but
@@ -156,6 +156,7 @@ function plan(fromManifestPath, toConfig, opts = {}) {
     }
     if (sc.voChanged) { s.voChanged = sc.voChanged; hasVoChange = true; }
     if (sc.bodyChanged) { s.bodyChanged = true; hasVisualChange = true; }
+    if (sc.visualChanged) { s.visualChanged = true; hasVisualChange = true; }
     if (sc.clipChanged) { s.clipChanged = true; hasVisualChange = true; }
     if (sc.walkthroughChanged) {
       s.walkthroughChanged = true;
@@ -280,12 +281,13 @@ function diffScenes(fromScenes, toScenes) {
     const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
     if (fvo !== tvo) entry.voChanged = true;
     if (f.body !== t.body) entry.bodyChanged = true;
+    if (JSON.stringify(f.visual) !== JSON.stringify(t.visual)) entry.visualChanged = true;
     if (f.clip !== t.clip) entry.clipChanged = true;
     if (JSON.stringify(f.walkthrough) !== JSON.stringify(t.walkthrough)) {
       entry.walkthroughChanged = true;
     }
     if (f.transition !== t.transition) entry.transitionChanged = true;
-    if (entry.idChanged || entry.voChanged || entry.bodyChanged || entry.clipChanged || entry.walkthroughChanged || entry.transitionChanged) {
+    if (entry.idChanged || entry.voChanged || entry.bodyChanged || entry.visualChanged || entry.clipChanged || entry.walkthroughChanged || entry.transitionChanged) {
       results.push(entry);
     }
   }
@@ -294,6 +296,7 @@ function diffScenes(fromScenes, toScenes) {
 
 function diffConfigTopLevel(from, to, fromHash, toHash, hasAssetChange) {
   const checks = [
+    { key: 'renderer', from: from.renderer,          to: to.renderer },
     { key: 'platform', from: from.project?.platform, to: to.project?.platform },
     { key: 'bed',      from: from.audio?.bed,       to: to.audio?.bed },
     { key: 'sfx',      from: from.audio?.sfx,       to: to.audio?.sfx },
@@ -364,7 +367,7 @@ function formatPlan(result, opts = {}) {
   if (result.changes.length) {
     for (const c of result.changes) {
       if (typeof c === 'string') lines.push(`  • ${c}`);
-      else if (c.scene) lines.push(`  • scene "${c.scene}":${c.voChanged ? ' vo' : ''}${c.bodyChanged ? ' body' : ''}${c.clipChanged ? ' clip' : ''}${c.walkthroughChanged ? ' walkthrough' : ''}${c.added ? ' (added)' : ''}${c.removed ? ' (removed)' : ''}`);
+      else if (c.scene) lines.push(`  • scene "${c.scene}":${c.voChanged ? ' vo' : ''}${c.bodyChanged ? ' body' : ''}${c.visualChanged ? ' visual' : ''}${c.clipChanged ? ' clip' : ''}${c.walkthroughChanged ? ' walkthrough' : ''}${c.added ? ' (added)' : ''}${c.removed ? ' (removed)' : ''}`);
     }
   }
   if (result.detail?.configDiff?.length) {

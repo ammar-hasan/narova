@@ -96,13 +96,13 @@ function compose(config, outDir) {
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
   fs.writeFileSync(path.join(hfDir, 'style.css'), css);
-  // Audio: external narration file, mix.wav, or full.wav (in that order).
-  if (hasExternalNarration) {
-    fs.copyFileSync(config.narrationSource.file, path.join(assetsDir, 'narration.wav'));
-  } else {
-    const mixWav = path.join(outDir, 'audio', 'mix.wav');
-    fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
-  }
+  // Audio: the mixed track wins for both synthesized and custom narration;
+  // otherwise use the custom narrator file, then synthesized full.wav.
+  const mixWav = path.join(outDir, 'audio', 'mix.wav');
+  const audioSource = fs.existsSync(mixWav)
+    ? mixWav
+    : (hasExternalNarration ? config.narrationSource.file : fullWav);
+  fs.copyFileSync(audioSource, path.join(assetsDir, 'narration.wav'));
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({
     name: slug(config.title || 'narova'),
     private: true,
