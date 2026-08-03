@@ -328,8 +328,8 @@
     },
     cloud: {
       mode: "# optional companion → premium voice",
-      prompt: "Use my registered OpenAI provider with the marin voice for the narrator. Make the delivery warm and confident, keep the project config free of credentials, and show me a preview before rendering.",
-      reply: "I’ll verify the registered OpenAI companion, use steerable delivery instructions without putting them in captions, keep the API key in the environment, and preserve Narova’s normal cache, timing, captions, and render pipeline."
+      prompt: "Use my registered cloud TTS companion for the narrator — OpenAI with marin, or ElevenLabs with [voice-id]. Keep credentials out of the project config and show me a preview before rendering.",
+      reply: "I’ll verify the companion you choose, keep its API key in the environment, apply provider-native voice controls without leaking them into captions, and preserve Narova’s normal cache, timing, captions, and render pipeline."
     }
   };
   var activePrompt = PROMPT_EXAMPLES.idea;
