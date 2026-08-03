@@ -25,6 +25,29 @@ function canvasModule() {
   }
 }
 
+function fontkitModule() {
+  try { return require('fontkit'); }
+  catch (error) {
+    const toolDir = path.resolve(__dirname, '../..');
+    const wrapped = new Error(`native complex-script text needs fontkit; run \`npm install --prefix ${toolDir}\`, then retry`);
+    wrapped.cause = error;
+    throw wrapped;
+  }
+}
+
+function defaultArabicFont() {
+  try {
+    return require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-700-normal.woff2');
+  } catch (error) {
+    const toolDir = path.resolve(__dirname, '../..');
+    const wrapped = new Error(`native Arabic-script text needs the bundled Noto Sans Arabic font; run \`npm install --prefix ${toolDir}\`, then retry`);
+    wrapped.cause = error;
+    throw wrapped;
+  }
+}
+
+const ARABIC_SCRIPT = /[\u0600-\u08ff\ufb50-\ufdff\ufe70-\ufeff]/u;
+
 function validateConfig(config) {
   const errors = [];
   for (let i = 0; i < config.scenes.length; i++) {
@@ -57,9 +80,9 @@ function timingsFor(config, outDir) {
     let cursor = 0;
     for (const scene of config.scenes) {
       const entry = timings[scene.id] || (timings[scene.id] = { dur: scene.dur || 0 });
-      const end = cursor + entry.dur;
+      const end = Math.round((cursor + entry.dur) * 1e6) / 1e6;
       entry.turns = entry.turns || [];
-      entry.words = cues.filter(cue => cue.start < end && cue.end > cursor)
+      entry.words = cues.filter(cue => cue.start < end - 1e-6 && cue.end > cursor + 1e-6)
         .flatMap((cue, si) => (cue.words || []).map(word => ({
           w: word.text || word.w || '',
           t0: Math.max(0, word.start - cursor),
@@ -360,13 +383,108 @@ function wrapText(ctx, text, width) {
   return lines;
 }
 
-function drawText(ctx, node, frame) {
+function fontSupports(font, text) {
+  for (const character of String(text)) {
+    if (/\s/u.test(character)) continue;
+    if (!font.hasGlyphForCodePoint(character.codePointAt(0))) return false;
+  }
+  return true;
+}
+
+function shapingFont(node, env) {
+  const style = node.style || {};
+  const text = String(node.text || '');
+  if (style.direction !== 'rtl') return null;
+  const preferred = style.fontFile ? path.resolve(env.baseDir, style.fontFile) : null;
+  const fallback = ARABIC_SCRIPT.test(text) ? defaultArabicFont() : null;
+  const candidates = [...new Set([preferred, fallback].filter(Boolean))];
+  if (!candidates.length) {
+    throw new Error('native complex-script text needs style.fontFile pointing to a font with the required glyphs');
+  }
+  const fontkit = fontkitModule();
+  if (!env.fonts) env.fonts = new Map();
+  for (const file of candidates) {
+    if (!fs.existsSync(file)) throw new Error(`native shaping font not found: ${file}`);
+    let font = env.fonts.get(file);
+    if (!font) { font = fontkit.openSync(file); env.fonts.set(file, font); }
+    if (fontSupports(font, text)) return font;
+  }
+  throw new Error(`native shaping fonts do not cover all characters in: ${JSON.stringify(text)}`);
+}
+
+function shapeRun(font, text, style = {}) {
+  const direction = style.direction === 'rtl' ? 'rtl' : 'ltr';
+  const language = style.language || (ARABIC_SCRIPT.test(text) ? 'urd' : null);
+  return font.layout(text, [], null, language, direction);
+}
+
+function shapedLines(font, text, width, size, style) {
+  const scale = size / font.unitsPerEm;
+  const lines = [];
+  for (const paragraph of String(text).split('\n')) {
+    const words = paragraph.trim().split(/\s+/u).filter(Boolean);
+    if (!words.length) { lines.push(shapeRun(font, '', style)); continue; }
+    let line = '';
+    for (const word of words) {
+      const candidate = line ? `${line} ${word}` : word;
+      const run = shapeRun(font, candidate, style);
+      if (line && run.advanceWidth * scale > width) {
+        lines.push(shapeRun(font, line, style));
+        line = word;
+      } else line = candidate;
+    }
+    if (line) lines.push(shapeRun(font, line, style));
+  }
+  return lines;
+}
+
+function drawGlyphRun(ctx, run, x, baseline, scale, env) {
+  ctx.save();
+  ctx.translate(x, baseline);
+  ctx.scale(scale, -scale);
+  let cursorX = 0, cursorY = 0;
+  run.glyphs.forEach((glyph, index) => {
+    const position = run.positions[index];
+    ctx.save();
+    ctx.translate(cursorX + position.xOffset, cursorY + position.yOffset);
+    ctx.fill(new env.canvas.Path2D(glyph.path.toSVG()));
+    ctx.restore();
+    cursorX += position.xAdvance;
+    cursorY += position.yAdvance;
+  });
+  ctx.restore();
+}
+
+function drawShapedText(ctx, node, frame, env, font, size) {
+  const style = node.style || {};
+  const scale = size / font.unitsPerEm;
+  const lines = shapedLines(font, node.text, frame.w, size, style).slice(0, style.maxLines || 1000);
+  const lineHeight = size * (+style.lineHeight || 1.25);
+  const blockHeight = lines.length * lineHeight;
+  const top = style.verticalAlign === 'center' ? frame.y + (frame.h - blockHeight) / 2 : frame.y;
+  const align = style.textAlign || (style.direction === 'rtl' ? 'right' : 'left');
+  lines.forEach((run, index) => {
+    const width = run.advanceWidth * scale;
+    const x = align === 'center'
+      ? frame.x + (frame.w - width) / 2
+      : (align === 'right' ? frame.x + frame.w - width : frame.x);
+    const baseline = top + index * lineHeight + run.bbox.maxY * scale;
+    drawGlyphRun(ctx, run, x, baseline, scale, env);
+  });
+}
+
+function drawText(ctx, node, frame, env) {
   const style = node.style || {};
   const size = +style.fontSize || Math.max(18, frame.h * 0.35);
   const weight = style.fontWeight || 600;
   const family = style.fontFamily || 'sans-serif';
-  ctx.font = `${weight} ${size}px ${JSON.stringify(family)}`;
   ctx.fillStyle = style.color || '#ffffff';
+  const font = shapingFont(node, env);
+  if (font) {
+    drawShapedText(ctx, node, frame, env, font, size);
+    return;
+  }
+  ctx.font = `${weight} ${size}px ${JSON.stringify(family)}`;
   ctx.textBaseline = 'top';
   ctx.direction = style.direction === 'rtl' ? 'rtl' : 'ltr';
   const align = style.textAlign || (style.direction === 'rtl' ? 'right' : 'left');
@@ -427,7 +545,7 @@ function drawNode(ctx, node, frames, localTime, scene, env) {
     if (style.fill && style.fill !== 'none') { ctx.fillStyle = style.fill; ctx.fill(p); }
     if (style.stroke || !style.fill) { ctx.strokeStyle = style.stroke || '#ffffff'; ctx.lineWidth = +style.strokeWidth || 2; ctx.stroke(p); }
     ctx.restore();
-  } else if (node.type === 'text') drawText(ctx, node, frame);
+  } else if (node.type === 'text') drawText(ctx, node, frame, env);
   else if (node.type === 'image' || node.type === 'svg') {
     const image = imageFrom(env.canvas, node, env.baseDir, env.images);
     fitImage(ctx, image, frame, style.fit || 'cover');
@@ -457,16 +575,25 @@ function transitionState(scene, localTime, index) {
   return { opacity: p, x: 0, scale: 1, wipe: 1 };
 }
 
-function drawCaptions(ctx, project, time) {
+function drawCaptions(ctx, project, time, env) {
   const group = project.timeline.groups.find(g => time >= g.start && time < g.end);
   if (!group || !group.words.length) return;
   const width = project.size.w, height = project.size.h;
   const fontSize = Math.max(24, Math.round(width * 0.035));
   const paddingX = fontSize * 0.75, paddingY = fontSize * 0.42;
+  const captionText = group.words.map(word => word.w).join(' ');
+  const strongCharacters = [...captionText].filter(character => /[\p{L}\p{N}]/u.test(character));
+  const rtl = strongCharacters.length > 0 && strongCharacters.every(character => ARABIC_SCRIPT.test(character));
+  const shapedNode = { text: captionText, style: { direction: rtl ? 'rtl' : 'ltr' } };
+  const font = rtl ? shapingFont(shapedNode, env) : null;
+  const fontScale = font ? fontSize / font.unitsPerEm : null;
   ctx.save();
   ctx.font = `800 ${fontSize}px sans-serif`;
   const gap = fontSize * 0.24;
-  const wordWidths = group.words.map(word => ctx.measureText(word.w).width);
+  const wordRuns = font ? group.words.map(word => shapeRun(font, word.w, shapedNode.style)) : null;
+  const wordWidths = font
+    ? wordRuns.map(run => run.advanceWidth * fontScale)
+    : group.words.map(word => ctx.measureText(word.w).width);
   const maxContent = width * 0.82;
   const lines = [];
   let line = [], lineWidth = 0;
@@ -486,15 +613,25 @@ function drawCaptions(ctx, project, time) {
   ctx.fillStyle = 'rgba(3,7,14,0.86)'; ctx.fill();
   ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
   lines.forEach((entry, lineIndex) => {
-    let cursor = x + (boxWidth - entry.width) / 2;
+    let cursor = rtl
+      ? x + (boxWidth + entry.width) / 2
+      : x + (boxWidth - entry.width) / 2;
     entry.indexes.forEach(i => {
       const word = group.words[i];
       const active = time >= word.t0 && time < word.t1;
       const past = time >= word.t1;
       const voice = project.voices[group.who] || {};
       ctx.fillStyle = active ? (voice.color || project.theme.accent || '#2ee6d6') : (past ? '#ffffff' : '#9ca8ba');
-      ctx.fillText(word.w, cursor, y + paddingY + lineHeight * (lineIndex + 0.5));
-      cursor += wordWidths[i] + gap;
+      if (font) {
+        cursor -= wordWidths[i];
+        const lineTop = y + paddingY + lineHeight * lineIndex;
+        const baseline = lineTop + wordRuns[i].bbox.maxY * fontScale;
+        drawGlyphRun(ctx, wordRuns[i], cursor, baseline, fontScale, env);
+        cursor -= gap;
+      } else {
+        ctx.fillText(word.w, cursor, y + paddingY + lineHeight * (lineIndex + 0.5));
+        cursor += wordWidths[i] + gap;
+      }
     });
   });
   ctx.restore();
@@ -531,6 +668,7 @@ function registerFonts(project, baseDir, canvas) {
   for (const [family, file] of refs) {
     const absolute = path.resolve(baseDir, file);
     if (!fs.existsSync(absolute)) throw new Error(`native font file not found: ${absolute}`);
+    if (/\.woff2?$/i.test(absolute)) continue; // FontKit handles webfonts for complex-script nodes.
     if (!canvas.GlobalFonts.registerFromPath(absolute, family)) throw new Error(`native renderer could not register font: ${absolute}`);
   }
 }
@@ -599,7 +737,7 @@ function renderCanvas(project, projectDir, time, env) {
   drawNode(ctx, current.source.visual, frames, localTime, current.timeline, { ...env, baseDir: projectDir });
   ctx.restore();
   drawChrome(ctx, project, time, current.index);
-  drawCaptions(ctx, project, time);
+  drawCaptions(ctx, project, time, env);
   return canvas;
 }
 
@@ -622,7 +760,7 @@ function render(config, outDir, opts = {}) {
   let clipDirs = new Map();
   try {
     clipDirs = extractClipFrames(project, composed.dir, frameRoot, fps);
-    const env = { canvas, fps, clipDirs, images: new Map() };
+    const env = { canvas, fps, clipDirs, images: new Map(), fonts: new Map() };
     const totalFrames = Math.max(1, Math.ceil(project.timeline.total * fps));
     for (let frame = 0; frame < totalFrames; frame++) {
       const surface = renderCanvas(project, composed.dir, frame / fps, env);
@@ -654,7 +792,7 @@ function shots(config, outDir, times) {
   fs.rmSync(dir, { recursive: true, force: true }); ensureDir(dir);
   const temp = ensureDir(path.join(composed.dir, '.snapshot-clips'));
   const env = {
-    canvas, fps: project.fps || 30, images: new Map(),
+    canvas, fps: project.fps || 30, images: new Map(), fonts: new Map(),
     snapshotClip(current, localTime) {
       const output = path.join(temp, `clip-${current.index}.rgba`);
       sh('ffmpeg', [
@@ -696,11 +834,17 @@ module.exports = {
   doctor() {
     let canvas = false;
     try { require.resolve('@napi-rs/canvas'); canvas = true; } catch {}
+    let fontkit = false;
+    try { require.resolve('fontkit'); fontkit = true; } catch {}
+    let arabicFont = false;
+    try { defaultArabicFont(); arabicFont = true; } catch {}
     const ffmpeg = !!which('ffmpeg');
     return {
-      ok: canvas && ffmpeg,
+      ok: canvas && ffmpeg && fontkit && arabicFont,
       checks: [
         { name: '@napi-rs/canvas', ok: canvas, detail: canvas ? 'installed' : `run npm install --prefix ${path.resolve(__dirname, '../..')}` },
+        { name: 'fontkit', ok: fontkit, detail: fontkit ? 'installed (OpenType shaping)' : `run npm install --prefix ${path.resolve(__dirname, '../..')}` },
+        { name: 'Noto Sans Arabic', ok: arabicFont, detail: arabicFont ? 'installed (Urdu/Arabic fallback)' : `run npm install --prefix ${path.resolve(__dirname, '../..')}` },
         { name: 'ffmpeg', ok: ffmpeg, detail: which('ffmpeg') || 'not found' },
         { name: 'browser', ok: true, detail: 'not required' },
       ],
@@ -710,5 +854,8 @@ module.exports = {
   compose,
   render,
   shots,
-  _internals: { layoutTree, animatedState, renderCanvas, qualityOptions },
+  _internals: {
+    layoutTree, animatedState, renderCanvas, qualityOptions,
+    fontSupports, shapingFont, shapeRun, shapedLines,
+  },
 };

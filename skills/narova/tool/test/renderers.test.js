@@ -85,6 +85,43 @@ test('native accepts explicit fallbacks beside HyperFrames-only metadata', () =>
   assert.doesNotThrow(() => getRenderer('native').validate(config));
 });
 
+test('native shapes Urdu through OpenType and falls back from an incomplete font', t => {
+  try { require.resolve('fontkit'); require.resolve('@fontsource/noto-sans-arabic'); }
+  catch { t.skip('native shaping dependencies not installed'); return; }
+  const native = getRenderer('native');
+  const text = 'ہر کہانی، اپنی زبان میں';
+  const node = {
+    text,
+    style: {
+      direction: 'rtl', language: 'urd',
+      fontFile: '/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf',
+    },
+  };
+  const font = native._internals.shapingFont(node, { baseDir: '/', fonts: new Map() });
+  assert.match(font.familyName, /Noto Sans Arabic/i);
+  const run = native._internals.shapeRun(font, text, node.style);
+  assert.equal(run.direction, 'rtl');
+  assert.ok(run.glyphs.length > 0);
+  assert.ok(run.glyphs.every(glyph => glyph.id !== 0), 'shaped run must not contain .notdef/tofu glyphs');
+});
+
+test('external caption transcript must match the declared voiceover', () => {
+  const tempRoot = path.join(process.cwd(), 'out', 'test-tmp');
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const project = fs.mkdtempSync(path.join(tempRoot, 'narova-transcript-'));
+  fs.writeFileSync(path.join(project, 'narration.wav'), 'RIFFfake');
+  fs.writeFileSync(path.join(project, 'words.json'), JSON.stringify([{
+    start: 0, end: 1, text: 'Unrelated subtitle.',
+    words: [{ text: 'Unrelated', start: 0, end: 0.5 }, { text: 'subtitle.', start: 0.5, end: 1 }],
+  }]));
+  assert.throws(() => resolveConfig({
+    title: 'Transcript guard', renderer: 'native',
+    narration: { file: 'narration.wav', wordTimings: 'words.json' },
+    voices: { a: { speaker: 'custom-file' } },
+    scenes: [{ id: 'one', visual: VISUAL, vo: [{ who: 'a', text: 'What the narrator says.' }], dur: 1 }],
+  }, {}, project), /transcript text does not match scene voiceover/);
+});
+
 test('native provider renders a real browserless MP4 with local audio', { timeout: 30000 }, t => {
   const ffmpeg = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
   try { require.resolve('@napi-rs/canvas'); }

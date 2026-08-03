@@ -28,45 +28,67 @@ function write(file, value) {
   fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value, null, 2) + '\n');
 }
 
-function timedWords(text, start, end) {
+// This source VTT is sentence-timed, not word-timed. Interpolation exercises
+// karaoke rendering without pretending that these are forced-alignment data.
+function interpolatedWords(text, start, end) {
   const words = text.split(/\s+/u);
   const step = (end - start) / words.length;
   return words.map((word, i) => ({ text: word, start: +(start + step * i).toFixed(3), end: +(start + step * (i + 0.82)).toFixed(3) }));
 }
 
+function parseVtt(file) {
+  const stamp = value => {
+    const parts = value.trim().split(':').map(Number);
+    return parts.length === 3 ? parts[0] * 3600 + parts[1] * 60 + parts[2] : parts[0] * 60 + parts[1];
+  };
+  const cues = [];
+  for (const block of fs.readFileSync(file, 'utf8').replace(/\r/g, '').split(/\n\n+/)) {
+    const lines = block.trim().split('\n');
+    const timing = lines.findIndex(line => line.includes('-->'));
+    if (timing < 0) continue;
+    const [start, end] = lines[timing].split('-->').map(stamp);
+    const text = lines.slice(timing + 1).join(' ').replace(/<[^>]+>/g, '').trim();
+    if (text) cues.push({ start, end, text, words: interpolatedWords(text, start, end) });
+  }
+  return cues;
+}
+
 fs.rmSync(PROJECT, { recursive: true, force: true });
 ensureDir(ASSETS);
 
-// Actual shipped narration is treated exactly like a custom-provided narrator.
+// The shipped reel and its paired VTT are treated exactly like a custom
+// narrator plus supplied transcript. Never invent captions for borrowed audio.
+const transcriptCues = parseVtt(path.join(ROOT, 'docs/assets/narova-skill-reel.vtt')).slice(0, 5);
+if (transcriptCues.length !== 5 || transcriptCues[0].text !== 'Stop building narrated videos frame by frame.') {
+  throw new Error('native complex eval could not verify the shipped narrator transcript');
+}
+const duration = transcriptCues.at(-1).end;
 run('ffmpeg', [
   '-y', '-loglevel', 'error', '-i', path.join(ROOT, 'docs/assets/narova-skill-reel.mp4'),
-  '-t', '16', '-vn', '-ar', '48000', '-ac', '1', path.join(PROJECT, 'narrator.wav'),
+  '-t', String(duration), '-vn', '-ar', '48000', '-ac', '1', path.join(PROJECT, 'narrator.wav'),
 ]);
 run('ffmpeg', [
   '-y', '-loglevel', 'error', '-ss', '8', '-i', path.join(ROOT, 'docs/assets/narova-product-walkthrough-demo.mp4'),
   '-t', '4', '-an', '-c:v', 'libx264', '-preset', 'veryfast', '-crf', '21', '-pix_fmt', 'yuv420p', path.join(ASSETS, 'product.mp4'),
 ]);
-run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=120:duration=16', '-af', 'volume=0.22', '-ar', '48000', path.join(ASSETS, 'bed.wav')]);
+run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', `sine=frequency=120:duration=${duration}`, '-af', 'volume=0.22', '-ar', '48000', path.join(ASSETS, 'bed.wav')]);
 run('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=880:duration=0.16', '-af', 'afade=t=out:st=0.04:d=0.12', '-ar', '48000', path.join(ASSETS, 'ping.wav')]);
 fs.copyFileSync(path.join(ROOT, 'docs/assets/poster.jpg'), path.join(ASSETS, 'poster.jpg'));
 fs.copyFileSync('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', path.join(ASSETS, 'DejaVuSans.ttf'));
+fs.copyFileSync(
+  require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-700-normal.woff2'),
+  path.join(ASSETS, 'NotoSansArabic.woff2'),
+);
 write(path.join(ASSETS, 'mark.svg'), `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 140 140">
   <defs><linearGradient id="g" x1="0" y1="0" x2="1" y2="1"><stop stop-color="#2ee6d6"/><stop offset="1" stop-color="#f2418a"/></linearGradient></defs>
   <path d="M70 8 129 42v67L70 143 11 109V42Z" fill="url(#g)"/>
   <path d="M42 74h56M70 46v56" stroke="#07111c" stroke-width="13" stroke-linecap="round"/>
 </svg>`);
 
-const lines = [
-  ['One local project can carry two rendering paths.', 0.2, 3.7],
-  ['Real product playback stays synchronized with narration and captions.', 4.2, 7.7],
-  ['Shapes paths and keyframes create cartoons without a browser.', 8.2, 11.7],
-  ['Local fonts support multilingual visual stories with no rendering fee.', 12.2, 15.7],
-];
-write(path.join(PROJECT, 'words.json'), lines.map(([text, start, end]) => ({
-  text, start, end, words: timedWords(text, start, end),
-})));
+write(path.join(PROJECT, 'words.json'), transcriptCues);
 
 const font = { fontFamily: 'Narova Sans', fontFile: 'assets/DejaVuSans.ttf' };
+const urduFont = { fontFamily: 'Noto Sans Arabic', fontFile: 'assets/NotoSansArabic.woff2', language: 'urd' };
 const config = resolveConfig({
   title: 'Narova Native · Complex Proof',
   renderer: 'native',
@@ -78,17 +100,17 @@ const config = resolveConfig({
   },
   voices: { a: { speaker: 'custom-file', color: '#2ee6d6', label: 'custom narrator' } },
   theme: { bg: '#070b13', accent: '#2ee6d6' },
-  captions: { preset: 'karaoke', emphasis: ['local', 'playback', 'cartoons', 'multilingual'] },
+  captions: { preset: 'karaoke', emphasis: ['Narova', 'captions', 'graphics', 'project'] },
   bed: { file: 'assets/bed.wav', volume: 0.035, fadeIn: 0.4, fadeOut: 1.2 },
   sfx: [
-    { file: 'assets/ping.wav', at: 4.05, volume: 0.26 },
-    { file: 'assets/ping.wav', at: 8.05, volume: 0.24 },
-    { file: 'assets/ping.wav', at: 12.05, volume: 0.22 },
+    { file: 'assets/ping.wav', at: 3.2, volume: 0.26 },
+    { file: 'assets/ping.wav', at: 5.8, volume: 0.24 },
+    { file: 'assets/ping.wav', at: 9.2, volume: 0.22 },
   ],
   scenes: [
     {
-      id: 'opener', dur: 4, transition: 'fade',
-      vo: [{ who: 'a', text: lines[0][0] }],
+      id: 'opener', dur: 3.2, transition: 'fade',
+      vo: [{ who: 'a', text: transcriptCues[0].text }],
       visual: {
         type: 'stack', style: {
           direction: 'row', padding: 38, gap: 26,
@@ -105,8 +127,8 @@ const config = resolveConfig({
       },
     },
     {
-      id: 'playback', dur: 4, transition: 'wipe', clip: 'assets/product.mp4',
-      vo: [{ who: 'a', text: lines[1][0] }],
+      id: 'playback', dur: 2.6, transition: 'wipe', clip: 'assets/product.mp4',
+      vo: [{ who: 'a', text: transcriptCues[1].text }],
       visual: {
         type: 'group', children: [
           { type: 'rect', style: { position: 'absolute', x: 24, y: 50, width: 292, height: 66, background: 'rgba(3,7,14,0.88)', radius: 13, borderWidth: 1, borderColor: '#2ee6d6' }, enter: { type: 'slide-left', at: 0.2 }, children: [
@@ -119,8 +141,8 @@ const config = resolveConfig({
       },
     },
     {
-      id: 'cartoon', dur: 4, transition: 'slide',
-      vo: [{ who: 'a', text: lines[2][0] }],
+      id: 'cartoon', dur: 3.4, transition: 'slide',
+      vo: [{ who: 'a', text: transcriptCues[2].text }],
       visual: {
         type: 'group', style: { background: '#f4d89b' }, children: [
           { type: 'circle', style: { x: 442, y: 58, width: 110, height: 110, fill: '#f2418a' }, animate: [{ property: 'y', from: 0, to: 92, at: 0.1, duration: 3.5, ease: 'in-out' }] },
@@ -133,14 +155,17 @@ const config = resolveConfig({
       },
     },
     {
-      id: 'data', dur: 4, transition: 'zoom',
-      vo: [{ who: 'a', text: lines[3][0] }],
+      id: 'data', dur: 7.2, transition: 'zoom',
+      vo: [
+        { who: 'a', text: transcriptCues[3].text },
+        { who: 'a', text: transcriptCues[4].text },
+      ],
       visual: {
         type: 'stack', style: { direction: 'row', padding: 34, gap: 28, background: '#07111c' }, children: [
           { type: 'image', src: 'assets/poster.jpg', drift: 'in', style: { width: 214, height: 246, radius: 18, overflow: 'hidden', fit: 'cover', borderWidth: 2, borderColor: '#2ee6d6' }, enter: { type: 'zoom', at: 0.2 } },
           { type: 'stack', style: { direction: 'column', gap: 10 }, children: [
             { type: 'text', text: 'FREE · LOCAL · MULTILINGUAL', style: { ...font, height: 34, color: '#2ee6d6', fontSize: 17, fontWeight: 800 }, enter: { type: 'fade', at: 0.1 } },
-            { type: 'text', text: 'ہر کہانی،\nاپنی زبان میں', style: { ...font, direction: 'rtl', textAlign: 'right', height: 108, color: '#ffffff', fontSize: 36, fontWeight: 700, lineHeight: 1.25 }, enter: { type: 'rise', at: 0.35 } },
+            { type: 'text', text: 'ہر کہانی،\nاپنی زبان میں', style: { ...urduFont, direction: 'rtl', textAlign: 'right', height: 108, color: '#ffffff', fontSize: 36, fontWeight: 700, lineHeight: 1.25 }, enter: { type: 'rise', at: 0.35 } },
             { type: 'stack', style: { direction: 'column', gap: 9 }, children: [
               { type: 'progress', value: 0.92, fill: '#2ee6d6', style: { height: 14, background: '#243248', radius: 7 }, animate: [{ property: 'progress', from: 0, to: 0.92, at: 0.7, duration: 1.0, ease: 'out' }] },
               { type: 'progress', value: 0.74, fill: '#f2418a', style: { height: 14, background: '#243248', radius: 7 }, animate: [{ property: 'progress', from: 0, to: 0.74, at: 0.9, duration: 1.1, ease: 'out' }] },
@@ -161,13 +186,22 @@ const result = build(config, {
   out: path.join(PROJECT, 'out'), projectDir: PROJECT,
   fps: 24, quality: 'standard', log: console.log,
 });
+const renderedSrt = fs.readFileSync(path.join(PROJECT, 'out', 'captions.srt'), 'utf8');
+for (const cue of transcriptCues) {
+  if (!renderedSrt.includes(cue.text)) throw new Error(`native captions lost narrator transcript cue: ${cue.text}`);
+}
+const renderedCueTimings = [...renderedSrt.matchAll(/^(\d\d:\d\d:\d\d,\d{3}) --> (\d\d:\d\d:\d\d,\d{3})$/gm)];
+if (renderedCueTimings.length !== transcriptCues.length
+    || renderedCueTimings.some(match => match[1] === match[2])) {
+  throw new Error(`native captions expected ${transcriptCues.length} nonzero cues, got ${renderedCueTimings.length}`);
+}
 if (fs.existsSync(path.join(result.project, '.frames'))) {
   throw new Error('native renderer retained its temporary frame sequence');
 }
-const times = [2, 6, 10, 14];
+const times = [1.6, 4.5, 7.5, 12.8];
 const shots = shotsWithRenderer(config, path.join(PROJECT, 'out'), times);
-if (fs.existsSync(path.join(shots.project, '.frames'))) {
-  throw new Error('native snapshots retained a stale render frame sequence');
+if (fs.existsSync(path.join(shots.project, '.snapshot-clips'))) {
+  throw new Error('native snapshots retained temporary decoded clip data');
 }
 run('ffmpeg', [
   '-y', '-loglevel', 'error', '-pattern_type', 'glob', '-i', path.join(shots.dir, '*.png'),
@@ -180,6 +214,9 @@ const summary = {
   renderer: result.renderer,
   video: result.mp4,
   seconds: probe(result.mp4),
+  transcriptCues: transcriptCues.length,
+  transcriptSource: 'paired-vtt',
+  wordTimingSource: 'sentence-interpolation',
   snapshots: shots.dir,
   contactSheet: path.join(PROJECT, 'contact-sheet.jpg'),
 };

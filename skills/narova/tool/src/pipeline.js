@@ -199,8 +199,9 @@ function build(config, opts = {}) {
     let t = 0;
     for (const s of config.scenes) {
       const dur = s.dur || 0;
+      const sceneEnd = Math.round((t + dur) * 1e6) / 1e6;
       const cues = (config.narrationSource.wordTimings || [])
-        .filter(cue => cue.start < t + dur && cue.end > t);
+        .filter(cue => cue.start < sceneEnd - 1e-6 && cue.end > t + 1e-6);
       const turns = (s.vo || []).map((turn, i) => {
         const cue = cues[i];
         return cue ? Math.max(0, cue.start - t) : (i * dur / Math.max(1, s.vo.length));
@@ -213,7 +214,7 @@ function build(config, opts = {}) {
         si,
       })));
       sceneTimings[s.id] = { dur, turns, words };
-      t += dur;
+      t = sceneEnd;
     }
     fs.writeFileSync(path.join(outDir, 'timings.json'),
       JSON.stringify({ total: Math.round(t * 1000) / 1000, ...sceneTimings }, null, 2));

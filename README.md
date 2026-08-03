@@ -188,8 +188,9 @@ to HTML for HyperFrames. A scene can also carry both `body` and `visual`:
 HyperFrames uses the richer `body`, while native requires and uses `visual`.
 Native deliberately errors on HTML-only scenes instead of silently lowering
 them. It supports stacks/groups, text, shapes, SVG paths, local raster/SVG
-assets and fonts, shaped RTL text, full-frame scene video, cue/keyframe motion,
-four transitions, captions, audio, snapshots, and deliverables. It does not
+assets and fonts, OpenType-shaped RTL text (including Urdu/Arabic), full-frame
+scene video, cue/keyframe motion, four transitions, captions, audio, snapshots,
+and deliverables. It does not
 claim parity for arbitrary HTML/CSS/JS, browser walkthrough framing, nested
 video, shaders, 3D, particles, Lottie, or maps.
 

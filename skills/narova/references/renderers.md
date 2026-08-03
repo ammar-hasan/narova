@@ -28,7 +28,7 @@ narova renderers doctor native
 | Arbitrary scene HTML and CSS | yes | no |
 | Portable `scene.visual` tree | yes, compiled to HTML | yes, drawn by Skia |
 | Local raster images and SVG | yes | yes |
-| Local fonts and shaped RTL text | browser font engine | Skia font engine |
+| Local fonts and shaped RTL text | browser font engine | FontKit OpenType shaping + Skia paths |
 | Full-frame scene video (`scene.clip`) | yes | yes |
 | Word-synced captions | yes | yes |
 | Cue/keyframe motion | full GSAP/data-* surface | portable enter/keyframe surface |
@@ -91,7 +91,10 @@ Nodes: `group`, `stack`, `rect`, `circle`, `line`, `path`, `text`, `image`,
   opacity, radius, borders, shadow, overflow/clip, font properties, text
   alignment/direction, and image `fit: "cover"|"contain"|"fill"`.
 - `style.fontFile` must point to a local asset. Pair it with
-  `style.fontFamily`; native registers that file explicitly.
+  `style.fontFamily`; native registers that file explicitly. Set
+  `direction: "rtl"` for RTL text. Native shapes it with the font's GSUB/GPOS
+  tables and falls back to the bundled Noto Sans Arabic when an Urdu/Arabic
+  glyph is missing, rather than drawing disconnected letters or a tofu box.
 - `image.src` and `svg.src` point to `assets/...`; SVG may instead use local
   inline `markup`. `path.d` accepts SVG path data plus `viewBox`.
 
@@ -117,9 +120,15 @@ or `progress`. Each item needs numeric `from`, `to`, `duration`, optional
 - `narova build`, variants, custom narration, beds/SFX, captions, and export
   deliverables work through either renderer.
 
-Native installs the pinned MIT-licensed `@napi-rs/canvas` Skia binding as an
-optional package dependency and uses Narova's existing FFmpeg requirement for
-media decode and MP4 encoding. It makes no network request while rendering.
+Native installs the pinned MIT-licensed `@napi-rs/canvas` Skia binding and
+FontKit shaping engine plus the OFL-licensed Noto Sans Arabic fallback as
+optional package dependencies. It uses Narova's existing FFmpeg requirement
+for media decode and MP4 encoding and makes no network request while rendering.
+
+For external narration, every timing cue must include transcript text matching
+the aggregate scene voiceover. This catches internally inconsistent caption
+files. The audio and transcript must still be a genuinely paired source; the
+complex eval demonstrates this with the shipped reel and its companion VTT.
 
 ## Deliberate limits
 

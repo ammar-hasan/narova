@@ -54,6 +54,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 - Native raster and decoded-video frames use explicit RGBA transfer into Skia,
   avoiding lazy-decoder black frames; long karaoke lines wrap inside the safe
   caption band.
+- Native Arabic-script text and captions now use FontKit OpenType shaping with
+  a pinned free Noto Sans Arabic fallback, avoiding disconnected Urdu letters
+  and missing-glyph boxes when an authored font has incomplete coverage.
+- External word-timing transcripts must match the declared voiceover, and
+  epsilon-safe scene boundaries no longer duplicate cues as zero-length
+  subtitles. The complex eval now consumes the shipped reel's paired VTT
+  instead of placing invented caption text over unrelated narration.
 
 ## [0.16.0] - 2026-08-03
 

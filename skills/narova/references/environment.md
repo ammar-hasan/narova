@@ -2,7 +2,7 @@
 
 The CLI is bundled in this skill: `node <skill-dir>/tool/bin/narova.js`.
 HyperFrames needs no Narova npm install. The optional browserless renderer has
-one pinned Skia package (`npm install --prefix <skill-dir>/tool`). Run
+pinned Skia and text-shaping packages (`npm install --prefix <skill-dir>/tool`). Run
 `doctor` plus `renderers doctor <name>` for the path you selected.
 
 ## What the machine needs
@@ -14,7 +14,7 @@ one pinned Skia package (`npm install --prefix <skill-dir>/tool`). Run
 | Python 3.10+ | the TTS venv | `brew install python@3.12` (macOS system 3.9 is too old) |
 | TTS venv | speech synthesis | nothing — the first `synth` creates it at `~/.narova/venv` |
 | HyperFrames CLI | preview + render | nothing — `npx` downloads it on first use |
-| `@napi-rs/canvas` (native only) | browserless Skia frames | `npm install --prefix <skill-dir>/tool` |
+| native npm packages | Skia frames, OpenType shaping, Urdu/Arabic fallback font | `npm install --prefix <skill-dir>/tool` |
 | agent-browser 0.33+ (optional) | explore and capture real product walkthroughs | `npm install -g agent-browser && agent-browser install` |
 
 Native rendering needs no Chrome or browser runtime. HyperFrames brings its own
@@ -33,8 +33,9 @@ when calling Python. If doctor says "not importable", run `tool/setup.sh`.
 
 HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
 `out/hf/package.json`. All calls go through `npx --yes hyperframes@<pin>`.
-The native provider pins `@napi-rs/canvas` in `tool/package.json`; after setup
-it performs no network access and uses the existing FFmpeg requirement.
+The native provider pins `@napi-rs/canvas`, FontKit, and the OFL-licensed Noto
+Sans Arabic fallback in `tool/package.json`; after setup it performs no network
+access and uses the existing FFmpeg requirement.
 
 ## Env overrides
 

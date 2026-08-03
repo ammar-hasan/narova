@@ -276,13 +276,37 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
                     if (!cue || typeof cue !== 'object') {
                       errs.push(`config.narration.wordTimings[${ci}]: not an object`);
                     } else {
-                      if (typeof cue.start !== 'number' || typeof cue.end !== 'number') {
-                        errs.push(`config.narration.wordTimings[${ci}]: start/end must be numbers`);
+                      if (typeof cue.start !== 'number' || typeof cue.end !== 'number'
+                          || !Number.isFinite(cue.start) || !Number.isFinite(cue.end) || cue.start < 0 || cue.end <= cue.start) {
+                        errs.push(`config.narration.wordTimings[${ci}]: start/end must be finite and end must be after start`);
+                      }
+                      if (typeof cue.text !== 'string' || !cue.text.trim()) {
+                        errs.push(`config.narration.wordTimings[${ci}].text: non-empty transcript text required`);
                       }
                       if (!Array.isArray(cue.words)) {
                         errs.push(`config.narration.wordTimings[${ci}]: words must be an array`);
+                      } else {
+                        cue.words.forEach((word, wi) => {
+                          const wat = `config.narration.wordTimings[${ci}].words[${wi}]`;
+                          if (!word || typeof word !== 'object' || Array.isArray(word)) {
+                            errs.push(`${wat}: expected an object`); return;
+                          }
+                          if (typeof (word.text || word.w) !== 'string' || !(word.text || word.w).trim()) {
+                            errs.push(`${wat}.text: non-empty word required`);
+                          }
+                          if (!Number.isFinite(word.start) || !Number.isFinite(word.end) || word.end <= word.start) {
+                            errs.push(`${wat}: start/end must be finite and end must be after start`);
+                          }
+                        });
                       }
                     }
+                  }
+                  const normalized = value => String(value || '').normalize('NFKC')
+                    .toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+                  const scriptText = normalized(scenes.flatMap(scene => scene.vo.map(turn => turn.text)).join(' '));
+                  const transcriptText = normalized(karaokeData.map(cue => cue && cue.text).join(' '));
+                  if (scriptText && transcriptText && scriptText !== transcriptText) {
+                    errs.push('config.narration.wordTimings: transcript text does not match scene voiceover — captions would not match the declared narration');
                   }
                   narrationSource.wordTimingsPath = wp;
                   narrationSource.wordTimings = karaokeData;
