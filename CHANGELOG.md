@@ -4,6 +4,36 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.16.0] - 2026-08-03
+
+### Added
+
+- **Optional `narova-openai` companion skill** — an isolated, dependency-free
+  OpenAI Speech API worker that implements `narova-tts-provider/v1`, keeps
+  `OPENAI_API_KEY` environment-only, requests validated WAV directly, and
+  leaves caching, timing, captions, and rendering in Narova core.
+- **Current OpenAI speech capabilities** — the provider explicitly supports
+  `gpt-4o-mini-tts`, its `2025-12-15` snapshot, `tts-1`, and `tts-1-hd`;
+  defaults to the steerable current alias; recommends `marin` and `cedar`;
+  and supports delivery instructions, speed, BCP 47 language guidance, and
+  eligible-customer custom voice IDs.
+- **OpenAI provider tests** — mocked protocol, request mapping, model/option
+  validation, credential isolation, direct-WAV safety, no-retry behavior, and
+  built-in voice-list coverage now run in the main `npm test` command.
+
+### Changed
+
+- Documentation, specification, main skill pointers, CLI reference, README,
+  landing page, and website changelog now present OpenAI and ElevenLabs as
+  peer optional companions while keeping Narova local-first.
+
+### Security
+
+- `.env.local` is ignored. The OpenAI worker never accepts credentials in
+  project configuration or writes them to protocol output, validates output
+  paths and WAV responses, and does not automatically retry potentially
+  billable synthesis requests.
+
 ## [0.15.0] - 2026-08-01
 
 ### Changed

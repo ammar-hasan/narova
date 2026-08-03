@@ -44,6 +44,10 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 Walkthrough config, auth, semantic locator, security, timing, and layout details:
 [`product-walkthroughs.md`](product-walkthroughs.md).
 
+Optional cloud TTS companions are installed and registered separately. Use
+`narova-elevenlabs` for ElevenLabs or `narova-openai` for OpenAI Speech API
+voices; neither provider is a dependency of the main Narova skill.
+
 ## Flags
 
 - `--backend <name>` — TTS backend for all voices: a built-in
