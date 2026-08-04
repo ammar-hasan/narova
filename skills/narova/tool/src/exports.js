@@ -298,7 +298,7 @@ function buildDeliverables(config, hfDir, outDir, opts = {}) {
 }
 
 /* Post-process one already-rendered source for every requested delivery
- * profile. Native renders once at the project frame size; unlike HyperFrames,
+ * profile. No-browser renders once at the project frame size; unlike HyperFrames,
  * it does not need a browser render per profile. */
 function buildDeliverablesFromSource(config, sourceMp4, outDir, opts = {}) {
   const log = opts.log || console.log;

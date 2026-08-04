@@ -435,8 +435,8 @@ function validate(tl) {
     if (!tl.renderer || typeof tl.renderer !== 'object' || Array.isArray(tl.renderer)) {
       errs.push('manifest.renderer: expected an object');
     } else {
-      if (!['hyperframes', 'native'].includes(tl.renderer.provider)) {
-        errs.push('manifest.renderer.provider: expected hyperframes|native');
+      if (!['hyperframes', 'no-browser'].includes(tl.renderer.provider)) {
+        errs.push('manifest.renderer.provider: expected hyperframes|no-browser');
       }
       if (tl.renderer.protocol !== 'narova-renderer-provider/v1') {
         errs.push('manifest.renderer.protocol: expected narova-renderer-provider/v1');

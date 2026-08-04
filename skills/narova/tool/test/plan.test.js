@@ -105,7 +105,7 @@ test('plan treats renderer switching as compose/render-only config work', () => 
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
   const cfg1 = makeConfig({ renderer: 'hyperframes' });
   const mp = writeManifest(cfg1, tmp);
-  const result = plan(mp, makeConfig({ renderer: 'native' }));
+  const result = plan(mp, makeConfig({ renderer: 'no-browser' }));
   assert.equal(result.level, STAGE.CONFIG);
   assert.ok(result.detail.configDiff.some(diff => diff.key === 'renderer'));
   fs.rmSync(tmp, { recursive: true, force: true });

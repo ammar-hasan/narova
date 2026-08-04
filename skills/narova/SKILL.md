@@ -12,7 +12,7 @@ description: >
   API keys. It turns a prompt or scene script into an MP4 with local
   piper/xtts/qwen/chatterbox voiceover, word-level captions, and
   speech-timed visuals rendered through local HyperFrames or the browserless
-  native Skia/FFmpeg provider. The full tool ships
+  no-browser Skia/FFmpeg provider. The full tool ships
   inside the skill. Also use whenever the user names narova or a
   reel.config file. For silent motion graphics without narration, use plain
   HyperFrames instead.
@@ -39,7 +39,7 @@ You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }`
 turns) and either an HTML `body` or provider-neutral `visual` tree. narova
 makes the speech locally, derives word timings, and renders through HyperFrames
-(default) or the browserless native provider to `out/video.mp4`. The speech drives everything: captions light up word by word
+(default) or the no-browser provider to `out/video.mp4`. The speech drives everything: captions light up word by word
 in each speaker's color, and any element with `data-cue="k"` appears exactly
 when turn `k` starts.
 
@@ -71,7 +71,7 @@ External TTS providers are optional registered companion skills — see
 4. `check` — fast validation (no TTS). Run after every config edit.
 5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
 6. `compose` — generates the selected renderer project. Run `narova shots` for visual QA.
-7. `preview --detach` — show HyperFrames Studio; native preview writes a draft MP4.
+7. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
 8. `build` — renders `out/video.mp4`. Verify: audio `dur` by eye, then ffprobe.
 
 For step-by-step walkthroughs, loop through screens semantically
@@ -90,7 +90,7 @@ as a source step — compose/build never replay it. See
   ids unique within one scene; style with classes, not `#id` in theme.css.
   Reusable `<defs>` can repeat ids across scenes safely.
 - **Never edit `out/hf/`.** Every compose regenerates it. Change the config.
-- **Native never interprets HTML/CSS.** Give every native scene a `visual`
+- **No-browser never interprets HTML/CSS.** Give every no-browser scene a `visual`
   tree. Keep HyperFrames for unrestricted browser visuals; see
   `references/renderers.md` for the capability boundary and dual-authoring.
 - **Sourcing is checked; balance is not.** `check` gates claims against
@@ -123,7 +123,7 @@ sentences; untouched scenes are byte-identical). See
 | `references/cli.md`            | every command, flag, `out/` file, and rough cost              |
 | `references/gotchas.md`        | avoid the traps (tempo, reuse, sync, models, lint)          |
 | `references/environment.md`    | fix `doctor` failures: ffmpeg, python, venv, hyperframes     |
-| `references/renderers.md`      | choose HyperFrames/native; portable visual nodes and limits |
+| `references/renderers.md`      | choose HyperFrames/no-browser; portable visual nodes and limits |
 
 For Urdu dialogue, use the `urdu-voice-director` skill before finalizing `vo` text.
 

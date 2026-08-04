@@ -14,7 +14,7 @@ The work is split in three parts:
 - **Node** (`skills/narova/tool/src`): config validation, optional product
   walkthrough orchestration, the provider-neutral manifest, and composition.
 - **Renderer provider** (`narova-renderer-provider/v1`): local HyperFrames for
-  unrestricted browser visuals, or local native Skia + FFmpeg when no browser
+  unrestricted browser visuals, or local no-browser Skia + FFmpeg when no browser
   is available.
 
 The goal: an agent takes a user prompt, writes the scene script, and
@@ -71,7 +71,7 @@ reel.config.mjs
    ▼
    │  narova walkthrough capture   optional explicit browser take, timed to narration
    ▼
-   │  narova compose     out/hf-*/ or out/native-*/ selected provider project
+   │  narova compose     out/hf-*/ or out/no-browser-*/ selected provider project
    ▼
    │  narova build       synth + compose + selected local renderer
    ▼
@@ -83,7 +83,7 @@ backend + speaker + text + tempo) so a revision re-synthesizes only the
 changed sentences — untouched scenes keep byte-identical audio. This is the
 iteration-consistency contract.
 
-`out/`, `out/hf-*`, and `out/native-*` are build folders. Every run regenerates them. The config
+`out/`, `out/hf-*`, and `out/no-browser-*` are build folders. Every run regenerates them. The config
 plus project `assets/` are source of truth. Walkthrough WebM, capture manifest,
 and evidence frames are durable source assets, never build output.
 
@@ -93,7 +93,7 @@ and evidence frames are durable source assets, never build output.
 // reel.config.mjs  (also accepted: .js, .json, .cjs)
 export default {
   title: "My Reel",
-  renderer: "hyperframes",                // default | "native"
+  renderer: "hyperframes",                // default | "no-browser"
   size: "16:9",                           // "16:9" | "1:1" | "9:16" | {w,h}
   assets: "assets",                       // optional; copied into out/hf/assets/
   voices: {
@@ -196,7 +196,7 @@ Rules:
 - Old fields `caption` and `dur` are accepted and ignored.
 
 Each scene must provide an HTML `body`, a portable `visual` tree, or both.
-HyperFrames prefers `body` and compiles visual-only scenes to HTML. Native
+HyperFrames prefers `body` and compiles visual-only scenes to HTML. No-browser
 requires `visual` and never parses or approximates HTML/CSS. This failure
 boundary is contractual: changing renderer must not silently lower a scene.
 The portable node/motion contract and exact provider capability matrix live in
@@ -292,12 +292,12 @@ narova compose        -> selected provider project + captions; prints scene star
 narova captions       (re)write out/captions.srt + out/captions.vtt from timings.json
 narova shots          snapshot one QA frame per scene -> provider snapshots/
 narova build          synth + compose + render -> out/video.mp4
-narova preview        HyperFrames Studio or native draft MP4
+narova preview        HyperFrames Studio or no-browser draft MP4
 narova preview --detach   persistent Studio (PID/log); --stop ends it
 narova voices         list or download voices
 narova providers      add/list/remove/doctor explicitly registered external
                       TTS workers in ~/.narova/providers/
-narova renderers      list/doctor bundled hyperframes and native providers
+narova renderers      list/doctor bundled hyperframes and no-browser providers
 narova release        save/list/restore/remove named manifest snapshots
                       in ~/.narova/releases/
 narova doctor         check ffmpeg, python, venv, hyperframes, and optional
@@ -309,7 +309,7 @@ work from inside `out/` and `out/hf`. A detached Studio preview left running
 is restarted automatically whenever `compose`/`build` replaces `out/hf`.
 
 Flags: `--backend <built-in-or-registered-provider>`,
-`--renderer hyperframes|native`, `--reuse` (ignored automatically when the
+`--renderer hyperframes|no-browser`, `--reuse` (ignored automatically when the
 spoken text changed since the last synth), `--tempo`, `--size`,
 `--platform tiktok|reels|shorts|linkedin|x|youtube` (frame preset + duration-band
 lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
@@ -382,9 +382,9 @@ capture evidence and drift manifests, stale-capture gates, generated browser
 framing, full-bleed composition, and a real browser-to-MP4 eval.
 
 Since 0.17.0: two bundled free local renderer providers, a provider-neutral
-`scene.visual` tree, browserless Skia/FFmpeg rendering, native snapshots and
+`scene.visual` tree, browserless Skia/FFmpeg rendering, no-browser snapshots and
 draft preview MP4s, local raster/SVG/font/RTL/video support, portable motion
-and transitions, explicit capability rejection, and a complex native eval.
+and transitions, explicit capability rejection, and a complex no-browser eval.
 
 ## Timeline intermediate representation
 

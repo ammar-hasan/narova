@@ -8,8 +8,8 @@ next layer expands.
 
 **Shipped foundation (0.17):** rendering is now a versioned provider boundary
 with two free local implementations. HyperFrames remains the broad browser
-surface; Narova Native covers the portable Skia/FFmpeg subset when no browser
-can run. Further native breadth expands against real-project fixtures without
+surface; Narova No-Browser covers the portable Skia/FFmpeg subset when no browser
+can run. Further no-browser breadth expands against real-project fixtures without
 turning unsupported HyperFrames features into silent approximations.
 
 ## North star

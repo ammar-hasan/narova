@@ -12,10 +12,11 @@ const { resolveConfig } = require('../src/schema');
 const { build } = require('../src/pipeline');
 const { check } = require('../src/check');
 const { shotsWithRenderer } = require('../src/renderers');
+const { findLatinFont } = require('../src/renderers/system-font');
 const { probe, ensureDir } = require('../src/util');
 
 const ROOT = path.resolve(__dirname, '../../../../');
-const PROJECT = path.join(ROOT, 'out', 'native-complex-eval');
+const PROJECT = path.join(ROOT, 'out', 'no-browser-complex-eval');
 const ASSETS = path.join(PROJECT, 'assets');
 
 function run(command, args) {
@@ -60,7 +61,7 @@ ensureDir(ASSETS);
 // narrator plus supplied transcript. Never invent captions for borrowed audio.
 const transcriptCues = parseVtt(path.join(ROOT, 'docs/assets/narova-skill-reel.vtt')).slice(0, 5);
 if (transcriptCues.length !== 5 || transcriptCues[0].text !== 'Stop building narrated videos frame by frame.') {
-  throw new Error('native complex eval could not verify the shipped narrator transcript');
+  throw new Error('no-browser complex eval could not verify the shipped narrator transcript');
 }
 const duration = transcriptCues.at(-1).end;
 run('ffmpeg', [
@@ -80,7 +81,9 @@ run('ffmpeg', [
   'gradients=s=480x720:c0=0x07111c:c1=0x2ee6d6:nb_colors=4:seed=3',
   '-frames:v', '1', path.join(ASSETS, 'local-art.png'),
 ]);
-fs.copyFileSync('/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf', path.join(ASSETS, 'DejaVuSans.ttf'));
+const latinFont = findLatinFont();
+if (!latinFont) throw new Error('no-browser complex eval needs a local system font to register as the Latin fixture');
+fs.copyFileSync(latinFont, path.join(ASSETS, 'LatinSans.ttf'));
 fs.copyFileSync(
   require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-700-normal.woff2'),
   path.join(ASSETS, 'NotoSansArabic.woff2'),
@@ -93,11 +96,11 @@ write(path.join(ASSETS, 'mark.svg'), `<svg xmlns="http://www.w3.org/2000/svg" vi
 
 write(path.join(PROJECT, 'words.json'), transcriptCues);
 
-const font = { fontFamily: 'Narova Sans', fontFile: 'assets/DejaVuSans.ttf' };
+const font = { fontFamily: 'Narova Sans', fontFile: 'assets/LatinSans.ttf' };
 const urduFont = { fontFamily: 'Noto Sans Arabic', fontFile: 'assets/NotoSansArabic.woff2', language: 'urd' };
 const config = resolveConfig({
-  title: 'Narova Native · Complex Proof',
-  renderer: 'native',
+  title: 'Narova No-Browser · Complex Proof',
+  renderer: 'no-browser',
   size: { w: 640, h: 360 },
   assets: 'assets',
   narration: {
@@ -125,7 +128,7 @@ const config = resolveConfig({
         children: [
           { type: 'stack', style: { direction: 'column', gap: 8 }, children: [
             { type: 'text', text: 'TWO LOCAL\nRENDERERS', style: { ...font, color: '#ffffff', fontSize: 44, fontWeight: 800, lineHeight: 0.98 }, enter: { type: 'rise', at: 0.15 } },
-            { type: 'text', text: 'HyperFrames + Narova Native', style: { ...font, height: 34, color: '#2ee6d6', fontSize: 18, fontWeight: 700 }, enter: { type: 'fade', at: 0.8 } },
+            { type: 'text', text: 'HyperFrames + Narova No-Browser', style: { ...font, height: 34, color: '#2ee6d6', fontSize: 18, fontWeight: 700 }, enter: { type: 'fade', at: 0.8 } },
             { type: 'progress', value: 1, fill: '#f2418a', style: { height: 8, background: '#253247', radius: 4 }, enter: 'fade', animate: [{ property: 'progress', from: 0, to: 1, at: 1.1, duration: 1.4, ease: 'out' }] },
           ] },
           { type: 'svg', src: 'assets/mark.svg', style: { width: 180, height: 180, alignSelf: 'center', fit: 'contain' }, enter: { type: 'pop', at: 0.4 }, animate: [{ property: 'rotate', from: -8, to: 8, at: 1.6, duration: 1.8, ease: 'in-out' }] },
@@ -185,7 +188,7 @@ const config = resolveConfig({
 }, {}, PROJECT);
 
 if (!check(config, { release: true, outDir: path.join(PROJECT, 'out') })) {
-  throw new Error('native complex eval failed the release check');
+  throw new Error('no-browser complex eval failed the release check');
 }
 
 const result = build(config, {
@@ -194,20 +197,20 @@ const result = build(config, {
 });
 const renderedSrt = fs.readFileSync(path.join(PROJECT, 'out', 'captions.srt'), 'utf8');
 for (const cue of transcriptCues) {
-  if (!renderedSrt.includes(cue.text)) throw new Error(`native captions lost narrator transcript cue: ${cue.text}`);
+  if (!renderedSrt.includes(cue.text)) throw new Error(`no-browser captions lost narrator transcript cue: ${cue.text}`);
 }
 const renderedCueTimings = [...renderedSrt.matchAll(/^(\d\d:\d\d:\d\d,\d{3}) --> (\d\d:\d\d:\d\d,\d{3})$/gm)];
 if (renderedCueTimings.length !== transcriptCues.length
     || renderedCueTimings.some(match => match[1] === match[2])) {
-  throw new Error(`native captions expected ${transcriptCues.length} nonzero cues, got ${renderedCueTimings.length}`);
+  throw new Error(`no-browser captions expected ${transcriptCues.length} nonzero cues, got ${renderedCueTimings.length}`);
 }
 if (fs.existsSync(path.join(result.project, '.frames'))) {
-  throw new Error('native renderer retained its temporary frame sequence');
+  throw new Error('no-browser renderer retained its temporary frame sequence');
 }
 const times = [1.6, 4.5, 7.5, 12.8];
 const shots = shotsWithRenderer(config, path.join(PROJECT, 'out'), times);
 if (fs.existsSync(path.join(shots.project, '.snapshot-clips'))) {
-  throw new Error('native snapshots retained temporary decoded clip data');
+  throw new Error('no-browser snapshots retained temporary decoded clip data');
 }
 run('ffmpeg', [
   '-y', '-loglevel', 'error', '-pattern_type', 'glob', '-i', path.join(shots.dir, '*.png'),

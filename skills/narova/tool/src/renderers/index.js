@@ -12,7 +12,7 @@ function register(provider) {
 }
 
 register(require('./hyperframes'));
-register(require('./native'));
+register(require('./no-browser'));
 
 function rendererName(value) {
   if (typeof value === 'string') return value;

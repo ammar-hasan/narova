@@ -140,7 +140,7 @@ function printSceneTable(config, out) {
 }
 
 const HELP = `narova — a scene script becomes a narrated, captioned video
-(HyperFrames for full browser rendering; native for local browserless rendering)
+(HyperFrames for full browser rendering; no-browser for local browserless rendering)
 
 Usage: narova <command> [options]
 
@@ -171,7 +171,7 @@ Commands:
   walkthrough status [id]   report missing/stale/fresh captured walkthrough assets
   shots                snapshot one QA frame per scene with the selected renderer
   build                synth + compose + selected renderer -> out/video.mp4
-  preview              HyperFrames Studio, or a native draft preview MP4
+  preview              HyperFrames Studio, or a no-browser draft preview MP4
   renderers list       list bundled local renderer providers and capabilities
   renderers doctor <name>  verify a renderer's local requirements
   voices list|get      list / download TTS voices (delegates to narova_tts)
@@ -196,7 +196,7 @@ HyperFrames Studio preview is restarted when its composition is replaced.
 
 Options:
   --backend <name>          TTS backend (${backendHint()} or a registered provider)
-  --renderer hyperframes|native   local renderer (default: hyperframes)
+  --renderer hyperframes|no-browser   local renderer (default: hyperframes)
   --reuse                  skip synth, reuse out/audio + out/timings.json
                            (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)
@@ -526,12 +526,12 @@ async function main() {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const renderer = getRenderer(config.renderer);
-      if (renderer.name === 'native') {
-        if (flags.detach) throw new Error('native preview writes a draft MP4 and does not support --detach');
+      if (renderer.name === 'no-browser') {
+        if (flags.detach) throw new Error('no-browser preview writes a draft MP4 and does not support --detach');
         const rendered = renderWithRenderer(config, out, {
-          name: 'preview-native.mp4', fps: flags.fps || 15, quality: flags.quality || 'draft',
+          name: 'preview-no-browser.mp4', fps: flags.fps || 15, quality: flags.quality || 'draft',
         });
-        console.log(`native preview -> ${rendered.mp4}`);
+        console.log(`no-browser preview -> ${rendered.mp4}`);
         return;
       }
       const r = composeWithRenderer(config, out);
@@ -575,7 +575,7 @@ async function main() {
       }
       if (sub === 'doctor') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova renderers doctor <hyperframes|native>'); process.exit(1); }
+        if (!name) { console.error('usage: narova renderers doctor <hyperframes|no-browser>'); process.exit(1); }
         const renderer = getRenderer(name);
         const report = renderer.doctor();
         for (const check of report.checks) {

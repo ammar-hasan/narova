@@ -9,22 +9,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Two bundled free local renderer providers** — HyperFrames remains the
-  default, full browser/HTML/CSS provider; Narova Native adds deterministic,
+  default, full browser/HTML/CSS provider; Narova No-Browser adds deterministic,
   browserless Skia frame drawing and FFmpeg media decode/encoding under the
   versioned `narova-renderer-provider/v1` boundary.
 - **Provider-neutral `scene.visual` tree** — groups/stacks, text, rectangles,
   circles, lines, SVG paths, images, SVG, progress graphics, local fonts,
   shaped RTL text, gradients, borders, clipping, shadows, and flexible
   row/column layout. Visual-only scenes compile to HyperFrames HTML; a scene
-  can keep a richer `body` beside its native fallback.
+  can keep a richer `body` beside its no-browser fallback.
 - **Portable motion** — cue- or second-anchored entrances, deterministic
   keyframes, media drift, and fade/wipe/slide/zoom scene transitions.
-- **Native media and delivery workflow** — full-frame per-scene video,
+- **No-browser media and delivery workflow** — full-frame per-scene video,
   word-synced captions, mixed custom narration/music/SFX, snapshots, draft
   preview MP4s, H.264/AAC builds, variants, and FFmpeg export deliverables.
-- **Renderer CLI** — `--renderer hyperframes|native`, `narova renderers list`,
+- **Renderer CLI** — `--renderer hyperframes|no-browser`, `narova renderers list`,
   and `narova renderers doctor <name>` make capabilities and requirements
-  explicit. Native rendering performs no network request.
+  explicit. No-browser rendering performs no network request.
 - **Complex browserless production eval** — a real 16-second, four-scene video
   covers custom narration, word timings, audio processing/mixing, product
   playback, raster/SVG/font assets, multilingual text, charts, cartoon motion,
@@ -36,7 +36,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   variants, the canonical manifest, planning fingerprints, composition, QA,
   preview, builds, and deliverables.
 - `narova check` understands portable visual content and asset references.
-  Native rejects HTML-only scenes and walkthroughs without an explicit clip fallback
+  No-browser rejects HTML-only scenes and walkthroughs without an explicit clip fallback
   before writing frames instead of silently producing a lower-fidelity result.
 - External narrator word timings are normalized into the shared timing
   contract before captions/manifests/rendering, so SRT/VTT and both renderers
@@ -51,17 +51,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 - External narration compression uses FFmpeg's millisecond attack/release
   units and accepted ranges, restoring the intended voice-cleanup pass on
   current FFmpeg.
-- Native raster and decoded-video frames use explicit RGBA transfer into Skia,
+- No-browser raster and decoded-video frames use explicit RGBA transfer into Skia,
   avoiding lazy-decoder black frames; long karaoke lines wrap inside the safe
   caption band.
-- Native Arabic-script text and captions now use FontKit OpenType shaping with
+- No-browser Arabic-script text and captions now use FontKit OpenType shaping with
   a pinned free Noto Sans Arabic fallback, avoiding disconnected Urdu letters
   and missing-glyph boxes when an authored font has incomplete coverage.
 - External word-timing transcripts must match the declared voiceover, and
   epsilon-safe scene boundaries no longer duplicate cues as zero-length
   subtitles. The complex eval now consumes the shipped reel's paired VTT
   instead of placing invented caption text over unrelated narration.
-- Native now reserves the caption-safe lower band for scene content while
+- No-browser now reserves the caption-safe lower band for scene content while
   keeping root backgrounds and full-frame clips edge-to-edge, preventing scene
   copy behind the karaoke overlay from looking like a second caption layer.
 - The complex proof uses caption-free raster artwork, so only Narova's single

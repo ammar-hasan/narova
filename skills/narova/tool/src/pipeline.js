@@ -194,7 +194,7 @@ function build(config, opts = {}) {
 
     // Generate timings from scene durations. When the custom narrator ships
     // word timings, normalize them into the same scene-local contract as TTS
-    // so captions, manifests, HyperFrames, and native all see identical data.
+    // so captions, manifests, HyperFrames, and no-browser all see identical data.
     const sceneTimings = {};
     let t = 0;
     for (const s of config.scenes) {

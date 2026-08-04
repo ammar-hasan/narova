@@ -5,23 +5,23 @@ The renderer choice is independent of the voice/TTS provider choice.
 
 ```js
 export default {
-  renderer: "hyperframes", // default; or "native"
+  renderer: "hyperframes", // default; or "no-browser"
   // ...
 }
 ```
 
-Every rendering command also accepts `--renderer hyperframes|native`. The CLI
+Every rendering command also accepts `--renderer hyperframes|no-browser`. The CLI
 override wins over the config. Inspect local requirements with:
 
 ```bash
 narova renderers list
 narova renderers doctor hyperframes
-narova renderers doctor native
+narova renderers doctor no-browser
 ```
 
 ## Which one to use
 
-| Capability | HyperFrames | Native |
+| Capability | HyperFrames | No-Browser |
 |---|---:|---:|
 | Runs locally, no render fee | yes | yes |
 | Works without a browser | no | yes |
@@ -37,10 +37,11 @@ narova renderers doctor native
 | Browser Studio | yes | no; draft MP4 + snapshots |
 | Product walkthrough framing/cursor composition | yes | not yet; use a full-frame `scene.clip` |
 
-Use HyperFrames for the broadest visual surface and normal local work. Use
-native when the machine has Node and FFmpeg but cannot launch a browser. Native
-does not parse HTML or approximate CSS. It fails before rendering when a scene
-has no portable visual, so an approved composition cannot silently degrade.
+Use HyperFrames for the broadest visual surface and normal local work. Use the
+no-browser renderer when the machine has Node and FFmpeg but cannot launch a
+browser. No-browser does not parse HTML or approximate CSS. It fails before
+rendering when a scene has no portable visual, so an approved composition
+cannot silently degrade.
 
 ## Author once, retain an escape hatch
 
@@ -55,7 +56,7 @@ both providers. For maximum range, a scene may carry both representations:
   // Full-fidelity HyperFrames art direction.
   body: `<section class="result-card reveal">...</section>`,
 
-  // Browserless fallback. Native always uses this tree.
+  // Browserless fallback. No-browser always uses this tree.
   visual: {
     type: "stack",
     style: { direction: "column", padding: 56, gap: 18, background: "#080d16" },
@@ -72,10 +73,10 @@ both providers. For maximum range, a scene may carry both representations:
 }
 ```
 
-HyperFrames prefers `body` when both are present. Native requires and uses
+HyperFrames prefers `body` when both are present. No-browser requires and uses
 `visual`. A visual-only scene is converted to HTML for HyperFrames. Project
 `theme.css` remains available to the HyperFrames body and is deliberately
-ignored by native; put every fallback style in `visual`.
+ignored by no-browser; put every fallback style in `visual`.
 
 ## Portable visual contract
 
@@ -91,8 +92,8 @@ Nodes: `group`, `stack`, `rect`, `circle`, `line`, `path`, `text`, `image`,
   opacity, radius, borders, shadow, overflow/clip, font properties, text
   alignment/direction, and image `fit: "cover"|"contain"|"fill"`.
 - `style.fontFile` must point to a local asset. Pair it with
-  `style.fontFamily`; native registers that file explicitly. Set
-  `direction: "rtl"` for RTL text. Native shapes it with the font's GSUB/GPOS
+  `style.fontFamily`; no-browser registers that file explicitly. Set
+  `direction: "rtl"` for RTL text. No-browser shapes it with the font's GSUB/GPOS
   tables and falls back to the bundled Noto Sans Arabic when an Urdu/Arabic
   glyph is missing, rather than drawing disconnected letters or a tofu box.
 - `image.src` and `svg.src` point to `assets/...`; SVG may instead use local
@@ -113,17 +114,17 @@ or `progress`. Each item needs numeric `from`, `to`, `duration`, optional
 ## Outputs and preview
 
 - HyperFrames compose: `out/hf-<project>/`; snapshots live below it.
-- Native compose: `out/native-<project>/project.json`; snapshots live below it.
-- `narova preview --renderer native` writes `out/preview-native.mp4` at draft
-  quality. Native preview does not accept `--detach` because there is no
+- No-browser compose: `out/no-browser-<project>/project.json`; snapshots live below it.
+- `narova preview --renderer no-browser` writes `out/preview-no-browser.mp4` at draft
+  quality. No-browser preview does not accept `--detach` because there is no
   browser server.
 - `narova build`, variants, custom narration, beds/SFX, captions, and export
   deliverables work through either renderer.
-- Both renderers reserve the lower caption-safe band for scene content. Native
+- Both renderers reserve the lower caption-safe band for scene content. No-browser
   keeps the root background and `scene.clip` full-frame while laying out root
   visual children above the karaoke overlay.
 
-Native installs the pinned MIT-licensed `@napi-rs/canvas` Skia binding and
+No-browser installs the pinned MIT-licensed `@napi-rs/canvas` Skia binding and
 FontKit shaping engine plus the OFL-licensed Noto Sans Arabic fallback as
 optional package dependencies. It uses Narova's existing FFmpeg requirement
 for media decode and MP4 encoding and makes no network request while rendering.
@@ -135,11 +136,11 @@ complex eval demonstrates this with the shipped reel and its companion VTT.
 
 ## Deliberate limits
 
-The native provider currently rejects or omits the parts of the HyperFrames
+The no-browser provider currently rejects or omits the parts of the HyperFrames
 surface that have no honest browserless equivalent: arbitrary HTML/CSS/JS,
 DOM measurement, nested/PiP video nodes, WebGL shader effects, 3D, particles,
 Lottie, maps, and captured walkthrough browser framing. Keep `renderer:
 "hyperframes"` for those projects, or author a separate `visual` fallback.
 For a walkthrough scene, an explicit full-frame `scene.clip` can serve as the
-native fallback while HyperFrames retains the walkthrough metadata.
+no-browser fallback while HyperFrames retains the walkthrough metadata.
 These are capability boundaries, not automatic downgrade paths.

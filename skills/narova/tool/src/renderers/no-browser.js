@@ -19,7 +19,7 @@ function canvasModule() {
   try { return require('@napi-rs/canvas'); }
   catch (error) {
     const toolDir = path.resolve(__dirname, '../..');
-    const wrapped = new Error(`native renderer needs @napi-rs/canvas; run \`npm install --prefix ${toolDir}\`, then retry`);
+    const wrapped = new Error(`no-browser renderer needs @napi-rs/canvas; run \`npm install --prefix ${toolDir}\`, then retry`);
     wrapped.cause = error;
     throw wrapped;
   }
@@ -29,7 +29,7 @@ function fontkitModule() {
   try { return require('fontkit'); }
   catch (error) {
     const toolDir = path.resolve(__dirname, '../..');
-    const wrapped = new Error(`native complex-script text needs fontkit; run \`npm install --prefix ${toolDir}\`, then retry`);
+    const wrapped = new Error(`no-browser complex-script text needs fontkit; run \`npm install --prefix ${toolDir}\`, then retry`);
     wrapped.cause = error;
     throw wrapped;
   }
@@ -40,7 +40,18 @@ function defaultArabicFont() {
     return require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-arabic-700-normal.woff2');
   } catch (error) {
     const toolDir = path.resolve(__dirname, '../..');
-    const wrapped = new Error(`native Arabic-script text needs the bundled Noto Sans Arabic font; run \`npm install --prefix ${toolDir}\`, then retry`);
+    const wrapped = new Error(`no-browser Arabic-script text needs the bundled Noto Sans Arabic font; run \`npm install --prefix ${toolDir}\`, then retry`);
+    wrapped.cause = error;
+    throw wrapped;
+  }
+}
+
+function defaultLatinFont() {
+  try {
+    return require.resolve('@fontsource/noto-sans-arabic/files/noto-sans-arabic-latin-700-normal.woff2');
+  } catch (error) {
+    const toolDir = path.resolve(__dirname, '../..');
+    const wrapped = new Error(`no-browser mixed-script text needs the bundled Noto Sans Arabic latin subset; run \`npm install --prefix ${toolDir}\`, then retry`);
     wrapped.cause = error;
     throw wrapped;
   }
@@ -53,16 +64,16 @@ function validateConfig(config) {
   for (let i = 0; i < config.scenes.length; i++) {
     const scene = config.scenes[i];
     if (!scene.visual) {
-      errors.push(`config.scenes[${i}].visual: required by native renderer (HTML body is HyperFrames-only)`);
+      errors.push(`config.scenes[${i}].visual: required by no-browser renderer (HTML body is HyperFrames-only)`);
     } else errors.push(...validateVisual(scene.visual, `config.scenes[${i}].visual`));
     if (scene.walkthrough && !scene.clip) {
-      errors.push(`config.scenes[${i}].walkthrough: captured walkthrough composition is not supported by native yet; provide scene.clip as the explicit full-frame fallback`);
+      errors.push(`config.scenes[${i}].walkthrough: captured walkthrough composition is not supported by no-browser yet; provide scene.clip as the explicit full-frame fallback`);
     }
     if (!TRANSITIONS.has(scene.transition || 'fade')) {
-      errors.push(`config.scenes[${i}].transition: native supports ${[...TRANSITIONS].join('|')}`);
+      errors.push(`config.scenes[${i}].transition: no-browser supports ${[...TRANSITIONS].join('|')}`);
     }
   }
-  if (errors.length) throw new Error('Native renderer cannot compose this project:\n  - ' + errors.join('\n  - '));
+  if (errors.length) throw new Error('No-browser renderer cannot compose this project:\n  - ' + errors.join('\n  - '));
 }
 
 function slug(value) {
@@ -103,15 +114,15 @@ function timingsFor(config, outDir) {
   return timings;
 }
 
-function copyAudio(config, outDir, nativeDir) {
+function copyAudio(config, outDir, noBrowserDir) {
   const mix = path.join(outDir, 'audio', 'mix.wav');
   const full = path.join(outDir, 'audio', 'full.wav');
   const external = config.narrationSource && config.narrationSource.file;
   const source = fs.existsSync(mix) ? mix : (external && fs.existsSync(external) ? external : full);
   if (!source || !fs.existsSync(source)) {
-    throw new Error('native compose needs narration audio — run `narova synth` first');
+    throw new Error('no-browser compose needs narration audio — run `narova synth` first');
   }
-  const audioDir = ensureDir(path.join(nativeDir, 'audio'));
+  const audioDir = ensureDir(path.join(noBrowserDir, 'audio'));
   fs.copyFileSync(source, path.join(audioDir, 'narration.wav'));
 }
 
@@ -121,12 +132,12 @@ function compose(config, outDir) {
   const timings = timingsFor(config, outDir);
   const data = composeData(config, timings);
   for (const entry of fs.readdirSync(outDir, { withFileTypes: true })) {
-    if (entry.isDirectory() && entry.name.startsWith('native-')) {
+    if (entry.isDirectory() && entry.name.startsWith('no-browser-')) {
       fs.rmSync(path.join(outDir, entry.name), { recursive: true, force: true });
     }
   }
-  const nativeDir = ensureDir(path.join(outDir, `native-${slug(config.title)}`));
-  const assetsDir = ensureDir(path.join(nativeDir, 'assets'));
+  const noBrowserDir = ensureDir(path.join(outDir, `no-browser-${slug(config.title)}`));
+  const assetsDir = ensureDir(path.join(noBrowserDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
 
   const scenes = config.scenes.map(scene => {
@@ -135,7 +146,7 @@ function compose(config, outDir) {
       const source = path.resolve(config.projectDir, scene.clip);
       const ext = path.extname(source) || '.mp4';
       clip = `assets/clip-${scene.id}${ext}`;
-      fs.copyFileSync(source, path.join(nativeDir, clip));
+      fs.copyFileSync(source, path.join(noBrowserDir, clip));
     }
     return {
       id: scene.id,
@@ -144,11 +155,11 @@ function compose(config, outDir) {
       clip,
     };
   });
-  copyAudio(config, outDir, nativeDir);
+  copyAudio(config, outDir, noBrowserDir);
 
   const project = {
     protocol: 'narova-renderer-provider/v1',
-    provider: 'native',
+    provider: 'no-browser',
     providerVersion: PROVIDER_VERSION,
     title: config.title,
     size: config.size,
@@ -161,13 +172,13 @@ function compose(config, outDir) {
     scenes,
     timeline: data,
   };
-  fs.writeFileSync(path.join(nativeDir, 'project.json'), JSON.stringify(project, null, 2) + '\n');
-  return { dir: nativeDir, project: nativeDir, total: data.total, scenes: data.scenes.length };
+  fs.writeFileSync(path.join(noBrowserDir, 'project.json'), JSON.stringify(project, null, 2) + '\n');
+  return { dir: noBrowserDir, project: noBrowserDir, total: data.total, scenes: data.scenes.length };
 }
 
 function readProject(dir) {
   const file = path.join(dir, 'project.json');
-  if (!fs.existsSync(file)) throw new Error(`native project missing: ${file}; run narova compose first`);
+  if (!fs.existsSync(file)) throw new Error(`no-browser project missing: ${file}; run narova compose first`);
   return JSON.parse(fs.readFileSync(file, 'utf8'));
 }
 
@@ -325,14 +336,28 @@ function roundRect(ctx, x, y, w, h, radius) {
   ctx.quadraticCurveTo(x, y, x + r, y); ctx.closePath();
 }
 
+function gradientLine(frame, angle) {
+  const rad = angle * Math.PI / 180;
+  const dx = Math.sin(rad), dy = -Math.cos(rad);
+  const cx = frame.x + frame.w / 2, cy = frame.y + frame.h / 2;
+  const t = (Math.abs(frame.w * dx) + Math.abs(frame.h * dy)) / 2;
+  return { x0: cx - dx * t, y0: cy - dy * t, x1: cx + dx * t, y1: cy + dy * t };
+}
+
 function paint(ctx, value, frame) {
   if (!value || typeof value === 'string') return value || 'transparent';
   if (value.type === 'linear' && Array.isArray(value.stops)) {
-    const from = value.from || [0, 0], to = value.to || [1, 1];
-    const gradient = ctx.createLinearGradient(
-      frame.x + n(from[0], frame.w), frame.y + n(from[1], frame.h),
-      frame.x + n(to[0], frame.w, frame.w), frame.y + n(to[1], frame.h, frame.h),
-    );
+    let gradient;
+    if (value.from || value.to) {
+      const from = value.from || [0, 0], to = value.to || [1, 1];
+      gradient = ctx.createLinearGradient(
+        frame.x + n(from[0], frame.w), frame.y + n(from[1], frame.h),
+        frame.x + n(to[0], frame.w, frame.w), frame.y + n(to[1], frame.h, frame.h),
+      );
+    } else {
+      const line = gradientLine(frame, value.angle == null ? 135 : value.angle);
+      gradient = ctx.createLinearGradient(line.x0, line.y0, line.x1, line.y1);
+    }
     value.stops.forEach(stop => gradient.addColorStop(stop.at, stop.color));
     return gradient;
   }
@@ -358,7 +383,7 @@ function imageFrom(canvas, source, baseDir, cache) {
     '-loglevel', 'error', '-i', key, '-frames:v', '1', '-f', 'rawvideo', '-pix_fmt', 'rgba', 'pipe:1',
   ], { encoding: null, maxBuffer: Math.max(16 * 1024 * 1024, image.width * image.height * 5) });
   if (decoded.error || decoded.status !== 0 || decoded.stdout.length !== image.width * image.height * 4) {
-    throw new Error(`native renderer could not decode raster image: ${key}`);
+    throw new Error(`no-browser renderer could not decode raster image: ${key}`);
   }
   const surface = canvas.createCanvas(image.width, image.height);
   const pixels = new Uint8ClampedArray(decoded.stdout.buffer, decoded.stdout.byteOffset, decoded.stdout.byteLength);
@@ -402,20 +427,26 @@ function shapingFont(node, env) {
   const text = String(node.text || '');
   if (style.direction !== 'rtl') return null;
   const preferred = style.fontFile ? path.resolve(env.baseDir, style.fontFile) : null;
-  const fallback = ARABIC_SCRIPT.test(text) ? defaultArabicFont() : null;
-  const candidates = [...new Set([preferred, fallback].filter(Boolean))];
+  const arabicFallback = ARABIC_SCRIPT.test(text) ? defaultArabicFont() : null;
+  const latinFallback = defaultLatinFont();
+  const candidates = [...new Set([preferred, arabicFallback, latinFallback].filter(Boolean))];
   if (!candidates.length) {
-    throw new Error('native complex-script text needs style.fontFile pointing to a font with the required glyphs');
+    throw new Error('no-browser complex-script text needs style.fontFile pointing to a font with the required glyphs');
   }
   const fontkit = fontkitModule();
   if (!env.fonts) env.fonts = new Map();
   for (const file of candidates) {
-    if (!fs.existsSync(file)) throw new Error(`native shaping font not found: ${file}`);
+    if (!fs.existsSync(file)) throw new Error(`no-browser shaping font not found: ${file}`);
     let font = env.fonts.get(file);
     if (!font) { font = fontkit.openSync(file); env.fonts.set(file, font); }
     if (fontSupports(font, text)) return font;
   }
-  throw new Error(`native shaping fonts do not cover all characters in: ${JSON.stringify(text)}`);
+  // No single font in the chain covers every character (mixed-script text).
+  // Returns null so the caller falls back to Skia canvas text, which does
+  // automatic bidi + font fallback across the GlobalFonts-registered fonts
+  // and system fonts. This prevents e.g. an Urdu caption ending in "!" from
+  // failing the entire render.
+  return null;
 }
 
 function shapeRun(font, text, style = {}) {
@@ -617,7 +648,10 @@ function drawCaptions(ctx, project, time, env) {
   const x = (width - boxWidth) / 2, y = height - boxHeight - Math.max(22, height * 0.055);
   roundRect(ctx, x, y, boxWidth, boxHeight, fontSize * 0.42);
   ctx.fillStyle = 'rgba(3,7,14,0.86)'; ctx.fill();
-  ctx.textBaseline = 'middle'; ctx.textAlign = 'left';
+  ctx.textBaseline = 'middle';
+  const canvasRtl = rtl && !font;
+  ctx.textAlign = canvasRtl ? 'right' : 'left';
+  if (canvasRtl) ctx.direction = 'rtl';
   lines.forEach((entry, lineIndex) => {
     let cursor = rtl
       ? x + (boxWidth + entry.width) / 2
@@ -635,8 +669,9 @@ function drawCaptions(ctx, project, time, env) {
         drawGlyphRun(ctx, wordRuns[i], cursor, baseline, fontScale, env);
         cursor -= gap;
       } else {
+        if (canvasRtl) cursor -= wordWidths[i];
         ctx.fillText(word.w, cursor, y + paddingY + lineHeight * (lineIndex + 0.5));
-        cursor += wordWidths[i] + gap;
+        cursor += canvasRtl ? -gap : (wordWidths[i] + gap);
       }
     });
   });
@@ -676,12 +711,19 @@ function registerFonts(project, baseDir, canvas) {
     (node.children || []).forEach(visit);
   }
   project.scenes.forEach(scene => visit(scene.visual));
+  // Register authored TTF/OTF fonts with Skia for the canvas-text fallback path.
   for (const [family, file] of refs) {
     const absolute = path.resolve(baseDir, file);
-    if (!fs.existsSync(absolute)) throw new Error(`native font file not found: ${absolute}`);
+    if (!fs.existsSync(absolute)) throw new Error(`no-browser font file not found: ${absolute}`);
     if (/\.woff2?$/i.test(absolute)) continue; // FontKit handles webfonts for complex-script nodes.
-    if (!canvas.GlobalFonts.registerFromPath(absolute, family)) throw new Error(`native renderer could not register font: ${absolute}`);
+    if (!canvas.GlobalFonts.registerFromPath(absolute, family)) throw new Error(`no-browser renderer could not register font: ${absolute}`);
   }
+  // Register the bundled Noto Sans Arabic subset so Skia can shape Arabic
+  // script in the canvas-text fallback path (e.g., mixed Urdu+Latin text).
+  // System fonts handle Latin punctuation/digits on all real platforms.
+  try {
+    canvas.GlobalFonts.registerFromPath(defaultArabicFont(), 'Noto Sans Arabic');
+  } catch {}
 }
 
 function extractClipFrames(project, projectDir, frameRoot, fps) {
@@ -768,7 +810,7 @@ function render(config, outDir, opts = {}) {
   const canvas = canvasModule();
   registerFonts(project, composed.dir, canvas);
   const fps = Number(opts.fps || project.fps || 30);
-  if (!Number.isFinite(fps) || fps <= 0 || fps > 120) throw new Error('native renderer fps must be between 1 and 120');
+  if (!Number.isFinite(fps) || fps <= 0 || fps > 120) throw new Error('no-browser renderer fps must be between 1 and 120');
   const frameRoot = path.join(composed.dir, '.frames');
   fs.rmSync(frameRoot, { recursive: true, force: true });
   const renderFrames = ensureDir(path.join(frameRoot, 'render'));
@@ -830,8 +872,8 @@ function shots(config, outDir, times) {
 }
 
 module.exports = {
-  name: 'native',
-  displayName: 'Narova Native',
+  name: 'no-browser',
+  displayName: 'Narova No-Browser',
   providerVersion: PROVIDER_VERSION,
   protocol: 'narova-renderer-provider/v1',
   local: true,
@@ -871,6 +913,6 @@ module.exports = {
   shots,
   _internals: {
     layoutTree, animatedState, renderCanvas, qualityOptions,
-    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset,
+    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, gradientLine,
   },
 };

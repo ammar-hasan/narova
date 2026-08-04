@@ -23,19 +23,19 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova walkthrough explore <id>` | open a declared URL in an isolated agent-browser session and print its interactive accessibility snapshot. The session stays open so an author/agent can inspect real roles, labels, text, and test ids before scripting. | browser startup |
 | `narova walkthrough capture [id]` | execute declared semantic actions on measured narration anchors and write a WebM, capture manifest, and evidence PNGs under project assets. Omit id (or use `all`) for every declaration. Explicit only; build never runs actions. | live walkthrough duration + browser startup |
 | `narova walkthrough status [id]` | report whether each capture is fresh, missing, recipe-stale, timing-stale, or modified. | instant |
-| `narova compose` | config + timings + audio → the selected renderer project (`out/hf-*` or `out/native-*`) + SRT/VTT, then prints the scene table. HyperFrames also consumes fresh walkthrough captures and restarts a live detached Studio. | usually under 1s |
+| `narova compose` | config + timings + audio → the selected renderer project (`out/hf-*` or `out/no-browser-*`) + SRT/VTT, then prints the scene table. HyperFrames also consumes fresh walkthrough captures and restarts a live detached Studio. | usually under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
-| `narova shots` | snapshot one QA frame per scene (mid-scene) with the selected renderer. `--at t1,t2,…` picks explicit times. Native needs no browser. | seconds |
+| `narova shots` | snapshot one QA frame per scene (mid-scene) with the selected renderer. `--at t1,t2,…` picks explicit times. No-browser needs no browser. | seconds |
 | `narova build` | synth + compose + selected local renderer → `out/video.mp4` (+ captions). Variants and deliverables work with both providers. | synth cost + local render |
-| `narova preview` | HyperFrames: compose and open Studio. Native: render `out/preview-native.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
+| `narova preview` | HyperFrames: compose and open Studio. No-browser: render `out/preview-no-browser.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
 | `narova providers add <manifest>` | validate, handshake with, and explicitly register an external TTS worker under `~/.narova/providers/`. | instant; starts the worker for its handshake |
 | `narova providers list` | list explicitly registered external TTS providers. | instant |
 | `narova providers doctor <name>` | verify manifest, executable, required environment, and protocol handshake. | provider startup |
 | `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
-| `narova renderers list` | list the bundled local `hyperframes` and `native` renderer providers. | instant |
-| `narova renderers doctor <name>` | verify provider-local dependencies; native explicitly reports that a browser is unnecessary. | instant |
+| `narova renderers list` | list the bundled local `hyperframes` and `no-browser` renderer providers. | instant |
+| `narova renderers doctor <name>` | verify provider-local dependencies; no-browser explicitly reports that a browser is unnecessary. | instant |
 | `narova doctor` | check ffmpeg, python, venv, optional agent-browser, and HyperFrames. Exit 1 if a required core tool is missing; missing optional adapters/backends are reported separately. | first run downloads the HyperFrames CLI |
 | `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |
 | `narova release list` | list all saved releases with size and date. | instant |
@@ -58,8 +58,8 @@ Renderer providers are different: both are bundled, local, and free. See
   (`piper|xtts|qwen|chatterbox`) or an explicitly registered external
   provider. Default piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
   path to a clean 10–20s recording (install once: `tool/setup.sh --chatterbox`).
-- `--renderer hyperframes|native` — renderer provider. HyperFrames is the
-  default; native is browserless and requires `scene.visual` on every scene.
+- `--renderer hyperframes|no-browser` — renderer provider. HyperFrames is the
+  default; no-browser is browserless and requires `scene.visual` on every scene.
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
   Meant for visual-only edits; if the spoken text changed since the last
   synth, `--reuse` is ignored with a note and a full synth runs instead.
@@ -116,7 +116,7 @@ out/
 │   ├── index.html         #   scenes, captions, timeline
 │   ├── assets/            #   project assets + narration.wav
 │   └── package.json       #   pins the hyperframes version
-├── native-<project>/      # the generated browserless project (when selected)
+├── no-browser-<project>/      # the generated browserless project (when selected)
 │   ├── project.json       #   portable visual tree + measured timeline
 │   ├── assets/            #   copied local media/fonts
 │   └── audio/narration.wav

@@ -31,7 +31,7 @@ test('renderers list exposes both bundled local providers', () => {
   const r = run(['renderers', 'list']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^hyperframes\t[^\t]+\tlocal · browser$/m);
-  assert.match(r.stdout, /^native\t1\.0\.0\tlocal · browserless$/m);
+  assert.match(r.stdout, /^no-browser\t1\.0\.0\tlocal · browserless$/m);
 });
 
 test('walkthrough status reports a missing take; capture requires synth timings', () => {

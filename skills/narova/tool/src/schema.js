@@ -38,11 +38,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   // Rendering is a separate provider axis from TTS. Both bundled providers
   // are local; HyperFrames remains the default for unrestricted HTML/CSS,
-  // while native consumes the browserless scene.visual contract.
+  // while no-browser consumes the browserless scene.visual contract.
   let renderer = overrides.renderer ?? raw.renderer ?? 'hyperframes';
   if (renderer && typeof renderer === 'object' && !Array.isArray(renderer)) renderer = renderer.provider;
-  if (renderer !== 'hyperframes' && renderer !== 'native') {
-    errs.push(`config.renderer: unknown renderer ${JSON.stringify(renderer)} (hyperframes|native)`);
+  if (renderer !== 'hyperframes' && renderer !== 'no-browser') {
+    errs.push(`config.renderer: unknown renderer ${JSON.stringify(renderer)} (hyperframes|no-browser)`);
   }
 
   // Scene/voice ids land in element ids, CSS selectors, and getElementById —
