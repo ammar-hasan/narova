@@ -297,6 +297,40 @@ function buildDeliverables(config, hfDir, outDir, opts = {}) {
   return results;
 }
 
+/* Post-process one already-rendered source for every requested delivery
+ * profile. No-browser renders once at the project frame size; unlike HyperFrames,
+ * it does not need a browser render per profile. */
+function buildDeliverablesFromSource(config, sourceMp4, outDir, opts = {}) {
+  const log = opts.log || console.log;
+  const explicit = opts.deliverables === true ? null : opts.deliverables;
+  const presets = presetsFor(config, explicit);
+  const standard = presets.find(p => p.id === 'narova-standard');
+  const ordered = standard ? [standard, ...presets.filter(p => p.id !== 'narova-standard')] : presets;
+  const baseName = path.basename(opts.name || sourceMp4, '.mp4');
+  const results = [];
+
+  for (const preset of ordered) {
+    const suffix = preset.id === 'narova-standard' ? '' : `-${preset.id}`;
+    const destination = path.join(outDir, `${baseName}${suffix}.mp4`);
+    const temporary = path.join(outDir, `${baseName}${suffix}-enc.mp4`);
+    log(`  deliverable: ${preset.label} (${preset.width}x${preset.height}, ${preset.enc?.codec || 'copy'}, ${preset.enc?.videoBitrate || '-'})`);
+    postProcess(sourceMp4, temporary, preset, { safeAreaGuides: opts.safeAreaGuides });
+    if (destination === sourceMp4) {
+      fs.unlinkSync(sourceMp4);
+      fs.renameSync(temporary, sourceMp4);
+    } else {
+      fs.renameSync(temporary, destination);
+    }
+    const mp4 = destination === sourceMp4 ? sourceMp4 : destination;
+    const seconds = probe(mp4);
+    const thumbnail = preset.thumbnail ? generateThumbnail(mp4, preset, outDir) : null;
+    if (thumbnail) log(`thumbnail -> ${thumbnail}`);
+    log(`deliverable -> ${mp4}  (${seconds.toFixed(1)}s, ${preset.label})`);
+    results.push({ id: preset.id, mp4, seconds, thumbnail });
+  }
+  return results;
+}
+
 module.exports = {
   PRESETS,
   PLATFORM_TO_PRESET,
@@ -307,4 +341,5 @@ module.exports = {
   generateThumbnail,
   renderDeliverable,
   buildDeliverables,
+  buildDeliverablesFromSource,
 };

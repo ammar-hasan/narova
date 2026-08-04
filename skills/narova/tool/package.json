@@ -1,8 +1,13 @@
 {
   "name": "narova",
-  "version": "0.16.0",
+  "version": "0.17.0",
   "description": "narova bundled tool — the CLI that ships inside the agent skill.",
   "private": true,
   "type": "commonjs",
-  "bin": { "narova": "bin/narova.js" }
+  "bin": { "narova": "bin/narova.js" },
+  "optionalDependencies": {
+    "@fontsource/noto-sans-arabic": "5.3.0",
+    "@napi-rs/canvas": "1.0.3",
+    "fontkit": "2.0.4"
+  }
 }

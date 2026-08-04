@@ -1,7 +1,7 @@
 # narova — the contract
 
 > Working name: **narova**.
-> One line: narova writes the words and the voice. HyperFrames draws the pictures.
+> One line: narova writes the words and the voice. A free local renderer draws the pictures.
 
 ## What it is
 
@@ -12,8 +12,10 @@ The work is split in three parts:
 
 - **Python** (`skills/narova/tool/py/narova_tts`): speech and word timings. Nothing else.
 - **Node** (`skills/narova/tool/src`): config validation, optional product
-  walkthrough orchestration, and the composition generator.
-- **HyperFrames** (`npx hyperframes@<pin>`): preview, lint, and the final render.
+  walkthrough orchestration, the provider-neutral manifest, and composition.
+- **Renderer provider** (`narova-renderer-provider/v1`): local HyperFrames for
+  unrestricted browser visuals, or local no-browser Skia + FFmpeg when no browser
+  is available.
 
 The goal: an agent takes a user prompt, writes the scene script, and
 `narova build` makes the video.
@@ -69,9 +71,9 @@ reel.config.mjs
    ▼
    │  narova walkthrough capture   optional explicit browser take, timed to narration
    ▼
-   │  narova compose     out/hf/: index.html + assets/narration.wav + package.json
+   │  narova compose     out/hf-*/ or out/no-browser-*/ selected provider project
    ▼
-   │  narova build       synth + compose + `npx hyperframes render`
+   │  narova build       synth + compose + selected local renderer
    ▼
 out/video.mp4
 ```
@@ -81,7 +83,7 @@ backend + speaker + text + tempo) so a revision re-synthesizes only the
 changed sentences — untouched scenes keep byte-identical audio. This is the
 iteration-consistency contract.
 
-`out/` and `out/hf/` are build folders. Every run regenerates them. The config
+`out/`, `out/hf-*`, and `out/no-browser-*` are build folders. Every run regenerates them. The config
 plus project `assets/` are source of truth. Walkthrough WebM, capture manifest,
 and evidence frames are durable source assets, never build output.
 
@@ -91,6 +93,7 @@ and evidence frames are durable source assets, never build output.
 // reel.config.mjs  (also accepted: .js, .json, .cjs)
 export default {
   title: "My Reel",
+  renderer: "hyperframes",                // default | "no-browser"
   size: "16:9",                           // "16:9" | "1:1" | "9:16" | {w,h}
   assets: "assets",                       // optional; copied into out/hf/assets/
   voices: {
@@ -192,6 +195,13 @@ Rules:
   `skills/narova/references/product-walkthroughs.md`.
 - Old fields `caption` and `dur` are accepted and ignored.
 
+Each scene must provide an HTML `body`, a portable `visual` tree, or both.
+HyperFrames prefers `body` and compiles visual-only scenes to HTML. No-browser
+requires `visual` and never parses or approximates HTML/CSS. This failure
+boundary is contractual: changing renderer must not silently lower a scene.
+The portable node/motion contract and exact provider capability matrix live in
+`skills/narova/references/renderers.md`.
+
 `narova check` catches all of this. `narova check --strict` also verifies
 that every detected claim actually appears in `claims.md`. `narova check
 --release` adds a build gate: remote dependencies, unresolved assets, missing
@@ -278,15 +288,16 @@ narova walkthrough explore <id>  open a declared product source in a named
                       agent-browser session and print its interactive snapshot
 narova walkthrough capture [id]  record narration-timed semantic actions
 narova walkthrough status [id]   report missing, stale, or fresh captures
-narova compose        -> out/hf/ + out/captions.srt|.vtt; prints per-scene start times
+narova compose        -> selected provider project + captions; prints scene starts
 narova captions       (re)write out/captions.srt + out/captions.vtt from timings.json
-narova shots          snapshot one QA frame per scene -> out/hf/snapshots/
+narova shots          snapshot one QA frame per scene -> provider snapshots/
 narova build          synth + compose + render -> out/video.mp4
-narova preview        compose + HyperFrames Studio; prints the exact URL
+narova preview        HyperFrames Studio or no-browser draft MP4
 narova preview --detach   persistent Studio (PID/log); --stop ends it
 narova voices         list or download voices
 narova providers      add/list/remove/doctor explicitly registered external
                       TTS workers in ~/.narova/providers/
+narova renderers      list/doctor bundled hyperframes and no-browser providers
 narova release        save/list/restore/remove named manifest snapshots
                       in ~/.narova/releases/
 narova doctor         check ffmpeg, python, venv, hyperframes, and optional
@@ -297,7 +308,8 @@ Commands find the config by walking up from the current directory, so they
 work from inside `out/` and `out/hf`. A detached Studio preview left running
 is restarted automatically whenever `compose`/`build` replaces `out/hf`.
 
-Flags: `--backend <built-in-or-registered-provider>`, `--reuse` (ignored automatically when the
+Flags: `--backend <built-in-or-registered-provider>`,
+`--renderer hyperframes|no-browser`, `--reuse` (ignored automatically when the
 spoken text changed since the last synth), `--tempo`, `--size`,
 `--platform tiktok|reels|shorts|linkedin|x|youtube` (frame preset + duration-band
 lint; `--size` wins), `--variant <id>` / `--variants` (hook-variant builds;
@@ -338,7 +350,7 @@ code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
 
-## Status: 0.16.0 shipped
+## Status: 0.17.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -368,6 +380,11 @@ Since 0.13.0: narration-timed product walkthroughs with semantic
 agent-browser actions, named exploration sessions, restore/profile support,
 capture evidence and drift manifests, stale-capture gates, generated browser
 framing, full-bleed composition, and a real browser-to-MP4 eval.
+
+Since 0.17.0: two bundled free local renderer providers, a provider-neutral
+`scene.visual` tree, browserless Skia/FFmpeg rendering, no-browser snapshots and
+draft preview MP4s, local raster/SVG/font/RTL/video support, portable motion
+and transitions, explicit capability rejection, and a complex no-browser eval.
 
 ## Timeline intermediate representation
 

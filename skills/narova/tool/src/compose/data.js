@@ -32,7 +32,7 @@ function composeData(config, timings) {
     const t = timings[s.id];
     if (!t) throw new Error(`timings.json: no entry for scene "${s.id}" — re-run narova synth`);
     scenes.push({
-      id: s.id, start: r3(acc), dur: t.dur, turns: t.turns,
+      id: s.id, start: r3(acc), dur: t.dur, turns: t.turns || [],
       ...(s.transition ? { transition: s.transition } : {}),
     });
     acc = r3(acc + t.dur);
@@ -43,7 +43,7 @@ function composeData(config, timings) {
   for (const sc of scenes) {
     const t = timings[sc.id];
     const by = new Map();
-    for (const w of t.words) {
+    for (const w of (t.words || [])) {
       if (!by.has(w.si)) by.set(w.si, []);
       by.get(w.si).push(w);
     }

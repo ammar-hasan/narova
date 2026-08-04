@@ -1,7 +1,7 @@
 {
   "name": "narova",
-  "version": "0.16.0",
-  "description": "Narration-first video with real product walkthroughs, local voices, word-synced captions, and HyperFrames rendering.",
+  "version": "0.17.0",
+  "description": "Narration-first video with local voices, word-synced captions, and two free local renderers.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"
   },
@@ -15,6 +15,7 @@
     "test:elevenlabs": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-elevenlabs/tests",
     "test:openai": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-openai/tests",
     "eval:walkthrough": "node skills/narova/tool/evals/walkthrough-eval.js",
+    "eval:no-browser": "node skills/narova/tool/evals/no-browser-complex-eval.js",
     "version:sync": "node scripts/sync-version.js",
     "version": "node scripts/sync-version.js"
   },
@@ -26,6 +27,11 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "optionalDependencies": {
+    "@fontsource/noto-sans-arabic": "5.3.0",
+    "@napi-rs/canvas": "1.0.3",
+    "fontkit": "2.0.4"
   },
   "license": "MIT"
 }

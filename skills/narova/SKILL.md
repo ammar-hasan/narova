@@ -11,23 +11,24 @@ description: >
   SRT/VTT sidecar captions, hook A/B variants, or local neural TTS with no
   API keys. It turns a prompt or scene script into an MP4 with local
   piper/xtts/qwen/chatterbox voiceover, word-level captions, and
-  speech-timed visuals rendered through HyperFrames. The full tool ships
+  speech-timed visuals rendered through local HyperFrames or the browserless
+  no-browser Skia/FFmpeg provider. The full tool ships
   inside the skill. Also use whenever the user names narova or a
   reel.config file. For silent motion graphics without narration, use plain
   HyperFrames instead.
 license: MIT
 compatibility: >
   Requires Node.js 18+, Python 3.10+ and ffmpeg.
-  First-time model and renderer setup requires internet access.
+  First-time model setup and HyperFrames setup require internet access.
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.16.0"
+  version: "0.17.0"
 ---
 
 # narova — prompt to narrated, captioned video
 
-**narova writes the words and the voice. HyperFrames draws the pictures.**
+**narova writes the words and the voice. A local renderer draws the pictures.**
 
 Pinned to the version above — do NOT auto-update. Check for a newer release
 without modifying anything:
@@ -36,9 +37,9 @@ Only upgrade on explicit user request.
 
 You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }`
-turns) and an HTML `body`. narova makes the speech locally, derives word
-timings, and generates a HyperFrames project (`out/hf/`) that renders to
-`out/video.mp4`. The speech drives everything: captions light up word by word
+turns) and either an HTML `body` or provider-neutral `visual` tree. narova
+makes the speech locally, derives word timings, and renders through HyperFrames
+(default) or the no-browser provider to `out/video.mp4`. The speech drives everything: captions light up word by word
 in each speaker's color, and any element with `data-cue="k"` appears exactly
 when turn `k` starts.
 
@@ -69,8 +70,8 @@ External TTS providers are optional registered companion skills — see
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
 5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
-6. `compose` — generates `out/hf/`. Run `narova shots` for visual QA.
-7. `preview --detach` — show before rendering.
+6. `compose` — generates the selected renderer project. Run `narova shots` for visual QA.
+7. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
 8. `build` — renders `out/video.mp4`. Verify: audio `dur` by eye, then ffprobe.
 
 For step-by-step walkthroughs, loop through screens semantically
@@ -89,6 +90,9 @@ as a source step — compose/build never replay it. See
   ids unique within one scene; style with classes, not `#id` in theme.css.
   Reusable `<defs>` can repeat ids across scenes safely.
 - **Never edit `out/hf/`.** Every compose regenerates it. Change the config.
+- **No-browser never interprets HTML/CSS.** Give every no-browser scene a `visual`
+  tree. Keep HyperFrames for unrestricted browser visuals; see
+  `references/renderers.md` for the capability boundary and dual-authoring.
 - **Sourcing is checked; balance is not.** `check` gates claims against
   `claims.md`, but a one-sided narrative built from sourced claims passes
   clean. For contested topics, ledger the major perspectives and re-read the
@@ -119,9 +123,10 @@ sentences; untouched scenes are byte-identical). See
 | `references/cli.md`            | every command, flag, `out/` file, and rough cost              |
 | `references/gotchas.md`        | avoid the traps (tempo, reuse, sync, models, lint)          |
 | `references/environment.md`    | fix `doctor` failures: ffmpeg, python, venv, hyperframes     |
+| `references/renderers.md`      | choose HyperFrames/no-browser; portable visual nodes and limits |
 
 For Urdu dialogue, use the `urdu-voice-director` skill before finalizing `vo` text.
 
-Related: `out/hf/` is a HyperFrames composition. `hyperframes-core` documents
+Related: `out/hf-*` is a HyperFrames composition. `hyperframes-core` documents
 its format; `hyperframes-cli` its commands. narova owns that project — treat
 it as read-only output.

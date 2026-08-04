@@ -96,13 +96,16 @@ function compose(config, outDir) {
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
   fs.writeFileSync(path.join(hfDir, 'style.css'), css);
-  // Audio: external narration file, mix.wav, or full.wav (in that order).
-  if (hasExternalNarration) {
-    fs.copyFileSync(config.narrationSource.file, path.join(assetsDir, 'narration.wav'));
-  } else {
-    const mixWav = path.join(outDir, 'audio', 'mix.wav');
-    fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
-  }
+  // Register visual-tree fonts so the browser shapes custom fontFile references.
+  const fontCss = buildFontFaces(config);
+  if (fontCss) fs.appendFileSync(path.join(hfDir, 'style.css'), '\n' + fontCss);
+  // Audio: the mixed track wins for both synthesized and custom narration;
+  // otherwise use the custom narrator file, then synthesized full.wav.
+  const mixWav = path.join(outDir, 'audio', 'mix.wav');
+  const audioSource = fs.existsSync(mixWav)
+    ? mixWav
+    : (hasExternalNarration ? config.narrationSource.file : fullWav);
+  fs.copyFileSync(audioSource, path.join(assetsDir, 'narration.wav'));
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({
     name: slug(config.title || 'narova'),
     private: true,
@@ -114,6 +117,25 @@ function compose(config, outDir) {
 
 function slug(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'narova';
+}
+
+/* Scan scene.visual trees for fontFile references registered by the no-browser
+ * renderer and emit @font-face blocks so HyperFrames can shape the same
+ * authored fonts through the browser's font engine. */
+function buildFontFaces(config) {
+  const refs = new Map();
+  function visit(node) {
+    const style = node.style || {};
+    if (style.fontFile) {
+      const family = style.fontFamily || path.basename(style.fontFile, path.extname(style.fontFile));
+      if (!refs.has(family)) refs.set(family, style.fontFile);
+    }
+    (node.children || []).forEach(visit);
+  }
+  (config.scenes || []).forEach(s => { if (s.visual) visit(s.visual); });
+  if (!refs.size) return '';
+  return [...refs].map(([family, file]) =>
+    `@font-face{font-family:"${family}";src:url("assets/${path.basename(file)}")}`).join('\n');
 }
 
 module.exports = { compose };

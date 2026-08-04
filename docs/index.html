@@ -30,6 +30,7 @@
   <nav class="nav-links" aria-label="Primary navigation">
     <a href="#demo" data-hover>Demo</a>
     <a href="#features" data-hover>Features</a>
+    <a href="#renderers" data-hover>Renderers</a>
     <a href="#providers" data-hover>Providers</a>
     <a href="#how" data-hover>How it works</a>
     <a href="#quickstart" data-hover>Quickstart</a>
@@ -52,7 +53,7 @@
         <div class="hero-text">
           <p class="kicker reveal-line">The narration-first video skill</p>
           <a class="release-pill reveal-line" href="#walkthroughs" data-hover>
-            <span class="release-version" data-narova-version>v0.16.0</span>
+            <span class="release-version" data-narova-version>v0.17.0</span>
             <span>real product walkthroughs are here</span>
             <span aria-hidden="true">→</span>
           </a>
@@ -141,6 +142,16 @@
         <p><code>data-cue="2"</code> keeps an element hidden until turn 2 is spoken. Visuals land on the beat.</p>
       </article>
 
+      <article class="card card-wide tilt" id="renderers" data-hover>
+        <h3>Two renderers. Both local. Both free.</h3>
+        <p>Keep the full browser canvas and Studio in HyperFrames. Switch to Narova No-Browser when a machine cannot launch a browser: Skia draws the portable scene tree, FFmpeg plays local media and encodes the result, and unsupported HTML fails clearly instead of degrading silently.</p>
+        <div class="renderer-pair" aria-label="Local renderer comparison">
+          <div><strong>HyperFrames</strong><span>HTML · CSS · Studio · full effects</span></div>
+          <div><strong>Narova No-Browser</strong><span>browserless · images · SVG · video · RTL</span></div>
+        </div>
+        <a class="renderer-read" href="https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/renderers.md" data-hover>See the capability contract →</a>
+      </article>
+
       <article class="card tilt" data-hover>
         <h3>Sources, with an agent in the loop</h3>
         <p>Your agent reads product sites, articles, papers, docs, and repos, then selects the story and evidence. Narova handles the mechanical ingest and video workflow.</p>
@@ -171,7 +182,7 @@
 
       <article class="card tilt" data-hover>
         <h3>Urdu-aware dialogue</h3>
-        <p>Native <code>۔</code> and <code>؟</code> punctuation now drive sentence timing correctly. For meaningful Urdu scripts, Narova can hand dialogue polishing to the optional <a href="https://github.com/ammar-hasan/urdu-voice-director">urdu-voice-director</a> skill.</p>
+        <p>No-browser <code>۔</code> and <code>؟</code> punctuation now drive sentence timing correctly. For meaningful Urdu scripts, Narova can hand dialogue polishing to the optional <a href="https://github.com/ammar-hasan/urdu-voice-director">urdu-voice-director</a> skill.</p>
       </article>
 
       <article class="card tilt" data-hover>
@@ -181,7 +192,7 @@
 
       <article class="card tilt" data-hover>
         <h3>Preview locally. Ship deliberately.</h3>
-        <p>Use Studio and scene snapshots to direct the work, <code>--reuse</code> for visual revisions, <code>check --release</code> as the final gate,
+        <p>Use Studio or a no-browser draft MP4 plus scene snapshots to direct the work, <code>--reuse</code> for visual revisions, <code>check --release</code> as the final gate,
            then export presets for TikTok, Reels, Shorts, LinkedIn, X, YouTube, and WhatsApp.</p>
       </article>
 

@@ -90,16 +90,31 @@ function matchClaim(claimText, ledger) {
   });
 }
 
+function visualFacts(root) {
+  const facts = { content: false, text: false, assets: [] };
+  function visit(node) {
+    if (!node || typeof node !== 'object') return;
+    if (node.type === 'text' && String(node.text || '').trim()) facts.text = facts.content = true;
+    if (['rect', 'circle', 'line', 'path', 'image', 'svg', 'progress'].includes(node.type)) facts.content = true;
+    if ((node.type === 'image' || node.type === 'svg') && node.src) facts.assets.push({ ref: node.src, kind: node.type });
+    if (node.style && node.style.fontFile) facts.assets.push({ ref: node.style.fontFile, kind: 'font' });
+    (node.children || []).forEach(visit);
+  }
+  visit(root);
+  return facts;
+}
+
 /* Release-mode checks that are too slow or pedantic for normal `check`. */
 function releaseChecks(config, errors) {
   for (const s of config.scenes) {
     // Black-frame / empty scene: body with no visible text, images, videos, or SVG.
-    const body = String(s.body);
+    const body = String(s.body || '');
     const hasText = body.replace(/<!--[\s\S]*?-->/g, '').replace(/<[^>]*>/g, '').trim().length > 0;
     const hasVisual = /<(?:img|video|svg|path|circle|rect|ellipse|polygon|line|use)\b/i.test(body);
+    const portable = visualFacts(s.visual);
     const hasVisibleWalkthrough = s.walkthrough && s.walkthrough.opacity !== 0;
-    if (!hasText && !hasVisual && !s.clip && !hasVisibleWalkthrough) {
-      errors.push(`scene "${s.id}": body has no visible content and no b-roll or walkthrough media — scene will render as a black frame`);
+    if (!hasText && !hasVisual && !portable.content && !s.clip && !hasVisibleWalkthrough) {
+      errors.push(`scene "${s.id}": body/visual has no visible content and no b-roll or walkthrough media — scene will render as a black frame`);
     }
 
     // Remote dependencies in body HTML.
@@ -240,9 +255,10 @@ function checkHook(config, warnings) {
   }
 
   // 2 — no visible text on-screen for muted viewers.
-  const body = String(s1.body);
+  const body = String(s1.body || '');
+  const portable = visualFacts(s1.visual);
   const textEls = body.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
-  if (!textEls || textEls.length === 0) {
+  if ((!textEls || textEls.length === 0) && !portable.text) {
     warnings.push(s1.walkthrough
       ? 'hook: scene 1 shows the product but has no on-screen hook text — add a short claim so muted viewers know why the action matters'
       : 'hook: scene 1 has no visible text — muted viewers (80%+ of autoplay) see a blank screen; add hook text on-screen');
@@ -252,10 +268,11 @@ function checkHook(config, warnings) {
 
   // 4 — last scene has no saveable end-frame (no text, no image, no CTA).
   const last = config.scenes[config.scenes.length - 1];
-  const lastBody = String(last.body);
+  const lastBody = String(last.body || '');
+  const lastPortable = visualFacts(last.visual);
   const hasImage = /<(?:img|svg|video)\b/i.test(lastBody);
   const lastTextEls = lastBody.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
-  if (!hasImage && (!lastTextEls || lastTextEls.length === 0)) {
+  if (!hasImage && !lastPortable.content && (!lastTextEls || lastTextEls.length === 0)) {
     warnings.push(`saveable: last scene "${last.id}" has no text or image — a saveable end-card lifts completion rate; add a title, logo, or CTA`);
   }
 }
@@ -277,6 +294,9 @@ function check(config, opts = {}) {
 
   for (const s of config.scenes) {
     const sceneIds = new Set();
+    for (const asset of visualFacts(s.visual).assets) {
+      inspectAssetRef(asset.ref, config, `scene "${s.id}" visual ${asset.kind}`, warnings, { release, _errors: errors });
+    }
     if (s.transition != null && !SCENE_TRANSITIONS.has(s.transition)) {
       warnings.push(`scene "${s.id}": unknown transition "${s.transition}" (valid: fade, wipe, slide, zoom) — the runtime falls back to fade`);
     }
