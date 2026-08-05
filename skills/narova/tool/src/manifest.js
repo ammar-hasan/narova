@@ -68,6 +68,9 @@ function buildHashes(config, projectDir) {
   h.config = hashConfig(config);
   // Theme CSS
   if (config.themeCss) h.themeCss = sha256(config.themeCss);
+  // Project choreography: inlined into the composition like theme.css, so an
+  // edit to it has to invalidate the build the same way.
+  if (config.choreography) h.choreography = sha256(config.choreography);
   // Assets: hash each discoverable file
   const assetsRoot = config.assetsDir || path.join(projectDir || '.', 'assets');
   if (fs.existsSync(assetsRoot)) {
@@ -107,9 +110,9 @@ function buildHashes(config, projectDir) {
 
 function compile(config, opts = {}) {
   const { title, size, voices, theme = {}, mode = 'dark', chrome = {},
-    themeCss = '', timing = {}, scenes, platform = null, bed = null, sfx = [],
-    captions = {}, align = false, variants = [], variant = null, series = null,
-    walkthroughs = {}, projectDir = '.' } = config;
+    themeCss = '', choreography = '', timing = {}, scenes, platform = null,
+    bed = null, sfx = [], captions = {}, align = false, variants = [],
+    variant = null, series = null, walkthroughs = {}, projectDir = '.' } = config;
 
   const assets = collectAssets(config, projectDir);
   const deliverables = buildDeliverables(config);
@@ -136,6 +139,9 @@ function compile(config, opts = {}) {
       css:    themeCss || '',
     },
     chrome: { ...(chrome || {}) },
+    // Carried as contents, not a path: the manifest has to be able to rebuild
+    // the composition on its own, exactly as it does for theme.css.
+    choreography: choreography || '',
     voices: compileVoices(voices || {}),
     timing: {
       gapSentence: timing.gapSentence != null ? timing.gapSentence : 0.24,

@@ -561,3 +561,42 @@ test('compile → validate → read back is stable', () => {
     fs.rmSync(tmp, { recursive: true, force: true });
   }
 });
+
+// ---- choreography round-trip ------------------------------------------------
+// The composition is rebuilt from the manifest, not from the resolved config,
+// so choreography that the manifest does not carry renders as nothing at all —
+// silently, with check() and the build both reporting success.
+
+const CHOREO = 'tl.to("#scene-intro .x", { y: 10, duration: 1 }, 2);';
+
+test('compile carries choreography contents into the manifest', () => {
+  const tl = compile({ ...resolve(makeRaw()), choreography: CHOREO });
+  assert.equal(tl.choreography, CHOREO);
+});
+
+test('compile defaults choreography to an empty string', () => {
+  assert.equal(compile(resolve(makeRaw())).choreography, '');
+});
+
+test('choreography survives the manifest round-trip into a composable config', () => {
+  const { configFromManifest } = require('../src/pipeline');
+  const tl = compile({ ...resolve(makeRaw()), choreography: CHOREO });
+  const round = configFromManifest(JSON.parse(JSON.stringify(tl)), null);
+  assert.equal(round.choreography, CHOREO,
+    'a build driven from the manifest must not drop choreography');
+});
+
+test('editing choreography changes the build hashes', () => {
+  const { buildHashes } = require('../src/manifest');
+  const base = resolve(makeRaw());
+  const h1 = buildHashes({ ...base, choreography: CHOREO }, os.tmpdir());
+  const h2 = buildHashes({ ...base, choreography: CHOREO + '\n// tweak' }, os.tmpdir());
+  assert.ok(h1.choreography, 'choreography must be hashed');
+  assert.notEqual(h1.choreography, h2.choreography,
+    'an edited choreography file must invalidate the cached build');
+});
+
+test('no choreography leaves no choreography hash', () => {
+  const { buildHashes } = require('../src/manifest');
+  assert.equal(buildHashes(resolve(makeRaw()), os.tmpdir()).choreography, undefined);
+});

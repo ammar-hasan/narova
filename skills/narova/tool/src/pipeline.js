@@ -394,6 +394,7 @@ function configFromManifest(manifest, resolvedConfig) {
     mode: m.theme?.mode || 'dark',
     chrome: m.chrome || {},
     themeCss: m.theme?.css || '',
+    choreography: m.choreography || '',
     timing: m.timing || {},
     scenes: (m.scenes || []).map(s => ({
       id: s.id, body: s.body || '', clip: s.clip || null, dur: s.dur || null,

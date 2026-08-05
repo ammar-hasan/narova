@@ -4,6 +4,33 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Project choreography hook (`choreography: "choreo.js"`)** — an optional
+  project-level file of timeline code, resolved relative to the config exactly
+  as `theme.css` is and inlined into the composition immediately after the
+  built-in animators are registered. `tl`, `DATA`, `gsap`, and `cueTime` are in
+  scope; motion is registered as turn-anchored tweens on the one paused
+  timeline, so it is exactly as seek-safe as the built-in vocabulary. No remote
+  fetch is introduced, and nothing changes for projects that do not declare it.
+- **`check` lints for choreography** — a declared file that cannot be read is
+  an error; references to `Date`, `Math.random`, `requestAnimationFrame`,
+  `setTimeout`, or `fetch` warn (each breaks determinism under seek); a file
+  over 32KB warns.
+- **`references/choreography.md`** — the in-scope globals, the turn-anchoring
+  pattern, scene-scoped selection, and the two determinism traps (pre-seed
+  identity transforms; do not tween `transformOrigin`).
+
+### Fixed
+
+- **Choreography survives the manifest round-trip.** The composition is rebuilt
+  from the manifest rather than from the resolved config, so choreography is
+  now carried in the manifest and hashed alongside `theme.css`. Without this an
+  edit to `choreo.js` would not invalidate a cached build, and a
+  manifest-driven build would silently render with no choreography at all.
+
 ## [0.16.0] - 2026-08-03
 
 ### Added
