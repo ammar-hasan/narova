@@ -451,3 +451,33 @@ test('synthesisText: absent from narration when not set', () => {
   const n = narration(c);
   assert.equal(n[0].segments[0].synthesisText, undefined);
 });
+
+// ---- choreography -----------------------------------------------------------
+
+test('resolveConfig reads choreography relative to the config dir', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-choreo-'));
+  fs.writeFileSync(path.join(dir, 'choreo.js'), 'tl.to(".x", { y: 10 }, 1);\n');
+  const c = resolveConfig({ ...validRaw(), choreography: 'choreo.js' }, {}, dir);
+  assert.equal(c.choreography, 'tl.to(".x", { y: 10 }, 1);\n');
+  assert.equal(c.choreographyPath, path.resolve(dir, 'choreo.js'));
+});
+
+test('resolveConfig throws when the choreography file is missing', () => {
+  assert.throws(
+    () => resolveConfig({ ...validRaw(), choreography: 'nope.js' }, {}, '.'),
+    /config\.choreography: file not found/,
+  );
+});
+
+test('resolveConfig rejects a non-string choreography reference', () => {
+  assert.throws(
+    () => resolveConfig({ ...validRaw(), choreography: { file: 'choreo.js' } }, {}, '.'),
+    /config\.choreography: expected a file path/,
+  );
+});
+
+test('choreography is empty and unset when not declared', () => {
+  const c = resolveConfig(validRaw(), {}, '.');
+  assert.equal(c.choreography, '');
+  assert.equal(c.choreographyPath, null);
+});

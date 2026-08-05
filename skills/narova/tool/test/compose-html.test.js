@@ -211,3 +211,42 @@ test('no series badge when series is not configured', () => {
   const h = doc();
   assert.ok(!h.includes('series-badge'));
 });
+
+// -- project choreography --
+
+const CHOREO = 'tl.to("#scene-s1 .evict", { y: 1050, duration: 1.7 }, 2.4);';
+
+test('choreography is inlined after the runtime, in the same script block', () => {
+  const h = composeDoc({ ...config, choreography: CHOREO }, size, composeData(config, timings), '');
+  const block = h.slice(h.indexOf('<script>\nvar DATA'), h.indexOf('</script>\n</body>'));
+  assert.ok(block.includes(CHOREO), 'choreography must be inlined');
+  // Must land after the timeline is registered, so the built-in animators are
+  // already on `tl` when project code adds to it.
+  assert.ok(block.indexOf(CHOREO) > block.indexOf("window.__timelines['main'] = tl;"),
+    'choreography must follow runtimeScript(), not precede it');
+});
+
+test('no choreography leaves the script block untouched', () => {
+  const h = doc();
+  assert.ok(!h.includes('project choreography'));
+});
+
+test('a </script> inside choreography cannot break out of the block', () => {
+  const nasty = 'var s = "</script><img onerror=x>";';
+  const h = composeDoc({ ...config, choreography: nasty }, size, composeData(config, timings), '');
+  const tail = h.slice(h.indexOf('var DATA'));
+  // The payload stays in the block — inert inside a JS string literal. What
+  // matters is that it did not terminate the block early, so exactly one
+  // closing tag remains: the real one.
+  assert.equal((tail.match(/<\/script>/g) || []).length, 1,
+    'the injected closing tag must not become a second, real one');
+  assert.ok(tail.includes('<\\/script><img onerror=x>'),
+    'the closing tag must be backslash-escaped, not stripped');
+});
+
+test('choreography keeps "<" comparisons intact (unlike the DATA block)', () => {
+  const cmp = 'if (sc.start < 3 && i <= 2) tl.set(".x", { opacity: 1 }, 0);';
+  const h = composeDoc({ ...config, choreography: cmp }, size, composeData(config, timings), '');
+  assert.ok(h.includes(cmp), 'comparison operators must survive verbatim');
+  assert.ok(!h.includes('sc.start \\u003c 3'), '"<" must not be entity-escaped in choreography');
+});

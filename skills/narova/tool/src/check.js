@@ -224,6 +224,22 @@ const HF_RESERVED_CLASSES = new Set([
   'has-walkthrough', 'walkthrough-window', 'walkthrough-full',
 ]);
 
+/* Determinism hazards in a project choreography file (config.choreography).
+ * Deliberately un-anchored substring matches with no /g flag — these are
+ * advisory sniffs, and a stateful lastIndex would make them fire every other
+ * call. */
+const CHOREOGRAPHY_DETERMINISM_RULES = [
+  { pattern: /\bDate\b/,                  desc: 'Date (wall-clock time)' },
+  { pattern: /\bMath\s*\.\s*random\b/,    desc: 'Math.random()' },
+  { pattern: /\brequestAnimationFrame\b/, desc: 'requestAnimationFrame()' },
+  { pattern: /\bsetTimeout\b/,            desc: 'setTimeout()' },
+  { pattern: /\bfetch\b/,                 desc: 'fetch() (a remote dependency)' },
+];
+
+/* Past this the file has stopped being choreography and started being an
+ * application — flagged so the logic moves into the tool instead. */
+const CHOREOGRAPHY_MAX_BYTES = 32 * 1024;
+
 /* Hook enforcement (§Hook doctrine in the skill references).
  * Viral video mechanics in 2026: muted autoplay is 80%+, hooks are measured at
  * 2s, the first syllable must land within ~200ms. Scene 1 is the hook. */
@@ -364,6 +380,31 @@ function check(config, opts = {}) {
     }
     if (flow.mutates) {
       warnings.push(`walkthrough "${id}" declares mutating actions — capture against disposable demo data, never a production account`);
+    }
+  }
+
+  // choreography
+  // A declared file that cannot be read is always an error: resolveConfig
+  // throws on it, so reaching here means the config was assembled another way
+  // and the composition would silently render with no choreography at all.
+  if (config.choreographyPath && !fs.existsSync(config.choreographyPath)) {
+    releaseIssue(`config.choreography: file not found: ${config.choreographyPath}`);
+  }
+  const choreoSrc = config.choreography || '';
+  if (choreoSrc) {
+    // Frames are rendered by seeking a paused timeline, so anything that reads
+    // wall-clock time, randomizes, or schedules its own work paints a different
+    // picture on every pass. Warnings, not errors — string matching has false
+    // positives (a variable named `updateDate`, "fetch" inside a comment) and
+    // the determinism contract carries the hard rule.
+    for (const rule of CHOREOGRAPHY_DETERMINISM_RULES) {
+      if (rule.pattern.test(choreoSrc)) {
+        warnings.push(`choreography: references ${rule.desc} — frames are rendered by seeking a paused timeline, so this will not reproduce`);
+      }
+    }
+    const bytes = Buffer.byteLength(choreoSrc, 'utf8');
+    if (bytes > CHOREOGRAPHY_MAX_BYTES) {
+      warnings.push(`choreography: ${Math.round(bytes / 1024)}KB exceeds the ${CHOREOGRAPHY_MAX_BYTES / 1024}KB guideline — a choreography file growing without bound is a sign the logic belongs in the tool`);
     }
   }
 

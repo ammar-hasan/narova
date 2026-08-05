@@ -15,9 +15,10 @@ const CAPTION_PRESETS = new Set(['karaoke', 'slam', 'pop', 'rise']);
 const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
- * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, timing,
- * scenes, walkthroughs, assetsDir, projectDir, platform, bed, sfx, captions, align,
- * variants, variant } and throws on anything the pipeline can't render. */
+ * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, choreography,
+ * choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir, platform,
+ * bed, sfx, captions, align, variants, variant } and throws on anything the
+ * pipeline can't render. */
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
   const errs = [];
@@ -54,6 +55,23 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   const themeMode = mode ?? 'dark';
   if (themeMode !== 'dark' && themeMode !== 'light') {
     errs.push(`config.theme.mode: expected "dark" or "light", got ${JSON.stringify(mode)}`);
+  }
+
+  // choreography is a FILE reference too — project timeline code, inlined into
+  // the composition after the built-in animators (compose/html.js). Resolved
+  // exactly like theme.css: local path, read here, no remote fetch introduced.
+  // The path is carried alongside the contents so `check` can report what it
+  // could not read on a config that was not built by this function.
+  let choreography = '';
+  let choreographyPath = null;
+  if (raw.choreography != null) {
+    if (typeof raw.choreography !== 'string') {
+      errs.push(`config.choreography: expected a file path relative to the config, got ${JSON.stringify(raw.choreography)}`);
+    } else {
+      choreographyPath = path.resolve(baseDir, raw.choreography);
+      if (!fs.existsSync(choreographyPath)) errs.push(`config.choreography: file not found: ${choreographyPath}`);
+      else choreography = fs.readFileSync(choreographyPath, 'utf8');
+    }
   }
 
   // Chrome (topbar/counter/progress bar) is generated page furniture — on by
@@ -484,7 +502,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource };
+  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource };
 }
 
 /* The narration.json contract for the Python TTS stage. */

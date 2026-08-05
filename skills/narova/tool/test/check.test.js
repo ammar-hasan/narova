@@ -585,3 +585,70 @@ test('release: empty voices config passes silently', () => {
   assert.equal(ok, true, 'silent voice-less project should pass release: ' + lines.join('\n'));
   assert.ok(lines.some(l => l.includes('silent')), 'backends should show silent');
 });
+
+// ---- choreography lints -----------------------------------------------------
+
+const choreoConfig = (choreography, extra = {}) => ({
+  ...base([{ id: 's', body: '<p data-cue="0">x</p>', vo: [{ who: 'a', text: 'one' }] }]),
+  choreography,
+  ...extra,
+});
+
+test('a clean choreography file produces no warnings', () => {
+  const { lines } = run(choreoConfig('var T = function (k) { return sc.start + sc.turns[k]; };'));
+  assert.ok(!lines.some(l => l.startsWith('warn:')), lines.join('\n'));
+});
+
+test('determinism-breaking references in choreography warn', () => {
+  const src = [
+    'var t = Date.now();',
+    'var j = Math.random();',
+    'requestAnimationFrame(step);',
+    'setTimeout(step, 16);',
+    'fetch("/x");',
+  ].join('\n');
+  const warns = run(choreoConfig(src)).lines.filter(l => l.startsWith('warn: choreography:'));
+  assert.equal(warns.length, 5, warns.join('\n'));
+  for (const token of ['Date', 'Math.random()', 'requestAnimationFrame()', 'setTimeout()', 'fetch()']) {
+    assert.ok(warns.some(l => l.includes(token)), `expected a warning naming ${token}`);
+  }
+});
+
+test('determinism sniffs are not stateful across repeated checks', () => {
+  const cfg = choreoConfig('var t = Date.now();');
+  const first = run(cfg).lines.filter(l => l.startsWith('warn: choreography:'));
+  const second = run(cfg).lines.filter(l => l.startsWith('warn: choreography:'));
+  assert.deepEqual(second, first, 'the same config must lint identically every time');
+});
+
+test('a choreography file over 32KB warns', () => {
+  const big = `tl.set(".x", { opacity: 1 }, 0);\n`.repeat(1200);
+  assert.ok(Buffer.byteLength(big, 'utf8') > 32 * 1024);
+  const warns = run(choreoConfig(big)).lines.filter(l => l.startsWith('warn: choreography:'));
+  assert.equal(warns.length, 1, warns.join('\n'));
+  assert.match(warns[0], /exceeds the 32KB guideline/);
+});
+
+test('a choreography file at or under 32KB does not warn on size', () => {
+  const small = `tl.set(".x", { opacity: 1 }, 0);\n`.repeat(100);
+  assert.ok(Buffer.byteLength(small, 'utf8') < 32 * 1024);
+  assert.ok(!run(choreoConfig(small)).lines.some(l => l.includes('guideline')));
+});
+
+test('a declared choreography file that cannot be read fails release', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-choreo-'));
+  const missing = path.join(dir, 'gone.js');
+  const { ok, lines } = run(choreoConfig('', { choreographyPath: missing }), { release: true });
+  assert.equal(ok, false, lines.join('\n'));
+  assert.ok(lines.some(l => l.startsWith('fail:') && l.includes('config.choreography: file not found')),
+    lines.join('\n'));
+});
+
+test('a choreography file that exists on disk does not fail release', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-choreo-ok-'));
+  const p = path.join(dir, 'choreo.js');
+  fs.writeFileSync(p, 'tl.set(".x", { opacity: 1 }, 0);\n');
+  const cfg = choreoConfig(fs.readFileSync(p, 'utf8'), { choreographyPath: p, assetsDir: null });
+  const { lines } = run(cfg, { release: true });
+  assert.ok(!lines.some(l => l.includes('config.choreography')), lines.join('\n'));
+});

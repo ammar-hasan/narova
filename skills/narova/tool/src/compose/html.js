@@ -158,6 +158,13 @@ function composeDoc(config, size, data, css) {
   // terminate the block early.
   const dataJson = JSON.stringify(data).replace(/</g, '\\u003c');
 
+  // Project choreography (config.choreography, resolved by schema.js) is raw
+  // timeline code, so "<" cannot be blanket-escaped the way it is for DATA —
+  // that would break every `a < b`. Only a literal "</script" can terminate the
+  // block, and "<\/script" is identical to the JS parser inside the string and
+  // regex literals where it can legitimately appear.
+  const choreography = String(config.choreography || '').replace(/<\/script/gi, '<\\/script');
+
   // The caption preset is carried twice: in DATA (runtime.js picks its word
   // tweens off it) and as a cap-preset-* class on the stage (css.js picks its
   // static styles off the class). Both derive from the same resolved config.
@@ -192,7 +199,7 @@ ${sceneClips}
 </div>
 <script>
 var DATA = ${dataJson};
-${runtimeScript()}
+${runtimeScript()}${choreography ? `\n/* project choreography */\n${choreography}` : ''}
 </script>
 </body>
 </html>

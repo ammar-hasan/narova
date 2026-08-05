@@ -114,6 +114,7 @@ sentences; untouched scenes are byte-identical). See
 | `references/url-to-source.md`   | classify a source page and extract factual & visual evidence |
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
 | `references/product-walkthroughs.md` | explore, capture, compose, and QA product demos       |
+| `references/choreography.md`   | make something *happen* in a scene beyond the built-in cues   |
 | `references/stock-assets.md`  | source photos, clips, music, SFX, fonts, icons from CLI      |
 | `references/audio.md`          | background beds, spot SFX, forced word alignment             |
 | `references/cli.md`            | every command, flag, `out/` file, and rough cost              |
