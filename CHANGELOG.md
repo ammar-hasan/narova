@@ -4,32 +4,125 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [Unreleased]
+## [0.19.0] - 2026-08-06
 
-### Added
+### Changed
 
-- **Project choreography hook (`choreography: "choreo.js"`)** — an optional
-  project-level file of timeline code, resolved relative to the config exactly
-  as `theme.css` is and inlined into the composition immediately after the
-  built-in animators are registered. `tl`, `DATA`, `gsap`, and `cueTime` are in
-  scope; motion is registered as turn-anchored tweens on the one paused
-  timeline, so it is exactly as seek-safe as the built-in vocabulary. No remote
-  fetch is introduced, and nothing changes for projects that do not declare it.
-- **`check` lints for choreography** — a declared file that cannot be read is
-  an error; references to `Date`, `Math.random`, `requestAnimationFrame`,
-  `setTimeout`, or `fetch` warn (each breaks determinism under seek); a file
-  over 32KB warns.
-- **`references/choreography.md`** — the in-scope globals, the turn-anchoring
-  pattern, scene-scoped selection, and the two determinism traps (pre-seed
-  identity transforms; do not tween `transformOrigin`).
+- **Three.js upgraded from r149 UMD to r185 ESM** — the old UMD build was
+  deprecated after r149 and removed at r161. r185 is the latest stable
+  (July 2026), shipped as an esbuild-bundled global script that exposes
+  `window.THREE` — no ESM import maps needed, no CDN probes, opaque to
+  HyperFrames' compiler so the full namespace survives tree-shaking.
+  GLTFLoader is compiled into the same bundle as `THREE.GLTFLoader`.
+- **Tone mapping** — default ACES filmic (`outputColorSpace=SRGB`),
+  configurable via `scene.three.toneMapping` (aces, agx, neutral, linear) and `exposure`.
+- **Lighting** — r185 uses physically-correct lighting (`decay=2`, no legacy
+  lights). Ambient/directional intensities of 2-4 are appropriate for typical
+  scenes (r149's legacy model used ~0.5-1).
+- **Template preset voices** in generated projects now use `en_US-lessac-medium`
+  (a real piper voice) instead of stub names.
 
 ### Fixed
 
-- **Choreography survives the manifest round-trip.** The composition is rebuilt
-  from the manifest rather than from the resolved config, so choreography is
-  now carried in the manifest and hashed alongside `theme.css`. Without this an
-  edit to `choreo.js` would not invalidate a cached build, and a
-  manifest-driven build would silently render with no choreography at all.
+- **Group/character opacity** (`appear`/`disappear`) no longer targets `.material`
+  on a `THREE.Group` (which has none — the old code silently killed the scene).
+  It now walks descendants and drives every material's opacity deterministically
+  from the GSAP timeline.
+- **Material-cache opacity bleed** — meshes that animate opacity get an isolated
+  material (same shader, own uniforms) so tweening one no longer fades every
+  same-colored sibling sharing the cache.
+- **animationTweens `from`** honored via `tl.fromTo` instead of dropped.
+- **Boot poll bounded** (200 retries + `console.error` surface) instead of
+  polling forever when THREE or the timeline is absent.
+- **GLTF models are deterministic** — prefetched via `fetch`, parsed with
+  `parseAsync`, and the first render is gated on `Promise.all(_pending)`.
+  Wireframe fallback only on explicit load failure, never a silent pop-in.
+- **GLTFLoader was silently broken** — the `examples/js/` UMD path 404'd
+  for every pinned version. The loader is now compiled into the global bundle.
+
+### Added
+
+- **Project choreography hook (`choreography: "choreo.js"`)** — optional
+  project-level file of GSAP timeline code, inlined into the composition after
+  the built-in animators. `tl`, `DATA`, `gsap`, and `cueTime` are in scope;
+  any turn-anchored tween is exactly as seek-safe as the built-in vocabulary.
+- **Character abstraction** — built-in presets (cat, mouse, robot) compile to
+  `THREE.Group` assemblies of relative parts. Scene use: one line per character.
+  Config `characters.<id>` overrides or adds custom characters.
+- **`instances` on primitives** — N copies of one primitive rendered as a single
+  `THREE.InstancedMesh` (crowds, props, particles — one draw call).
+- **Shared geometry/material cache** — identical primitives share one buffer
+  and one program across all meshes, reduced draw calls.
+- **`narova generate` command** — AI clip generation via Sora/Runway APIs,
+  downloaded to `assets/` for use as `scene.clip`.
+- **Ground/set convenience** — `type: "ground"` element → floor plane.
+- **Primitive shorthand** — `type: "cube"` ≡ `3d-object` with kind cube.
+- **`canvas3d`/`model3d` node types** in the portable visual tree.
+- **6 new validation tests** added across the affected modules.
+
+## [0.17.0] - 2026-08-03
+
+### Added
+
+- **Two bundled free local renderer providers** — HyperFrames remains the
+  default, full browser/HTML/CSS provider; Narova No-Browser adds deterministic,
+  browserless Skia frame drawing and FFmpeg media decode/encoding under the
+  versioned `narova-renderer-provider/v1` boundary.
+- **Provider-neutral `scene.visual` tree** — groups/stacks, text, rectangles,
+  circles, lines, SVG paths, images, SVG, progress graphics, local fonts,
+  shaped RTL text, gradients, borders, clipping, shadows, and flexible
+  row/column layout. Visual-only scenes compile to HyperFrames HTML; a scene
+  can keep a richer `body` beside its no-browser fallback.
+- **Portable motion** — cue- or second-anchored entrances, deterministic
+  keyframes, media drift, and fade/wipe/slide/zoom scene transitions.
+- **No-browser media and delivery workflow** — full-frame per-scene video,
+  word-synced captions, mixed custom narration/music/SFX, snapshots, draft
+  preview MP4s, H.264/AAC builds, variants, and FFmpeg export deliverables.
+- **Renderer CLI** — `--renderer hyperframes|no-browser`, `narova renderers list`,
+  and `narova renderers doctor <name>` make capabilities and requirements
+  explicit. No-browser rendering performs no network request.
+- **Complex browserless production eval** — a real 16-second, four-scene video
+  covers custom narration, word timings, audio processing/mixing, product
+  playback, raster/SVG/font assets, multilingual text, charts, cartoon motion,
+  captions, all four transitions, snapshots, and a contact sheet.
+
+### Changed
+
+- Renderer identity and portable visuals now survive config resolution,
+  variants, the canonical manifest, planning fingerprints, composition, QA,
+  preview, builds, and deliverables.
+- `narova check` understands portable visual content and asset references.
+  No-browser rejects HTML-only scenes and walkthroughs without an explicit clip fallback
+  before writing frames instead of silently producing a lower-fidelity result.
+- External narrator word timings are normalized into the shared timing
+  contract before captions/manifests/rendering, so SRT/VTT and both renderers
+  receive the same cues. External narration mixes now prefer `mix.wav` in the
+  HyperFrames project as documented.
+- Documentation and the landing page now explain the two local render paths,
+  portable contract, installation, honest capability boundaries, and preview
+  behavior without changing the site's established visual language.
+
+### Fixed
+
+- External narration compression uses FFmpeg's millisecond attack/release
+  units and accepted ranges, restoring the intended voice-cleanup pass on
+  current FFmpeg.
+- No-browser raster and decoded-video frames use explicit RGBA transfer into Skia,
+  avoiding lazy-decoder black frames; long karaoke lines wrap inside the safe
+  caption band.
+- No-browser Arabic-script text and captions now use FontKit OpenType shaping with
+  a pinned free Noto Sans Arabic fallback, avoiding disconnected Urdu letters
+  and missing-glyph boxes when an authored font has incomplete coverage.
+- External word-timing transcripts must match the declared voiceover, and
+  epsilon-safe scene boundaries no longer duplicate cues as zero-length
+  subtitles. The complex eval now consumes the shipped reel's paired VTT
+  instead of placing invented caption text over unrelated narration.
+- No-browser now reserves the caption-safe lower band for scene content while
+  keeping root backgrounds and full-frame clips edge-to-edge, preventing scene
+  copy behind the karaoke overlay from looking like a second caption layer.
+- The complex proof uses caption-free raster artwork, so only Narova's single
+  karaoke layer appears in review frames.
+
 
 ## [0.16.0] - 2026-08-03
 

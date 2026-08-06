@@ -109,10 +109,11 @@ function buildHashes(config, projectDir) {
 /* ---- compilation ---------------------------------------------------------- */
 
 function compile(config, opts = {}) {
-  const { title, size, voices, theme = {}, mode = 'dark', chrome = {},
-    themeCss = '', choreography = '', timing = {}, scenes, platform = null,
-    bed = null, sfx = [], captions = {}, align = false, variants = [],
-    variant = null, series = null, walkthroughs = {}, projectDir = '.' } = config;
+  const { title, size, renderer = 'hyperframes', voices, theme = {}, mode = 'dark', chrome = {},
+    themeCss = '', choreography = '', timing = {}, scenes, platform = null, bed = null, sfx = [],
+    captions = {}, align = false, variants = [], variant = null, series = null,
+    walkthroughs = {}, projectDir = '.' } = config;
+
 
   const assets = collectAssets(config, projectDir);
   const deliverables = buildDeliverables(config);
@@ -124,6 +125,10 @@ function compile(config, opts = {}) {
       title,
       created: new Date().toISOString(),
       platform: platform || null,
+    },
+    renderer: {
+      provider: renderer,
+      protocol: 'narova-renderer-provider/v1',
     },
     format: {
       width:  (size && size.w) || 1280,
@@ -169,6 +174,7 @@ function compile(config, opts = {}) {
     environment: {
       narova:    opts.toolVersion || '0.8.0',
       backend:   opts.backend || config.voices && Object.values(config.voices)[0]?.backend || 'piper',
+      renderer,
       compiled:  new Date().toISOString(),
     },
     hashes: buildHashes(config, projectDir),
@@ -273,6 +279,8 @@ function compileScenes(scenes) {
       words: [],           // filled after synth
     })),
     body: s.body || '',
+    visual: s.visual || null,
+    three: s.three || null,
     clip: s.clip || null,
     walkthrough: s.walkthrough || null,
     dur:  s.dur || null,   // silent scene fixed duration
@@ -362,6 +370,7 @@ function compileVariants(variants) {
     id: v.id,
     scene: v.scene ? {
       body:       v.scene.body || '',
+      visual:     v.scene.visual || null,
       vo:         (v.scene.vo || []).map(turn => ({
         who: turn.who,
         text: turn.text,
@@ -430,6 +439,18 @@ function validate(tl) {
   }
   if (!tl.project || typeof tl.project !== 'object') errs.push('manifest.project: required (object)');
   else if (!tl.project.title || typeof tl.project.title !== 'string') errs.push('manifest.project.title: required (string)');
+  if (tl.renderer != null) {
+    if (!tl.renderer || typeof tl.renderer !== 'object' || Array.isArray(tl.renderer)) {
+      errs.push('manifest.renderer: expected an object');
+    } else {
+      if (!['hyperframes', 'no-browser'].includes(tl.renderer.provider)) {
+        errs.push('manifest.renderer.provider: expected hyperframes|no-browser');
+      }
+      if (tl.renderer.protocol !== 'narova-renderer-provider/v1') {
+        errs.push('manifest.renderer.protocol: expected narova-renderer-provider/v1');
+      }
+    }
+  }
   if (!tl.format || typeof tl.format !== 'object') errs.push('manifest.format: required (object)');
   else {
     if (!Number.isFinite(tl.format.width)) errs.push('manifest.format.width: required (number)');

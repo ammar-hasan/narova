@@ -44,6 +44,136 @@ export default {
 }
 ```
 
+## 3D scenes and the element model
+
+narova renders 3D through HyperFrames' browser WebGL (Three.js). There are two
+ways to author a 3D scene — start with **elements** (the semantic, agent-friendly
+surface), drop to **scene.three** (explicit Three.js) only when you need direct
+control.
+
+### `scene.elements` — describe intent, not mechanics
+
+An element is one line. narova expands it. The author says *what* the scene is
+("a cat chases a mouse across the floor"); narova decides *how* to build it.
+
+```js
+{
+  id: "chase",
+  vo: [{ who: "a", text: "Go go go! The chase is on!" }],
+  elements: [
+    { type: "camera", position: [0, 3.2, 6.5], lookAt: [0, 0.6, 0] },
+    { type: "light", kind: "ambient", color: "#404060", intensity: 0.7 },
+    { type: "light", kind: "directional", position: [4, 6, 4] },
+    { type: "effect", kind: "background", color: "#1b2438" },
+    { type: "ground" },                                   // a floor, one line
+    { type: "character", kind: "cat", position: [-2.2, 0, 0.3],
+      actions: [{ type: "move", to: [0.4, 0, 0.3], duration: 4.6 }] },
+    { type: "character", kind: "mouse", position: [2.2, 0, 0],
+      actions: [{ type: "move", to: [-1.8, 0, 0], duration: 4.6 }] },
+  ],
+  body: `<span class="cue" data-cue="0" style="font-size:48px;font-weight:900;color:#fff">CAT vs MOUSE</span>`,
+}
+```
+
+**Element types**
+
+| type | what it becomes |
+|------|-----------------|
+| `camera` | the 3D camera (`position`, `lookAt`, `fov`) |
+| `light` | a light (`kind`: ambient/directional/point/spot/hemisphere) |
+| `cube`/`sphere`/`cylinder`/`plane`/`torus`/`cone`/… | a primitive (shorthand for `3d-object` with `kind`) |
+| `3d-object` | a primitive by `kind`, e.g. `{ type: "3d-object", kind: "cube" }` |
+| `model` | a `.glb`/`.gltf` file by `src` |
+| `character` | a whole character — see below |
+| `ground` | a floor plane (optional `color`, `size`) |
+| `effect` | fog (`{ kind: "fog", color, near, far }`) or background (`{ kind: "background", color }`) |
+| `text`/`shape`/`image`/`video` | 2D overlay on top of the 3D scene |
+| `group` | nested elements that inherit transforms |
+
+**Characters** are the point of the abstraction. A character is a reusable
+assembly of relative parts; instancing it is one line. Three built-in presets
+ship: `kind: "cat"`, `kind: "mouse"`, `kind: "robot"`. `actions` on the
+character apply to the whole assembly (move the cat, not its 10 parts).
+
+```js
+{ type: "character", kind: "cat", position: [-2.2, 0, 0.3],
+  actions: [{ type: "move", to: [0.4, 0, 0.3], duration: 4.6 }] }
+```
+
+Define your own characters under `config.characters` (parts are primitives in
+local coordinates; feet near y=0). A config character overrides a preset of the
+same name. Model characters use `model`/`src` instead of `parts`:
+
+```js
+characters: {
+  hero: { parts: [
+    { type: "cube", size: [0.4, 0.5, 0.3], color: "#46d98a", position: [0, 0.25, 0] },
+    { type: "sphere", size: 0.18, color: "#2ee6d6", position: [0, 0.75, 0] },
+  ]},
+  avatar: { model: "assets/avatar.glb" },
+}
+```
+
+**Actions** are semantic: `appear`, `disappear`, `move` (with `to: [x,y,z]`),
+`rotate` (with `axis` + `to` radians), `scale`, `orbit`/`revolve`. Timing binds
+to narration cues: `at: { cue: 0 }` fires when turn 0 starts, `at: 0.5` is a
+scene-time offset.
+
+**Repeated objects (crowds, props, particles)** use `instances` — N copies of
+one primitive rendered as a single `THREE.InstancedMesh` (one draw call, shared
+geometry/material) instead of N meshes:
+
+```js
+{ type: "sphere", size: 0.3, color: "#46d98a",
+  instances: [
+    { position: [0, 0.3, 0] },
+    { position: [1, 0.3, 0] },
+    { position: [2, 0.3, 0], scale: [1.5, 1.5, 1.5] },
+  ] }
+```
+
+Three.js best practices are applied automatically: identical geometries and
+materials are deduplicated through a per-scene cache (one buffer, one program;
+materials that animate opacity are isolated so tweening one mesh never fades a
+same-colored sibling), `preserveDrawingBuffer` + `setPixelRatio(1)` keep
+captures deterministic, and rendering is driven by the GSAP timeline — not
+`requestAnimationFrame`, which would be non-deterministic under frame seeking.
+`.glb`/`.gltf` models are prefetched and parsed before frame 0 (no mid-scene
+pop-in), and output is tone-mapped (ACES filmic by default) to sRGB for video.
+
+Note on the version: narova pins three.js **r149** — the last release with a
+real UMD `build/three.min.js` (r150+ ships only a deprecation stub) that the
+inline-script composition needs. The UMD GLTFLoader (removed at r148) is
+vendored into the tool. Newer releases (r155+) add AgX/Neutral tone mapping and
+WebGPU but require ESM/import maps, a future migration.
+
+### `scene.three` — explicit Three.js
+
+For direct control, `scene.three` is the compiled target: `camera`, `lights`,
+`objects` (primitives, `model`, or `group` with relative `children`), `fog`,
+`background`. Each object takes `position`/`rotation`/`scale` and an `animate`
+list of `{ property: "position.x" | "rotation.y" | "scale", from, to, duration,
+ease, at }`. Everything is driven by the GSAP timeline, so frames are
+deterministic and seek-safe.
+
+```js
+three: {
+  camera: { position: [0, 0, 5], fov: 45 },
+  lights: [{ type: "ambient", intensity: 0.5 }, { type: "directional", position: [5, 5, 5] }],
+  toneMapping: "aces",        // optional: aces (default) | linear
+  exposure: 1,                // optional: tone-mapping exposure
+  objects: [{ type: "cube", color: "#2ee6d6", size: 1.2,
+    animate: { property: "rotation.y", from: 0, to: Math.PI * 2, duration: 6 } }],
+}
+```
+
+Notes:
+- Three.js is downloaded once to `out/hf-*/assets/` at compose time (no CDN
+  dependency at render); the GLTFLoader ships vendored in the tool.
+- `.glb`/`.gltf` models are copied from the project, prefetched, and parsed
+  before frame 0 so they never pop in mid-scene.
+- 2D `body` HTML overlays the 3D canvas, so mix text/captions over 3D freely.
+
 ## What `check` enforces (errors)
 
 - At least one voice. Every `vo[].who` must be a declared voice.

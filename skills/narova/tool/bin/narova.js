@@ -10,7 +10,6 @@ const { spawnSync } = require('child_process');
 const { loadProjectConfig } = require('../src/config');
 const { resolveConfig } = require('../src/schema');
 const { synth, writeStageInputs, build, findPython, resolveReuse, compileTimeline, enrichTimeline } = require('../src/pipeline');
-const { compose } = require('../src/compose');
 const { composeData } = require('../src/compose/data');
 const { writeCaptions } = require('../src/captions');
 const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort } = require('../src/hf');
@@ -23,10 +22,15 @@ const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
+const { PROVIDERS, providerInfo, generate } = require('../src/generate');
 const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
 const { backendHint } = require('../src/tts-backends');
+const {
+  composeWithRenderer, renderWithRenderer, shotsWithRenderer,
+  getRenderer, listRenderers,
+} = require('../src/renderers');
 const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
@@ -70,6 +74,7 @@ function overridesFrom(flags) {
   if (flags.size) o.size = flags.size;
   if (flags.platform) o.platform = flags.platform;
   if (flags.variant) o.variant = flags.variant;
+  if (flags.renderer) o.renderer = flags.renderer;
   if (flags.tempo != null) o.tempo = flags.tempo;
   if (flags['voice-a']) o.voiceA = flags['voice-a'];
   if (flags['voice-b']) o.voiceB = flags['voice-b'];
@@ -136,7 +141,7 @@ function printSceneTable(config, out) {
 }
 
 const HELP = `narova — a scene script becomes a narrated, captioned video
-(narova writes the words and the voice; HyperFrames draws the pictures)
+(HyperFrames for full browser rendering; no-browser for local browserless rendering)
 
 Usage: narova <command> [options]
 
@@ -160,14 +165,16 @@ Commands:
   release restore <n>  restore a saved release to out/manifest.json
   release remove <n>   delete a saved release
   synth                Python TTS -> out/audio/*, out/timings.json
-  compose              timings + audio -> out/hf/ (HyperFrames project) + captions
+  compose              timings + audio -> selected renderer project + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
   walkthrough explore <id>  open source and print agent-readable interactive page state
   walkthrough capture [id]  record narration-timed product actions with agent-browser
   walkthrough status [id]   report missing/stale/fresh captured walkthrough assets
-  shots                snapshot one QA frame per scene into out/hf/snapshots/
-  build                synth + compose + hyperframes render -> out/video.mp4
-  preview              compose, then open HyperFrames Studio on out/hf
+  shots                snapshot one QA frame per scene with the selected renderer
+  build                synth + compose + selected renderer -> out/video.mp4
+  preview              HyperFrames Studio, or a no-browser draft preview MP4
+  renderers list       list bundled local renderer providers and capabilities
+  renderers doctor <name>  verify a renderer's local requirements
   voices list|get      list / download TTS voices (delegates to narova_tts)
   providers add <manifest>    register an external TTS provider
   providers list              list explicitly registered providers
@@ -181,15 +188,19 @@ Commands:
                                      --max-words N        words per karaoke cue (default 8)
                                      --engine faster-whisper|whisper-cpp|auto (default auto)
   retime <config> <karaoke.json>  print scene duration suggestions aligned to word timings
-                                     --apply   rewrite the config file in-place
+                                      --apply   rewrite the config file in-place
+  generate <prompt>       generate a video clip via AI (Sora / Runway)
+                              --provider sora|runway   API provider (default: sora)
+                              --output <path>           output file (default: assets/gen-<provider>-<slug>.mp4)
   doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
-they work from inside out/ and out/hf too. A detached Studio preview is
-restarted automatically whenever compose/build replaces out/hf.
+they work from inside out/ and renderer project folders too. A detached
+HyperFrames Studio preview is restarted when its composition is replaced.
 
 Options:
   --backend <name>          TTS backend (${backendHint()} or a registered provider)
+  --renderer hyperframes|no-browser   local renderer (default: hyperframes)
   --reuse                  skip synth, reuse out/audio + out/timings.json
                            (ignored automatically if the spoken text changed)
   --tempo N                narration tempo (atempo)
@@ -204,8 +215,8 @@ Options:
                             export profile + thumbnails, ffmpeg post-processed)
   --deliverables ids      build: comma-separated export preset ids or "true"
                             for all profiles (e.g. --deliverables youtube-1080p,reels-1080p)
-  --fps N                  render fps (hyperframes; default 30)
-  --quality draft|standard|high   render quality (hyperframes)
+  --fps N                  render fps (default 30)
+  --quality draft|standard|high   renderer quality
   --safe-area-guides       build: overlay TikTok safe-area zones on the
                             TikTok deliverable (requires --deliverables)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
@@ -414,13 +425,14 @@ async function main() {
     case 'compose': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
-      const r = compose(config, out);
-      console.log(`composed ${r.scenes} scenes (${r.total}s) -> ${r.dir}`);
+      const renderer = getRenderer(config.renderer);
+      const r = composeWithRenderer(config, out);
+      console.log(`composed ${r.scenes} scenes (${r.total}s) with ${renderer.name} -> ${r.dir}`);
       const caps = writeCaptions(config, out);
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
       console.log(`  qa: narova shots   ·   preview: narova preview --detach   ·   render: narova build --reuse`);
-      refreshPreviewIfLive(out);
+      if (renderer.name === 'hyperframes') refreshPreviewIfLive(out);
       return;
     }
 
@@ -440,13 +452,8 @@ async function main() {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const timingsPath = path.join(out, 'timings.json');
-      const hfDir = findHfDir(out);
       if (!fs.existsSync(timingsPath)) {
         console.error('shots needs out/timings.json — run `narova synth` first');
-        process.exit(1);
-      }
-      if (!fs.existsSync(path.join(hfDir, 'index.html'))) {
-        console.error('shots needs out/hf/index.html — run `narova compose` first');
         process.exit(1);
       }
       const data = composeData(config, JSON.parse(fs.readFileSync(timingsPath, 'utf8')));
@@ -458,8 +465,8 @@ async function main() {
         console.error('--at needs comma-separated seconds, e.g. --at 0.8,6.2,14');
         process.exit(1);
       }
-      runHf(['snapshot', '--at', times.join(','), '-o', 'snapshots/review'], hfDir);
-      console.log(`frames -> ${path.join(hfDir, 'snapshots', 'review')}  (${times.length} @ ${times.join(', ')})`);
+      const rendered = shotsWithRenderer(config, out, times);
+      console.log(`frames -> ${rendered.dir}  (${times.length} @ ${times.join(', ')})`);
       console.log('look at every frame — lint misses glyph bleed and chrome collisions; your eyes are the check');
       return;
     }
@@ -471,6 +478,7 @@ async function main() {
       }
       const buildOpts = {
         backend: flags.backend, reuse: flags.reuse,
+        renderer: flags.renderer,
         fps: flags.fps, quality: flags.quality,
         deliverables: flags.deliverables
           ? (flags.deliverables === true ? true : String(flags.deliverables).split(',').map(s => s.trim()).filter(Boolean))
@@ -498,7 +506,7 @@ async function main() {
             build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` });
           }
         }
-        refreshPreviewIfLive(out);
+        if (base.renderer === 'hyperframes') refreshPreviewIfLive(out);
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
@@ -507,7 +515,7 @@ async function main() {
         ...buildOpts, out, projectDir,
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
-      refreshPreviewIfLive(out);
+      if (config.renderer === 'hyperframes') refreshPreviewIfLive(out);
       return;
     }
 
@@ -521,7 +529,16 @@ async function main() {
       }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
-      const r = compose(config, out);
+      const renderer = getRenderer(config.renderer);
+      if (renderer.name === 'no-browser') {
+        if (flags.detach) throw new Error('no-browser preview writes a draft MP4 and does not support --detach');
+        const rendered = renderWithRenderer(config, out, {
+          name: 'preview-no-browser.mp4', fps: flags.fps || 15, quality: flags.quality || 'draft',
+        });
+        console.log(`no-browser preview -> ${rendered.mp4}`);
+        return;
+      }
+      const r = composeWithRenderer(config, out);
       if (flags.detach) {
         // A live Studio keeps serving the directory compose just replaced, so
         // re-running preview --detach means "show me the new build": stop the
@@ -548,6 +565,32 @@ async function main() {
         console.log(`Studio -> ${previewUrl(r.dir, port, projectSlug(config))} (Ctrl-C to stop)`);
         runHf(['preview', '--port', String(port)], r.dir);
       }
+      return;
+    }
+
+    case 'renderers': {
+      const sub = positionals[1] || 'list';
+      if (sub === 'list') {
+        for (const renderer of listRenderers()) {
+          const mode = renderer.browserless ? 'browserless' : 'browser';
+          console.log(`${renderer.name}\t${renderer.providerVersion}\tlocal · ${mode}`);
+        }
+        return;
+      }
+      if (sub === 'doctor') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova renderers doctor <hyperframes|no-browser>'); process.exit(1); }
+        const renderer = getRenderer(name);
+        const report = renderer.doctor();
+        for (const check of report.checks) {
+          const mark = check.ok === null ? '·' : (check.ok ? '✓' : '✗');
+          console.log(`${mark} ${check.name}: ${check.detail}`);
+        }
+        if (!report.ok) process.exitCode = 1;
+        return;
+      }
+      console.error('usage: narova renderers list|doctor [name]');
+      process.exit(1);
       return;
     }
 
@@ -719,6 +762,45 @@ async function main() {
         });
       } catch (e) {
         console.error(`error: ${e.message}`);
+        process.exit(1);
+      }
+      return;
+    }
+
+    case 'generate': {
+      const prompt = positionals[1];
+      if (!prompt) {
+        console.error('usage: narova generate <prompt> --provider sora|runway [--output <path>]');
+        console.error('');
+        console.error('Providers:');
+        for (const [id, p] of Object.entries(PROVIDERS)) {
+          console.error(`  ${id.padEnd(8)} ${p.description}`);
+        }
+        process.exit(1);
+      }
+      const provider = flags.provider || 'sora';
+      const info = providerInfo(provider);
+      if (!info) {
+        console.error(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
+        process.exit(1);
+      }
+      const apiKey = process.env[info.envKey];
+      if (!apiKey) {
+        console.error(`${info.name} requires ${info.envKey} environment variable`);
+        process.exit(1);
+      }
+      try {
+        const projectDir = flags.project ? path.resolve(flags.project) : process.cwd();
+        const assetsDir = path.join(projectDir, 'assets');
+        if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+        const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+        const output = flags.output
+          ? path.resolve(projectDir, flags.output)
+          : path.join(assetsDir, `gen-${provider}-${slug}.mp4`);
+        await generate(provider, prompt, apiKey, output, assetsDir);
+        console.log(`Add to reel.config.mjs:  clip: "assets/${path.basename(output)}"`);
+      } catch (e) {
+        console.error(`generate failed: ${e.message}`);
         process.exit(1);
       }
       return;

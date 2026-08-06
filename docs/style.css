@@ -499,6 +499,23 @@ section > .kicker { text-align: center; }
 .card p { color: var(--muted); font-size: 15px; }
 .card code { color: var(--cyan); font-size: 0.92em; }
 .card a { color: var(--cyan); text-decoration: underline; text-underline-offset: 3px; }
+.renderer-pair {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 12px;
+  margin-top: 22px;
+}
+.renderer-pair div {
+  padding: 16px 18px;
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  background: rgba(7, 11, 19, 0.34);
+}
+.renderer-pair strong,
+.renderer-pair span { display: block; }
+.renderer-pair strong { margin-bottom: 5px; color: var(--text); font-size: 15px; }
+.renderer-pair span { color: var(--muted); font: 700 10px/1.45 var(--mono); letter-spacing: 0.06em; text-transform: uppercase; }
+.card .renderer-read { display: inline-block; margin-top: 18px; font-size: 13px; font-weight: 800; }
 .walkthrough-demo {
   position: relative;
   max-width: 920px;
@@ -529,6 +546,7 @@ section > .kicker { text-align: center; }
   .walkthrough-demo { margin-top: 22px; padding: 5px; border-radius: 14px; }
   .walkthrough-demo video { border-radius: 10px; }
 }
+@media (max-width: 600px) { .renderer-pair { grid-template-columns: 1fr; } }
 
 /* waveform bars in big card */
 .wave-bars {

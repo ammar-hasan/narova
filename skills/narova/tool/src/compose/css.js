@@ -247,7 +247,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .close-line{font-size:clamp(22px,4vw,44px);font-weight:800;line-height:1.12;letter-spacing:-.02em;max-width:18em;text-wrap:balance}
 .close-tags{display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
 .ctag{font-family:var(--mono);font-size:clamp(10px,1.35vw,13px);letter-spacing:.04em;color:var(--muted);background:var(--panel);border:1px solid var(--line);border-radius:999px;padding:6px 14px}
-.close-sign{font-size:clamp(16px,2.6vw,26px);font-weight:700;color:var(--accent);letter-spacing:-.01em}`;
+.close-sign{font-size:clamp(16px,2.6vw,26px);font-weight:700;color:var(--accent);letter-spacing:-.01em}
+.narova-three-scene{position:absolute;inset:0;z-index:0;pointer-events:none}
+.narova-three-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}`;
 }
 
 /* Full stylesheet for the composition. `extraCss` is the project theme.css,

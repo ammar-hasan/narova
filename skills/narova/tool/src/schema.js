@@ -8,6 +8,8 @@ const {
   getProvider, jsonCompatibilityError, containsRequiredEnvironmentValue,
 } = require('./providers');
 const { resolveWalkthroughs } = require('./walkthrough');
+const { validateVisual, validateThreeConfig } = require('./renderers/visual');
+const { validateElements, resolveElementsScene } = require('./compose/elements');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
@@ -35,6 +37,15 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   const sizeRef = overrides.size ?? raw.size ?? (platformName && PLATFORMS[platformName] ? PLATFORMS[platformName].size : undefined);
   try { size = resolveSize(sizeRef); }
   catch (e) { errs.push(`config.size: ${e.message}`); }
+
+  // Rendering is a separate provider axis from TTS. Both bundled providers
+  // are local; HyperFrames remains the default for unrestricted HTML/CSS,
+  // while no-browser consumes the browserless scene.visual contract.
+  let renderer = overrides.renderer ?? raw.renderer ?? 'hyperframes';
+  if (renderer && typeof renderer === 'object' && !Array.isArray(renderer)) renderer = renderer.provider;
+  if (renderer !== 'hyperframes' && renderer !== 'no-browser') {
+    errs.push(`config.renderer: unknown renderer ${JSON.stringify(renderer)} (hyperframes|no-browser)`);
+  }
 
   // Scene/voice ids land in element ids, CSS selectors, and getElementById —
   // anything outside this set breaks the composition silently (or worse,
@@ -191,6 +202,25 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   });
 
+  const characters = { ...(raw.characters || {}) };
+  Object.keys(characters).forEach(id => {
+    if (!ID_RE.test(id)) errs.push(`config.characters.${id}: character id must match ${ID_RE}`);
+    const c = characters[id];
+    if (!c || typeof c !== 'object') { errs.push(`config.characters.${id}: expected an object`); return; }
+    if (!c.parts && !Array.isArray(c.parts) && !c.model && !c.src) {
+      errs.push(`config.characters.${id}: needs a model/src file or a parts array`);
+    }
+    if (c.model) {
+      const mp = path.resolve(baseDir, c.model);
+      if (!fs.existsSync(mp) || !fs.statSync(mp).isFile()) errs.push(`config.characters.${id}.model: file not found: ${mp}`);
+    }
+    if (c.src) {
+      const sp = path.resolve(baseDir, c.src);
+      if (!fs.existsSync(sp) || !fs.statSync(sp).isFile()) errs.push(`config.characters.${id}.src: file not found: ${sp}`);
+    }
+    if (c.voice && !voices[c.voice]) errs.push(`config.characters.${id}.voice: "${c.voice}" not in config.voices`);
+  });
+
   const timing = { ...DEFAULT_TIMING, ...(raw.timing || {}) };
   if (overrides.tempo != null) timing.tempo = Number(overrides.tempo);
 
@@ -207,7 +237,15 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     else if (!ID_RE.test(s.id)) errs.push(`${at}.id: "${s.id}" must match ${ID_RE}`);
     else if (seen.has(s.id)) errs.push(`${at}.id: duplicate "${s.id}"`);
     else seen.add(s.id);
-    if (typeof s.body !== 'string') errs.push(`${at}.body: HTML string required`);
+    if (typeof s.body !== 'string' && (!s.visual || typeof s.visual !== 'object' || Array.isArray(s.visual))
+        && (!s.three || typeof s.three !== 'object' || Array.isArray(s.three))
+        && (!s.elements || !Array.isArray(s.elements))) {
+      errs.push(`${at}.body: HTML string required unless a visual, three, or elements object is provided`);
+    }
+    if (s.body != null && typeof s.body !== 'string' && s.visual && typeof s.visual === 'object' && !Array.isArray(s.visual)) {
+      errs.push(`${at}.body: must be an HTML string when provided`);
+    }
+    if (s.visual != null) errs.push(...validateVisual(s.visual, `${at}.visual`));
     if (!Array.isArray(s.vo)) {
       errs.push(`${at}.vo: turn list required`);
     } else if (s.vo.length === 0 && !(typeof s.dur === 'number' && Number.isFinite(s.dur) && s.dur > 0)) {
@@ -227,7 +265,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         errs.push(`${at}.vo[${j}].lang: must be a language code string (e.g. "en", "ar", "ur")`);
       }
     });
-    if (s.dur != null && typeof s.dur !== 'number') errs.push(`${at}.dur: must be a number`);
+    if (s.elements != null) {
+      validateElements(s.elements, `${at}`, errs);
+    }
     // Optional b-roll video clip per scene: a project-relative video file
     // that plays looped behind the HTML overlay.
     if (s.clip != null) {
@@ -237,6 +277,23 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         const clipPath = path.resolve(baseDir, s.clip);
         if (!fs.existsSync(clipPath) || !fs.statSync(clipPath).isFile()) {
           errs.push(`${at}.clip: file not found: ${clipPath}`);
+        }
+      }
+    }
+    if (s.three != null) {
+      if (typeof s.three !== 'object' || Array.isArray(s.three)) {
+        errs.push(`${at}.three: expected an object with 3D scene config`);
+      } else {
+        validateThreeConfig(s.three, `${at}.three`, errs);
+        if (s.three.objects) {
+          s.three.objects.forEach((obj, oi) => {
+            if (obj.type === 'model' && obj.src) {
+              const modelPath = path.resolve(baseDir, obj.src);
+              if (!fs.existsSync(modelPath) || !fs.statSync(modelPath).isFile()) {
+                errs.push(`${at}.three.objects[${oi}].src: model file not found: ${modelPath}`);
+              }
+            }
+          });
         }
       }
     }
@@ -278,13 +335,37 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
                     if (!cue || typeof cue !== 'object') {
                       errs.push(`config.narration.wordTimings[${ci}]: not an object`);
                     } else {
-                      if (typeof cue.start !== 'number' || typeof cue.end !== 'number') {
-                        errs.push(`config.narration.wordTimings[${ci}]: start/end must be numbers`);
+                      if (typeof cue.start !== 'number' || typeof cue.end !== 'number'
+                          || !Number.isFinite(cue.start) || !Number.isFinite(cue.end) || cue.start < 0 || cue.end <= cue.start) {
+                        errs.push(`config.narration.wordTimings[${ci}]: start/end must be finite and end must be after start`);
+                      }
+                      if (typeof cue.text !== 'string' || !cue.text.trim()) {
+                        errs.push(`config.narration.wordTimings[${ci}].text: non-empty transcript text required`);
                       }
                       if (!Array.isArray(cue.words)) {
                         errs.push(`config.narration.wordTimings[${ci}]: words must be an array`);
+                      } else {
+                        cue.words.forEach((word, wi) => {
+                          const wat = `config.narration.wordTimings[${ci}].words[${wi}]`;
+                          if (!word || typeof word !== 'object' || Array.isArray(word)) {
+                            errs.push(`${wat}: expected an object`); return;
+                          }
+                          if (typeof (word.text || word.w) !== 'string' || !(word.text || word.w).trim()) {
+                            errs.push(`${wat}.text: non-empty word required`);
+                          }
+                          if (!Number.isFinite(word.start) || !Number.isFinite(word.end) || word.end <= word.start) {
+                            errs.push(`${wat}: start/end must be finite and end must be after start`);
+                          }
+                        });
                       }
                     }
+                  }
+                  const normalized = value => String(value || '').normalize('NFKC')
+                    .toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+                  const scriptText = normalized(scenes.flatMap(scene => scene.vo.map(turn => turn.text)).join(' '));
+                  const transcriptText = normalized(karaokeData.map(cue => cue && cue.text).join(' '));
+                  if (scriptText && transcriptText && scriptText !== transcriptText) {
+                    errs.push('config.narration.wordTimings: transcript text does not match scene voiceover — captions would not match the declared narration');
                   }
                   narrationSource.wordTimingsPath = wp;
                   narrationSource.wordTimings = karaokeData;
@@ -442,9 +523,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (typeof v.id !== 'string' || !ID_RE.test(v.id)) { errs.push(`${at}.id: must match ${ID_RE}`); return; }
       if (variants.some(x => x.id === v.id)) { errs.push(`${at}.id: duplicate "${v.id}"`); return; }
       const sc = v.scene;
-      if (!sc || typeof sc !== 'object' || typeof sc.body !== 'string') {
-        errs.push(`${at}.scene.body: HTML string required`); return;
+      if (!sc || typeof sc !== 'object'
+          || (typeof sc.body !== 'string' && (!sc.visual || typeof sc.visual !== 'object' || Array.isArray(sc.visual)))) {
+        errs.push(`${at}.scene: body HTML string or visual object required`); return;
       }
+      if (sc.visual != null) errs.push(...validateVisual(sc.visual, `${at}.scene.visual`));
       if (!Array.isArray(sc.vo) || sc.vo.length === 0) { errs.push(`${at}.scene.vo: non-empty turn list required`); return; }
       let ok = true;
       sc.vo.forEach((turn, j) => {
@@ -454,7 +537,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
           errs.push(`${at}.scene.vo[${j}].synthesisText: must be a non-empty string`); ok = false;
         }
       });
-      if (ok) variants.push({ id: v.id, scene: { body: sc.body, vo: sc.vo, ...(sc.transition ? { transition: sc.transition } : {}) } });
+      if (ok) variants.push({ id: v.id, scene: {
+        ...(typeof sc.body === 'string' ? { body: sc.body } : {}),
+        ...(sc.visual ? { visual: sc.visual } : {}),
+        vo: sc.vo,
+        ...(sc.transition ? { transition: sc.transition } : {}),
+      } });
     });
   }
 
@@ -491,7 +579,13 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       errs.push(`unknown variant "${overrides.variant}" — declared variants: ${ids}`);
     } else {
       variant = v.id;
-      scenes[0] = { ...scenes[0], body: v.scene.body, vo: v.scene.vo, ...(v.scene.transition ? { transition: v.scene.transition } : {}) };
+      scenes[0] = {
+        ...scenes[0],
+        ...(typeof v.scene.body === 'string' ? { body: v.scene.body } : {}),
+        ...(v.scene.visual ? { visual: v.scene.visual } : {}),
+        vo: v.scene.vo,
+        ...(v.scene.transition ? { transition: v.scene.transition } : {}),
+      };
     }
   }
 
@@ -502,7 +596,16 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  return { title, size, voices, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource };
+
+  // Compile semantic elements into concrete render configs (three + body/visual).
+  for (let i = 0; i < resolved.scenes.length; i++) {
+    if (resolved.scenes[i].elements) {
+      resolved.scenes[i] = resolveElementsScene(resolved.scenes[i], resolved);
+    }
+  }
+
+  return resolved;
 }
 
 /* The narration.json contract for the Python TTS stage. */

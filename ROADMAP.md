@@ -6,6 +6,20 @@ This is a sequence of enablement and product-risk gates, not a calendar
 promise. Each release must prove the behavior in its exit criteria before the
 next layer expands.
 
+**Shipped foundation (0.17):** rendering is now a versioned provider boundary
+with two free local implementations. HyperFrames remains the broad browser
+surface; Narova No-Browser covers the portable Skia/FFmpeg subset when no browser
+can run. Further no-browser breadth expands against real-project fixtures without
+turning unsupported HyperFrames features into silent approximations.
+
+**Shipped 3D visual system (0.19):** declarative 3D authoring through
+`scene.three` and `scene.elements` — cameras, lights, primitives, models,
+GSAP-driven animations, characters as reusable groups with built-in presets,
+instanced meshes for crowds, and AI clip generation (`narova generate`).
+Three.js upgraded to r185 ESM (esbuild-bundled global script, opaque to
+HyperFrames' compiler so the full namespace survives), tone-mapped output with
+ACES filmic default, and deterministic GLTF loading.
+
 ## North star
 
 Narova gives every person and every intelligence the creative power to make

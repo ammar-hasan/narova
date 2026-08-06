@@ -10,7 +10,17 @@ const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
 const { composeDoc } = require('./html');
+const { collectModelAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
+
+/* Copy the vendored three.js global bundle (core + GLTFLoader, esbuild-bundled
+ * to a classic script exposing window.THREE) into the render project. The file
+ * ships inside the tool (tool/vendor/three/), so rendering never depends on a
+ * CDN being reachable at build time. */
+function copyThreeAssets(assetsDir) {
+  const dest = path.join(assetsDir, path.basename(THREE_IMPORT));
+  if (!fs.existsSync(dest)) fs.copyFileSync(THREE_MODULE_SRC, dest);
+}
 
 function compose(config, outDir) {
   const timingsPath = path.join(outDir, 'timings.json');
@@ -62,6 +72,11 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
+  // Three.js is vendored in the tool (r185, esbuild-bundled global script) —
+  // copy it into the render project so HyperFrames never hits a CDN.
+  if (hasThreeScenes(config)) {
+    copyThreeAssets(assetsDir);
+  }
   // Copy and auto-loop per-scene b-roll clips. If a clip is shorter than
   // its scene, narova creates a looped version with ffmpeg so the renderer
   // doesn't stutter on boundary seeks.
@@ -94,15 +109,25 @@ function compose(config, outDir) {
       }
     }
   }
+  for (const modelRel of collectModelAssets(config)) {
+    const modelSrc = path.resolve(config.projectDir, modelRel);
+    if (fs.existsSync(modelSrc)) {
+      const destName = path.basename(modelRel);
+      fs.copyFileSync(modelSrc, path.join(assetsDir, destName));
+    }
+  }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
   fs.writeFileSync(path.join(hfDir, 'style.css'), css);
-  // Audio: external narration file, mix.wav, or full.wav (in that order).
-  if (hasExternalNarration) {
-    fs.copyFileSync(config.narrationSource.file, path.join(assetsDir, 'narration.wav'));
-  } else {
-    const mixWav = path.join(outDir, 'audio', 'mix.wav');
-    fs.copyFileSync(fs.existsSync(mixWav) ? mixWav : fullWav, path.join(assetsDir, 'narration.wav'));
-  }
+  // Register visual-tree fonts so the browser shapes custom fontFile references.
+  const fontCss = buildFontFaces(config);
+  if (fontCss) fs.appendFileSync(path.join(hfDir, 'style.css'), '\n' + fontCss);
+  // Audio: the mixed track wins for both synthesized and custom narration;
+  // otherwise use the custom narrator file, then synthesized full.wav.
+  const mixWav = path.join(outDir, 'audio', 'mix.wav');
+  const audioSource = fs.existsSync(mixWav)
+    ? mixWav
+    : (hasExternalNarration ? config.narrationSource.file : fullWav);
+  fs.copyFileSync(audioSource, path.join(assetsDir, 'narration.wav'));
   fs.writeFileSync(path.join(hfDir, 'package.json'), JSON.stringify({
     name: slug(config.title || 'narova'),
     private: true,
@@ -114,6 +139,25 @@ function compose(config, outDir) {
 
 function slug(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'narova';
+}
+
+/* Scan scene.visual trees for fontFile references registered by the no-browser
+ * renderer and emit @font-face blocks so HyperFrames can shape the same
+ * authored fonts through the browser's font engine. */
+function buildFontFaces(config) {
+  const refs = new Map();
+  function visit(node) {
+    const style = node.style || {};
+    if (style.fontFile) {
+      const family = style.fontFamily || path.basename(style.fontFile, path.extname(style.fontFile));
+      if (!refs.has(family)) refs.set(family, style.fontFile);
+    }
+    (node.children || []).forEach(visit);
+  }
+  (config.scenes || []).forEach(s => { if (s.visual) visit(s.visual); });
+  if (!refs.size) return '';
+  return [...refs].map(([family, file]) =>
+    `@font-face{font-family:"${family}";src:url("assets/${path.basename(file)}")}`).join('\n');
 }
 
 module.exports = { compose };
