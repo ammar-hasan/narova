@@ -127,8 +127,8 @@ function validateThreeConfig(three, at, errors) {
   if (three.background != null && typeof three.background !== 'string' && (typeof three.background !== 'object' || Array.isArray(three.background))) {
     errors.push(`${at}.background: expected a hex color string or { type, ... }`);
   }
-  if (three.toneMapping != null && !['aces', 'linear'].includes(three.toneMapping)) {
-    errors.push(`${at}.toneMapping: expected aces|linear (r149 UMD build supports these)`);
+  if (three.toneMapping != null && !['aces', 'agx', 'neutral', 'linear'].includes(three.toneMapping)) {
+    errors.push(`${at}.toneMapping: expected aces|agx|neutral|linear`);
   }
   if (three.exposure != null && (typeof three.exposure !== 'number' || !Number.isFinite(three.exposure) || three.exposure <= 0)) {
     errors.push(`${at}.exposure: must be a positive number`);

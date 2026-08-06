@@ -12,7 +12,7 @@ const { compile, validate: validateManifest } = require('../src/manifest');
 const { listRenderers, getRenderer } = require('../src/renderers');
 const { validateVisual, visualToHtml, materializeVisualBodies } = require('../src/renderers/visual');
 const { findLatinFont } = require('../src/renderers/system-font');
-const { threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels, collectModelAssets, THREE_CDN, GLTF_LOADER_CDN } = require('../src/compose/three');
+const { threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels, collectModelAssets, threeHeadScripts, THREE_IMPORT } = require('../src/compose/three');
 const { resolveElementsScene, validateElements, hasElements } = require('../src/compose/elements');
 
 const VISUAL = {
@@ -645,7 +645,7 @@ test('fix: animationTweens honors authored `from` via fromTo', () => {
 test('fix: boot poll is bounded with an error surface', () => {
   const js = threeSetupJs('boot', { camera: {}, lights: [], objects: [] }, 0, 3, 800, 600);
   assert.match(js, /_try>200/);
-  assert.match(js, /narova-three: GSAP timeline never became ready/);
+  assert.match(js, /THREE or GSAP timeline never became ready/);
 });
 
 test('fix: GLTF loads deterministically via prefetch + parseAsync, gated before frame 0', () => {
@@ -668,4 +668,30 @@ test('fix: tone mapping / color space defaults are set on the renderer', () => {
   const linear = threeSetupJs('tm2', { camera: {}, lights: [], objects: [], toneMapping: 'linear', exposure: 1.2 }, 0, 3, 800, 600);
   assert.match(linear, /toneMapping=THREE\.NoToneMapping/);
   assert.match(linear, /toneMappingExposure=1\.2/);
+});
+
+// --- ESM migration (r185) ---
+
+test('esm: threeHeadScripts emits a classic global script (not ESM)', () => {
+  const js = threeHeadScripts();
+  // Classic <script src> loading the vendored global bundle at the canonical
+  // path HyperFrames probes. No import map, no module script — opaque to the
+  // compiler's esbuild, so it can't tree-shake three.
+  assert.match(js, /<script src="\.\/assets\/three\.core\.js"><\/script>/);
+  assert.doesNotMatch(js, /importmap|type="module"/);
+});
+
+test('esm: scene setup polls for window.THREE and uses THREE.GLTFLoader', () => {
+  const js = threeSetupJs('m', { camera: {}, lights: [],
+    objects: [{ type: 'model', src: 'assets/rocket.glb', position: [0, 0, 0] }]}, 0, 3, 800, 600);
+  assert.match(js, /window\.THREE/);
+  assert.match(js, /var THREE=window\.THREE/);
+  assert.match(js, /new THREE\.GLTFLoader\(\)\.parseAsync/);
+});
+
+test('esm: r185 tone mapping supports AgX and Neutral', () => {
+  const agx = threeSetupJs('agx', { camera: {}, lights: [], objects: [], toneMapping: 'agx' }, 0, 3, 800, 600);
+  assert.match(agx, /toneMapping=THREE\.AgXToneMapping/);
+  const neutral = threeSetupJs('neu', { camera: {}, lights: [], objects: [], toneMapping: 'neutral' }, 0, 3, 800, 600);
+  assert.match(neutral, /toneMapping=THREE\.NeutralToneMapping/);
 });

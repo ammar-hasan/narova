@@ -1,22 +1,38 @@
 'use strict';
-/* Three.js composition for narova. Generates managed <canvas> + <script>
- * blocks that drive a deterministic Three.js scene through the GSAP timeline.
- * HyperFrames renders these in a real Chromium browser with full WebGL. */
+/* Three.js composition for narova. Generates an import-map + ESM bootstrap and
+ * managed <canvas> + <script> blocks that drive a deterministic Three.js scene
+ * through the GSAP timeline. HyperFrames renders these in a real Chromium
+ * browser with full WebGL.
+ *
+ * Three.js is pinned to r185 and VENDORED locally (tool/vendor/three/) as ESM —
+ * the UMD core was dropped after r149, so ESM + import map is the only modern
+ * path. Rendering never hits a CDN. */
 
 const path = require('path');
 
-// three.js UMD core `build/three.min.js` is replaced by a deprecation stub
-// from r150 onward, so r149 is the last version that ships a real UMD build —
-// which is what our inline-script composition needs (a global `THREE`).
-// examples/js UMD addons (GLTFLoader) were removed at r148, so the last UMD
-// GLTFLoader is vendored locally (tool/vendor/GLTFLoader.js) and copied to the
-// render project at compose — no CDN at render time.
-const THREE_VERSION = '0.149.0';
-const THREE_CDN = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/three.min.js`;
-const THREE_LOCAL = 'assets/narova-three.min.js';
-const GLTF_LOADER_CDN = null; // vendored, not downloaded
-const GLTF_LOADER_LOCAL = 'assets/narova-gltf-loader.js';
-const GLTF_LOADER_VENDOR = path.join(__dirname, '..', '..', 'vendor', 'GLTFLoader.js');
+const THREE_VERSION = '0.185.0';
+// ESM distribution, vendored under tool/vendor/three/. HyperFrames' render
+// runtime detects WebGL canvases and probes a canonical `/assets/three.core.js`
+// for its three adapter, and its compiler bundles imported ESM with esbuild —
+// three's unminified module re-exports have circular imports that break esbuild.
+// `build/three.core.js` is the flattened full core (all renderers, one file,
+// no circular re-exports), safe for the compiler to consume. We serve it at the
+// canonical path so both our import and HyperFrames' probe hit the same file.
+// (The minified three.core.min.js is only a math/objects subset — no WebGL.)
+const THREE_IMPORT = './assets/three.core.js';
+const THREE_VENDOR_DIR = path.join(__dirname, '..', '..', 'vendor', 'three');
+const THREE_MODULE_SRC = path.join(THREE_VENDOR_DIR, 'three.global.js');
+
+/* The <head> snippet: three is served as a CLASSIC global script (an IIFE
+ * bundle exposing window.THREE) rather than ESM. This is deliberate: HyperFrames'
+ * render runtime detects WebGL canvases, probes /assets/three.core.js for its
+ * three adapter, and its compiler runs esbuild over imported ESM — three's
+ * module re-exports have circular imports that esbuild rejects, and a dynamic
+ * import gets tree-shaken to a stub. A classic global script is opaque to the
+ * compiler, so it is left alone. */
+function threeHeadScripts() {
+  return `\n  <script src="${THREE_IMPORT}"></script>\n`;
+}
 
 function esc(v) { return JSON.stringify(v); }
 function fmt(n) { return String(Math.round(n * 1000) / 1000); }
@@ -149,18 +165,21 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   const look = cam.lookAt || [0, 0, 0];
 
   // Tone mapping + color space: default to ACES filmic for a video look. The
-  // output color space is sRGB (the only sane target for h264). Only operators
-  // that exist in r149 (the pinned UMD build) are offered — AgX/Neutral came
-  // in r155, which has no UMD core.
+  // output color space is sRGB (the only sane target for h264). r185 (the
+  // vendored ESM build) offers ACES, AgX, Neutral, and linear.
   const tm = three.toneMapping || 'aces';
   const tmExpr = tm === 'aces' ? 'THREE.ACESFilmicToneMapping'
+    : tm === 'agx' ? 'THREE.AgXToneMapping'
+    : tm === 'neutral' ? 'THREE.NeutralToneMapping'
     : 'THREE.NoToneMapping';
   const exposure = Number.isFinite(three.exposure) ? three.exposure : 1;
 
-  // boot(): wait for the GSAP timeline (built after DOM parse) with a bounded
-  // number of attempts — an unbounded poll would hang the renderer forever.
+  // boot(): wait for the ESM bootstrap (window.THREE) and the GSAP timeline
+  // (built after DOM parse) with a bounded number of attempts — an unbounded
+  // poll would hang the renderer forever.
   let js = `(function(){var _try=0;function boot(){var tl=window.__timelines['main'];`;
-  js += `if(!tl){if(++_try>200){console.error('narova-three: GSAP timeline never became ready');return;}setTimeout(boot,50);return;}`;
+  js += `if(!tl||!window.THREE){if(++_try>200){console.error('narova-three: THREE or GSAP timeline never became ready');return;}setTimeout(boot,50);return;}`;
+  js += `var THREE=window.THREE;`;
   js += `var cvs=document.getElementById(${esc('three-' + sceneId)});`;
   js += `if(!cvs){cvs=document.getElementById(${esc(sceneId + '--three-' + sceneId)});}`;
   js += `cvs.style.width='100%';cvs.style.height='100%';`;
@@ -323,7 +342,7 @@ function collectModelAssets(config) {
 }
 
 module.exports = {
-  THREE_CDN, THREE_LOCAL, GLTF_LOADER_CDN, GLTF_LOADER_LOCAL, GLTF_LOADER_VENDOR,
-  threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels,
+  THREE_VERSION, THREE_IMPORT, THREE_VENDOR_DIR, THREE_MODULE_SRC,
+  threeHeadScripts, threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels,
   collectModelAssets,
 };

@@ -5,27 +5,21 @@
  * config, theme, and project assets are source; out/hf is never hand-edited. */
 const fs = require('fs');
 const path = require('path');
-const { execSync } = require('child_process');
 const { ensureDir, probe, sh } = require('../util');
 const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
 const { composeDoc } = require('./html');
-const { collectModelAssets, hasThreeScenes, hasThreeModels, THREE_CDN, GLTF_LOADER_VENDOR } = require('./three');
+const { collectModelAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
 
-/* Download with a couple of retries; curl exits non-zero on HTTP errors (e.g.
- * a 404), so a transient network blip or a stale CDN path surfaces as a build
- * error instead of leaving a truncated file behind. */
-function downloadWithRetry(url, dest, attempts = 3) {
-  let lastErr;
-  for (let i = 0; i < attempts; i++) {
-    try {
-      execSync(`curl -sL --fail "${url}" -o "${dest}"`, { stdio: 'pipe' });
-      if (fs.statSync(dest).size > 0) return;
-    } catch (e) { lastErr = e; }
-  }
-  throw new Error(`failed to download ${url}: ${lastErr ? lastErr.message : 'unknown'}`);
+/* Copy the vendored three.js global bundle (core + GLTFLoader, esbuild-bundled
+ * to a classic script exposing window.THREE) into the render project. The file
+ * ships inside the tool (tool/vendor/three/), so rendering never depends on a
+ * CDN being reachable at build time. */
+function copyThreeAssets(assetsDir) {
+  const dest = path.join(assetsDir, path.basename(THREE_IMPORT));
+  if (!fs.existsSync(dest)) fs.copyFileSync(THREE_MODULE_SRC, dest);
 }
 
 function compose(config, outDir) {
@@ -78,18 +72,10 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
-  // Three.js core is downloaded once (then reused across projects via a cache)
-  // and the GLTFLoader comes from the vendored UMD build shipped in the tool —
-  // rendering never depends on a CDN being reachable at build time.
+  // Three.js is vendored in the tool (r185, esbuild-bundled global script) —
+  // copy it into the render project so HyperFrames never hits a CDN.
   if (hasThreeScenes(config)) {
-    const threeDest = path.join(assetsDir, 'narova-three.min.js');
-    if (!fs.existsSync(threeDest) || fs.statSync(threeDest).size < 1000) {
-      downloadWithRetry(THREE_CDN, threeDest);
-    }
-    if (hasThreeModels(config)) {
-      const gltfDest = path.join(assetsDir, 'narova-gltf-loader.js');
-      fs.copyFileSync(GLTF_LOADER_VENDOR, gltfDest);
-    }
+    copyThreeAssets(assetsDir);
   }
   // Copy and auto-loop per-scene b-roll clips. If a clip is shorter than
   // its scene, narova creates a looped version with ffmpeg so the renderer
