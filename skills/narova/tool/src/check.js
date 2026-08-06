@@ -113,20 +113,27 @@ function releaseChecks(config, errors) {
     const hasVisual = /<(?:img|video|svg|path|circle|rect|ellipse|polygon|line|use)\b/i.test(body);
     const portable = visualFacts(s.visual);
     const hasVisibleWalkthrough = s.walkthrough && s.walkthrough.opacity !== 0;
-    if (!hasText && !hasVisual && !portable.content && !s.clip && !hasVisibleWalkthrough) {
-      errors.push(`scene "${s.id}": body/visual has no visible content and no b-roll or walkthrough media — scene will render as a black frame`);
+    const hasThreeScene = !!(s.three && s.three.objects && s.three.objects.length);
+    if (!hasText && !hasVisual && !portable.content && !s.clip && !hasVisibleWalkthrough && !hasThreeScene) {
+      errors.push(`scene "${s.id}": body/visual has no visible content and no b-roll, walkthrough, or 3D scene — scene will render as a black frame`);
     }
 
     // Remote dependencies in body HTML.
-    for (const t of tags(body)) {
-      const tagName = t.match(/^<(\w+)/);
-      if (tagName && ['script', 'link', 'iframe'].includes(tagName[1].toLowerCase())) {
-        errors.push(`scene "${s.id}": contains a <${tagName[1]}> element — remote dependencies are not supported during render`);
+    // Scenes using narova's managed Three.js (scene.three) or element compiler
+    // generate their own <script>/<canvas> — these are intentional, not remote.
+    const hasManaged3D = !!(s.three || s.elements);
+    if (!hasManaged3D) {
+      for (const t of tags(body)) {
+        const tagName = t.match(/^<(\w+)/);
+        if (tagName && ['script', 'link', 'iframe'].includes(tagName[1].toLowerCase())) {
+          errors.push(`scene "${s.id}": contains a <${tagName[1]}> element — remote dependencies are not supported during render`);
+        }
       }
     }
 
     // Unsupported HTML patterns that HyperFrames cannot render.
-    if (/<(?:canvas|web-component|marquee|blink)\b/i.test(body)) {
+    // Canvas in narova-managed Three.js scenes is intentional.
+    if (!hasManaged3D && /<(?:canvas|web-component|marquee|blink)\b/i.test(body)) {
       errors.push(`scene "${s.id}": contains an unsupported HTML element (<canvas>, <web-component>) — HyperFrames may not render it deterministically`);
     }
   }

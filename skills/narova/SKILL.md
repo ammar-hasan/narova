@@ -8,10 +8,13 @@ description: >
   articles, docs, repositories), word-synced karaoke captions,
   voice-triggered reveals, background beds and sound effects, per-platform
   presets and comprehensive export profiles (TikTok/Reels/Shorts/LinkedIn/X/YouTube),
-  SRT/VTT sidecar captions, hook A/B variants, or local neural TTS with no
-  API keys. It turns a prompt or scene script into an MP4 with local
+  SRT/VTT sidecar captions, 3D scenes (scene.three / scene.elements),
+  mixed 2D/3D compositing, AI clip generation (narova generate),
+  or local neural TTS with no API keys. It turns a prompt or scene script
+  into an MP4 with local
   piper/xtts/qwen/chatterbox voiceover, word-level captions, and
-  speech-timed visuals rendered through local HyperFrames or the browserless
+  speech-timed visuals rendered through local HyperFrames (2D HTML/CSS,
+  3D Three.js/WebGL, SVG, video compositing) or the browserless
   no-browser Skia/FFmpeg provider. The full tool ships
   inside the skill. Also use whenever the user names narova or a
   reel.config file. For silent motion graphics without narration, use plain
@@ -23,7 +26,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.17.0"
+  version: "0.18.0"
 ---
 
 # narova — prompt to narrated, captioned video

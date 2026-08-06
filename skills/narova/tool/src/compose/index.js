@@ -5,11 +5,13 @@
  * config, theme, and project assets are source; out/hf is never hand-edited. */
 const fs = require('fs');
 const path = require('path');
+const { execSync } = require('child_process');
 const { ensureDir, probe, sh } = require('../util');
 const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
 const { composeDoc } = require('./html');
+const { collectModelAssets, hasThreeScenes, hasThreeModels, THREE_CDN, THREE_LOCAL, GLTF_LOADER_CDN, GLTF_LOADER_LOCAL } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
 
 function compose(config, outDir) {
@@ -62,6 +64,19 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
+  // Download Three.js locally so HyperFrames renders without waiting on a CDN.
+  if (hasThreeScenes(config)) {
+    const threeDest = path.join(assetsDir, 'narova-three.min.js');
+    if (!fs.existsSync(threeDest) || fs.statSync(threeDest).size < 1000) {
+      execSync(`curl -sL "${THREE_CDN}" -o "${threeDest}"`, { stdio: 'pipe' });
+    }
+    if (hasThreeModels(config)) {
+      const gltfDest = path.join(assetsDir, 'narova-gltf-loader.js');
+      if (!fs.existsSync(gltfDest) || fs.statSync(gltfDest).size < 1000) {
+        execSync(`curl -sL "${GLTF_LOADER_CDN}" -o "${gltfDest}"`, { stdio: 'pipe' });
+      }
+    }
+  }
   // Copy and auto-loop per-scene b-roll clips. If a clip is shorter than
   // its scene, narova creates a looped version with ffmpeg so the renderer
   // doesn't stutter on boundary seeks.
@@ -92,6 +107,13 @@ function compose(config, outDir) {
           }
         } catch { /* keep original clip if ffprobe/ffmpeg fails */ }
       }
+    }
+  }
+  for (const modelRel of collectModelAssets(config)) {
+    const modelSrc = path.resolve(config.projectDir, modelRel);
+    if (fs.existsSync(modelSrc)) {
+      const destName = path.basename(modelRel);
+      fs.copyFileSync(modelSrc, path.join(assetsDir, destName));
     }
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);

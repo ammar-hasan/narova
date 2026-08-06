@@ -12,6 +12,8 @@ const { compile, validate: validateManifest } = require('../src/manifest');
 const { listRenderers, getRenderer } = require('../src/renderers');
 const { validateVisual, visualToHtml, materializeVisualBodies } = require('../src/renderers/visual');
 const { findLatinFont } = require('../src/renderers/system-font');
+const { threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels, collectModelAssets, THREE_CDN, GLTF_LOADER_CDN } = require('../src/compose/three');
+const { resolveElementsScene, validateElements, hasElements } = require('../src/compose/elements');
 
 const VISUAL = {
   type: 'stack',
@@ -251,4 +253,206 @@ test('no-browser provider renders a real browserless MP4 with local audio', { ti
   ], { encoding: 'utf8' });
   assert.equal(dimensions.status, 0, dimensions.stderr);
   assert.equal(dimensions.stdout.trim(), '320x180');
+});
+
+// --- canvas3d node type ---
+
+test('canvas3d in visual tree validates cleanly and renders a canvas+script', () => {
+  const vis = {
+    type: 'canvas3d',
+    three: {
+      camera: { position: [0, 0, 5] },
+      lights: [{ type: 'ambient', color: '#404060', intensity: 0.5 }],
+      objects: [{ type: 'cube', color: '#2ee6d6' }],
+    },
+  };
+  assert.deepEqual(validateVisual(vis), []);
+  const html = visualToHtml(vis);
+  assert.match(html, /<canvas/);
+  assert.match(html, /narova-three-canvas/);
+  assert.match(html, /data-three=/);
+});
+
+test('canvas3d rejects missing three config', () => {
+  const vis = { type: 'canvas3d' };
+  const errs = validateVisual(vis);
+  assert.ok(errs.length > 0);
+  assert.match(errs[0], /3D scene config required/);
+});
+
+test('canvas3d validates nested three config', () => {
+  const vis = {
+    type: 'canvas3d',
+    three: {
+      camera: { fov: 200 },
+      lights: [{ type: 'sun' }],
+    },
+  };
+  const errs = validateVisual(vis);
+  assert.ok(errs.length > 0);
+  assert.match(errs.join(' '), /fov/);
+  assert.match(errs.join(' '), /ambient\|directional/);
+});
+
+test('model3d requires src', () => {
+  const errs = validateVisual({ type: 'model3d' });
+  assert.ok(errs.length > 0);
+  assert.match(errs[0], /src/);
+});
+
+// --- scene.three schema ---
+
+test('scene.three with valid config passes schema', () => {
+  const { resolveConfig } = require('../src/schema');
+  const c = resolveConfig({
+    title: '3D Test',
+    size: '16:9',
+    voices: { a: { speaker: 'v1' } },
+    scenes: [{
+      id: 's1',
+      vo: [{ who: 'a', text: 'Hello.' }],
+      three: {
+        camera: { position: [0, 0, 5], fov: 45 },
+        lights: [{ type: 'ambient', color: '#404060' }, { type: 'directional', position: [5, 5, 5] }],
+        objects: [{ type: 'cube', color: '#2ee6d6', size: 1.5, animate: { property: 'rotation.y', from: 0, to: Math.PI * 2, duration: 3 } }],
+        background: '#0a0a1a',
+      },
+    }],
+  }, {}, '.');
+  assert.ok(c.scenes[0].three);
+  assert.equal(c.scenes[0].three.objects[0].type, 'cube');
+});
+
+test('scene.three with invalid camera fov fails', () => {
+  const { resolveConfig } = require('../src/schema');
+  assert.throws(() => resolveConfig({
+    title: '3D', size: '16:9', voices: { a: { speaker: 'v1' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Hi.' }], three: { camera: { fov: 200 } } }],
+  }, {}, '.'), /fov/);
+});
+
+// --- Elements compiler ---
+
+test('elements: 3D cube scene compiles to three config', () => {
+  const scene = {
+    id: 'intro',
+    vo: [{ who: 'a', text: 'Watch this.' }],
+    elements: [
+      { type: 'camera', position: [0, 0, 5] },
+      { type: 'light', kind: 'ambient', color: '#404060', intensity: 0.5 },
+      { type: 'light', kind: 'directional', position: [5, 5, 5] },
+      { type: '3d-object', kind: 'cube', color: '#2ee6d6', size: 1.5,
+        actions: [{ type: 'rotate', axis: 'y', to: Math.PI * 2, duration: 4 }] },
+    ],
+  };
+  const result = resolveElementsScene(scene, {});
+  assert.ok(result.three);
+  assert.ok(result.three.objects);
+  assert.equal(result.three.objects.length, 1);
+  assert.equal(result.three.objects[0].animate.length, 1);
+  assert.equal(result.three.objects[0].animate[0].property, 'rotation.y');
+  assert.ok(!result.elements);
+});
+
+test('elements: 2D text only scene compiles to body HTML', () => {
+  const scene = {
+    id: 'title',
+    vo: [{ who: 'a', text: 'Simple.' }],
+    elements: [
+      { type: 'text', content: 'Hello World', style: { fontSize: 48, color: '#ffffff' },
+        actions: [{ type: 'appear', at: { cue: 0 } }] },
+    ],
+  };
+  const result = resolveElementsScene(scene, {});
+  assert.ok(!result.three);
+  assert.match(result.body, /Hello World/);
+  assert.match(result.body, /class="cue"/);
+  assert.match(result.body, /data-cue="0"/);
+});
+
+test('elements: mixed 2D/3D compiles to three + HTML overlay', () => {
+  const scene = {
+    id: 'mixed',
+    vo: [{ who: 'a', text: 'Look.' }],
+    elements: [
+      { type: 'camera', position: [0, 0, 5] },
+      { type: 'light', kind: 'ambient', intensity: 0.5 },
+      { type: '3d-object', kind: 'sphere', color: '#ff7eb6' },
+      { type: 'text', content: '3D + Text', style: { fontSize: 36 } },
+    ],
+  };
+  const result = resolveElementsScene(scene, {});
+  assert.ok(result.three);
+  assert.match(result.body, /3D \+ Text/);
+});
+
+test('elements validation rejects unknown element type', () => {
+  const errs = [];
+  validateElements([{ type: 'unknown' }], 'test', errs);
+  assert.ok(errs.length > 0);
+  assert.match(errs[0], /expected/);
+});
+
+test('elements validation rejects unknown action', () => {
+  const errs = [];
+  validateElements([{ type: 'text', content: 'x', actions: [{ type: 'fly' }] }], 'test', errs);
+  assert.ok(errs.length > 0);
+  assert.match(errs[0], /expected/);
+});
+
+// --- Three.js composition ---
+
+test('threeSetupJs generates valid JS with canvas, renderer, scene, objects', () => {
+  const js = threeSetupJs('test', {
+    camera: { position: [0, 0, 5] },
+    lights: [{ type: 'ambient', color: '#404060', intensity: 0.5 }],
+    objects: [{ type: 'cube', color: '#2ee6d6', position: [0, 0, 0], animate: { property: 'rotation.y', from: 0, to: Math.PI * 2, duration: 4 } }],
+  }, 0, 5, 1280, 720);
+  assert.match(js, /WebGLRenderer/);
+  assert.match(js, /AmbientLight/);
+  assert.match(js, /BoxGeometry/);
+  assert.match(js, /window\.__timelines\['main'\]/);
+  assert.match(js, /R\.render/);
+});
+
+test('threeSetupJs handles model type with GLTFLoader fallback', () => {
+  const js = threeSetupJs('test', {
+    camera: { position: [0, 0, 5] },
+    lights: [],
+    objects: [{ type: 'model', src: 'assets/rocket.glb', position: [0, 0, 0] }],
+  }, 0, 3, 800, 600);
+  assert.match(js, /GLTFLoader/);
+  assert.match(js, /assets\/rocket\.glb/);
+});
+
+test('hasThreeScenes detects three config', () => {
+  assert.ok(hasThreeScenes({ scenes: [{ three: {} }] }));
+  assert.ok(!hasThreeScenes({ scenes: [{ body: '<p>hi</p>' }] }));
+});
+
+test('hasThreeModels detects model references', () => {
+  assert.ok(hasThreeModels({ scenes: [{ three: { objects: [{ type: 'model' }] } }] }));
+  assert.ok(!hasThreeModels({ scenes: [{ three: { objects: [{ type: 'cube' }] } }] }));
+});
+
+test('collectModelAssets gathers all model src paths', () => {
+  const paths = collectModelAssets({
+    scenes: [
+      { three: { objects: [{ type: 'model', src: 'models/a.glb' }, { type: 'model', src: 'models/b.gltf' }] } },
+      { body: '<p>no models</p>' },
+    ],
+  });
+  assert.deepEqual(paths, ['models/a.glb', 'models/b.gltf']);
+});
+
+test('threeSceneBody generates full HTML with canvas and script', () => {
+  const html = threeSceneBody(
+    { id: 's1', three: { camera: {}, lights: [], objects: [] } },
+    { start: 0, dur: 5 },
+    1280, 720,
+  );
+  assert.match(html, /<canvas id="three-s1"/);
+  assert.match(html, /narova-three-canvas/);
+  assert.match(html, /<script>/);
+  assert.match(html, /<\/script>/);
 });

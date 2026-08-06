@@ -22,6 +22,7 @@ const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
+const { PROVIDERS, providerInfo, generate } = require('../src/generate');
 const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
@@ -187,7 +188,10 @@ Commands:
                                      --max-words N        words per karaoke cue (default 8)
                                      --engine faster-whisper|whisper-cpp|auto (default auto)
   retime <config> <karaoke.json>  print scene duration suggestions aligned to word timings
-                                     --apply   rewrite the config file in-place
+                                      --apply   rewrite the config file in-place
+  generate <prompt>       generate a video clip via AI (Sora / Runway)
+                              --provider sora|runway   API provider (default: sora)
+                              --output <path>           output file (default: assets/gen-<provider>-<slug>.mp4)
   doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
@@ -758,6 +762,45 @@ async function main() {
         });
       } catch (e) {
         console.error(`error: ${e.message}`);
+        process.exit(1);
+      }
+      return;
+    }
+
+    case 'generate': {
+      const prompt = positionals[1];
+      if (!prompt) {
+        console.error('usage: narova generate <prompt> --provider sora|runway [--output <path>]');
+        console.error('');
+        console.error('Providers:');
+        for (const [id, p] of Object.entries(PROVIDERS)) {
+          console.error(`  ${id.padEnd(8)} ${p.description}`);
+        }
+        process.exit(1);
+      }
+      const provider = flags.provider || 'sora';
+      const info = providerInfo(provider);
+      if (!info) {
+        console.error(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
+        process.exit(1);
+      }
+      const apiKey = process.env[info.envKey];
+      if (!apiKey) {
+        console.error(`${info.name} requires ${info.envKey} environment variable`);
+        process.exit(1);
+      }
+      try {
+        const projectDir = flags.project ? path.resolve(flags.project) : process.cwd();
+        const assetsDir = path.join(projectDir, 'assets');
+        if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+        const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
+        const output = flags.output
+          ? path.resolve(projectDir, flags.output)
+          : path.join(assetsDir, `gen-${provider}-${slug}.mp4`);
+        await generate(provider, prompt, apiKey, output, assetsDir);
+        console.log(`Add to reel.config.mjs:  clip: "assets/${path.basename(output)}"`);
+      } catch (e) {
+        console.error(`generate failed: ${e.message}`);
         process.exit(1);
       }
       return;

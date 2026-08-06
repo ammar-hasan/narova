@@ -273,6 +273,7 @@ function compileScenes(scenes) {
     })),
     body: s.body || '',
     visual: s.visual || null,
+    three: s.three || null,
     clip: s.clip || null,
     walkthrough: s.walkthrough || null,
     dur:  s.dur || null,   // silent scene fixed duration
