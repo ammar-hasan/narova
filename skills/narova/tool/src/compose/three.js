@@ -72,9 +72,29 @@ function geometryKey(type, obj) {
   return `${type}${JSON.stringify(obj.size ?? null)}`;
 }
 
-/* Material cache key: color + wireframe + opacity. */
+/* Material cache key: color + wireframe + opacity + PBR props. */
 function materialKey(obj) {
-  return `${obj.color || '#ffffff'}|${obj.wireframe ? 1 : 0}|${obj.opacity ?? 1}`;
+  const extra = obj._cacheKey || '';
+  return `${obj.color || '#ffffff'}|${obj.wireframe ? 1 : 0}|${obj.opacity ?? 1}${extra ? '|' + extra : ''}`;
+}
+
+/* PBR surface properties shared by every material factory. */
+function pbrPropsJs(obj) {
+  const parts = [];
+  if (obj.roughness != null) parts.push(`roughness:${obj.roughness}`);
+  if (obj.metalness != null) parts.push(`metalness:${obj.metalness}`);
+  if (obj.emissive) parts.push(`emissive:${esc(obj.emissive)}`);
+  if (obj.emissiveIntensity != null) parts.push(`emissiveIntensity:${obj.emissiveIntensity}`);
+  return parts.join(',');
+}
+
+/* Build a cache-key fragment that includes PBR props so materials that differ
+ * only in roughness/metalness/emissive don't collide in the shared cache. */
+function pbrCacheKey(obj) {
+  let k = '';
+  const pbr = pbrPropsJs(obj);
+  if (pbr) k = pbr.replace(/:/g, '=').replace(/"/g, '');
+  return k;
 }
 
 /* A material that will be opacity-animated must NOT come from the shared cache
@@ -85,8 +105,11 @@ function meshMaterialJs(obj, animateOpacity) {
     const color = obj.color || '#ffffff';
     const wf = obj.wireframe ? 'true' : 'false';
     const opacity = obj.opacity ?? 1;
-    return `new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity},transparent:true})`;
+    const pbr = pbrPropsJs(obj);
+    const pbrPart = pbr ? ',' + pbr : '';
+    return `new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity},transparent:true${pbrPart}})`;
   }
+  obj._cacheKey = pbrCacheKey(obj);
   return cachedMaterialJs(obj);
 }
 
@@ -107,7 +130,9 @@ function cachedMaterialJs(obj) {
   const wf = obj.wireframe ? 'true' : 'false';
   const opacity = obj.opacity ?? 1;
   const transparent = opacity < 1 ? ',transparent:true' : '';
-  return `_m(${esc(materialKey(obj))},function(){return new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity}${transparent}})})`;
+  const pbr = pbrPropsJs(obj);
+  const pbrPart = pbr ? ',' + pbr : '';
+  return `_m(${esc(materialKey(obj))},function(){return new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity}${transparent}${pbrPart}})})`;
 }
 
 function animationTweens(objVar, obj, sceneStart) {
@@ -129,6 +154,10 @@ function animationTweens(objVar, obj, sceneStart) {
         at = `${sceneStart}+${anim.at}`;
       }
     }
+    if (anim.wait != null) {
+      at = typeof at === 'number' ? `${at}+${anim.wait}` : `(${at}+${anim.wait})`;
+    }
+    const loop = anim.loop ? ',repeat:-1' : '';
     const parts = prop.split('.');
     if (parts.length === 2) {
       const axis = parts[1];
@@ -136,11 +165,11 @@ function animationTweens(objVar, obj, sceneStart) {
         // Use fromTo so the authored `from` is honored, not just the resting
         // position. Defaults to the authored position when `from` is unset.
         const from = Number.isFinite(anim.from) ? anim.from : 'undefined';
-        js += `tl.fromTo(${objVar}.${parts[0]},{${axis}:${from === 'undefined' ? `Number(${objVar}.${parts[0]}.${axis})` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+        js += `tl.fromTo(${objVar}.${parts[0]},{${axis}:${from === 'undefined' ? `Number(${objVar}.${parts[0]}.${axis})` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}${loop}},${at});`;
       }
     } else if (prop === 'scale') {
       const from = Number.isFinite(anim.from) ? anim.from : 1;
-      js += `tl.fromTo(${objVar}.scale,{x:${from},y:${from},z:${from}},{x:${anim.to},y:${anim.to},z:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+      js += `tl.fromTo(${objVar}.scale,{x:${from},y:${from},z:${from}},{x:${anim.to},y:${anim.to},z:${anim.to},duration:${duration},ease:${esc(ease)}${loop}},${at});`;
     } else if (prop === 'opacity') {
       // Opacity must work on a single mesh AND on a group/instanced mesh (a
       // Group has no .material — the old code threw here). Walk the object
@@ -150,10 +179,43 @@ function animationTweens(objVar, obj, sceneStart) {
       const to = Number.isFinite(anim.to) ? anim.to : 0;
       js += `function _fade_${ai}(o,v){o.traverse(function(n){if(n.material){n.material.transparent=true;n.material.opacity=v;}});}`;
       js += `_fade_${ai}(${objVar},${from});`;
-      js += `tl.fromTo({t:${from}},{t:${from}},{t:${to},duration:${duration},ease:${esc(ease)},onUpdate:function(){_fade_${ai}(${objVar},this.targets[0].t);}},${at});`;
+      js += `tl.fromTo({t:${from}},{t:${from}},{t:${to},duration:${duration},ease:${esc(ease)}${loop},onUpdate:function(){_fade_${ai}(${objVar},this.targets[0].t);}},${at});`;
     }
   });
   return js;
+}
+
+const TEXTURE_MAPS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap'];
+
+/* Generate loading code for texture maps on an object. Textures are loaded
+ * before frame 0 through the `_pending` promise gating, same as glTF models. */
+function textureLoadJs(varName, obj) {
+  let code = '';
+  for (const mapType of TEXTURE_MAPS) {
+    const src = obj[mapType];
+    if (!src || typeof src !== 'string') continue;
+    const assetPath = `assets/${path.basename(src)}`;
+    code += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(assetPath)},function(_tex){`;
+    code += `_tex.colorSpace=THREE.SRGBColorSpace;`;
+    code += `${varName}.material.${mapType}=_tex;`;
+    code += `${varName}.material.needsUpdate=true;`;
+    code += `_res();`;
+    code += `},undefined,function(){_res();`;        // don't block on load failure
+    code += `console.error('narova-three: texture load failed',${esc(assetPath)});`;
+    code += `});}));`;
+  }
+  return code;
+}
+
+/* Collect all texture asset paths from a three config for copying. */
+function collectTextureAssets(three) {
+  const paths = [];
+  for (const obj of (three.objects || [])) {
+    for (const mapType of TEXTURE_MAPS) {
+      if (typeof obj[mapType] === 'string') paths.push(obj[mapType]);
+    }
+  }
+  return paths;
 }
 
 function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
@@ -186,6 +248,13 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   js += `var R=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});`;
   js += `R.outputColorSpace=THREE.SRGBColorSpace;R.toneMapping=${tmExpr};R.toneMappingExposure=${exposure};`;
   js += `R.setPixelRatio(1);R.setSize(${w},${h});`;
+  // Shadow maps: enabled only when at least one light or object requests them.
+  const hasShadows = (three.lights || []).some(l => l.shadow) ||
+    (three.objects || []).some(o => o.castShadow || o.receiveShadow ||
+      (o.children || []).some(c => c.castShadow || c.receiveShadow));
+  if (hasShadows) {
+    js += `R.shadowMap.enabled=true;R.shadowMap.type=THREE.PCFSoftShadowMap;`;
+  }
   js += `var S=new THREE.Scene();`;
   // Shared geometry/material cache: identical primitives reuse one buffer and
   // one program — no per-mesh allocation, fewer draw calls.
@@ -195,6 +264,43 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   js += `var C=new THREE.PerspectiveCamera(${fov},${w}/${h},${near},${far});`;
   js += `C.position.set(${camPos[0]},${camPos[1]},${camPos[2]});`;
   js += `C.lookAt(${look[0]},${look[1]},${look[2]});`;
+  // Camera animation: position, lookAt target, or fov (zoom).
+  const camAnims = three.cameraAnimate
+    ? (Array.isArray(three.cameraAnimate) ? three.cameraAnimate : [three.cameraAnimate])
+    : [];
+  if (camAnims.length) {
+    js += `var _camTarget=new THREE.Object3D();_camTarget.position.set(${look[0]},${look[1]},${look[2]});S.add(_camTarget);`;
+    camAnims.forEach((anim, ai) => {
+      const prop = anim.property;
+      const duration = anim.duration || 2;
+      const ease = anim.ease || 'power2.inOut';
+      let at = sceneStart;
+      if (anim.at != null) {
+        if (typeof anim.at === 'object' && anim.at.cue != null) {
+          at = `(${sceneStart}+${anim.at.cue}*2+${anim.at.offset || 0})`;
+        } else if (typeof anim.at === 'number') {
+          at = `${sceneStart}+${anim.at}`;
+        }
+      }
+      if (prop === 'fov') {
+        const from = Number.isFinite(anim.from) ? anim.from : fov;
+        js += `tl.fromTo(C,{fov:${from}},{fov:${anim.to},duration:${duration},ease:${esc(ease)},onUpdate:function(){C.updateProjectionMatrix();}},${at});`;
+      } else if (prop === 'position.x' || prop === 'position.y' || prop === 'position.z') {
+        const axis = prop.split('.')[1];
+        const from = Number.isFinite(anim.from) ? anim.from : 'undefined';
+        js += `tl.fromTo(C.position,{${axis}:${from === 'undefined' ? `C.position.${axis}` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+      } else if (prop === 'lookAt.x' || prop === 'lookAt.y' || prop === 'lookAt.z') {
+        const axis = prop.split('.')[1];
+        const from = Number.isFinite(anim.from) ? anim.from : 'undefined';
+        js += `tl.fromTo(_camTarget.position,{${axis}:${from === 'undefined' ? `_camTarget.position.${axis}` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+        js += `C.lookAt(_camTarget.position);`;
+      }
+    });
+    // If any lookAt animations present, bind the camera to the target on every frame.
+    if (camAnims.some(a => a.property && a.property.startsWith('lookAt'))) {
+      js += `var _origRender=_render;_render=function(){C.lookAt(_camTarget.position);_origRender();};`;
+    }
+  }
   // Pending model loads; the render driver waits for all of them before frame 0.
   js += `var _pending=[];`;
 
@@ -211,6 +317,21 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
     js += `S.fog=new THREE.Fog(${esc(fog.color || '#000000')},${fog.near || 1},${fog.far || 50});`;
   }
 
+  // IBL environment map: loads an equirectangular texture, generates a
+  // prefiltered PMREM, and sets it as scene.environment for PBR materials.
+  if (three.envMap) {
+    const envCfg = typeof three.envMap === 'string' ? { src: three.envMap } : three.envMap;
+    const envSrc = `assets/${path.basename(envCfg.src)}`;
+    const envIntensity = envCfg.intensity != null ? envCfg.intensity : 1;
+    js += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(envSrc)},function(_tex){`;
+    js += `_tex.colorSpace=THREE.SRGBColorSpace;_tex.mapping=THREE.EquirectangularReflectionMapping;`;
+    js += `var _pmrem=new THREE.PMREMGenerator(R);_pmrem.compileEquirectangularShader();`;
+    js += `var _envMap=_pmrem.fromEquirectangular(_tex).texture;_pmrem.dispose();`;
+    js += `S.environment=_envMap;S.environmentIntensity=${envIntensity};`;
+    if (envCfg.background) js += `S.background=_envMap;`;
+    js += `_res();},undefined,function(){_res();console.error('narova-three: envMap load failed');});}));`;
+  }
+
   (three.lights || []).forEach((l, i) => {
     const c = l.color || '#ffffff';
     const int = l.intensity != null ? l.intensity : 1;
@@ -218,17 +339,48 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       js += `S.add(new THREE.AmbientLight(${esc(c)},${int}));`;
     } else if (l.type === 'directional') {
       const p = l.position || [5, 5, 5];
-      js += `var L${i}=new THREE.DirectionalLight(${esc(c)},${int});L${i}.position.set(${p[0]},${p[1]},${p[2]});S.add(L${i});`;
+      js += `var L${i}=new THREE.DirectionalLight(${esc(c)},${int});`;
+      js += `L${i}.position.set(${p[0]},${p[1]},${p[2]});`;
+      if (l.shadow) {
+        const sm = l.shadowMapSize || 1024;
+        const sc = l.shadowCamera || 10;
+        js += `L${i}.castShadow=true;`;
+        js += `L${i}.shadow.mapSize.width=${sm};L${i}.shadow.mapSize.height=${sm};`;
+        js += `L${i}.shadow.camera.near=0.5;L${i}.shadow.camera.far=50;`;
+        js += `L${i}.shadow.camera.left=-${sc};L${i}.shadow.camera.right=${sc};`;
+        js += `L${i}.shadow.camera.top=${sc};L${i}.shadow.camera.bottom=-${sc};`;
+        if (l.shadowBias != null) js += `L${i}.shadow.bias=${l.shadowBias};`;
+      }
+      js += `S.add(L${i});`;
     } else if (l.type === 'point') {
       const p = l.position || [0, 0, 0];
-      js += `var L${i}=new THREE.PointLight(${esc(c)},${int},${l.distance || 0},${l.decay || 2});L${i}.position.set(${p[0]},${p[1]},${p[2]});S.add(L${i});`;
+      js += `var L${i}=new THREE.PointLight(${esc(c)},${int},${l.distance || 0},${l.decay || 2});`;
+      js += `L${i}.position.set(${p[0]},${p[1]},${p[2]});`;
+      if (l.shadow) {
+        const sm = l.shadowMapSize || 512;
+        js += `L${i}.castShadow=true;`;
+        js += `L${i}.shadow.mapSize.width=${sm};L${i}.shadow.mapSize.height=${sm};`;
+        if (l.shadowBias != null) js += `L${i}.shadow.bias=${l.shadowBias};`;
+      }
+      js += `S.add(L${i});`;
     } else if (l.type === 'spot') {
       const p = l.position || [0, 5, 0];
-      js += `var L${i}=new THREE.SpotLight(${esc(c)},${int});L${i}.position.set(${p[0]},${p[1]},${p[2]});S.add(L${i});`;
+      js += `var L${i}=new THREE.SpotLight(${esc(c)},${int});`;
+      js += `L${i}.position.set(${p[0]},${p[1]},${p[2]});`;
+      if (l.shadow) {
+        const sm = l.shadowMapSize || 1024;
+        js += `L${i}.castShadow=true;`;
+        js += `L${i}.shadow.mapSize.width=${sm};L${i}.shadow.mapSize.height=${sm};`;
+        if (l.shadowBias != null) js += `L${i}.shadow.bias=${l.shadowBias};`;
+      }
+      js += `S.add(L${i});`;
     } else if (l.type === 'hemisphere') {
       js += `S.add(new THREE.HemisphereLight(${esc(c)},${esc(l.groundColor || '#000000')},${int}));`;
     }
   });
+  // AnimationMixer stack for playing glTF animation clips.
+  const hasModelAnims = (three.objects || []).some(o => o.type === 'model' && o.playAnimations);
+  if (hasModelAnims) js += `var _mixers=[];`;
 
   (three.objects || []).forEach((obj, i) => {
     const pos = obj.position || [0, 0, 0];
@@ -248,7 +400,13 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       const assetSrc = `assets/${path.basename(obj.src)}`;
       js += `_pending.push(fetch(${esc(assetSrc)}).then(function(r){if(!r.ok)throw new Error('gltf '+${esc(assetSrc)}+' '+r.status);return r.arrayBuffer();}).then(function(buf){`;
       js += `return new THREE.GLTFLoader().parseAsync(buf,${esc(assetSrc)}).then(function(g){`;
-      js += `${name}.add(g.scene);${animationTweens(name, obj, sceneStart)}`;
+      js += `${name}.add(g.scene);`;
+      if (obj.playAnimations) {
+        js += `if(g.animations&&g.animations.length){var ${name}Mixer=new THREE.AnimationMixer(${name});`;
+        js += `${name}Mixer.clipAction(g.animations[0]).play();`;
+        js += `_mixers.push({m:${name}Mixer,start:${fmt(sceneStart)}});}`;
+      }
+      js += `${animationTweens(name, obj, sceneStart)}`;
       js += `});}).catch(function(e){console.error('narova-three: model load failed',e);` +
         `${name}.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:${esc(obj.color || '#ff6363')},wireframe:true})));` +
         `}));`;
@@ -270,7 +428,10 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
         js += `var ${cname}=new THREE.Mesh(${cachedGeometryJs(child.type, child)},${meshMaterialJs(child, animatesOpacity(childAnims))});`;
         js += `${cname}.position.set(${cpos[0]},${cpos[1]},${cpos[2]});`;
         js += `${cname}.rotation.set(${crot[0]},${crot[1]},${crot[2]});${objectScaleJs(cname, child)}`;
+        if (child.castShadow) js += `${cname}.castShadow=true;`;
+        if (child.receiveShadow) js += `${cname}.receiveShadow=true;`;
         js += `${name}.add(${cname});`;
+        js += textureLoadJs(cname, child);
         js += animationTweens(cname, child, sceneStart);
       });
       js += animationTweens(name, obj, sceneStart);
@@ -286,7 +447,34 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
         const is = inst.scale || [1, 1, 1];
         js += `_d.position.set(${ip[0]},${ip[1]},${ip[2]});_d.rotation.set(${ir[0]},${ir[1]},${ir[2]});_d.scale.set(${is[0]},${is[1]},${is[2]});_d.updateMatrix();${name}.setMatrixAt(${ii},_d.matrix);`;
       });
-      js += `${name}.instanceMatrix.needsUpdate=true;S.add(${name});`;
+      js += `${name}.instanceMatrix.needsUpdate=true;`;
+      if (obj.castShadow) js += `${name}.castShadow=true;`;
+      if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
+      js += `S.add(${name});`;
+      js += textureLoadJs(name, obj);
+      js += animationTweens(name, obj, sceneStart);
+    } else if (obj.type === 'particles') {
+      const count = obj.count || 100;
+      const spread = obj.spread || [1, 1, 1];
+      const pcolor = obj.color || '#ffffff';
+      const psize = obj.size || 0.1;
+      const popacity = obj.opacity ?? 1;
+      js += `var ${name}Geo=new THREE.BufferGeometry();`;
+      js += `var _pPos=new Float32Array(${count}*3);`;
+      js += `for(var _pi=0;_pi<${count};_pi++){_pPos[_pi*3]=(Math.random()-0.5)*${spread[0]};_pPos[_pi*3+1]=Math.random()*${spread[1]};_pPos[_pi*3+2]=(Math.random()-0.5)*${spread[2]};}`;
+      js += `${name}Geo.setAttribute('position',new THREE.BufferAttribute(_pPos,3));`;
+      js += `var ${name}Mat=new THREE.PointsMaterial({color:${esc(pcolor)},size:${psize},transparent:${popacity < 1 ? 'true' : 'false'},opacity:${popacity},blending:THREE.AdditiveBlending,depthWrite:false});`;
+      if (obj.texture) {
+        const texPath = `assets/${path.basename(obj.texture)}`;
+        js += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(texPath)},function(_tex){${name}Mat.map=_tex;${name}Mat.needsUpdate=true;_res();},undefined,function(){_res();});}));`;
+      }
+      js += `var ${name}=new THREE.Points(${name}Geo,${name}Mat);`;
+      const ppos = obj.position || [0, 0, 0];
+      js += `${name}.position.set(${ppos[0]},${ppos[1]},${ppos[2]});`;
+      js += `S.add(${name});`;
+      if (obj.animated !== false) {
+        js += `tl.to(${name}.rotation,{y:Math.PI*2,duration:${obj.rotateDuration || 8},ease:'none',repeat:-1},${fmt(sceneStart)});`;
+      }
       js += animationTweens(name, obj, sceneStart);
     } else {
       const pos = obj.position || [0, 0, 0];
@@ -294,13 +482,18 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       js += `var ${name}=new THREE.Mesh(${cachedGeometryJs(obj.type, obj)},${meshMaterialJs(obj, animatesOpacity(obj.animate))});`;
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
       js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
+      if (obj.castShadow) js += `${name}.castShadow=true;`;
+      if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
       js += `S.add(${name});`;
+      js += textureLoadJs(name, obj);
       js += animationTweens(name, obj, sceneStart);
     }
   });
 
   js += `var T={n:0};`;
-  js += `function _render(){R.render(S,C);}`;
+  js += `function _render(){`;
+  if (hasModelAnims) js += `var _t=tl.time();for(var _mi=0;_mi<_mixers.length;_mi++)_mixers[_mi].m.setTime(_t-_mixers[_mi].start);`;
+  js += `R.render(S,C);}`;
   js += `tl.to(T,{n:${fmt(sceneDur*30)},duration:${fmt(sceneDur)},ease:'none',onUpdate:_render},${fmt(sceneStart)});`;
   // Wait for any glTF loads (frame 0 must show the assembled scene), then
   // render the resting frame. If a model hangs, still render after a timeout
@@ -344,5 +537,5 @@ function collectModelAssets(config) {
 module.exports = {
   THREE_VERSION, THREE_IMPORT, THREE_VENDOR_DIR, THREE_MODULE_SRC,
   threeHeadScripts, threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels,
-  collectModelAssets,
+  collectModelAssets, collectTextureAssets,
 };

@@ -605,6 +605,15 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
+  // Bump a scene's duration to fit the longest 3D animation, so the render
+  // loop never stops before an animation finishes. The initial fallback
+  // (max(6, vo*5)) knows nothing about 3D timing — it can cut tweens short
+  // and freeze the scene mid-playback.
+  for (const s of resolved.scenes) {
+    const minDur = min3dSceneDuration(s);
+    if (minDur > 0 && minDur > (s.dur || 0)) s.dur = minDur;
+  }
+
   return resolved;
 }
 
@@ -616,6 +625,51 @@ function narration(config) {
     segments: s.vo,
     ...(s.vo.length === 0 ? { dur: s.dur } : {}),
   }));
+}
+
+/* Compute the minimum scene duration needed to fit all 3D animations.
+ * The initial fallback (max(6, vo*5)) knows nothing about 3D timing.
+ * Returns 0 when there are no animations to account for. */
+function min3dSceneDuration(scene) {
+  if (!scene.three) return 0;
+
+  let maxEnd = 0;
+
+  // Animate specs on objects: { property, from?, to, duration, at? }
+  const collected = [];
+  for (const obj of (scene.three.objects || [])) {
+    const anims = obj.animate
+      ? (Array.isArray(obj.animate) ? obj.animate : [obj.animate])
+      : [];
+    for (const a of anims) if (a) collected.push(a);
+  }
+
+  // Camera animate (if camera supports it — added in a later release).
+  const camAnims = scene.three.cameraAnimate
+    ? (Array.isArray(scene.three.cameraAnimate) ? scene.three.cameraAnimate : [scene.three.cameraAnimate])
+    : [];
+  for (const a of camAnims) if (a) collected.push(a);
+
+  for (const anim of collected) {
+    const duration = anim.duration || 0;
+    if (duration <= 0) continue;
+
+    // Offset from scene start — same resolution that animationTweens() uses.
+    let offset = 0;
+    if (anim.at != null) {
+      if (typeof anim.at === 'number') {
+        offset = anim.at;
+      } else if (typeof anim.at === 'object' && anim.at.cue != null) {
+        // cue * 2 approximates narration turn timing before real durations exist.
+        offset = anim.at.cue * 2 + (anim.at.offset || 0);
+      }
+    }
+
+    const end = offset + duration;
+    if (end > maxEnd) maxEnd = end;
+  }
+
+  return maxEnd;
 }
 
 module.exports = { resolveConfig, narration };

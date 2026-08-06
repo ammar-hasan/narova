@@ -136,6 +136,23 @@ function releaseChecks(config, errors) {
     if (!hasManaged3D && /<(?:canvas|web-component|marquee|blink)\b/i.test(body)) {
       errors.push(`scene "${s.id}": contains an unsupported HTML element (<canvas>, <web-component>) — HyperFrames may not render it deterministically`);
     }
+
+    // 3D scene quality checks: useful hints for a cinematic look.
+    if (s.three) {
+      if (!s.three.camera) {
+        errors.push(`scene "${s.id}": 3D scene has no camera — add a camera element or three.camera`);
+      }
+      const hasShadowLight = (s.three.lights || []).some(l => l.shadow);
+      const hasShadowReceiver = (s.three.objects || []).some(o => o.receiveShadow);
+      if (hasShadowLight && !hasShadowReceiver) {
+        errors.push(`scene "${s.id}": lights cast shadows but no object has receiveShadow:true — shadows won't be visible`);
+      }
+      const usesPBR = (s.three.objects || []).some(o =>
+        o.roughness != null || o.metalness != null || o.roughnessMap || o.metalnessMap);
+      if (usesPBR && !s.three.envMap) {
+        errors.push(`scene "${s.id}": PBR materials (roughness/metalness) used without envMap — surfaces will look flat; add an equirectangular environment map`);
+      }
+    }
   }
 
   // Remote url() references in theme.css.

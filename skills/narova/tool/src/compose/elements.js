@@ -158,6 +158,10 @@ function compileThreeScene(elements, characters) {
         distance: el.distance,
         decay: el.decay,
         groundColor: el.groundColor,
+        shadow: el.shadow,
+        shadowMapSize: el.shadowMapSize,
+        shadowCamera: el.shadowCamera,
+        shadowBias: el.shadowBias,
       });
     } else if (el.type === '3d-object' || el.type === 'model' || PRIMITIVE_KINDS.has(el.type)) {
       // Direct primitive shorthand: { type: "cube", ... } == { type: "3d-object", kind: "cube", ... }
@@ -171,7 +175,20 @@ function compileThreeScene(elements, characters) {
         size: el.size,
         wireframe: el.wireframe,
         opacity: el.opacity,
+        roughness: el.roughness,
+        metalness: el.metalness,
+        emissive: el.emissive,
+        emissiveIntensity: el.emissiveIntensity,
+        map: el.map,
+        normalMap: el.normalMap,
+        roughnessMap: el.roughnessMap,
+        metalnessMap: el.metalnessMap,
+        emissiveMap: el.emissiveMap,
+        aoMap: el.aoMap,
         src: el.src,
+        castShadow: el.castShadow,
+        receiveShadow: el.receiveShadow,
+        playAnimations: el.playAnimations,
         instances: el.instances,
         animate: [],
       };
@@ -211,6 +228,20 @@ function compileThreeScene(elements, characters) {
         if (result.objects.length) three.objects.push(...result.objects);
         if (result.lights.length) three.lights.push(...result.lights);
       }
+    } else if (el.type === 'particles') {
+      three.objects.push({
+        type: 'particles',
+        count: el.count || 100,
+        size: el.size || 0.1,
+        color: el.color || '#ffffff',
+        opacity: el.opacity ?? 1,
+        spread: el.spread || [1, 1, 1],
+        position: el.position || [0, 0, 0],
+        texture: el.texture,
+        animated: el.animated !== false,
+        rotateDuration: el.rotateDuration || 8,
+        animate: [],
+      });
     }
   }
 
@@ -392,7 +423,7 @@ function validateElements(elements, at, errors) {
     if (!el || typeof el !== 'object') { errors.push(`${ea}: expected an object`); return; }
 
     const validTypes = new Set(['camera', 'light', '3d-object', 'model', 'character',
-      'text', 'shape', 'image', 'video', 'effect', 'group', 'ground', ...PRIMITIVE_KINDS]);
+      'text', 'shape', 'image', 'video', 'effect', 'group', 'ground', 'particles', ...PRIMITIVE_KINDS]);
     if (!validTypes.has(el.type)) {
       errors.push(`${ea}.type: expected ${[...validTypes].join('|')}`);
     }

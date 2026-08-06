@@ -159,13 +159,72 @@ deterministic and seek-safe.
 ```js
 three: {
   camera: { position: [0, 0, 5], fov: 45 },
-  lights: [{ type: "ambient", intensity: 0.5 }, { type: "directional", position: [5, 5, 5] }],
-  toneMapping: "aces",        // optional: aces (default) | linear
+  cameraAnimate: orbitCamera(0, 8, { target: [0, 0, 0] }), // move the camera
+  lights: [
+    { type: "ambient", intensity: 0.5 },
+    { type: "directional", position: [5, 5, 5], shadow: true },  // cast shadows
+  ],
+  toneMapping: "aces",        // optional: aces (default) | agx | neutral | linear
   exposure: 1,                // optional: tone-mapping exposure
-  objects: [{ type: "cube", color: "#2ee6d6", size: 1.2,
-    animate: { property: "rotation.y", from: 0, to: Math.PI * 2, duration: 6 } }],
+  envMap: { src: "assets/sky.hdr", intensity: 0.8 },  // IBL environment
+  objects: [{
+    type: "cube", color: "#2ee6d6", size: 1.2,
+    roughness: 0.4, metalness: 0.8,                      // PBR surface
+    map: "assets/wood.png", normalMap: "assets/wood-n.png",  // textures
+    castShadow: true, receiveShadow: true,
+    animate: { property: "rotation.y", from: 0, to: Math.PI * 2, duration: 6, loop: true },
+  }],
 }
 ```
+
+### Object material properties (PBR)
+
+Every primitive object supports:
+- `roughness` (0–1), `metalness` (0–1) — PBR surface properties
+- `emissive` (hex string), `emissiveIntensity` (number) — self-illuminating glow
+- `map`, `normalMap`, `roughnessMap`, `metalnessMap`, `emissiveMap`, `aoMap` — texture maps (asset file paths)
+- `castShadow`, `receiveShadow` (boolean) — shadow interaction
+- `playAnimations: true` on `model` objects plays the first animation clip from the glTF file
+
+### Camera animation (`scene.three.cameraAnimate`)
+
+An array of animate specs that move the camera during the scene:
+
+```js
+cameraAnimate: [
+  { property: "position.x", to: 3, duration: 4, ease: "power2.inOut" },
+  { property: "lookAt.z", to: 2, duration: 4 },
+  { property: "fov", from: 45, to: 20, duration: 3 },
+]
+```
+
+Camera animation DSL helpers are available at
+`narova/tool/src/compose/camera-dsl.js` — `orbitCamera()`, `dollyCamera()`,
+`panCamera()`, `boomCamera()`, `lookAtPan()`.
+
+### Animation chaining
+
+Each animate spec also supports:
+- `wait` (number) — seconds of delay before the tween starts
+- `loop: true` — repeat the tween continuously within the scene duration
+
+### Shadows
+
+Set `shadow: true` on a directional, point, or spot light. Use `shadowMapSize`
+and `shadowCamera` (directional) to tune quality. Objects need `castShadow: true`
+and/or `receiveShadow: true` to participate.
+
+### Environment maps (IBL)
+
+Set `envMap: { src: "assets/sky.hdr", intensity: 0.8, background: false }` on
+the three config. Loads an equirectangular image, generates a prefiltered PMREM,
+and sets it as `scene.environment` for PBR reflectance. Set `background: true` to
+also use it as the scene background.
+
+### Particles
+
+Add `{ type: "particles", count: 500, spread: [8, 4, 8], color: "#ffaa44", size: 0.08 }`
+to `objects`. Particles use additive blending and auto-rotate.
 
 Notes:
 - Three.js is downloaded once to `out/hf-*/assets/` at compose time (no CDN
