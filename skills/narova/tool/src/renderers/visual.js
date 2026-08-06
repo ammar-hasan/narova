@@ -28,7 +28,7 @@ function plainObject(value) {
 }
 
 const LIGHT_TYPES = new Set(['ambient', 'directional', 'point', 'spot', 'hemisphere']);
-const PRIMITIVE_TYPES = new Set(['cube', 'sphere', 'cylinder', 'plane', 'torus', 'cone', 'ring', 'icosahedron', 'dodecahedron', 'octahedron', 'tetrahedron', 'torusKnot', 'model', 'group']);
+const PRIMITIVE_TYPES = new Set(['cube', 'sphere', 'cylinder', 'plane', 'torus', 'cone', 'ring', 'icosahedron', 'dodecahedron', 'octahedron', 'tetrahedron', 'torusKnot', 'model', 'group', 'particles']);
 
 function validateThreeConfig(three, at, errors) {
   if (three.camera != null) {
@@ -44,6 +44,16 @@ function validateThreeConfig(three, at, errors) {
     if (c.near != null && (typeof c.near !== 'number' || c.near <= 0)) errors.push(`${ca}.near: must be positive`);
     if (c.far != null && (typeof c.far !== 'number' || c.far <= 0)) errors.push(`${ca}.far: must be positive`);
   }
+  if (three.cameraAnimate != null) {
+    const ca = `${at}.cameraAnimate`;
+    const list = Array.isArray(three.cameraAnimate) ? three.cameraAnimate : [three.cameraAnimate];
+    const CAM_PROPS = new Set(['position.x', 'position.y', 'position.z', 'lookAt.x', 'lookAt.y', 'lookAt.z', 'fov']);
+    list.forEach((anim, i) => {
+      if (!anim || typeof anim !== 'object') { errors.push(`${ca}[${i}]: expected an object`); return; }
+      if (!CAM_PROPS.has(anim.property)) errors.push(`${ca}[${i}].property: expected ${[...CAM_PROPS].join('|')}`);
+      if (anim.to == null) errors.push(`${ca}[${i}].to: required`);
+    });
+  }
   if (three.lights != null) {
     if (!Array.isArray(three.lights)) errors.push(`${at}.lights: expected an array`);
     else three.lights.forEach((l, i) => {
@@ -57,6 +67,10 @@ function validateThreeConfig(three, at, errors) {
           errors.push(`${la}.position: expected [x, y, z]`);
         }
       }
+      if (l.shadow != null && typeof l.shadow !== 'boolean') errors.push(`${la}.shadow: expected a boolean`);
+      if (l.shadowMapSize != null && (typeof l.shadowMapSize !== 'number' || l.shadowMapSize < 64)) errors.push(`${la}.shadowMapSize: expected a number >= 64`);
+      if (l.shadowCamera != null && (typeof l.shadowCamera !== 'number' || l.shadowCamera <= 0)) errors.push(`${la}.shadowCamera: must be positive`);
+      if (l.shadowBias != null && typeof l.shadowBias !== 'number') errors.push(`${la}.shadowBias: expected a number`);
     });
   }
   if (three.objects != null) {
@@ -73,7 +87,7 @@ function validateThreeConfig(three, at, errors) {
           obj.children.forEach((part, pi) => {
             const pa = `${oa}.children[${pi}]`;
             if (!part || typeof part !== 'object') { errors.push(`${pa}: expected an object`); return; }
-            if (!PRIMITIVE_TYPES.has(part.type) || part.type === 'group' || part.type === 'model') {
+            if (!PRIMITIVE_TYPES.has(part.type) || part.type === 'group' || part.type === 'model' || part.type === 'particles') {
               errors.push(`${pa}.type: expected a primitive (${[...PRIMITIVE_TYPES].filter(t => t !== 'group' && t !== 'model').join('|')})`);
             }
           });
@@ -99,6 +113,19 @@ function validateThreeConfig(three, at, errors) {
         }
       }
       if (obj.color != null && typeof obj.color !== 'string') errors.push(`${oa}.color: expected a hex string`);
+      if (obj.roughness != null && (typeof obj.roughness !== 'number' || obj.roughness < 0 || obj.roughness > 1)) errors.push(`${oa}.roughness: expected 0–1`);
+      if (obj.metalness != null && (typeof obj.metalness !== 'number' || obj.metalness < 0 || obj.metalness > 1)) errors.push(`${oa}.metalness: expected 0–1`);
+      if (obj.emissive != null && typeof obj.emissive !== 'string') errors.push(`${oa}.emissive: expected a hex string`);
+      if (obj.emissiveIntensity != null && (typeof obj.emissiveIntensity !== 'number' || obj.emissiveIntensity < 0)) errors.push(`${oa}.emissiveIntensity: must be non-negative`);
+      if (obj.map != null && typeof obj.map !== 'string') errors.push(`${oa}.map: expected an asset path string`);
+      if (obj.normalMap != null && typeof obj.normalMap !== 'string') errors.push(`${oa}.normalMap: expected an asset path string`);
+      if (obj.roughnessMap != null && typeof obj.roughnessMap !== 'string') errors.push(`${oa}.roughnessMap: expected an asset path string`);
+      if (obj.metalnessMap != null && typeof obj.metalnessMap !== 'string') errors.push(`${oa}.metalnessMap: expected an asset path string`);
+      if (obj.emissiveMap != null && typeof obj.emissiveMap !== 'string') errors.push(`${oa}.emissiveMap: expected an asset path string`);
+      if (obj.aoMap != null && typeof obj.aoMap !== 'string') errors.push(`${oa}.aoMap: expected an asset path string`);
+      if (obj.castShadow != null && typeof obj.castShadow !== 'boolean') errors.push(`${oa}.castShadow: expected a boolean`);
+      if (obj.receiveShadow != null && typeof obj.receiveShadow !== 'boolean') errors.push(`${oa}.receiveShadow: expected a boolean`);
+      if (obj.playAnimations != null && typeof obj.playAnimations !== 'boolean') errors.push(`${oa}.playAnimations: expected a boolean`);
       if (obj.position != null && (!Array.isArray(obj.position) || obj.position.length !== 3 || obj.position.some(v => !Number.isFinite(v)))) {
         errors.push(`${oa}.position: expected [x, y, z]`);
       }
@@ -141,6 +168,13 @@ function validateThreeConfig(three, at, errors) {
       if (f.near != null && typeof f.near !== 'number') errors.push(`${at}.fog.near: expected a number`);
       if (f.far != null && typeof f.far !== 'number') errors.push(`${at}.fog.far: expected a number`);
     }
+  }
+  if (three.envMap != null) {
+    const ea = `${at}.envMap`;
+    const envCfg = typeof three.envMap === 'string' ? { src: three.envMap } : three.envMap;
+    if (typeof envCfg.src !== 'string') errors.push(`${ea}.src: expected an asset path string`);
+    if (envCfg.intensity != null && (typeof envCfg.intensity !== 'number' || envCfg.intensity < 0)) errors.push(`${ea}.intensity: must be non-negative`);
+    if (envCfg.background != null && typeof envCfg.background !== 'boolean') errors.push(`${ea}.background: expected a boolean`);
   }
 }
 

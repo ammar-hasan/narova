@@ -10,7 +10,7 @@ const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
 const { composeDoc } = require('./html');
-const { collectModelAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
+const { collectModelAssets, collectTextureAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
 
 /* Copy the vendored three.js global bundle (core + GLTFLoader, esbuild-bundled
@@ -114,6 +114,22 @@ function compose(config, outDir) {
     if (fs.existsSync(modelSrc)) {
       const destName = path.basename(modelRel);
       fs.copyFileSync(modelSrc, path.join(assetsDir, destName));
+    }
+  }
+  for (const texRel of collectTextureAssets(config)) {
+    const texSrc = path.resolve(config.projectDir, texRel);
+    if (fs.existsSync(texSrc)) {
+      const destName = path.basename(texRel);
+      fs.copyFileSync(texSrc, path.join(assetsDir, destName));
+    }
+  }
+  for (const s of config.scenes) {
+    if (s.three && s.three.envMap) {
+      const envCfg = typeof s.three.envMap === 'string' ? { src: s.three.envMap } : s.three.envMap;
+      const envSrc = path.resolve(config.projectDir, envCfg.src);
+      if (fs.existsSync(envSrc)) {
+        fs.copyFileSync(envSrc, path.join(assetsDir, path.basename(envCfg.src)));
+      }
     }
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
