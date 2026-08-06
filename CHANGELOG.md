@@ -4,6 +4,58 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.19.0] - 2026-08-06
+
+### Changed
+
+- **Three.js upgraded from r149 UMD to r185 ESM** — the old UMD build was
+  deprecated after r149 and removed at r161. r185 is the latest stable
+  (July 2026), shipped as an esbuild-bundled global script that exposes
+  `window.THREE` — no ESM import maps needed, no CDN probes, opaque to
+  HyperFrames' compiler so the full namespace survives tree-shaking.
+  GLTFLoader is compiled into the same bundle as `THREE.GLTFLoader`.
+- **Tone mapping** — default ACES filmic (`outputColorSpace=SRGB`),
+  configurable via `scene.three.toneMapping` (aces, agx, neutral, linear) and `exposure`.
+- **Lighting** — r185 uses physically-correct lighting (`decay=2`, no legacy
+  lights). Ambient/directional intensities of 2-4 are appropriate for typical
+  scenes (r149's legacy model used ~0.5-1).
+- **Template preset voices** in generated projects now use `en_US-lessac-medium`
+  (a real piper voice) instead of stub names.
+
+### Fixed
+
+- **Group/character opacity** (`appear`/`disappear`) no longer targets `.material`
+  on a `THREE.Group` (which has none — the old code silently killed the scene).
+  It now walks descendants and drives every material's opacity deterministically
+  from the GSAP timeline.
+- **Material-cache opacity bleed** — meshes that animate opacity get an isolated
+  material (same shader, own uniforms) so tweening one no longer fades every
+  same-colored sibling sharing the cache.
+- **animationTweens `from`** honored via `tl.fromTo` instead of dropped.
+- **Boot poll bounded** (200 retries + `console.error` surface) instead of
+  polling forever when THREE or the timeline is absent.
+- **GLTF models are deterministic** — prefetched via `fetch`, parsed with
+  `parseAsync`, and the first render is gated on `Promise.all(_pending)`.
+  Wireframe fallback only on explicit load failure, never a silent pop-in.
+- **GLTFLoader was silently broken** — the `examples/js/` UMD path 404'd
+  for every pinned version. The loader is now compiled into the global bundle.
+
+### Added
+
+- **Character abstraction** — built-in presets (cat, mouse, robot) compile to
+  `THREE.Group` assemblies of relative parts. Scene use: one line per character.
+  Config `characters.<id>` overrides or adds custom characters.
+- **`instances` on primitives** — N copies of one primitive rendered as a single
+  `THREE.InstancedMesh` (crowds, props, particles — one draw call).
+- **Shared geometry/material cache** — identical primitives share one buffer
+  and one program across all meshes, reduced draw calls.
+- **`narova generate` command** — AI clip generation via Sora/Runway APIs,
+  downloaded to `assets/` for use as `scene.clip`.
+- **Ground/set convenience** — `type: "ground"` element → floor plane.
+- **Primitive shorthand** — `type: "cube"` ≡ `3d-object` with kind cube.
+- **`canvas3d`/`model3d` node types** in the portable visual tree.
+- **6 new validation tests** added across the affected modules.
+
 ## [0.17.0] - 2026-08-03
 
 ### Added
