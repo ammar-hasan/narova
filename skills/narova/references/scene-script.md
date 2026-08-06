@@ -119,6 +119,25 @@ characters: {
 to narration cues: `at: { cue: 0 }` fires when turn 0 starts, `at: 0.5` is a
 scene-time offset.
 
+**Repeated objects (crowds, props, particles)** use `instances` — N copies of
+one primitive rendered as a single `THREE.InstancedMesh` (one draw call, shared
+geometry/material) instead of N meshes:
+
+```js
+{ type: "sphere", size: 0.3, color: "#46d98a",
+  instances: [
+    { position: [0, 0.3, 0] },
+    { position: [1, 0.3, 0] },
+    { position: [2, 0.3, 0], scale: [1.5, 1.5, 1.5] },
+  ] }
+```
+
+Three.js best practices are applied automatically: identical geometries and
+materials are deduplicated through a per-scene cache (one buffer, one program),
+`preserveDrawingBuffer` + `setPixelRatio(1)` keep captures deterministic, and
+rendering is driven by the GSAP timeline — not `requestAnimationFrame`, which
+would be non-deterministic under frame seeking.
+
 ### `scene.three` — explicit Three.js
 
 For direct control, `scene.three` is the compiled target: `camera`, `lights`,

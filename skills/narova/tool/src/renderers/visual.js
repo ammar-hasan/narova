@@ -79,6 +79,25 @@ function validateThreeConfig(three, at, errors) {
           });
         }
       }
+      if (obj.instances != null) {
+        if (!Array.isArray(obj.instances) || obj.instances.length === 0) {
+          errors.push(`${oa}.instances: expected a non-empty array of { position, rotation?, scale? }`);
+        } else {
+          obj.instances.forEach((inst, ii) => {
+            const ia = `${oa}.instances[${ii}]`;
+            if (!plainObject(inst)) { errors.push(`${ia}: expected an object`); return; }
+            if (inst.position != null && (!Array.isArray(inst.position) || inst.position.length !== 3 || inst.position.some(v => !Number.isFinite(v)))) {
+              errors.push(`${ia}.position: expected [x, y, z]`);
+            }
+            if (inst.rotation != null && (!Array.isArray(inst.rotation) || inst.rotation.length !== 3 || inst.rotation.some(v => !Number.isFinite(v)))) {
+              errors.push(`${ia}.rotation: expected [x, y, z]`);
+            }
+            if (inst.scale != null && (!Array.isArray(inst.scale) || inst.scale.length !== 3 || inst.scale.some(v => !Number.isFinite(v) || v <= 0))) {
+              errors.push(`${ia}.scale: expected [x, y, z] with positive values`);
+            }
+          });
+        }
+      }
       if (obj.color != null && typeof obj.color !== 'string') errors.push(`${oa}.color: expected a hex string`);
       if (obj.position != null && (!Array.isArray(obj.position) || obj.position.length !== 3 || obj.position.some(v => !Number.isFinite(v)))) {
         errors.push(`${oa}.position: expected [x, y, z]`);

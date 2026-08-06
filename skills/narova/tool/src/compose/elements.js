@@ -170,7 +170,9 @@ function compileThreeScene(elements, characters) {
         scale: el.scale,
         size: el.size,
         wireframe: el.wireframe,
+        opacity: el.opacity,
         src: el.src,
+        instances: el.instances,
         animate: [],
       };
       if (el.actions) {

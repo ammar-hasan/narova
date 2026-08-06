@@ -43,6 +43,31 @@ function objectScaleJs(name, obj) {
   return `${name}.scale.setScalar(${scl});`;
 }
 
+/* Geometry cache key: primitive type + size params uniquely identify the
+ * buffer, so identical primitives share one geometry. */
+function geometryKey(type, obj) {
+  return `${type}${JSON.stringify(obj.size ?? null)}`;
+}
+
+/* Material cache key: color + wireframe + opacity. */
+function materialKey(obj) {
+  return `${obj.color || '#ffffff'}|${obj.wireframe ? 1 : 0}|${obj.opacity ?? 1}`;
+}
+
+/* `_g("<key>",function(){return new THREE.X()})` — shared geometry lookup. */
+function cachedGeometryJs(type, obj) {
+  return `_g(${esc(geometryKey(type, obj))},function(){return ${primitiveGeometry(type, obj)}})`;
+}
+
+/* `_m("<key>",function(){return new THREE.MeshStandardMaterial({...})})`. */
+function cachedMaterialJs(obj) {
+  const color = obj.color || '#ffffff';
+  const wf = obj.wireframe ? 'true' : 'false';
+  const opacity = obj.opacity ?? 1;
+  const transparent = opacity < 1 ? ',transparent:true' : '';
+  return `_m(${esc(materialKey(obj))},function(){return new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity}${transparent}})})`;
+}
+
 function animationTweens(objVar, obj, sceneStart) {
   const anims = obj.animate
     ? (Array.isArray(obj.animate) ? obj.animate : [obj.animate])
@@ -90,9 +115,14 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   js += `var cvs=document.getElementById(${esc('three-' + sceneId)});`;
   js += `if(!cvs){cvs=document.getElementById(${esc(sceneId + '--three-' + sceneId)});}`;
   js += `cvs.style.width='100%';cvs.style.height='100%';`;
-  js += `var R=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true,preserveDrawingBuffer:true});`;
+  js += `var R=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});`;
   js += `R.setPixelRatio(1);R.setSize(${w},${h});`;
   js += `var S=new THREE.Scene();`;
+  // Shared geometry/material cache: identical primitives reuse one buffer and
+  // one program — no per-mesh allocation, fewer draw calls.
+  js += `var _geo={},_mat={};`;
+  js += `function _g(k,f){return _geo[k]||(_geo[k]=f());}`;
+  js += `function _m(k,f){return _mat[k]||(_mat[k]=f());}`;
   js += `var C=new THREE.PerspectiveCamera(${fov},${w}/${h},${near},${far});`;
   js += `C.position.set(${camPos[0]},${camPos[1]},${camPos[2]});`;
   js += `C.lookAt(${look[0]},${look[1]},${look[2]});`;
@@ -155,19 +185,31 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
         const cname = `${name}_p${ci}`;
         const cpos = child.position || [0, 0, 0];
         const crot = child.rotation || [0, 0, 0];
-        const color = child.color || '#ffffff';
-        const wf = child.wireframe ? 'true' : 'false';
-        js += `var ${cname}=new THREE.Mesh(${primitiveGeometry(child.type, child)},new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf}}));`;
+        js += `var ${cname}=new THREE.Mesh(${cachedGeometryJs(child.type, child)},${cachedMaterialJs(child)});`;
         js += `${cname}.position.set(${cpos[0]},${cpos[1]},${cpos[2]});`;
         js += `${cname}.rotation.set(${crot[0]},${crot[1]},${crot[2]});${objectScaleJs(cname, child)}`;
         js += `${name}.add(${cname});`;
         js += animationTweens(cname, child, sceneStart);
       });
       js += animationTweens(name, obj, sceneStart);
+    } else if (obj.instances && Array.isArray(obj.instances) && obj.instances.length) {
+      // InstancedMesh: N copies of the same primitive share one draw call.
+      // Each instance gets its own transform matrix; the whole object can
+      // still be animated as one unit (group-level tween on the mesh).
+      js += `var ${name}=new THREE.InstancedMesh(${cachedGeometryJs(obj.type, obj)},${cachedMaterialJs(obj)},${obj.instances.length});`;
+      js += `var _d=new THREE.Object3D();`;
+      obj.instances.forEach((inst, ii) => {
+        const ip = inst.position || [0, 0, 0];
+        const ir = inst.rotation || [0, 0, 0];
+        const is = inst.scale || [1, 1, 1];
+        js += `_d.position.set(${ip[0]},${ip[1]},${ip[2]});_d.rotation.set(${ir[0]},${ir[1]},${ir[2]});_d.scale.set(${is[0]},${is[1]},${is[2]});_d.updateMatrix();${name}.setMatrixAt(${ii},_d.matrix);`;
+      });
+      js += `${name}.instanceMatrix.needsUpdate=true;S.add(${name});`;
+      js += animationTweens(name, obj, sceneStart);
     } else {
       const color = obj.color || '#ffffff';
       const wf = obj.wireframe ? 'true' : 'false';
-      js += `var ${name}=new THREE.Mesh(${primitiveGeometry(obj.type, obj)},new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf}}));`;
+      js += `var ${name}=new THREE.Mesh(${cachedGeometryJs(obj.type, obj)},${cachedMaterialJs(obj)});`;
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
       js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
       js += `S.add(${name});`;

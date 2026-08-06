@@ -544,3 +544,57 @@ test('threeSetupJs emits valid group JS (no stray syntax)', () => {
   assert.match(js, /\.scale\.set\(1,1,1\)/);
   assert.match(js, /O0\.add\(O0_p0\)/);
 });
+
+test('threeSetupJs shares geometry/material through the cache', () => {
+  const js = threeSetupJs('g2', {
+    camera: { position: [0, 0, 5] },
+    lights: [],
+    objects: [
+      { type: 'cube', size: 1, color: '#ff0000' },
+      { type: 'cube', size: 1, color: '#ff0000' },
+      { type: 'sphere', size: 0.5, color: '#00ff00' },
+    ],
+  }, 0, 3, 800, 600);
+  // Both cubes resolve through _g/_m with the same cache key.
+  assert.match(js, /_g\("cube1"/);
+  assert.match(js, /_m\("#ff0000\|0\|1"/);
+  // Only one _geo/_mat helper definition each, not one per mesh.
+  assert.equal((js.match(/function _g\(/g) || []).length, 1);
+  assert.equal((js.match(/function _m\(/g) || []).length, 1);
+});
+
+test('threeSetupJs compiles instances to a single InstancedMesh', () => {
+  const js = threeSetupJs('g3', {
+    camera: { position: [0, 0, 5] },
+    lights: [],
+    objects: [{
+      type: 'sphere', size: 0.3, color: '#c9cfd6',
+      instances: [
+        { position: [0, 0.3, 0] },
+        { position: [1, 0.3, 0] },
+        { position: [2, 0.3, 0], scale: [1.5, 1.5, 1.5] },
+      ],
+    }],
+  }, 0, 3, 800, 600);
+  assert.match(js, /new THREE\.InstancedMesh/);
+  assert.match(js, /setMatrixAt\(0/);
+  assert.match(js, /setMatrixAt\(2/);
+  assert.match(js, /instanceMatrix\.needsUpdate=true/);
+  // Three instance transforms, one InstancedMesh, no per-instance Mesh.
+  assert.equal((js.match(/new THREE\.Mesh\(/g) || []).length, 0);
+});
+
+test('validateVisual accepts valid instances and rejects malformed ones', () => {
+  assert.deepEqual(validateVisual({
+    type: 'canvas3d',
+    three: {
+      objects: [{ type: 'sphere', instances: [{ position: [0, 0, 0] }, { position: [1, 0, 0] }] }],
+    },
+  }), []);
+  const bad = validateVisual({
+    type: 'canvas3d',
+    three: { objects: [{ type: 'sphere', instances: [{ position: [0, 0] }] }] },
+  });
+  assert.ok(bad.length > 0);
+  assert.match(bad.join(' '), /position: expected \[x, y, z\]/);
+});
