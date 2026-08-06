@@ -62,6 +62,7 @@
           <li><strong>InstancedMesh + geo/material cache</strong> — <code>instances: [...]</code> renders N copies in one draw call; identical primitives share buffers and programs.</li>
           <li><strong>narova generate</strong> — AI clip generation via Sora/Runway APIs, downloaded to <code>assets/</code> for use as <code>scene.clip</code>.</li>
           <li><strong><code>canvas3d</code>/<code>model3d</code></strong> node types in the portable visual tree.</li>
+          <li><strong>Choreography hook</strong> — optional project-level <code>choreography: "choreo.js"</code> file with custom GSAP timeline code inlined into the composition. <code>tl</code>, <code>DATA</code>, <code>gsap</code>, and <code>cueTime</code> in scope; turn-anchored tweens are exactly as seek-safe as the built-in vocabulary. <code>check</code> lints for determinism (warns on Date, Math.random, rAF, setTimeout, fetch).</li>
         </ul>
         <h4><span class="tag changed">Changed</span></h4>
         <ul>
