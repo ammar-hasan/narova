@@ -51,6 +51,36 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
+        <span class="rel-version" data-narova-version>0.19.0</span>
+        <span class="rel-date">2026-08-06</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>3D visual system</strong> — declarative <code>scene.three</code> and <code>scene.elements</code> for cameras, lights, primitives, models, GSAP-driven animations, and tone-mapped output (ACES filmic default). Three.js upgraded from the deprecated r149 UMD to r185 ESM (esbuild-bundled global script with GLTFLoader included).</li>
+          <li><strong>Character abstraction</strong> — built-in presets (cat, mouse, robot) compile to <code>THREE.Group</code> assemblies of relative parts. One line per character; <code>config.characters</code> for custom ones. Group-level actions (move, rotate, appear) cascade to all descendants.</li>
+          <li><strong>InstancedMesh + geo/material cache</strong> — <code>instances: [...]</code> renders N copies in one draw call; identical primitives share buffers and programs.</li>
+          <li><strong>narova generate</strong> — AI clip generation via Sora/Runway APIs, downloaded to <code>assets/</code> for use as <code>scene.clip</code>.</li>
+          <li><strong><code>canvas3d</code>/<code>model3d</code></strong> node types in the portable visual tree.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Three.js upgraded from r149 UMD to r185 ESM — the old UMD was deprecated after r149 and removed at r161. Shipped as a global script opaque to HyperFrames' compiler.</li>
+          <li>Tone mapping now configurable (aces, agx, neutral, linear) at <code>scene.three.toneMapping</code>; ACES filmic is the default for video.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Group/character <code>appear</code>/<code>disappear</code> no longer targets <code>.material</code> on a <code>THREE.Group</code> (the old code silently killed the scene).</li>
+          <li>Material-cache opacity bleed: tweening one mesh's opacity no longer fades every same-colored sibling.</li>
+          <li>Animation <code>from</code> values honored via <code>tl.fromTo</code> instead of dropped.</li>
+          <li>Boot poll bounded to 200 retries + error surface instead of polling forever.</li>
+          <li>GLTF models load deterministically via prefetch + parseAsync, gated before frame 0.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
         <span class="rel-version" data-narova-version>0.17.0</span>
         <span class="rel-date">2026-08-03</span>
       </div>
