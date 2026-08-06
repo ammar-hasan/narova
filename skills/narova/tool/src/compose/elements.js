@@ -33,6 +33,55 @@ const ACTION_TYPES = new Set([
 const TWO_D_ELEMENTS = new Set(['text', 'shape', 'image', 'video']);
 const THREE_D_ELEMENTS = new Set(['camera', 'light', '3d-object', 'model']);
 
+/* Built-in cartoon character presets. A character is a group of relative
+ * primitives; instancing it in a scene is one line — the assembly is narova's
+ * job, not the author's. Parts are in local coordinates around the origin
+ * (feet near y=0). Config `characters.<id>` overrides a preset of the same
+ * name or adds new ones. */
+const BUILTIN_CHARACTERS = {
+  cat: {
+    name: 'cat',
+    parts: [
+      { type: 'sphere', size: 0.5, color: '#f08c2e', position: [0, 0.5, 0] },
+      { type: 'sphere', size: 0.34, color: '#e07f24', position: [0, 1.05, 0.1] },
+      { type: 'sphere', size: 0.05, color: '#ffffff', position: [-0.12, 1.12, 0.42] },
+      { type: 'sphere', size: 0.05, color: '#ffffff', position: [0.12, 1.12, 0.42] },
+      { type: 'sphere', size: 0.03, color: '#1b2438', position: [-0.12, 1.12, 0.48] },
+      { type: 'sphere', size: 0.03, color: '#1b2438', position: [0.12, 1.12, 0.48] },
+      { type: 'cone', size: 0.15, color: '#e07f24', position: [-0.2, 1.35, 0.05] },
+      { type: 'cone', size: 0.15, color: '#e07f24', position: [0.2, 1.35, 0.05] },
+      { type: 'sphere', size: 0.04, color: '#ff8fa3', position: [0, 0.98, 0.42] },
+      { type: 'cylinder', size: [0.07, 0.07, 0.8], color: '#f08c2e', position: [-0.35, 0.75, -0.1], rotation: [0, 0, Math.PI / 4] },
+    ],
+  },
+  mouse: {
+    name: 'mouse',
+    parts: [
+      { type: 'sphere', size: 0.26, color: '#c9cfd6', position: [0, 0.26, 0] },
+      { type: 'sphere', size: 0.18, color: '#e2e7ec', position: [0.22, 0.45, 0.02] },
+      { type: 'sphere', size: 0.05, color: '#ff8fa3', position: [0.36, 0.42, 0.12] },
+      { type: 'sphere', size: 0.03, color: '#1b2438', position: [0.18, 0.5, 0.24] },
+      { type: 'sphere', size: 0.03, color: '#1b2438', position: [0.28, 0.5, 0.24] },
+      { type: 'sphere', size: 0.09, color: '#ffb7c5', position: [0.2, 0.55, 0.14] },
+      { type: 'sphere', size: 0.09, color: '#ffb7c5', position: [0.28, 0.55, 0.14] },
+      { type: 'cylinder', size: [0.03, 0.03, 0.4], color: '#c9cfd6', position: [-0.24, 0.2, 0], rotation: [0, 0, Math.PI / 4] },
+    ],
+  },
+  robot: {
+    name: 'robot',
+    parts: [
+      { type: 'cube', size: [0.5, 0.6, 0.4], color: '#8a97b3', position: [0, 0.4, 0] },
+      { type: 'cube', size: [0.34, 0.34, 0.34], color: '#a7b3cb', position: [0, 0.95, 0] },
+      { type: 'cube', size: [0.12, 0.06, 0.05], color: '#2ee6d6', position: [0, 0.95, 0.18] },
+      { type: 'cylinder', size: [0.05, 0.05, 0.1], color: '#ff7eb6', position: [0, 1.14, 0.1] },
+      { type: 'cube', size: [0.12, 0.4, 0.12], color: '#8a97b3', position: [-0.35, 0.35, 0] },
+      { type: 'cube', size: [0.12, 0.4, 0.12], color: '#8a97b3', position: [0.35, 0.35, 0] },
+      { type: 'cube', size: [0.14, 0.35, 0.14], color: '#8a97b3', position: [-0.14, 0.12, 0] },
+      { type: 'cube', size: [0.14, 0.35, 0.14], color: '#8a97b3', position: [0.14, 0.12, 0] },
+    ],
+  },
+};
+
 function esc(v) { return JSON.stringify(v); }
 function escHtml(s) { return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;'); }
 function pad(n) { return n < 10 ? '0' + n : String(n); }
@@ -110,9 +159,11 @@ function compileThreeScene(elements, characters) {
         decay: el.decay,
         groundColor: el.groundColor,
       });
-    } else if (el.type === '3d-object' || el.type === 'model') {
+    } else if (el.type === '3d-object' || el.type === 'model' || PRIMITIVE_KINDS.has(el.type)) {
+      // Direct primitive shorthand: { type: "cube", ... } == { type: "3d-object", kind: "cube", ... }
+      const objType = el.type === '3d-object' ? (el.kind || 'cube') : (el.type === 'model' ? 'model' : el.type);
       const obj = {
-        type: el.kind || (el.type === 'model' ? 'model' : 'cube'),
+        type: objType,
         color: el.color,
         position: el.position,
         rotation: el.rotation,
@@ -133,15 +184,25 @@ function compileThreeScene(elements, characters) {
       }
       three.objects.push(obj);
     } else if (el.type === 'character') {
-      const char = characters && el.ref ? characters[el.ref] : null;
+      const char = (characters && el.ref ? characters[el.ref] : null)
+        || (el.kind ? { parts: (BUILTIN_CHARACTERS[el.kind] || {}).parts } : null);
       if (char) {
-        three.objects.push(compileCharacterElement(el, char));
+        three.objects.push(compileCharacterElement(el, char, characters));
       }
     } else if (el.type === 'effect') {
       // Effects: particles, fog, post-processing — stub for now
       if (el.kind === 'fog' && el.color) {
         three.fog = { color: el.color, near: el.near || 1, far: el.far || 50 };
       }
+    } else if (el.type === 'ground') {
+      const size = el.size || 20;
+      three.objects.push({
+        type: 'plane',
+        size: Array.isArray(size) ? size : [size, size],
+        color: el.color || '#2a3550',
+        position: el.position || [0, -0.01, 0],
+        rotation: [-Math.PI / 2, 0, 0],
+      });
     } else if (el.type === 'group' && el.children) {
       for (const child of el.children) {
         const result = compileThreeScene([child], characters);
@@ -164,15 +225,33 @@ function compileThreeScene(elements, characters) {
   return three;
 }
 
-function compileCharacterElement(el, char) {
+function compileCharacterElement(el, char, characters) {
+  const actions = (el.actions || []).map(actionToAnim).filter(Boolean).flat();
+  const position = el.position || char.defaultPosition || char.position || [0, 0, 0];
+  const rotation = el.rotation || char.defaultRotation || char.rotation || [0, 0, 0];
+  const scale = el.scale || char.scale || [1, 1, 1];
+
+  // A GLTF model character renders as a single loaded model.
+  if (char.model || char.src) {
+    return {
+      type: 'model',
+      src: char.model || char.src,
+      position, rotation, scale,
+      animate: actions,
+    };
+  }
+
+  // A primitive-assembly character is a group of relative parts. The author
+  // says "place a cat here and move it"; narova expands the parts.
+  const parts = (char.parts || []).map(p => ({ ...p }));
+  if (char.color && parts.length) {
+    for (const p of parts) if (!p.color) p.color = char.color;
+  }
   return {
-    type: 'model',
-    src: char.model || char.src,
-    position: el.position || char.defaultPosition || char.position || [0, -1, 0],
-    rotation: el.rotation || char.defaultRotation || char.rotation || [0, 0, 0],
-    scale: el.scale || [1, 1, 1],
-    color: el.color,
-    animate: (el.actions || []).map(actionToAnim).filter(Boolean).flat(),
+    type: 'group',
+    position, rotation, scale,
+    children: parts,
+    animate: actions,
   };
 }
 
@@ -311,7 +390,7 @@ function validateElements(elements, at, errors) {
     if (!el || typeof el !== 'object') { errors.push(`${ea}: expected an object`); return; }
 
     const validTypes = new Set(['camera', 'light', '3d-object', 'model', 'character',
-      'text', 'shape', 'image', 'video', 'effect', 'group']);
+      'text', 'shape', 'image', 'video', 'effect', 'group', 'ground', ...PRIMITIVE_KINDS]);
     if (!validTypes.has(el.type)) {
       errors.push(`${ea}.type: expected ${[...validTypes].join('|')}`);
     }
@@ -329,8 +408,8 @@ function validateElements(elements, at, errors) {
         && typeof el.src !== 'string') {
       errors.push(`${ea}.src: source path required`);
     }
-    if (el.type === 'character' && typeof el.ref !== 'string') {
-      errors.push(`${ea}.ref: character ID required`);
+    if (el.type === 'character' && typeof el.ref !== 'string' && (typeof el.kind !== 'string' || !BUILTIN_CHARACTERS[el.kind])) {
+      errors.push(`${ea}: character needs a ref (config.characters) or a kind (${Object.keys(BUILTIN_CHARACTERS).join('|')})`);
     }
     if (el.actions) {
       if (!Array.isArray(el.actions)) errors.push(`${ea}.actions: expected an array`);
@@ -356,4 +435,5 @@ module.exports = {
   validateElements,
   hasElements,
   PRIMITIVE_KINDS, LIGHT_KINDS, ACTION_TYPES,
+  BUILTIN_CHARACTERS,
 };

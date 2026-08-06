@@ -456,3 +456,91 @@ test('threeSceneBody generates full HTML with canvas and script', () => {
   assert.match(html, /<script>/);
   assert.match(html, /<\/script>/);
 });
+
+// --- character / group abstraction ---
+
+test('elements: built-in character kind expands to a group', () => {
+  const scene = {
+    id: 'char',
+    vo: [{ who: 'a', text: 'Hi.' }],
+    elements: [
+      { type: 'camera', position: [0, 0, 5] },
+      { type: 'light', kind: 'ambient' },
+      { type: 'character', kind: 'cat', position: [0, 0, 0],
+        actions: [{ type: 'move', to: [2, 0, 0], duration: 2 }] },
+    ],
+  };
+  const result = resolveElementsScene(scene, {});
+  assert.ok(result.three);
+  const cat = result.three.objects.find(o => o.type === 'group');
+  assert.ok(cat, 'character compiles to a group');
+  assert.ok(cat.children.length > 5, `cat has ${cat.children.length} parts`);
+  assert.deepEqual(cat.position, [0, 0, 0]);
+  assert.ok(cat.animate.some(a => a.property === 'position.x'), 'move action on the whole group');
+});
+
+test('elements: config character with parts overrides preset', () => {
+  const scene = {
+    id: 'char2',
+    vo: [{ who: 'a', text: 'Yo.' }],
+    elements: [
+      { type: 'camera' },
+      { type: 'light', kind: 'ambient' },
+      { type: 'character', ref: 'hero', position: [1, 0, 0] },
+    ],
+  };
+  const result = resolveElementsScene(scene, {
+    characters: { hero: { parts: [{ type: 'cube', size: 0.5, color: '#ff0000' }] } },
+  });
+  const group = result.three.objects.find(o => o.type === 'group');
+  assert.ok(group);
+  assert.equal(group.children.length, 1);
+  assert.deepEqual(group.position, [1, 0, 0]);
+});
+
+test('elements: ground element compiles to a plane', () => {
+  const scene = {
+    id: 'g',
+    vo: [{ who: 'a', text: 'x' }],
+    elements: [{ type: 'camera' }, { type: 'ground', color: '#123456' }],
+  };
+  const result = resolveElementsScene(scene, {});
+  const plane = result.three.objects.find(o => o.type === 'plane');
+  assert.ok(plane);
+  assert.equal(plane.color, '#123456');
+  assert.deepEqual(plane.rotation, [-Math.PI / 2, 0, 0]);
+});
+
+test('elements: primitive shorthand type works like 3d-object', () => {
+  const scene = {
+    id: 'p',
+    vo: [{ who: 'a', text: 'x' }],
+    elements: [
+      { type: 'camera' },
+      { type: 'cube', size: 1, color: '#00ff00', position: [0, 0.5, 0],
+        actions: [{ type: 'rotate', axis: 'y', to: 6.28, duration: 3 }] },
+    ],
+  };
+  const result = resolveElementsScene(scene, {});
+  const cube = result.three.objects.find(o => o.type === 'cube');
+  assert.ok(cube);
+  assert.equal(cube.animate.length, 1);
+  assert.equal(cube.animate[0].property, 'rotation.y');
+});
+
+test('threeSetupJs emits valid group JS (no stray syntax)', () => {
+  const js = threeSetupJs('g1', {
+    camera: { position: [0, 0, 5] },
+    lights: [],
+    objects: [{
+      type: 'group', position: [0, 0, 0], scale: [1, 1, 1],
+      children: [{ type: 'sphere', size: 0.5, color: '#f08c2e', position: [0, 0.5, 0] }],
+      animate: { property: 'position.x', from: 0, to: 2, duration: 2 },
+    }],
+  }, 0, 3, 800, 600);
+  // The generated code must not contain a bare `.scale.set` (previous bug).
+  assert.doesNotMatch(js, /;\s*\.scale/);
+  assert.match(js, /new THREE\.Group/);
+  assert.match(js, /\.scale\.set\(1,1,1\)/);
+  assert.match(js, /O0\.add\(O0_p0\)/);
+});

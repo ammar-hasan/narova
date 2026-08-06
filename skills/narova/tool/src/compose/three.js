@@ -36,11 +36,11 @@ function primitiveGeometry(type, obj) {
   }
 }
 
-function objectScaleJs(obj) {
+function objectScaleJs(name, obj) {
   const scl = obj.scale;
   if (scl == null) return '';
-  if (Array.isArray(scl)) return `.scale.set(${scl[0]},${scl[1]},${scl[2]})`;
-  return `.scale.setScalar(${scl})`;
+  if (Array.isArray(scl)) return `${name}.scale.set(${scl[0]},${scl[1]},${scl[2]});`;
+  return `${name}.scale.setScalar(${scl});`;
 }
 
 function animationTweens(objVar, obj, sceneStart) {
@@ -137,18 +137,39 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
     if (obj.type === 'model') {
       js += `var ${name}=new THREE.Group();`;
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
-      js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(obj)};`;
+      js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
       js += `S.add(${name});`;
-      const assetSrc = `assets/${require('path').basename(obj.src)}`;
+      const assetSrc = `assets/${path.basename(obj.src)}`;
       js += `new THREE.GLTFLoader().load(${esc(assetSrc)},function(g){`;
       js += `${name}.add(g.scene);${animationTweens(name, obj, sceneStart)}`;
       js += `},undefined,function(){${name}.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:${esc(obj.color || '#ff6363')},wireframe:true})));});`;
+    } else if (obj.type === 'group') {
+      // A reusable group of relative parts (e.g. a character built from
+      // primitives). Group-level position/rotation/scale + animations apply
+      // to the whole assembly; parts are children in local coordinates.
+      js += `var ${name}=new THREE.Group();`;
+      js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
+      js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
+      js += `S.add(${name});`;
+      (obj.children || []).forEach((child, ci) => {
+        const cname = `${name}_p${ci}`;
+        const cpos = child.position || [0, 0, 0];
+        const crot = child.rotation || [0, 0, 0];
+        const color = child.color || '#ffffff';
+        const wf = child.wireframe ? 'true' : 'false';
+        js += `var ${cname}=new THREE.Mesh(${primitiveGeometry(child.type, child)},new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf}}));`;
+        js += `${cname}.position.set(${cpos[0]},${cpos[1]},${cpos[2]});`;
+        js += `${cname}.rotation.set(${crot[0]},${crot[1]},${crot[2]});${objectScaleJs(cname, child)}`;
+        js += `${name}.add(${cname});`;
+        js += animationTweens(cname, child, sceneStart);
+      });
+      js += animationTweens(name, obj, sceneStart);
     } else {
       const color = obj.color || '#ffffff';
       const wf = obj.wireframe ? 'true' : 'false';
       js += `var ${name}=new THREE.Mesh(${primitiveGeometry(obj.type, obj)},new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf}}));`;
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
-      js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(obj)};`;
+      js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
       js += `S.add(${name});`;
       js += animationTweens(name, obj, sceneStart);
     }

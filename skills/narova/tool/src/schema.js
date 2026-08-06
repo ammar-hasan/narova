@@ -189,10 +189,16 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     if (!ID_RE.test(id)) errs.push(`config.characters.${id}: character id must match ${ID_RE}`);
     const c = characters[id];
     if (!c || typeof c !== 'object') { errs.push(`config.characters.${id}: expected an object`); return; }
-    if (typeof c.name !== 'string' || !c.name.trim()) errs.push(`config.characters.${id}.name: required`);
+    if (!c.parts && !Array.isArray(c.parts) && !c.model && !c.src) {
+      errs.push(`config.characters.${id}: needs a model/src file or a parts array`);
+    }
     if (c.model) {
       const mp = path.resolve(baseDir, c.model);
       if (!fs.existsSync(mp) || !fs.statSync(mp).isFile()) errs.push(`config.characters.${id}.model: file not found: ${mp}`);
+    }
+    if (c.src) {
+      const sp = path.resolve(baseDir, c.src);
+      if (!fs.existsSync(sp) || !fs.statSync(sp).isFile()) errs.push(`config.characters.${id}.src: file not found: ${sp}`);
     }
     if (c.voice && !voices[c.voice]) errs.push(`config.characters.${id}.voice: "${c.voice}" not in config.voices`);
   });
@@ -242,7 +248,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       }
     });
     if (s.elements != null) {
-      validateElements(s.elements, `${at}.elements`, errs);
+      validateElements(s.elements, `${at}`, errs);
     }
     // Optional b-roll video clip per scene: a project-relative video file
     // that plays looped behind the HTML overlay.

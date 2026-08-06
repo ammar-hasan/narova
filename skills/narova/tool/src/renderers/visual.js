@@ -28,7 +28,7 @@ function plainObject(value) {
 }
 
 const LIGHT_TYPES = new Set(['ambient', 'directional', 'point', 'spot', 'hemisphere']);
-const PRIMITIVE_TYPES = new Set(['cube', 'sphere', 'cylinder', 'plane', 'torus', 'cone', 'ring', 'icosahedron', 'dodecahedron', 'octahedron', 'tetrahedron', 'torusKnot', 'model']);
+const PRIMITIVE_TYPES = new Set(['cube', 'sphere', 'cylinder', 'plane', 'torus', 'cone', 'ring', 'icosahedron', 'dodecahedron', 'octahedron', 'tetrahedron', 'torusKnot', 'model', 'group']);
 
 function validateThreeConfig(three, at, errors) {
   if (three.camera != null) {
@@ -66,6 +66,19 @@ function validateThreeConfig(three, at, errors) {
       if (!obj || typeof obj !== 'object') { errors.push(`${oa}: expected an object`); return; }
       if (!PRIMITIVE_TYPES.has(obj.type)) errors.push(`${oa}.type: expected ${[...PRIMITIVE_TYPES].join('|')}`);
       if (obj.type === 'model' && typeof obj.src !== 'string') errors.push(`${oa}.src: model file required for type "model"`);
+      if (obj.type === 'group') {
+        if (!Array.isArray(obj.children) || obj.children.length === 0) {
+          errors.push(`${oa}.children: group requires an array of part objects`);
+        } else {
+          obj.children.forEach((part, pi) => {
+            const pa = `${oa}.children[${pi}]`;
+            if (!part || typeof part !== 'object') { errors.push(`${pa}: expected an object`); return; }
+            if (!PRIMITIVE_TYPES.has(part.type) || part.type === 'group' || part.type === 'model') {
+              errors.push(`${pa}.type: expected a primitive (${[...PRIMITIVE_TYPES].filter(t => t !== 'group' && t !== 'model').join('|')})`);
+            }
+          });
+        }
+      }
       if (obj.color != null && typeof obj.color !== 'string') errors.push(`${oa}.color: expected a hex string`);
       if (obj.position != null && (!Array.isArray(obj.position) || obj.position.length !== 3 || obj.position.some(v => !Number.isFinite(v)))) {
         errors.push(`${oa}.position: expected [x, y, z]`);
