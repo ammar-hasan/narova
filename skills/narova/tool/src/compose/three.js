@@ -5,11 +5,18 @@
 
 const path = require('path');
 
+// three.js UMD core `build/three.min.js` is replaced by a deprecation stub
+// from r150 onward, so r149 is the last version that ships a real UMD build —
+// which is what our inline-script composition needs (a global `THREE`).
+// examples/js UMD addons (GLTFLoader) were removed at r148, so the last UMD
+// GLTFLoader is vendored locally (tool/vendor/GLTFLoader.js) and copied to the
+// render project at compose — no CDN at render time.
 const THREE_VERSION = '0.149.0';
 const THREE_CDN = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/build/three.min.js`;
 const THREE_LOCAL = 'assets/narova-three.min.js';
-const GLTF_LOADER_CDN = `https://cdn.jsdelivr.net/npm/three@${THREE_VERSION}/examples/js/loaders/GLTFLoader.js`;
+const GLTF_LOADER_CDN = null; // vendored, not downloaded
 const GLTF_LOADER_LOCAL = 'assets/narova-gltf-loader.js';
+const GLTF_LOADER_VENDOR = path.join(__dirname, '..', '..', 'vendor', 'GLTFLoader.js');
 
 function esc(v) { return JSON.stringify(v); }
 function fmt(n) { return String(Math.round(n * 1000) / 1000); }
@@ -54,6 +61,25 @@ function materialKey(obj) {
   return `${obj.color || '#ffffff'}|${obj.wireframe ? 1 : 0}|${obj.opacity ?? 1}`;
 }
 
+/* A material that will be opacity-animated must NOT come from the shared cache
+ * — tweening one mesh's material would mutate every same-keyed mesh. Emit a
+ * fresh per-mesh material instead (identical shader, isolated uniforms). */
+function meshMaterialJs(obj, animateOpacity) {
+  if (animateOpacity) {
+    const color = obj.color || '#ffffff';
+    const wf = obj.wireframe ? 'true' : 'false';
+    const opacity = obj.opacity ?? 1;
+    return `new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity},transparent:true})`;
+  }
+  return cachedMaterialJs(obj);
+}
+
+function animatesOpacity(anims) {
+  if (!anims) return false;
+  const list = Array.isArray(anims) ? anims : [anims];
+  return list.some(a => a && a.property === 'opacity');
+}
+
 /* `_g("<key>",function(){return new THREE.X()})` — shared geometry lookup. */
 function cachedGeometryJs(type, obj) {
   return `_g(${esc(geometryKey(type, obj))},function(){return ${primitiveGeometry(type, obj)}})`;
@@ -91,13 +117,24 @@ function animationTweens(objVar, obj, sceneStart) {
     if (parts.length === 2) {
       const axis = parts[1];
       if (axis === 'x' || axis === 'y' || axis === 'z') {
-        js += `tl.to(${objVar}.${parts[0]},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+        // Use fromTo so the authored `from` is honored, not just the resting
+        // position. Defaults to the authored position when `from` is unset.
+        const from = Number.isFinite(anim.from) ? anim.from : 'undefined';
+        js += `tl.fromTo(${objVar}.${parts[0]},{${axis}:${from === 'undefined' ? `Number(${objVar}.${parts[0]}.${axis})` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
       }
     } else if (prop === 'scale') {
-      js += `tl.to(${objVar}.scale,{x:${anim.to},y:${anim.to},z:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
-    } else if (prop === 'opacity' && anim.from != null) {
-      js += `${objVar}.material.opacity=${anim.from};${objVar}.material.transparent=true;`;
-      js += `tl.to(${objVar}.material,{opacity:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+      const from = Number.isFinite(anim.from) ? anim.from : 1;
+      js += `tl.fromTo(${objVar}.scale,{x:${from},y:${from},z:${from}},{x:${anim.to},y:${anim.to},z:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+    } else if (prop === 'opacity') {
+      // Opacity must work on a single mesh AND on a group/instanced mesh (a
+      // Group has no .material — the old code threw here). Walk the object
+      // tree and drive every descendant material's opacity from the tween,
+      // which GSAP evaluates deterministically on each seek.
+      const from = Number.isFinite(anim.from) ? anim.from : 1;
+      const to = Number.isFinite(anim.to) ? anim.to : 0;
+      js += `function _fade_${ai}(o,v){o.traverse(function(n){if(n.material){n.material.transparent=true;n.material.opacity=v;}});}`;
+      js += `_fade_${ai}(${objVar},${from});`;
+      js += `tl.fromTo({t:${from}},{t:${from}},{t:${to},duration:${duration},ease:${esc(ease)},onUpdate:function(){_fade_${ai}(${objVar},this.targets[0].t);}},${at});`;
     }
   });
   return js;
@@ -111,11 +148,24 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   const camPos = cam.position || [0, 0, 5];
   const look = cam.lookAt || [0, 0, 0];
 
-  let js = `(function(){function boot(){var tl=window.__timelines['main'];if(!tl){setTimeout(boot,50);return;}`;
+  // Tone mapping + color space: default to ACES filmic for a video look. The
+  // output color space is sRGB (the only sane target for h264). Only operators
+  // that exist in r149 (the pinned UMD build) are offered — AgX/Neutral came
+  // in r155, which has no UMD core.
+  const tm = three.toneMapping || 'aces';
+  const tmExpr = tm === 'aces' ? 'THREE.ACESFilmicToneMapping'
+    : 'THREE.NoToneMapping';
+  const exposure = Number.isFinite(three.exposure) ? three.exposure : 1;
+
+  // boot(): wait for the GSAP timeline (built after DOM parse) with a bounded
+  // number of attempts — an unbounded poll would hang the renderer forever.
+  let js = `(function(){var _try=0;function boot(){var tl=window.__timelines['main'];`;
+  js += `if(!tl){if(++_try>200){console.error('narova-three: GSAP timeline never became ready');return;}setTimeout(boot,50);return;}`;
   js += `var cvs=document.getElementById(${esc('three-' + sceneId)});`;
   js += `if(!cvs){cvs=document.getElementById(${esc(sceneId + '--three-' + sceneId)});}`;
   js += `cvs.style.width='100%';cvs.style.height='100%';`;
   js += `var R=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});`;
+  js += `R.outputColorSpace=THREE.SRGBColorSpace;R.toneMapping=${tmExpr};R.toneMappingExposure=${exposure};`;
   js += `R.setPixelRatio(1);R.setSize(${w},${h});`;
   js += `var S=new THREE.Scene();`;
   // Shared geometry/material cache: identical primitives reuse one buffer and
@@ -126,6 +176,8 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   js += `var C=new THREE.PerspectiveCamera(${fov},${w}/${h},${near},${far});`;
   js += `C.position.set(${camPos[0]},${camPos[1]},${camPos[2]});`;
   js += `C.lookAt(${look[0]},${look[1]},${look[2]});`;
+  // Pending model loads; the render driver waits for all of them before frame 0.
+  js += `var _pending=[];`;
 
   if (three.background) {
     if (typeof three.background === 'string') {
@@ -165,14 +217,22 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
     const name = `O${i}`;
 
     if (obj.type === 'model') {
+      // Deterministic glTF: prefetch the file to an ArrayBuffer, then parse.
+      // GLTFLoader.load() fires an XHR mid-scene — the model could pop in
+      // after frame 0. parseAsync keeps loading under our control, and the
+      // render driver below is gated on _ready() resolving after every model
+      // has been parsed, so frame 0 always shows the assembled scene.
       js += `var ${name}=new THREE.Group();`;
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
       js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
       js += `S.add(${name});`;
       const assetSrc = `assets/${path.basename(obj.src)}`;
-      js += `new THREE.GLTFLoader().load(${esc(assetSrc)},function(g){`;
+      js += `_pending.push(fetch(${esc(assetSrc)}).then(function(r){if(!r.ok)throw new Error('gltf '+${esc(assetSrc)}+' '+r.status);return r.arrayBuffer();}).then(function(buf){`;
+      js += `return new THREE.GLTFLoader().parseAsync(buf,${esc(assetSrc)}).then(function(g){`;
       js += `${name}.add(g.scene);${animationTweens(name, obj, sceneStart)}`;
-      js += `},undefined,function(){${name}.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:${esc(obj.color || '#ff6363')},wireframe:true})));});`;
+      js += `});}).catch(function(e){console.error('narova-three: model load failed',e);` +
+        `${name}.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:${esc(obj.color || '#ff6363')},wireframe:true})));` +
+        `}));`;
     } else if (obj.type === 'group') {
       // A reusable group of relative parts (e.g. a character built from
       // primitives). Group-level position/rotation/scale + animations apply
@@ -185,7 +245,10 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
         const cname = `${name}_p${ci}`;
         const cpos = child.position || [0, 0, 0];
         const crot = child.rotation || [0, 0, 0];
-        js += `var ${cname}=new THREE.Mesh(${cachedGeometryJs(child.type, child)},${cachedMaterialJs(child)});`;
+        const childAnims = child.animate
+          ? (Array.isArray(child.animate) ? child.animate : [child.animate])
+          : [];
+        js += `var ${cname}=new THREE.Mesh(${cachedGeometryJs(child.type, child)},${meshMaterialJs(child, animatesOpacity(childAnims))});`;
         js += `${cname}.position.set(${cpos[0]},${cpos[1]},${cpos[2]});`;
         js += `${cname}.rotation.set(${crot[0]},${crot[1]},${crot[2]});${objectScaleJs(cname, child)}`;
         js += `${name}.add(${cname});`;
@@ -196,7 +259,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       // InstancedMesh: N copies of the same primitive share one draw call.
       // Each instance gets its own transform matrix; the whole object can
       // still be animated as one unit (group-level tween on the mesh).
-      js += `var ${name}=new THREE.InstancedMesh(${cachedGeometryJs(obj.type, obj)},${cachedMaterialJs(obj)},${obj.instances.length});`;
+      js += `var ${name}=new THREE.InstancedMesh(${cachedGeometryJs(obj.type, obj)},${meshMaterialJs(obj, animatesOpacity(obj.animate))},${obj.instances.length});`;
       js += `var _d=new THREE.Object3D();`;
       obj.instances.forEach((inst, ii) => {
         const ip = inst.position || [0, 0, 0];
@@ -207,9 +270,9 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       js += `${name}.instanceMatrix.needsUpdate=true;S.add(${name});`;
       js += animationTweens(name, obj, sceneStart);
     } else {
-      const color = obj.color || '#ffffff';
-      const wf = obj.wireframe ? 'true' : 'false';
-      js += `var ${name}=new THREE.Mesh(${cachedGeometryJs(obj.type, obj)},${cachedMaterialJs(obj)});`;
+      const pos = obj.position || [0, 0, 0];
+      const rot = obj.rotation || [0, 0, 0];
+      js += `var ${name}=new THREE.Mesh(${cachedGeometryJs(obj.type, obj)},${meshMaterialJs(obj, animatesOpacity(obj.animate))});`;
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
       js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
       js += `S.add(${name});`;
@@ -218,8 +281,13 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
   });
 
   js += `var T={n:0};`;
-  js += `tl.to(T,{n:${fmt(sceneDur*30)},duration:${fmt(sceneDur)},ease:'none',onUpdate:function(){R.render(S,C);}},${fmt(sceneStart)});`;
-  js += `R.render(S,C);`;
+  js += `function _render(){R.render(S,C);}`;
+  js += `tl.to(T,{n:${fmt(sceneDur*30)},duration:${fmt(sceneDur)},ease:'none',onUpdate:_render},${fmt(sceneStart)});`;
+  // Wait for any glTF loads (frame 0 must show the assembled scene), then
+  // render the resting frame. If a model hangs, still render after a timeout
+  // rather than freezing the composition.
+  js += `Promise.all(_pending).then(function(){_render();}).catch(function(){_render();});`;
+  js += `setTimeout(_render,3000);`;
   js += `}boot();})();`;
   return js;
 }
@@ -255,7 +323,7 @@ function collectModelAssets(config) {
 }
 
 module.exports = {
-  THREE_CDN, THREE_LOCAL, GLTF_LOADER_CDN, GLTF_LOADER_LOCAL,
+  THREE_CDN, THREE_LOCAL, GLTF_LOADER_CDN, GLTF_LOADER_LOCAL, GLTF_LOADER_VENDOR,
   threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels,
   collectModelAssets,
 };

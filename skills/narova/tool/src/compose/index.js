@@ -11,8 +11,22 @@ const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
 const { composeDoc } = require('./html');
-const { collectModelAssets, hasThreeScenes, hasThreeModels, THREE_CDN, THREE_LOCAL, GLTF_LOADER_CDN, GLTF_LOADER_LOCAL } = require('./three');
+const { collectModelAssets, hasThreeScenes, hasThreeModels, THREE_CDN, GLTF_LOADER_VENDOR } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
+
+/* Download with a couple of retries; curl exits non-zero on HTTP errors (e.g.
+ * a 404), so a transient network blip or a stale CDN path surfaces as a build
+ * error instead of leaving a truncated file behind. */
+function downloadWithRetry(url, dest, attempts = 3) {
+  let lastErr;
+  for (let i = 0; i < attempts; i++) {
+    try {
+      execSync(`curl -sL --fail "${url}" -o "${dest}"`, { stdio: 'pipe' });
+      if (fs.statSync(dest).size > 0) return;
+    } catch (e) { lastErr = e; }
+  }
+  throw new Error(`failed to download ${url}: ${lastErr ? lastErr.message : 'unknown'}`);
+}
 
 function compose(config, outDir) {
   const timingsPath = path.join(outDir, 'timings.json');
@@ -64,17 +78,17 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
-  // Download Three.js locally so HyperFrames renders without waiting on a CDN.
+  // Three.js core is downloaded once (then reused across projects via a cache)
+  // and the GLTFLoader comes from the vendored UMD build shipped in the tool —
+  // rendering never depends on a CDN being reachable at build time.
   if (hasThreeScenes(config)) {
     const threeDest = path.join(assetsDir, 'narova-three.min.js');
     if (!fs.existsSync(threeDest) || fs.statSync(threeDest).size < 1000) {
-      execSync(`curl -sL "${THREE_CDN}" -o "${threeDest}"`, { stdio: 'pipe' });
+      downloadWithRetry(THREE_CDN, threeDest);
     }
     if (hasThreeModels(config)) {
       const gltfDest = path.join(assetsDir, 'narova-gltf-loader.js');
-      if (!fs.existsSync(gltfDest) || fs.statSync(gltfDest).size < 1000) {
-        execSync(`curl -sL "${GLTF_LOADER_CDN}" -o "${gltfDest}"`, { stdio: 'pipe' });
-      }
+      fs.copyFileSync(GLTF_LOADER_VENDOR, gltfDest);
     }
   }
   // Copy and auto-loop per-scene b-roll clips. If a clip is shorter than

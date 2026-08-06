@@ -133,10 +133,19 @@ geometry/material) instead of N meshes:
 ```
 
 Three.js best practices are applied automatically: identical geometries and
-materials are deduplicated through a per-scene cache (one buffer, one program),
-`preserveDrawingBuffer` + `setPixelRatio(1)` keep captures deterministic, and
-rendering is driven by the GSAP timeline — not `requestAnimationFrame`, which
-would be non-deterministic under frame seeking.
+materials are deduplicated through a per-scene cache (one buffer, one program;
+materials that animate opacity are isolated so tweening one mesh never fades a
+same-colored sibling), `preserveDrawingBuffer` + `setPixelRatio(1)` keep
+captures deterministic, and rendering is driven by the GSAP timeline — not
+`requestAnimationFrame`, which would be non-deterministic under frame seeking.
+`.glb`/`.gltf` models are prefetched and parsed before frame 0 (no mid-scene
+pop-in), and output is tone-mapped (ACES filmic by default) to sRGB for video.
+
+Note on the version: narova pins three.js **r149** — the last release with a
+real UMD `build/three.min.js` (r150+ ships only a deprecation stub) that the
+inline-script composition needs. The UMD GLTFLoader (removed at r148) is
+vendored into the tool. Newer releases (r155+) add AgX/Neutral tone mapping and
+WebGPU but require ESM/import maps, a future migration.
 
 ### `scene.three` — explicit Three.js
 
@@ -151,6 +160,8 @@ deterministic and seek-safe.
 three: {
   camera: { position: [0, 0, 5], fov: 45 },
   lights: [{ type: "ambient", intensity: 0.5 }, { type: "directional", position: [5, 5, 5] }],
+  toneMapping: "aces",        // optional: aces (default) | linear
+  exposure: 1,                // optional: tone-mapping exposure
   objects: [{ type: "cube", color: "#2ee6d6", size: 1.2,
     animate: { property: "rotation.y", from: 0, to: Math.PI * 2, duration: 6 } }],
 }
@@ -158,8 +169,9 @@ three: {
 
 Notes:
 - Three.js is downloaded once to `out/hf-*/assets/` at compose time (no CDN
-  dependency at render).
-- `.glb`/`.gltf` models are copied from the project and loaded via GLTFLoader.
+  dependency at render); the GLTFLoader ships vendored in the tool.
+- `.glb`/`.gltf` models are copied from the project, prefetched, and parsed
+  before frame 0 so they never pop in mid-scene.
 - 2D `body` HTML overlays the 3D canvas, so mix text/captions over 3D freely.
 
 ## What `check` enforces (errors)

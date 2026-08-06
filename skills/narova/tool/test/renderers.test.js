@@ -598,3 +598,74 @@ test('validateVisual accepts valid instances and rejects malformed ones', () => 
   assert.ok(bad.length > 0);
   assert.match(bad.join(' '), /position: expected \[x, y, z\]/);
 });
+
+// --- adversarial-review fixes ---
+
+test('fix: group opacity uses traverse, never .material on a Group', () => {
+  const scene = {
+    id: 'g',
+    vo: [{ who: 'a', text: 'x' }],
+    elements: [
+      { type: 'camera' }, { type: 'light', kind: 'ambient' },
+      { type: 'character', kind: 'cat', actions: [{ type: 'appear', duration: 0.5 }] },
+    ],
+  };
+  const result = resolveElementsScene(scene, {});
+  const group = result.three.objects.find(o => o.type === 'group');
+  assert.ok(group, 'character compiles to a group');
+  assert.ok(group.animate.some(a => a.property === 'opacity'));
+  const js = threeSetupJs('g', result.three, 0, 5, 800, 600);
+  // The old code emitted `O0.material.opacity=...` on a Group (throws). Now it
+  // must traverse descendants instead.
+  assert.doesNotMatch(js, /O0\.material\.opacity=/);
+  assert.match(js, /traverse\(function/);
+});
+
+test('fix: opacity-animated mesh gets an isolated material, not the shared cache', () => {
+  const js = threeSetupJs('b', { camera: {}, lights: [],
+    objects: [
+      { type: 'sphere', size: 0.5, color: '#ff0000', animate: { property: 'opacity', from: 0, to: 1, duration: 0.5 } },
+      { type: 'sphere', size: 0.5, color: '#ff0000' },
+    ]}, 0, 3, 800, 600);
+  // The opacity-animated mesh must NOT resolve through the shared _m cache
+  // (tweening it would fade the other same-colored mesh too).
+  assert.match(js, /new THREE\.MeshStandardMaterial\(\{color:"#ff0000",wireframe:false,opacity:1,transparent:true\}\)/);
+  // The static mesh still shares the cache.
+  assert.match(js, /_m\("#ff0000\|0\|1"/);
+  assert.equal((js.match(/_m\("#ff0000\|0\|1"/g) || []).length, 1);
+});
+
+test('fix: animationTweens honors authored `from` via fromTo', () => {
+  const js = threeSetupJs('f', { camera: {}, lights: [],
+    objects: [{ type: 'cube', color: '#fff', position: [2, 0, 0],
+      animate: { property: 'position.x', from: 5, to: -1, duration: 2 } }]}, 0, 3, 800, 600);
+  assert.match(js, /fromTo\(O0\.position,\{x:5\},\{x:-1/);
+});
+
+test('fix: boot poll is bounded with an error surface', () => {
+  const js = threeSetupJs('boot', { camera: {}, lights: [], objects: [] }, 0, 3, 800, 600);
+  assert.match(js, /_try>200/);
+  assert.match(js, /narova-three: GSAP timeline never became ready/);
+});
+
+test('fix: GLTF loads deterministically via prefetch + parseAsync, gated before frame 0', () => {
+  const js = threeSetupJs('m', { camera: {}, lights: [],
+    objects: [{ type: 'model', src: 'assets/rocket.glb', position: [0, 0, 0] }]}, 0, 3, 800, 600);
+  assert.match(js, /fetch\(/);
+  assert.match(js, /parseAsync/);
+  assert.match(js, /_pending\.push/);
+  assert.match(js, /Promise\.all\(_pending\)/);
+  // No legacy async load() + wireframe fallback path.
+  assert.doesNotMatch(js, /GLTFLoader\(\)\.load\(/);
+});
+
+test('fix: tone mapping / color space defaults are set on the renderer', () => {
+  const js = threeSetupJs('tm', { camera: {}, lights: [], objects: [] }, 0, 3, 800, 600);
+  assert.match(js, /outputColorSpace=THREE\.SRGBColorSpace/);
+  assert.match(js, /toneMapping=THREE\.ACESFilmicToneMapping/);
+  assert.match(js, /toneMappingExposure=1/);
+  // linear is configurable (AgX/Neutral need r155+, which has no UMD core).
+  const linear = threeSetupJs('tm2', { camera: {}, lights: [], objects: [], toneMapping: 'linear', exposure: 1.2 }, 0, 3, 800, 600);
+  assert.match(linear, /toneMapping=THREE\.NoToneMapping/);
+  assert.match(linear, /toneMappingExposure=1\.2/);
+});
