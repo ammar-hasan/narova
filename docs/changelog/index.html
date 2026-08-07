@@ -51,7 +51,35 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.20.0</span>
+        <span class="rel-version" data-narova-version>0.21.0</span>
+        <span class="rel-date">2026-08-07</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong><code>captions: false</code></strong> — disable the visual caption band entirely. Caption DOM, CSS padding, and presets are cleanly omitted. SRT/VTT sidecars always export.</li>
+          <li><strong><code>config.patterns</code></strong> — control built-in layout classes. Defaults to <code>true</code> for backward compat. Set <code>patterns: false</code> to define your own visual language.</li>
+          <li><strong><code>scene.scriptFile</code></strong> — per-scene raw JavaScript escape hatch for Three.js/WebGL/canvas. Inlined into scene animation context with timeline, DOM, and Three.js globals in scope. Same determinism contract as project choreography.</li>
+          <li><strong>Per-scene content hashes</strong> — every scene carries a <code>hash</code> field in the manifest. <code>narova plan</code> shows per-scene hash diffs. Foundation for scene-level render caching.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Layout patterns separated from production CSS</strong> — 30+ built-in layout classes extracted to opt-in <code>patternsCss()</code>. Default CSS is now neutral infrastructure only: background, chrome, captions, walkthrough, marks, typography. A blank project is a canvas.</li>
+          <li><strong>Default background neutralized</strong> — removed accent/pink/gold radial gradient glow blobs. Default is flat <code>var(--stage)</code> with subtle grid.</li>
+          <li><strong>Default scaffold neutralized</strong> — <code>init</code> uses plain inline styles, not layout classes. Documents captions, chrome, and patterns options.</li>
+          <li><strong>Hook/CTA enforcement is context-aware</strong> — skipped for silent projects and <code>captions: false</code>. Warnings tagged <code>craft:</code> vs <code>correctness:</code>.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><strong>Documentation honesty</strong> — <code>scene.three</code> documented as declarative (not "unlimited"). Creative-diversity eval reframed as schema conformance test.</li>
+          <li>Removed <code>.grad</code> / <code>.hairline</code> from default CSS.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.20.0</span>
         <span class="rel-date">2026-08-07</span>
       </div>
       <div class="rel-body">

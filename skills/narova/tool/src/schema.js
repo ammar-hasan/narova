@@ -68,6 +68,17 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     errs.push(`config.theme.mode: expected "dark" or "light", got ${JSON.stringify(mode)}`);
   }
 
+  // patterns: include the built-in Narova layout pattern classes (.s-title,
+  // .pane, .stat, .flow, .verdicts, .s-close, etc.) in the default CSS.
+  // Defaults to true for backward compatibility. Set to false when the project
+  // defines its own visual language in theme.css.
+  let includePatterns = true;
+  if (raw.patterns != null) {
+    if (typeof raw.patterns !== 'boolean') {
+      errs.push('config.patterns: expected a boolean (true to include built-in layout classes)');
+    } else includePatterns = raw.patterns;
+  }
+
   // choreography is a FILE reference too — project timeline code, inlined into
   // the composition after the built-in animators (compose/html.js). Resolved
   // exactly like theme.css: local path, read here, no remote fetch introduced.
@@ -339,6 +350,14 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (r) { s._choreographyFileContents = r.contents; sceneFileRefs.push({ sceneIndex: i, key: 'choreographyFile', file: s.choreographyFile }); delete s.choreographyFile; }
       }
     }
+    if (s.scriptFile != null) {
+      if (typeof s.scriptFile !== 'string') {
+        errs.push(`${sat}.scriptFile: expected a project-relative JS file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.scriptFile`, s.scriptFile);
+        if (r) { s._scriptFileContents = r.contents; sceneFileRefs.push({ sceneIndex: i, key: 'scriptFile', file: s.scriptFile }); delete s.scriptFile; }
+      }
+    }
   }
 
   const seen = new Set();
@@ -586,11 +605,16 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   // Captions: a karaoke style preset plus words to auto-emphasize (matched
   // case-insensitively, punctuation-stripped, against each spoken token).
-  const captions = { preset: 'karaoke', emphasis: [], maxWords: null };
-  if (raw.captions != null) {
+  // Set `captions: false` to disable the visual caption band entirely —
+  // SRT/VTT sidecars are still exported for accessibility and embed use.
+  let captions = { preset: 'karaoke', emphasis: [], maxWords: null };
+  let captionsEnabled = true;
+  if (raw.captions === false) {
+    captionsEnabled = false;
+  } else if (raw.captions != null) {
     const c = raw.captions;
     if (typeof c !== 'object' || Array.isArray(c)) {
-      errs.push('config.captions: expected an object like { preset, emphasis, maxWords }');
+      errs.push('config.captions: expected an object like { preset, emphasis, maxWords } or false to disable');
     } else {
       if (c.preset != null) {
         if (!CAPTION_PRESETS.has(c.preset)) {
@@ -867,7 +891,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource, imports, sceneFileRefs };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, imports, sceneFileRefs, includePatterns };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

@@ -21,7 +21,7 @@ const normWord = s => String(s).toLowerCase()
  * one per sentence — the caption "line" unit, same grouping the old player
  * used via si; kw=1 marks an emphasis keyword)
  * preset: the caption style preset name (runtime + css key their look off it). */
-function composeData(config, timings) {
+function composeData(config, timings, captionsEnabled = true) {
   const captions = config.captions || {};
   const emphasis = new Set((captions.emphasis || []).map(normWord));
   const maxWords = Number.isInteger(captions.maxWords) ? captions.maxWords : Infinity;
@@ -76,7 +76,7 @@ function composeData(config, timings) {
     delete g.sceneEnd;
   });
 
-  return { total, scenes, groups, preset: captions.preset || 'karaoke' };
+  return { total, scenes, groups, preset: captionsEnabled ? (captions.preset || 'karaoke') : false };
 }
 
 module.exports = { composeData, r3, normWord };

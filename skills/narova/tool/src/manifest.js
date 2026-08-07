@@ -306,7 +306,21 @@ function compileScenes(scenes) {
     walkthrough: s.walkthrough || null,
     dur:  s.dur || null,   // silent scene fixed duration
     sfx:  [],              // per-scene SFX anchors (filled by audio.sfx resolution)
+    hash: sceneHash(s),    // scene-level content fingerprint for selective rebuild
   }));
+}
+
+/* Per-scene content hash: covers every datum that would change the rendered
+ * output of a single scene. Changing scene 3's body should not invalidate the
+ * render cache for scene 1. */
+function sceneHash(s) {
+  const payload = JSON.stringify({
+    id: s.id,
+    vo: s.vo, body: s.body, visual: s.visual, three: s.three,
+    clip: s.clip, walkthrough: s.walkthrough, transition: s.transition,
+    dur: s.dur,
+  });
+  return sha256(payload);
 }
 
 function portableUrl(value) {

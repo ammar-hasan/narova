@@ -281,8 +281,24 @@ const CHOREOGRAPHY_MAX_BYTES = 32 * 1024;
 
 /* Hook enforcement (§Hook doctrine in the skill references).
  * Viral video mechanics in 2026: muted autoplay is 80%+, hooks are measured at
- * 2s, the first syllable must land within ~200ms. Scene 1 is the hook. */
+ * 2s, the first syllable must land within ~200ms. Scene 1 is the hook.
+ *
+ * Hook/CTA advice is CREATIVE CRAFT — it depends on the intended video shape.
+ * Silent projects, music visualizers, cinematic films, and projects that
+ * disable captions are deliberately outside the social-media grammar and
+ * should not receive hook enforcement. */
 function checkHook(config, warnings) {
+  const craftWarn = (msg) => warnings.push('craft: ' + msg);
+  const voices = config.voices || {};
+  const hasVoiceover = Object.keys(voices).length > 0;
+  const hasSynthesis = config.scenes.some(s => (s.vo || []).length > 0);
+
+  // Skip hook enforcement for explicitly non-social projects.
+  // captions:false is a strong signal the author is not targeting social video.
+  // Silent projects (no voices, no synthesis) are works of motion design.
+  if (!hasVoiceover && !hasSynthesis) return;
+  if (config.captionsEnabled === false) return;
+
   const s1 = config.scenes[0];
   if (!s1) return;
 
@@ -291,7 +307,7 @@ function checkHook(config, warnings) {
   // 1 — lead-in silence > 200ms (dead air at the head loses viewers in <2s).
   const lead = timing.lead ?? 0.16;
   if (lead > 0.2) {
-    warnings.push(`hook: timing.lead is ${lead}s (>200ms) — the first syllable should land within 200ms; set "timing.lead" ≤ 0.2`);
+    craftWarn(`hook: timing.lead is ${lead}s (>200ms) — the first syllable should land within 200ms; set "timing.lead" ≤ 0.2`);
   }
 
   // 2 — no visible text on-screen for muted viewers.
@@ -299,7 +315,7 @@ function checkHook(config, warnings) {
   const portable = visualFacts(s1.visual);
   const textEls = body.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
   if ((!textEls || textEls.length === 0) && !portable.text) {
-    warnings.push(s1.walkthrough
+    craftWarn(s1.walkthrough
       ? 'hook: scene 1 shows the product but has no on-screen hook text — add a short claim so muted viewers know why the action matters'
       : 'hook: scene 1 has no visible text — muted viewers (80%+ of autoplay) see a blank screen; add hook text on-screen');
   }
@@ -313,7 +329,7 @@ function checkHook(config, warnings) {
   const hasImage = /<(?:img|svg|video)\b/i.test(lastBody);
   const lastTextEls = lastBody.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
   if (!hasImage && !lastPortable.content && (!lastTextEls || lastTextEls.length === 0)) {
-    warnings.push(`saveable: last scene "${last.id}" has no text or image — a saveable end-card lifts completion rate; add a title, logo, or CTA`);
+    craftWarn(`saveable: last scene "${last.id}" has no text or image — a saveable end-card lifts completion rate; add a title, logo, or CTA`);
   }
 }
 
@@ -329,7 +345,11 @@ function check(config, opts = {}) {
   const strict = release || !!opts.strict;
   const bodyIds = new Set();
 
-  const issue = (msg) => release ? errors.push(msg) : warnings.push(msg);
+  const issue = (msg, category = 'quality') => {
+    const prefix = category === 'correctness' ? 'correctness: ' : category === 'craft' ? 'craft: ' : '';
+    const full = prefix + msg;
+    return release ? errors.push(full) : warnings.push(full);
+  };
   const releaseIssue = (msg) => errors.push(msg);
 
   for (const s of config.scenes) {
