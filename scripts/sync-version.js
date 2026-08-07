@@ -42,9 +42,11 @@ update(['SPEC.md'], (s, ver) =>
 );
 
 // Website — current-version markers on the landing page and changelog.
+// Only update the FIRST occurrence (the current/latest release entry).
+// Subsequent entries are historical and must keep their original version.
 update(['docs/index.html', 'docs/changelog/index.html'], (s, ver) =>
   s.replace(
-    /(<[^>]+data-narova-version[^>]*>v?)[0-9.]+(<\/[^>]+>)/g,
+    /(<[^>]+data-narova-version[^>]*>v?)[0-9.]+(<\/[^>]+>)/,
     `$1${ver}$2`
   )
 );

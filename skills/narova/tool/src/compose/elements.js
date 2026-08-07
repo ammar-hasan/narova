@@ -15,8 +15,7 @@
  *   video, effect, group
  *
  * Action types (semantic, renderer-independent):
- *   appear, disappear, move, rotate, scale, draw, speak, react, follow,
- *   transform, orbit, revolve
+ *   appear, disappear, move, rotate, scale, orbit, revolve
  *
  * Timing: actions bind to narration cues (0-based turn index) or scene time.
  */
@@ -27,9 +26,11 @@ const PRIMITIVE_KINDS = new Set([
 ]);
 const LIGHT_KINDS = new Set(['ambient', 'directional', 'point', 'spot', 'hemisphere']);
 const ACTION_TYPES = new Set([
-  'appear', 'disappear', 'move', 'rotate', 'scale', 'draw', 'speak',
-  'react', 'follow', 'transform', 'orbit', 'revolve',
+  'appear', 'disappear', 'move', 'rotate', 'scale', 'orbit', 'revolve',
 ]);
+// The following semantic actions are NOT yet implemented and are rejected during
+// validation. They will be added as the element compiler grows:
+//   draw, speak, react, follow, transform
 const TWO_D_ELEMENTS = new Set(['text', 'shape', 'image', 'video']);
 const THREE_D_ELEMENTS = new Set(['camera', 'light', '3d-object', 'model']);
 
@@ -92,7 +93,11 @@ function resolveActionAt(at, sceneStart) {
   if (at == null) return sceneStart;
   if (typeof at === 'number') return sceneStart + at;
   if (typeof at === 'object' && at.cue != null) {
-    // cue is the narration turn index (0-based); approximate 2s per turn
+    // PLANNING ESTIMATE: approximate ~2s per turn for pre-synthesis config
+    // resolution. The 2D runtime (cueTime in runtime.js) resolves data-cue
+    // to measured turn timings at render time. 3D animation timings are
+    // resolved during compose using measured timings from timings.json
+    // (see compose/three.js animationTweens).
     return `(${sceneStart}+${at.cue}*2+${at.offset || 0})`;
   }
   return sceneStart;
@@ -132,6 +137,7 @@ function actionToAnim(action) {
     case 'revolve':
       return { property: 'rotation.y', from: 0, to: Math.PI * 2, duration: action.duration || 6, ease: 'none', at: action.at };
     default:
+      // Should not reach here — validation rejects unsupported actions.
       return null;
   }
 }
@@ -449,7 +455,12 @@ function validateElements(elements, at, errors) {
       else el.actions.forEach((a, ai) => {
         if (!a || typeof a !== 'object') { errors.push(`${ea}.actions[${ai}]: expected an object`); return; }
         if (!ACTION_TYPES.has(a.type)) {
-          errors.push(`${ea}.actions[${ai}].type: expected ${[...ACTION_TYPES].join('|')}`);
+          const DEPRECATED = new Set(['draw', 'speak', 'react', 'follow', 'transform']);
+          if (DEPRECATED.has(a.type)) {
+            errors.push(`${ea}.actions[${ai}].type: "${a.type}" is not yet implemented — supported actions are ${[...ACTION_TYPES].join('|')}`);
+          } else {
+            errors.push(`${ea}.actions[${ai}].type: expected ${[...ACTION_TYPES].join('|')}, got "${a.type}"`);
+          }
         }
       });
     }

@@ -90,7 +90,9 @@ test('--reuse holds only while the spoken text is unchanged', () => {
   assert.equal(resolveReuse(config, out, true), false, 'no previous synth -> full synth');
   writeStageInputs(config, out);                      // what the last synth consumed
   // synth writes timings.json + fingerprint — the test needs dummies so reuse can match.
-  fs.writeFileSync(path.join(out, 'timings.json'), '{}', 'utf8');
+  fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify({ only: { dur: 3, turns: [0.16] } }), 'utf8');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(out, 'audio', 'full.wav'), 'fake');
   commitFingerprint(config, out);
   assert.equal(resolveReuse(config, out, true), true, 'same vo -> reuse the audio');
   const edited = { ...config, scenes: [{ ...config.scenes[0], vo: [{ who: 'a', text: 'Changed.' }] }] };

@@ -695,3 +695,52 @@ test('esm: r185 tone mapping supports AgX and Neutral', () => {
   const neutral = threeSetupJs('neu', { camera: {}, lights: [], objects: [], toneMapping: 'neutral' }, 0, 3, 800, 600);
   assert.match(neutral, /toneMapping=THREE\.NeutralToneMapping/);
 });
+
+// --- particle seed determinism -----------------------------------------------
+
+test('particles use seeded PRNG, not Math.random', () => {
+  const js = threeSetupJs('p', { camera: {}, lights: [],
+    objects: [{ type: 'particles', count: 50, spread: [4, 3, 2], color: '#ffaa00' }],
+  }, 0, 5, 800, 600);
+  // Must NOT contain bare Math.random
+  assert.ok(!/\bMath\.random\b/.test(js), 'particle positions must not use unseeded Math.random');
+  // Must contain the seeded PRNG function
+  assert.match(js, /function\(\)\{var s=\d+/);
+  // Must use _rng() instead of Math.random
+  assert.match(js, /_rng\(\)/);
+});
+
+test('particles with same seed produce identical JS', () => {
+  const cfg = { camera: {}, lights: [],
+    objects: [{ type: 'particles', count: 10, spread: [2, 2, 2], color: '#ffffff', prngSeed: 12345 }],
+  };
+  const js1 = threeSetupJs('p', cfg, 0, 5, 800, 600);
+  const js2 = threeSetupJs('p', cfg, 0, 5, 800, 600);
+  assert.equal(js1, js2, 'same seed must produce identical generated JS');
+});
+
+test('particles with different seeds produce different JS', () => {
+  const cfg1 = { camera: {}, lights: [],
+    objects: [{ type: 'particles', count: 10, spread: [2, 2, 2], color: '#ffffff', prngSeed: 12345 }],
+  };
+  const cfg2 = { camera: {}, lights: [],
+    objects: [{ type: 'particles', count: 10, spread: [2, 2, 2], color: '#ffffff', prngSeed: 54321 }],
+  };
+  const js1 = threeSetupJs('p', cfg1, 0, 5, 800, 600);
+  const js2 = threeSetupJs('p', cfg2, 0, 5, 800, 600);
+  assert.notEqual(js1, js2, 'different seeds must produce different generated JS');
+});
+
+test('particles derive deterministic seed from scene id + object index when no explicit seed', () => {
+  const cfg = { camera: {}, lights: [],
+    objects: [{ type: 'particles', count: 10, spread: [2, 2, 2], color: '#ffffff' }],
+  };
+  // Same scene id = same seed = same JS
+  const js1 = threeSetupJs('my-scene', cfg, 0, 5, 800, 600);
+  const js2 = threeSetupJs('my-scene', cfg, 0, 5, 800, 600);
+  assert.equal(js1, js2, 'same scene id must produce identical JS');
+
+  // Different scene id = different seed = different JS
+  const js3 = threeSetupJs('other-scene', cfg, 0, 5, 800, 600);
+  assert.notEqual(js1, js3, 'different scene id must produce different JS');
+});

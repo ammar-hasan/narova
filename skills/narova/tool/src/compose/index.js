@@ -13,6 +13,9 @@ const { composeDoc } = require('./html');
 const { collectModelAssets, collectTextureAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
 
+const GSAP_VENDOR_DIR = path.join(__dirname, '..', '..', 'vendor', 'gsap');
+const GSAP_SRC = path.join(GSAP_VENDOR_DIR, 'gsap.min.js');
+
 /* Copy the vendored three.js global bundle (core + GLTFLoader, esbuild-bundled
  * to a classic script exposing window.THREE) into the render project. The file
  * ships inside the tool (tool/vendor/three/), so rendering never depends on a
@@ -56,8 +59,31 @@ function compose(config, outDir) {
 
   const size = config.size;
   const data = composeData(config, timings);
-  const css = composeCss(config.theme || {}, config.voices, size, config.themeCss || '', config.mode);
-  const html = composeDoc(config, size, data, css);
+
+  // Merge per-scene file-referenced CSS and choreography into the project.
+  let mergedExtraCss = config.themeCss || '';
+  let mergedChoreography = config.choreography || '';
+  for (const s of config.scenes) {
+    if (s._cssFileContents) mergedExtraCss += '\n/* scene:' + s.id + ' */\n' + s._cssFileContents;
+    if (s._choreographyFileContents) mergedChoreography += '\n/* scene:' + s.id + ' */\n' + s._choreographyFileContents;
+  }
+  // Append import module contents: CSS-like files → extra CSS, JS-like files → choreography.
+  if (config.imports) {
+    for (const [name, imported] of Object.entries(config.imports)) {
+      if (!imported || !imported.contents) continue;
+      const ext = path.extname(imported.file || '').toLowerCase();
+      if (ext === '.css') {
+        mergedExtraCss += '\n/* import:' + name + ' */\n' + imported.contents;
+      } else if (ext === '.js') {
+        mergedChoreography += '\n/* import:' + name + ' */\n' + imported.contents;
+      }
+      // .json, .html, .svg imports are available on the config object for
+      // scene body HTML and element references at authoring time.
+    }
+  }
+  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode);
+  const composeConfig = { ...config, themeCss: mergedExtraCss, choreography: mergedChoreography };
+  const html = composeDoc(composeConfig, size, data, css);
 
   const slugTitle = slug(config.title || 'narova');
   const hfDir = path.join(outDir, `hf-${slugTitle}`);
@@ -77,6 +103,9 @@ function compose(config, outDir) {
   if (hasThreeScenes(config)) {
     copyThreeAssets(assetsDir);
   }
+  // GSAP is vendored in the tool (3.14.2, minified) — copy into the render
+  // project so rendering and preview never require a CDN.
+  fs.copyFileSync(GSAP_SRC, path.join(assetsDir, 'gsap.min.js'));
   // Copy and auto-loop per-scene b-roll clips. If a clip is shorter than
   // its scene, narova creates a looped version with ffmpeg so the renderer
   // doesn't stutter on boundary seeks.

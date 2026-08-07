@@ -71,6 +71,21 @@ function buildHashes(config, projectDir) {
   // Project choreography: inlined into the composition like theme.css, so an
   // edit to it has to invalidate the build the same way.
   if (config.choreography) h.choreography = sha256(config.choreography);
+  // Imported modules: hash each imported file's contents for invalidation.
+  if (config.imports) {
+    for (const [name, imported] of Object.entries(config.imports)) {
+      if (imported && imported.contents) {
+        h[`import:${name}`] = sha256(imported.contents);
+      }
+    }
+  }
+  // Scene file refs: hash each referenced file path for invalidation.
+  if (config.sceneFileRefs) {
+    for (const ref of config.sceneFileRefs) {
+      const resolved = path.resolve(projectDir, ref.file);
+      h[`scenefile:${ref.sceneIndex}:${ref.key}`] = hashFile(resolved);
+    }
+  }
   // Assets: hash each discoverable file
   const assetsRoot = config.assetsDir || path.join(projectDir || '.', 'assets');
   if (fs.existsSync(assetsRoot)) {
@@ -138,6 +153,12 @@ function compile(config, opts = {}) {
       colorSpace: 'rec709',
     },
     theme: {
+      // Preserve every validated theme token from the resolved config.
+      // Custom tokens (stage, deep, halo, panel, line, ink, muted, faint,
+      // gold, pink, colw, user-defined tokens, etc.) survive the round-trip
+      // through the manifest so downstream consumers (compose, no-browser,
+      // exports) reconstruct the full authored palette.
+      ...(theme || {}),
       accent: (theme && theme.accent) || '#2ee6d6',
       bg:     (theme && theme.bg)     || '#080d16',
       mode,
@@ -368,9 +389,11 @@ function compileWalkthroughs(walkthroughs, projectDir) {
 function compileVariants(variants) {
   return (variants || []).map(v => ({
     id: v.id,
+    kind: v.kind || 'hook',
     scene: v.scene ? {
       body:       v.scene.body || '',
       visual:     v.scene.visual || null,
+      three:      v.scene.three || null,
       vo:         (v.scene.vo || []).map(turn => ({
         who: turn.who,
         text: turn.text,
@@ -379,6 +402,10 @@ function compileVariants(variants) {
       })),
       ...(v.scene.transition ? { transition: v.scene.transition } : {}),
     } : null,
+    sceneOverrides: v.sceneOverrides || null,
+    theme: v.theme || null,
+    captions: v.captions || null,
+    timing: v.timing || null,
   }));
 }
 

@@ -105,14 +105,14 @@ function commitFingerprint(config, outDir) {
 }
 
 /* `--reuse` replays the previous synth's audio + timings only when the
- * complete audio fingerprint matches. A text change, voice swap, backend
- * change, tempo change, gain change, clone-sample replacement, language
- * change, or instruct change all force a full synth. */
+ * complete audio fingerprint matches AND the audio files are intact. A text
+ * change, voice swap, backend change, tempo change, gain change, clone-sample
+ * replacement, language change, or instruct change all force a full synth. */
 function resolveReuse(config, outDir, requested, log = console.log) {
   if (!requested) return false;
   const fingerprintPath = path.join(outDir, '.audio-fingerprint');
-  const narrationPath = path.join(outDir, 'narration.json');
   const timingsPath = path.join(outDir, 'timings.json');
+  const audioDir = path.join(outDir, 'audio');
 
   if (!fs.existsSync(fingerprintPath) || !fs.existsSync(timingsPath)) {
     log('note: --reuse but no previous synth found — running a full synth');
@@ -122,22 +122,43 @@ function resolveReuse(config, outDir, requested, log = console.log) {
   const currentFp = audioFingerprint(config);
   const previousFp = fs.readFileSync(fingerprintPath, 'utf8').trim();
 
-  if (currentFp === previousFp) return true;
-
-  // Give a helpful message about what likely changed.
-  try {
-    const prevNarration = JSON.parse(fs.readFileSync(narrationPath, 'utf8'));
-    const currNarration = narration(config);
-    const textChanged = JSON.stringify(prevNarration) !== JSON.stringify(currNarration);
-    if (textChanged) {
-      log('note: the spoken text changed since the last synth — ignoring --reuse and re-synthesizing');
-    } else {
-      log('note: voice, backend, tempo, gain, instruction, or clone sample changed — ignoring --reuse and re-synthesizing');
+  if (currentFp !== previousFp) {
+    // Give a helpful message about what likely changed.
+    // The fingerprint captures voice identity, text, tempo, gain, and backend
+    // parameters — everything that affects the produced audio waveforms.
+    // Visual changes (body, theme, CSS, choreography, captions config) do NOT
+    // change the fingerprint, so --reuse safely replays the audio.
+    try {
+      const prevNarration = JSON.parse(fs.readFileSync(path.join(outDir, 'narration.json'), 'utf8'));
+      const currNarration = narration(config);
+      const textChanged = JSON.stringify(prevNarration) !== JSON.stringify(currNarration);
+      if (textChanged) {
+        log('note: the spoken text changed since the last synth — ignoring --reuse and re-synthesizing');
+      } else {
+        log('note: voice, backend, tempo, gain, instruction, or clone sample changed — ignoring --reuse and re-synthesizing');
+      }
+    } catch {
+      log('note: audio configuration changed — ignoring --reuse and re-synthesizing');
     }
-  } catch {
-    log('note: audio configuration changed — ignoring --reuse and re-synthesizing');
+    return false;
   }
-  return false;
+
+  // Fingerprint matches. Verify that the audio files still exist — the
+  // fingerprint is the authority on whether the audio IS correct, but if the
+  // files were deleted or corrupted, --reuse cannot help.
+  const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+  if (!timings || typeof timings !== 'object') {
+    log('note: --reuse fingerprint matches but timings.json is invalid — running a full synth');
+    return false;
+  }
+  // Audio files are numbered by scene index (01.wav, 02.wav, ...).
+  // Check that the full mix exists as evidence of prior synthesis.
+  const fullWav = path.join(audioDir, 'full.wav');
+  if (!fs.existsSync(fullWav)) {
+    log('note: --reuse fingerprint matches but audio is missing — running a full synth');
+    return false;
+  }
+  return true;
 }
 
 function synth(outDir, opts = {}) {
@@ -422,7 +443,7 @@ function configFromManifest(manifest, resolvedConfig) {
       ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
     }])),
-    theme: { accent: m.theme?.accent, bg: m.theme?.bg },
+    theme: { ...(m.theme || {}), accent: m.theme?.accent, bg: m.theme?.bg },
     mode: m.theme?.mode || 'dark',
     chrome: m.chrome || {},
     themeCss: m.theme?.css || '',
@@ -439,7 +460,12 @@ function configFromManifest(manifest, resolvedConfig) {
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
     sfx: (m.audio?.sfx || []).map(s => ({ file: s.file, scene: s.scene, at: s.at, volume: s.volume })),
     variants: (m.variants || []).map(v => ({
-      id: v.id, scene: v.scene ? { body: v.scene.body, visual: v.scene.visual || null, vo: v.scene.vo } : null,
+      id: v.id, kind: v.kind || 'hook',
+      scene: v.scene ? { body: v.scene.body, visual: v.scene.visual || null, three: v.scene.three || null, vo: v.scene.vo } : null,
+      sceneOverrides: v.sceneOverrides || null,
+      theme: v.theme || null,
+      captions: v.captions || null,
+      timing: v.timing || null,
     })),
     variant: m.variant || null,
     series: m.series || null,

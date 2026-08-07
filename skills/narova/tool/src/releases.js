@@ -76,7 +76,7 @@ function resolveProjectDir(fromDir) {
 }
 
 /* Snapshot a project: copies manifest + config + theme + assets + ledgers
- * into the release directory. Preserves the original config filename.
+ * + audio fingerprint and timings (so --reuse works after restore).
  * Returns { name, dir, created, files }. */
 function save(manifestPath, name, opts = {}) {
   const releaseDir = releasePath(name);
@@ -85,8 +85,19 @@ function save(manifestPath, name, opts = {}) {
   const manifestSrc = fs.readFileSync(manifestPath, 'utf8');
   fs.writeFileSync(path.join(releaseDir, 'manifest.json'), manifestSrc, 'utf8');
 
+  const outDir = path.dirname(manifestPath);
   const safeName = path.basename(releaseDir);
   const saved = ['manifest.json'];
+
+  // Save audio fingerprint + timings so --reuse works after restore.
+  // These are small text files; saving them avoids a full re-synth.
+  for (const fname of ['.audio-fingerprint', 'timings.json']) {
+    const src = path.join(outDir, fname);
+    if (fs.existsSync(src)) {
+      fs.copyFileSync(src, path.join(releaseDir, fname));
+      saved.push(fname);
+    }
+  }
 
   // Resolve the project root properly.
   const projectDir = opts.projectDir
@@ -190,8 +201,22 @@ function restore(name, destDir, opts = {}) {
 
   const results = { manifest: manifestDest, restored: [], skipped: [], conflicts: [] };
 
+  // Restore audio fingerprint and timings to the output directory (not project root).
+  for (const fname of ['.audio-fingerprint', 'timings.json']) {
+    const src = path.join(srcDir, fname);
+    const dest = path.join(manifestDestDir, fname);
+    if (fs.existsSync(src)) {
+      if (!dryRun) {
+        fs.mkdirSync(manifestDestDir, { recursive: true });
+        fs.copyFileSync(src, dest);
+      }
+      results.restored.push(fname);
+    }
+  }
+
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     if (entry.name === 'manifest.json') continue;
+    if (entry.name === '.audio-fingerprint' || entry.name === 'timings.json') continue;
     const src = path.join(srcDir, entry.name);
     const dest = path.join(projectDir, entry.name);
 

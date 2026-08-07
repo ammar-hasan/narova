@@ -1,7 +1,8 @@
 # Narova vision, need, and product direction
 
-**Research date:** 2026-07-26  
-**Evidence window:** 2026-05-01 through 2026-07-26
+**Research date:** 2026-08-07  
+**Evidence window:** 2026-05-01 through 2026-08-07
+**Last reviewed:** 2026-08-07 (post-0.20.0 release)
 
 This document deliberately excludes research published before May 2026. Live
 product pages without a publication date are identified as current pages
@@ -62,19 +63,24 @@ Narova a repeated problem on which to prove the larger vision.
 
 ## What Narova already has
 
-Narova 0.7 is not a concept. It is a working local compiler with:
+Narova 0.20.0 is not a concept. It is a working local compiler and renderer with:
 
 - prompt, script, README, repository, and URL-to-video workflows;
 - local multi-speaker TTS and voice cloning;
 - word-timed captions and speech-triggered visuals;
 - source and claims ledgers;
 - platform-specific outputs and caption sidecars;
-- music, sound effects, B-roll, transitions, annotations, series, and hook
-  variants;
-- deterministic HyperFrames rendering;
+- music, sound effects, B-roll, transitions, annotations, series, and
+  expanded hook/visual/narration/pacing/caption variants;
+- deterministic HyperFrames and browserless Skia/FFmpeg rendering;
+- declarative 3D authoring (`scene.three`, `scene.elements`) with character
+  presets, PBR, shadows, instanced meshes, and GSAP-driven camera animation;
+- creative modularity with per-scene file references and project-level imports;
 - visual-only rebuilds and sentence-level audio reuse, so unchanged narration
   can remain byte-identical;
-- validation, preview, snapshot QA, and render commands.
+- named releases with fingerprint+timings for reuse after restore;
+- validation, preview, snapshot QA, and render commands;
+- neutral scaffold and concept branching for creative diversity.
 
 That is a strong production engine. Two layers remain underdeveloped:
 

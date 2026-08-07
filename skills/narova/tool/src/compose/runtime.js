@@ -180,7 +180,9 @@ function annotate(scene, layer, el, kind, t) {
     rect.setAttribute('height', mf(h * 0.88));
     rect.setAttribute('class', 'markhl');
     layer.appendChild(rect);
-    tl.fromTo(rect, { scaleX: 0, transformOrigin: 'left center' },
+    // Pre-seed transformOrigin via set to avoid timeline breakage.
+    tl.set(rect, { transformOrigin: 'left center' }, t);
+    tl.fromTo(rect, { scaleX: 0 },
       { scaleX: 1, duration: 0.5, ease: 'power3.out' }, t);
   }
 }
@@ -223,8 +225,12 @@ DATA.scenes.forEach(function (sc) {
         { opacity: 1, y: 0, duration: 0.6, ease: 'power3.out' }, t);
     }
     // data-grow: horizontal bar growth (element is authored at full width).
+    // Pre-seed transformOrigin in a tl.set so it never appears in a tween —
+    // tweening transformOrigin breaks the sub-composition timeline under
+    // hyperframes@0.7.64.
     if (el.hasAttribute('data-grow')) {
-      tl.fromTo(el, { scaleX: 0, transformOrigin: 'left center' },
+      tl.set(el, { transformOrigin: 'left center' }, t);
+      tl.fromTo(el, { scaleX: 0 },
         { scaleX: 1, duration: 0.7, ease: 'power3.out' }, t);
     }
     // data-draw: an SVG path/line draws itself (stroke-dash walk).

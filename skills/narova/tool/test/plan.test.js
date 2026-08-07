@@ -336,3 +336,96 @@ test('formatPlan shows new stage fields (tts, align, mix, compose, render)', () 
   assert.ok(!out.includes('tts'), 'mix should NOT show tts');
   assert.ok(out.includes('assets/bed.mp3'), 'should show asset diff');
 });
+
+// --- planner accuracy: classification for each edit type -------------------
+
+test('planner: body-only change = VISUAL (no synth)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>New body</h1></div>' }],
+  });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.VISUAL, 'body change must classify as VISUAL');
+  assert.equal(result.level.tts, false, 'body change must NOT require TTS');
+  assert.equal(result.level.compose, true, 'body change must trigger compose');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('planner: theme-only change = CONFIG (no synth, no mix)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig({ theme: { accent: '#2ee6d6' } });
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({ theme: { accent: '#ff0000' } });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.CONFIG, 'theme change must classify as CONFIG');
+  assert.equal(result.level.tts, false, 'theme change must NOT require TTS');
+  assert.equal(result.level.mix, false, 'theme change must NOT require mix');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('planner: captions change = CONFIG (no synth)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({ captions: { preset: 'slam' } });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.CONFIG, 'captions preset change must classify as CONFIG');
+  assert.equal(result.level.tts, false, 'captions change must NOT require TTS');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('planner: vo text change = AUDIO (re-synth needed)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Completely different text.' }], body: '<div><h1>Hi</h1></div>' }],
+  });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.AUDIO, 'vo text change must classify as AUDIO');
+  assert.equal(result.level.tts, true, 'vo text change MUST require TTS');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('planner: both body AND vo change = AUDIO (vo takes priority)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Changed text.' }], body: '<div><h1>Changed body</h1></div>' }],
+  });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.AUDIO, 'vo+body change must classify as AUDIO');
+  assert.equal(result.level.tts, true, 'vo change MUST require TTS');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('planner: adding a scene = FULL (structure change)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({
+    scenes: [
+      { id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>Hi</h1></div>' },
+      { id: 's2', vo: [{ who: 'a', text: 'Extra.' }], body: '<div><h2>Extra</h2></div>' },
+    ],
+  });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.FULL, 'adding a scene must classify as FULL');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('planner: transition-only change = VISUAL (no synth)', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp);
+  const cfg2 = makeConfig({
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>Hi</h1></div>', transition: 'wipe' }],
+  });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.VISUAL, 'transition change must classify as VISUAL');
+  assert.equal(result.level.tts, false, 'transition change must NOT require TTS');
+  fs.rmSync(tmp, { recursive: true, force: true });
+});

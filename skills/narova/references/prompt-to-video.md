@@ -40,6 +40,44 @@ is your call. If you do ask: one short batch of at most 2–3 questions, each
 with a default you'd pick ("I'll go with X unless you say otherwise"). Then
 never ask again unless the user changes direction.
 
+## Concept branching: try directions before committing
+
+Before writing the final project, briefly sketch 2-3 meaningfully distinct
+creative directions. These must differ in structure and visual language, not
+just palette. The goal: surface the strongest approach before you invest in
+scene-level details.
+
+Think in terms of representation, not templating:
+
+- **Concept A: typography-led editorial** — graphic design, bold type, custom
+  font pairings, a poster-like grid system. Clean, minimal, high impact.
+- **Concept B: character-led 3D narrative** — a character or object moves
+  through space, the camera follows, the story unfolds physically.
+- **Concept C: documentary media collage** — sourced photos, product images,
+  screenshots, and diagrams composited in time to the narration. Evidence-driven.
+- **Concept D: abstract motion graphics** — shapes, colors, and transitions
+  carry meaning without literal representation. Music-driven.
+- **Concept E: text-only kinetic typography** — every visual is words on
+  screen, animated. No chrome, no illustrations, pure type.
+
+Each concept gets one line: the visual system + a 8-12 word description of how
+it serves the brief. The concepts should differ in:
+- Structure (scene count, ordering, pacing)
+- Visual language (type vs. 3D vs. media vs. abstract vs. typography-only)
+- Narration style (host count, tone, external/silent/synthesized)
+- Caption treatment (karaoke, hidden, stylistic overlays, subtitle-style)
+- Use of chrome (full default, restyled, removed)
+- Use of built-in layout classes vs. custom HTML/CSS
+
+Pick the strongest direction based on the brief. When two directions are
+equally promising and differ substantially, offer a single 1-liner choice
+("typography-led editorial → 60s dense explainer for LinkedIn, or character-led
+→ 30s playful reel?") and keep moving. This is a 1-turn optimization, not a
+questionnaire.
+
+For simple or short requests ("make me a 15s reel from this URL"), a single
+direction is fine — skip the branch and execute.
+
 ## Video shapes
 
 Pick the shape from the prompt, then follow its structure. Word budgets
