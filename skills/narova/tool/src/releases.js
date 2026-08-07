@@ -139,6 +139,52 @@ function save(manifestPath, name, opts = {}) {
   return { name: safeName, dir: releaseDir, created: new Date().toISOString(), files: saved };
 }
 
+/* Save branch metadata alongside a release. Branches extend releases with
+ * creative rationale, status tracking, and parentage — enabling the workflow:
+ * "bring back the surreal concept," "take B's visuals + A's narration," etc.
+ *
+ * branch.json shape:
+ *   { rationale, status, parent, created }
+ *   status: exploring | candidate | approved | rejected | archived
+ *   parent: optional branch name this was derived from */
+function saveBranch(name, meta = {}) {
+  const releaseDir = releasePath(name);
+  if (!fs.existsSync(releaseDir)) throw new Error(`release "${name}" not found — save it first`);
+  const branch = {
+    created: new Date().toISOString(),
+    rationale: meta.rationale || '',
+    status: meta.status || 'exploring',
+    ...(meta.parent ? { parent: meta.parent } : {}),
+  };
+  fs.writeFileSync(path.join(releaseDir, 'branch.json'), JSON.stringify(branch, null, 2));
+  return branch;
+}
+
+/* Read branch metadata from a release, if present. */
+function readBranch(name) {
+  const bp = path.join(releasePath(name), 'branch.json');
+  if (!fs.existsSync(bp)) return null;
+  return JSON.parse(fs.readFileSync(bp, 'utf8'));
+}
+
+/* List all releases with branch metadata included. */
+function listBranches() {
+  return list().map(entry => {
+    const branch = readBranch(entry.name);
+    return branch ? { ...entry, branch } : entry;
+  });
+}
+
+/* Update the status of an existing branch. */
+function setBranchStatus(name, status) {
+  const branch = readBranch(name);
+  if (!branch) throw new Error(`branch "${name}" not found`);
+  branch.status = status;
+  branch.updated = new Date().toISOString();
+  fs.writeFileSync(path.join(releasePath(name), 'branch.json'), JSON.stringify(branch, null, 2));
+  return branch;
+}
+
 function list() {
   ensureDir();
   const entries = [];
@@ -256,4 +302,4 @@ function remove(name) {
   return p;
 }
 
-module.exports = { save, list, restore, remove, RELEASES_DIR, releasePath, resolveProjectDir };
+module.exports = { save, list, restore, remove, RELEASES_DIR, releasePath, resolveProjectDir, saveBranch, readBranch, listBranches, setBranchStatus };

@@ -84,6 +84,15 @@ function cueTime(sc, el, entryIndex) {
   var delay = parseFloat(el.getAttribute('data-delay') || '0') || 0;
   var raw = el.getAttribute('data-cue');
   if (raw != null) {
+    // Named marker: data-cue="marker:reveal" resolves to DATA.markers[reveal].
+    // Falls back to a turn-index parse if the marker name is not found.
+    if (raw.indexOf('marker:') === 0) {
+      var name = raw.slice(7);
+      var t = DATA.markers && DATA.markers[name];
+      if (typeof t === 'number') return t + delay;
+      // Not found — resolve to scene entry (graceful fallback).
+      return sc.start + delay;
+    }
     var k = +raw;
     var local = (Number.isInteger(k) && k >= 0 && k < sc.turns.length) ? sc.turns[k] : 0;
     return sc.start + local + delay;

@@ -902,12 +902,34 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const walkthroughs = resolveWalkthroughs(raw.walkthroughs, scenes, baseDir, ID_RE, errs);
 
+  // Named time markers: author-defined anchors on the global project timeline,
+  // resolvable as `data-cue="marker:<name>"` and `at: { marker: "<name>" }`.
+  // Markers decouple timing from narration turns, enabling music-driven edits,
+  // silent montage, and any non-speech-anchored event to drive the timeline.
+  // Each marker is a non-negative second offset from the start of the video.
+  const markers = {};
+  if (raw.markers != null) {
+    if (typeof raw.markers !== 'object' || Array.isArray(raw.markers)) {
+      errs.push('config.markers: expected an object like { name: seconds }');
+    } else {
+      for (const [name, sec] of Object.entries(raw.markers)) {
+        if (!ID_RE.test(name)) {
+          errs.push(`config.markers.${name}: name must match ${ID_RE}`);
+        } else if (typeof sec !== 'number' || !Number.isFinite(sec) || sec < 0) {
+          errs.push(`config.markers.${name}: expected a non-negative number of seconds`);
+        } else {
+          markers[name] = sec;
+        }
+      }
+    }
+  }
+
   if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
 
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, imports, sceneFileRefs, includePatterns };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, imports, sceneFileRefs, includePatterns, markers };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

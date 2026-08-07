@@ -21,7 +21,7 @@ const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
-const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
+const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus } = require('../src/releases');
 const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
@@ -427,6 +427,55 @@ async function main() {
         return;
       }
       console.error('usage: narova release save|list|restore|remove [name]');
+      process.exit(1);
+      return;
+    }
+
+    case 'branch': {
+      const sub = positionals[1] || 'list';
+      if (sub === 'list') {
+        const entries = listBranches();
+        if (!entries.length) {
+          console.log('no branches saved yet — save a release first with narova release save <name>, then narova branch set <name>');
+        } else {
+          for (const e of entries) {
+            const status = e.branch ? `[${e.branch.status}]` : '[—]';
+            const parent = e.branch && e.branch.parent ? ` ← ${e.branch.parent}` : '';
+            console.log(`  ${status} ${e.name.padEnd(24)} ${parent} ${e.title || ''}`);
+            if (e.branch && e.branch.rationale) console.log(`       "${e.branch.rationale}"`);
+          }
+          console.log(`\n${entries.length} branch(es) in ${require('../src/releases').RELEASES_DIR}`);
+        }
+        return;
+      }
+      if (sub === 'set') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova branch set <name> [--status approved|rejected|archived|candidate] [--rationale "..."]'); process.exit(1); }
+        const status = flags.status;
+        const rationale = flags.rationale;
+        let branch = readBranch(name);
+        if (!branch) {
+          // Auto-create branch metadata for an existing release.
+          branch = saveBranch(name, { rationale: rationale || '', status: status || 'exploring' });
+        } else {
+          if (status) { setBranchStatus(name, status); branch.status = status; }
+          if (rationale) {
+            branch.rationale = rationale;
+            fs.writeFileSync(path.join(require('../src/releases').releasePath(name), 'branch.json'), JSON.stringify(branch, null, 2));
+          }
+        }
+        console.log(`branch "${name}": status=${branch.status}${branch.rationale ? ' rationale="' + branch.rationale + '"' : ''}`);
+        return;
+      }
+      if (sub === 'show') {
+        const name = positionals[2];
+        if (!name) { console.error('usage: narova branch show <name>'); process.exit(1); }
+        const branch = readBranch(name);
+        if (!branch) { console.error(`branch "${name}" not found`); process.exit(1); }
+        console.log(JSON.stringify(branch, null, 2));
+        return;
+      }
+      console.error('usage: narova branch list|set|show [name]');
       process.exit(1);
       return;
     }

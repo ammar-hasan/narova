@@ -367,11 +367,19 @@ function check(config, opts = {}) {
       // cues
       if (/(?<![-\w])data-cue\s*=/.test(t)) {
         const raw = attr(t, 'data-cue');
-        const k = +raw;
-        if (!Number.isInteger(k) || k < 0) {
-          warnings.push(`scene "${s.id}": data-cue="${raw}" does not resolve to a turn — it reveals at scene entry`);
-        } else if (k >= s.vo.length) {
-          warnings.push(`scene "${s.id}": data-cue="${raw}" but turns are indexed 0..${s.vo.length - 1} — it reveals at scene entry`);
+        // Named markers: data-cue="marker:name" — resolve against config.markers.
+        if (raw && raw.indexOf('marker:') === 0) {
+          const name = raw.slice(7);
+          if (config.markers && !(name in config.markers)) {
+            warnings.push(`scene "${s.id}": data-cue="${raw}" — marker "${name}" not found in config.markers`);
+          }
+        } else {
+          const k = +raw;
+          if (!Number.isInteger(k) || k < 0) {
+            warnings.push(`scene "${s.id}": data-cue="${raw}" does not resolve to a turn — it reveals at scene entry`);
+          } else if (k >= s.vo.length) {
+            warnings.push(`scene "${s.id}": data-cue="${raw}" but turns are indexed 0..${s.vo.length - 1} — it reveals at scene entry`);
+          }
         }
       } else if (/class\s*=\s*["'][^"']*\bcue\b/.test(t)) {
         warnings.push(`scene "${s.id}": class="cue" without data-cue — it animates at scene entry, not on a turn`);
