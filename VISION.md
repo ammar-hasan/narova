@@ -55,10 +55,9 @@ strengthening · `[ ]` gap.
   render. Word-by-word karaoke captions per speaker color; `data-cue`
   elements appear exactly when the voice reaches them. `SPEC.md`,
   `skills/narova/tool/src/compose/`.
-- [x] **One or more voices; default two (male + female)** — schema accepts
-  any number of voices (`tool/src/schema.js`); the `init` scaffold and all
-  docs default to two piper voices: `en_US-ryan-high` (male) +
-  `en_US-hfc_female-medium` (female).
+- [x] **One or more voices; zero voices for silent** — schema accepts
+  any number of voices; the `init` scaffold defaults to a single neutral
+  narrator. Zero voices works for silent scenes with explicit durations.
 - [x] **The skill decides the creative direction from the prompt** — theme,
   script, scenes, story, structure, mood, pacing are inferred, not asked.
   `references/scene-script.md` §"Theme: build it from evidence" +
@@ -111,7 +110,7 @@ strengthening · `[ ]` gap.
 
 ## Proof (all verified on this machine)
 
-- [x] `npm test` exits 0 (300+ JS tests + 50+ Python tests).
+- [x] `npm test` exits 0 (470+ JS tests + 80+ Python tests).
 - [x] Real walkthrough eval: a local demo product is explored and recorded,
   semantic actions stay within the timing-drift budget, the capture manifest
   and evidence frames validate, and the resulting 1280×720 MP4 passes media and
@@ -121,8 +120,7 @@ strengthening · `[ ]` gap.
   (±0.15s). See `generated/`.
 - [x] Iteration consistency demo: one-turn edit → only that scene's audio
   changed (sha256 of every other scene wav identical across runs).
-- [x] Multiple videos: three distinct example projects build end-to-end —
-  `attention-is-all-you-need` (16:9 teal paper walkthrough), `vkf-upgrade`
-  (1:1 violet announcement), `backlog-graveyard` (9:16 warm coral reel with
-  stat/verdict/stepper layouts and a custom theme.css). Different formats,
-  palettes, layouts, and pacing — not one template re-skinned.
+- [x] Multiple videos: distinct example projects build end-to-end across
+  varied formats, palettes, layouts, and creative approaches —
+  see `generated/` for the full set including walkthrough showcases,
+  product intros, and research explainers.

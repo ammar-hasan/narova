@@ -1,6 +1,6 @@
 # Narova roadmap
 
-**Strategy date:** 2026-07-26
+**Strategy date:** 2026-08-07
 
 This is a sequence of enablement and product-risk gates, not a calendar
 promise. Each release must prove the behavior in its exit criteria before the
@@ -19,6 +19,17 @@ instanced meshes for crowds, and AI clip generation (`narova generate`).
 Three.js upgraded to r185 ESM (esbuild-bundled global script, opaque to
 HyperFrames' compiler so the full namespace survives), tone-mapped output with
 ACES filmic default, and deterministic GLTF loading.
+
+**Shipped creative quality and modularity (0.20):** 15 correctness and
+architecture improvements. Creative modularity with 6 file-reference types per
+scene and `config.imports` for reusable modules. Expanded variant model with
+scene overrides and theme/captions/timing overrides. Neutral project scaffold.
+Concept branching workflow. Measured cue timing for 3D. Theme token preservation
+through pipeline round-trips. Deterministic seeded particles. `data-grow`/`data-mark`
+transformOrigin fix. GSAP vendored locally (zero CDN). Semantic action validation
+with clear errors for unsupported actions. `--reuse` audio integrity check.
+Release restore with fingerprint+timings for reuse. Creative-diversity eval suite
+(10 briefs, 11 metrics). 470+ unit + 6 eval tests.
 
 ## North star
 
@@ -43,22 +54,22 @@ The product must therefore:
 Generation, direction, changeability, maintenance, and management are product
 functions in service of this north star.
 
-## Current baseline: 0.7
+## Current baseline: 0.20.0
 
-Narova 0.7 is the generation and compilation engine:
+Narova 0.20 is the generation, compilation, rendering, and creative orchestration engine:
 
-- prompt/script/README/repository/URL to narrated video;
-- local TTS, voice cloning, alignment, captions, cues, audio, B-roll, and
-  platform size/duration presets;
-- source and claims ledgers;
-- deterministic HyperFrames composition;
-- validation, preview, snapshot QA, and rendering;
-- visual reuse and sentence-level audio caching;
-- hook variants and series mode.
-
-The immediate task is twofold: strengthen the creative system so modest models
-produce exceptional first results, and turn implicit caches and files into an
-explicit, inspectable project model.
+- All 0.7 capabilities (prompt-to-video, TTS, captions, cues, audio, sources,
+  ledgers, deterministic HyperFrames, validation, preview, QA, rendering)
+- Dual local renderers with provider-neutral `scene.visual` tree
+- Declarative 3D authoring (`scene.three`, `scene.elements`) with character
+  presets, PBR, shadows, instanced meshes, tone mapping
+- Creative modularity: 6 file-reference types per scene, project-level imports
+- Expanded variant model with per-scene overrides
+- Project choreography hook, AI clip generation
+- Product walkthrough capture with agent-browser
+- Named releases with fingerprint+timings for `--reuse` after restore
+- Neutral scaffold, concept branching, creative diversity evals
+- Sentence-level TTS cache, visual-only edit reuse, planner change classification
 
 ## 0.8 — Creative kernel and durable projects
 

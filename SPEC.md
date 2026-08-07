@@ -291,6 +291,9 @@ narova walkthrough status [id]   report missing, stale, or fresh captures
 narova compose        -> selected provider project + captions; prints scene starts
 narova captions       (re)write out/captions.srt + out/captions.vtt from timings.json
 narova shots          snapshot one QA frame per scene -> provider snapshots/
+narova karaoke generate  transcribe audio + transcript -> word-timed karaoke JSON + captions
+narova retime          auto-derive scene durations from karaoke word timings
+narova generate        AI clip generation via Sora/Runway APIs; downloads to assets/
 narova build          synth + compose + render -> out/video.mp4
 narova preview        HyperFrames Studio or no-browser draft MP4
 narova preview --detach   persistent Studio (PID/log); --stop ends it
@@ -386,6 +389,25 @@ Since 0.17.0: two bundled free local renderer providers, a provider-neutral
 draft preview MP4s, local raster/SVG/font/RTL/video support, portable motion
 and transitions, explicit capability rejection, and a complex no-browser eval.
 
+Since 0.19.0: declarative 3D authoring via `scene.three` and `scene.elements`
+(cameras, lights, primitives, models, GSAP-driven animations), Three.js upgraded
+from r149 UMD to r185 ESM with GLTFLoader included, ACES filmic tone mapping
+configurable (aces/agx/neutral/linear), built-in character presets (cat, mouse,
+robot), InstancedMesh with geometry/material cache, `narova generate`
+(Sora/Runway AI clip generation), project choreography hook
+(`choreography: "choreo.js"`), PBR surface (roughness/metalness/maps),
+shadows, environment maps, and camera animation helpers.
+
+Since 0.20.0: creative modularity (6 scene file-reference types + `config.imports`),
+expanded variant model with scene overrides and theme/captions/timing overrides,
+neutral project scaffold, concept branching workflow, measured cue timing for 3D
+animations (not `cue * 2` approximation), theme token preservation through
+pipeline round-trips, deterministic seeded particle randomness (mulberry32),
+`data-grow`/`data-mark` transformOrigin fix, GSAP vendored locally (zero CDN
+dependencies), semantic action validation (unsupported actions fail clearly),
+`--reuse` audio integrity check, release save/restore includes fingerprint for
+reuse, creative-diversity eval suite (10 briefs), 470+ unit + 6 eval tests.
+
 ## Timeline intermediate representation
 
 `narova compile` converts `reel.config.*` → `out/manifest.json`, a versioned
@@ -432,5 +454,4 @@ the canonical project snapshot.
 - `--eject`: make out/hf a standalone project you can edit in Studio.
 - Theme gallery: ready-made looks, picked by name.
 - Qwen voice cloning (`speaker: {clone: "sample.wav"}`).
-- Bundle GSAP into out/hf so rendering works fully offline.
 - Publish to npm.

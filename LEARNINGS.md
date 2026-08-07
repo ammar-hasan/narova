@@ -14,9 +14,11 @@ Keep the fixes in the code so they never come back.
    `rescale_timings()`. Verify: sum of scene durations == length of the
    joined audio, within a few ms.
 
-2. **Word timing is computed, not measured.** We synthesize each sentence
-   alone (so we know its length) and spread the words across it, weighted by
-   word length. Good enough for karaoke captions. No forced-aligner needed.
+2. **Word timing is computed, not measured (by default).** We synthesize each sentence
+    alone (so we know its length) and spread the words across it, weighted by
+    word length. Good enough for karaoke captions. When `align: true`, word
+    timings come from measured forced alignment (faster-whisper or whisper.cpp);
+    otherwise, length-weighted estimates are used.
 
 3. **Control the pauses yourself.** Neural TTS pauses randomly on
    punctuation. We synthesize sentence by sentence and insert fixed silence:
@@ -184,7 +186,60 @@ Keep the fixes in the code so they never come back.
 - Reactive reveals: elements with `data-cue="k"` appear when turn `k` starts.
   Everything else appears at scene start.
 - Two hosts trading lines, with questions and banter, read far better than
-  one narrator. Color the active caption word by speaker.
+  one narrator for explainers and dialogue formats. A single narrator works
+  well for brand promos, teaching, or documentary. Zero voices with silent
+  scenes works for music visualizers and motion graphics. Match the cast to
+  the   concept, not to a default.
+
+## 3D, choreography, and variants (0.19 — 0.20)
+
+- **Three.js r185 ESM requires a global script bundle.** The r149 UMD was
+  deprecated and removed. esbuild-bundled global script with GLTFLoader included
+  is the only path that survives HyperFrames' compiler tree-shaking. Dynamic
+  ESM imports get stripped to stubs.
+- **GLTF models must be prefetched and parsed before frame 0.** Async XHR
+  mid-scene pop-in breaks deterministic rendering. `fetch` + `parseAsync` +
+  `Promise.all(_pending)` gating ensures the assembled scene is ready at frame 0.
+- **Material opacity on Groups requires traversal.** `object.material` on a
+  `THREE.Group` is undefined — the old code silently killed the scene. Walk
+  descendants and drive every material's opacity from the GSAP timeline.
+- **Material-cache opacity bleed** — meshes that animate opacity need isolated
+  materials. Sharing the cache makes tweening one mesh fade all same-colored
+  siblings.
+- **`transformOrigin` in GSAP tweens breaks HyperFrames' sub-composition timeline**
+  under hyperframes@0.7.64. Pre-seed via `tl.set()` before the tween; never
+  include it in `fromTo`/`to` properties.
+- **Theme tokens must survive round-trips.** The manifest previously only stored
+  accent and bg. Custom tokens (stage, deep, halo, colw, user-defined) were
+  silently lost in configFromManifest. Every validated token must be spread
+  into the manifest and reconstructed downstream.
+- **`{ at: { cue: N } }` must use measured turn timings.** The pre-0.20 `cue * 2`
+  approximation made 3D animations fire at arbitrary 2-second boundaries.
+  `animationTweens` now accepts a measured `turns[]` array and resolves to actual
+  start times from timings.json.
+- **Particles need seeded randomness.** Unseeded `Math.random()` made every build
+  produce different particle layouts. mulberry32 PRNG seeded from scene+object
+  identity gives identical output for identical input, and different output for
+  different explicit seeds.
+- **Unsupported actions must fail validation, not silently compile.** `draw`,
+  `speak`, `react`, `follow`, `transform` were in ACTION_TYPES but `actionToAnim()`
+  returned null for all of them — validation accepted them but they had zero effect.
+- **GSAP must be vendored, not CDN-loaded.** Three.js was already vendored;
+  GSAP was the last runtime CDN dependency. Vendored 3.14.2 in `vendor/gsap/`.
+- **Release restore needs fingerprint for `--reuse`.** Without it, every restore
+  forces a full synth (even though the sentence cache would serve identical audio).
+  Saving `.audio-fingerprint` and `timings.json` in releases makes `--reuse` work.
+- **Variant model must support more than hook copy.** The original `{ scene: { body, vo } }`
+  was scene-1 only. `sceneOverrides`, `theme`/`captions`/`timing` overrides, and
+  kind tags (visual/narration/pacing/captions) expand the model without making
+  variants opaque full-project forks.
+- **The scaffold sets the creative default.** A teal/pink/two-host scaffold
+  trained agents to produce one visual style. A neutral single-narrator scaffold
+  with "replace everything" comments encourages original visual languages.
+- **Creative diversity needs measurement.** 10 radically different briefs, with
+  automated convergence checks (palette topology, caption presets, chrome usage,
+  css/choreo/3D footprint, scene-count distributions, hook/CTA patterns), makes
+  creative sameness visible before it ships.
 
 ## Render-path CSS compatibility (0.8.3)
 
