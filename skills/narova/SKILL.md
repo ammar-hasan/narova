@@ -26,7 +26,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.17.0"
+  version: "0.20.0"
 ---
 # narova — prompt to narrated, captioned video
 

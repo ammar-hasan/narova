@@ -4,7 +4,73 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.19.0] - 2026-08-06
+## [0.20.0] - 2026-08-07
+
+### Fixed
+
+- **Theme token preservation** — custom theme tokens (stage, deep, halo, colw,
+  user-defined) now survive the full manifest round-trip through all pipeline
+  stages. Previously only accent and bg were preserved.
+- **Measured cue timing for 3D** — animationTweens resolves `{ at: { cue: N } }`
+  to actual measured turn start times from timings.json, not the previous
+  `cue * 2` approximation. Planning estimates remain approximate; final
+  rendering uses measured timings.
+- **Semantic action validation** — `draw`, `speak`, `react`, `follow`, `transform`
+  now produced clear validation errors instead of silently compiling to nothing.
+  Supported actions: appear, disappear, move, rotate, scale, orbit, revolve.
+- **Deterministic particle randomness** — mulberry32 seeded PRNG replaces
+  `Math.random()` in Three.js particle generation. Same project + scene + object
+  identity produces identical particle layouts across builds.
+- **`data-grow` / `data-mark highlight` transformOrigin** — transformOrigin is
+  now pre-seeded via `tl.set()` before the tween, avoiding the HyperFrames
+  sub-composition timeline breakage under hyperframes@0.7.64.
+- **GSAP vendored locally** — GSAP 3.14.2 ships in `vendor/gsap/`. Generated
+  compositions have zero CDN dependencies at render time.
+- **Release restore + `--reuse`** — releases now save `.audio-fingerprint` and
+  `timings.json` so `--reuse` works after restore. `resolveReuse` also verifies
+  audio file integrity before declaring a reuse match.
+- **Version consistency** — all 7 version sources (root pkg, tool pkg, SKILL.md,
+  README badge, SPEC.md, CLI --version, docs) now fail CI when they drift.
+
+### Added
+
+- **Creative modularity** — 6 file-reference types per scene: `bodyFile`,
+  `cssFile`, `choreographyFile`, `threeFile`, `elementsFile`, `visualFile`.
+  `config.imports` for reusable project-level modules (CSS/JS/JSON/HTML/SVG).
+  All file contents are hashed for deterministic build invalidation.
+- **Expanded variant model** — kind tags (hook, visual, narration, pacing,
+  captions), `sceneOverrides` for any scene, theme/captions/timing overrides
+  per variant. Backward-compatible with the legacy `{ scene: { body, vo } }` form.
+- **Concept branching guidance** — SKILL.md and prompt-to-video.md encourage
+  sketching 2-3 distinct creative directions before committing to the final project.
+- **Creative-diversity evaluation suite** — 10 radically different briefs,
+  11 convergence metrics, machine-readable similarity checks, human review
+  checklist. Run via `node skills/narova/tool/evals/creative-diversity-eval.js`.
+- **Revision guarantee tests** — 14 tests verifying audio fingerprint stability
+  for visual-only edits, theme changes, caption changes, choreography changes,
+  and bed/SFX changes (all safe — no TTS required). Text, voice, and tempo edits
+  correctly invalidate the fingerprint.
+- **Planner accuracy tests** — 7 tests verifying correct VISUAL/AUDIO/FULL/CONFIG
+  classification for body, text, theme, structure, and transition edits.
+
+### Changed
+
+- **Skill reframed** — SKILL.md restructured into three categories: hard
+  invariants (deterministic rendering, reproducible timing, source grounding),
+  optional craft heuristics (hook formulas, casting conventions, pacing —
+  presented as defaults, not rules), and creative mandate (encourages custom
+  HTML/CSS/SVG/Three.js/choreography over built-in templates; removes or changes
+  captions when the concept calls for it).
+- **Neutral project scaffold** — one narrator, no default palette, no branded
+  Narova text, replace-everything design. The old teal/pink/two-host scaffold
+  is replaced.
+- **`references/scene-script.md`** — added creative hierarchy (semantic elements
+  → portable trees → HTML/CSS → choreography → explicit Three.js), hard
+  invariants section, "tools not templates" guidance for built-in layouts.
+- **`references/choreography.md`** — updated transformOrigin guidance to reflect
+  the pre-seed fix; documents the `tl.set` + `tl.fromTo` pattern.
+- **`references/gotchas.md`** — added revision guarantee matrix and resolved
+  issues section documenting all 6 fixes.
 
 ### Changed
 
