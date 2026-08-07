@@ -402,7 +402,7 @@ async function main() {
         const name = positionals[2];
         if (!name) { console.error('usage: narova release save <name>'); process.exit(1); }
         const projectDir = path.resolve(flags.project || '.');
-        const r = saveRelease(mp, name, { projectDir });
+        const r = await saveRelease(mp, name, { projectDir });
         console.log(`release "${r.name}" saved -> ${r.dir}  (${r.files.length} files: ${r.files.join(', ')})`);
         return;
       }

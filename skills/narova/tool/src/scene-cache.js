@@ -170,12 +170,74 @@ function planSpans(manifest, contextHash, fps, outDir) {
   });
 }
 
+/* Per-scene isolation safety gate. A project feature is "unsafe" to render
+ * scene-by-scene when its authored behavior can depend on the FULL project
+ * timeline (global DATA, multiple scenes, or absolute global times). Isolating
+ * such a feature into a t=0 scene-local project would silently change what the
+ * author wrote, so we fall back to a whole-video render instead.
+ *
+ * Unsafe (-> whole-video fallback):
+ *   - project choreography (config.choreography): by contract it can read the
+ *     global DATA object and address any scene via sc.start (see
+ *     references/choreography.md). It is authored in global time.
+ *   - .js imports: inlined into the same global choreography blob, so they
+ *     carry the same risk.
+ *
+ * Safe (kept per-scene): ordinary scene bodies, scene-local CSS, captions,
+ * transitions, declarative Three.js, scene.threeModule, scene scriptFile /
+ * choreographyFile — these are scene-scoped and are rebased to scene-local
+ * coordinates by composeSceneDoc (markers, turns, the Three.js driver, etc.).
+ *
+ * This is deliberately a small allow/deny list, NOT a dependency analyzer. If a
+ * future feature's locality is not provable, add it here as unsafe. */
+function selectiveRenderSafe(manifest) {
+  const m = manifest || {};
+  if (m.choreography && String(m.choreography).trim()) {
+    return { safe: false, reason: 'project choreography can reference global DATA and multiple scenes — performing a full render to preserve authored behavior' };
+  }
+  const imports = m.imports || {};
+  const jsImport = Object.entries(imports).find(([, file]) => typeof file === 'string' && file.toLowerCase().endsWith('.js'));
+  if (jsImport) {
+    return { safe: false, reason: `project import "${jsImport[0]}" is JavaScript inlined into the global timeline — performing a full render to preserve authored behavior` };
+  }
+  return { safe: true };
+}
+
 /* Decide what to reuse vs render. Returns { mode, contextHash, spans?,
- * wholeKey?, wholeFile?, reused, renderCount }. */
-function plan({ outDir, manifest, renderer, fps, quality }) {
+ * wholeKey?, wholeFile?, reused, renderCount }.
+ *
+ * For per-scene renderers we first ask selectiveRenderSafe(): if the project
+ * uses a feature whose per-scene isolation is not provably safe, we silently
+ * downgrade THIS build to the whole-video path (full render, cached as one
+ * MP4). That is the documented escape hatch — "fast when safe, full render
+ * when uncertain, never creatively wrong." The downgrade does not change the
+ * renderer; it only changes how the cache layers this build. */
+function plan({ outDir, manifest, renderer, fps, quality, log }) {
   const mode = (renderer && renderer.cache && renderer.cache.mode) || 'none';
+  const isolated = !!(renderer && renderer.cache && renderer.cache.isolated);
   const contextHash = renderContextHash(manifest, { fps, quality });
+  const downgrade = (reason) => {
+    if (log) log(`scene cache: selective render skipped — ${reason}`);
+    const key = wholeVideoKey(manifest, contextHash);
+    const wholeFile = path.join(cacheDir(outDir), `${key}.mp4`);
+    const total = manifest.totalDuration || (manifest.scenes || []).reduce((n, s) => n + (s.duration || 0), 0);
+    const reusable = spanIsValid(wholeFile, total);
+    return {
+      mode: 'whole-video', contextHash, wholeKey: key, wholeFile,
+      reused: reusable ? 1 : 0, renderCount: reusable ? 0 : 1,
+      selectiveSkipped: reason,
+    };
+  };
   if (mode === 'per-scene') {
+    // Only renderers that ISOLATE a scene into its own t=0 project (HyperFrames)
+    // need the safety gate: they must rebase authored behavior, and project-
+    // global JS (choreography / .js imports) cannot be rebased safely. no-browser
+    // renders the full project at absolute frame times, so its per-scene spans
+    // are correct by construction and are never downgraded.
+    if (isolated) {
+      const safety = selectiveRenderSafe(manifest);
+      if (!safety.safe) return downgrade(safety.reason);
+    }
     const spans = planSpans(manifest, contextHash, fps, outDir);
     return {
       mode, contextHash, spans,
@@ -241,7 +303,7 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
   const outMp4 = path.join(outDir, name);
   const fps = Number(opts.fps || (manifest.format && manifest.format.fps) || 30);
   const quality = opts.quality || 'standard';
-  const cachePlan = plan({ outDir, manifest, renderer, fps, quality });
+  const cachePlan = plan({ outDir, manifest, renderer, fps, quality, log });
   const mode = cachePlan.mode;
 
   if (mode === 'per-scene' && typeof renderer.renderSpans === 'function') {
@@ -379,17 +441,26 @@ function pruneCache(dir, keepFiles) {
   const overCount = files.length > CACHE_MAX_SPANS;
   if (!overSize && !overCount) return;
 
-  // Sort by age (oldest first), then prune until within budget.
+  // LRU: oldest access (mtime) first. Walk the sorted array and delete
+  // non-protected entries until BOTH budgets are satisfied.
+  //
+  // IMPORTANT: do NOT mutate `files.length` during the for..of loop. The prior
+  // implementation did `files.length--` after each delete, which desynchronizes
+  // the array iterator whenever a protected entry is skipped with `continue`
+  // (the index advances but the length only shrinks on deletes). With enough
+  // old protected entries the iterator then terminates early and the cache is
+  // left OVER budget (proven: 200 entries with the oldest 100 protected left
+  // 150 survivors, 50 over the count budget). Track survivors in plain counters
+  // instead — the array stays intact for the whole iteration.
   files.sort((a, b) => a.mtime - b.mtime);
+  let survivorCount = files.length;
+  let survivorSize = totalSize;
   for (const f of files) {
-    if (protectedPaths.has(f.path)) continue;
-    // Stop pruning once within both limits.
-    if (!overCount || files.length <= CACHE_MAX_SPANS) {
-      if (!overSize || totalSize <= CACHE_MAX_SIZE) break;
-    }
+    if (protectedPaths.has(f.path)) continue; // current-build span: always retained
+    if (survivorCount <= CACHE_MAX_SPANS && survivorSize <= CACHE_MAX_SIZE) break;
     try { fs.rmSync(f.path, { force: true }); } catch {}
-    totalSize -= f.size;
-    files.length--; // track remaining count
+    survivorCount--;
+    survivorSize -= f.size;
   }
 }
 
@@ -399,6 +470,12 @@ function pruneCache(dir, keepFiles) {
 function formatCacheStatus(cachePlan) {
   if (!cachePlan || cachePlan.mode === 'none') {
     return 'cache: not supported for this renderer';
+  }
+  if (cachePlan.selectiveSkipped) {
+    const reuse = cachePlan.reused
+      ? 'previous MP4 reusable — render would be skipped'
+      : 'miss — full render required';
+    return `cache (whole-video, selective skipped): ${reuse} — ${cachePlan.selectiveSkipped}`;
   }
   if (cachePlan.mode === 'per-scene') {
     const total = cachePlan.spans.length;
@@ -413,5 +490,5 @@ module.exports = {
   CACHE_DIR, cacheDir,
   renderContextHash, sceneTimingsFingerprint, sceneCacheKey, wholeVideoKey,
   spanIsValid, planSpans, plan, assembleFromSpans, renderToMp4, fullAudioPath,
-  formatCacheStatus,
+  formatCacheStatus, selectiveRenderSafe, pruneCache,
 };

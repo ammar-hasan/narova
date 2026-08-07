@@ -57,29 +57,7 @@ function rmDir(dir) {
   fs.rmdirSync(dir);
 }
 
-/* Lightweight config reader: load a config file without full schema resolution.
- * Supports ESM (export default) and CJS (module.exports) and plain JSON. */
-function loadRawConfig(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  const text = fs.readFileSync(filePath, 'utf8');
-  if (ext === '.json') return JSON.parse(text);
-  if (ext === '.cjs' || ext === '.js' || ext === '.mjs') {
-    try {
-      const fn = new Function('exports', 'module', text);
-      const m = { exports: {} };
-      fn(m.exports, m);
-      return m.exports && m.exports.default ? m.exports.default : m.exports;
-    } catch {
-      const defaultMatch = text.match(/export\s+default\s+(\{[\s\S]*\})\s*;?\s*$/);
-      if (defaultMatch) return JSON.parse(defaultMatch[1].replace(/'/g, '"').replace(/(\w+):/g, '"$1":'));
-      const cjsMatch = text.match(/module\.exports\s*=\s*(\{[\s\S]*\})\s*;?\s*$/);
-      if (cjsMatch) return JSON.parse(cjsMatch[1].replace(/'/g, '"').replace(/(\w+):/g, '"$1":'));
-      return null;
-    }
-  }
-  return null;
-}
-
+/* isInside: true if `child` resolves strictly under `parent`. */
 function isInside(parent, child) {
   const rel = path.relative(parent, child);
   return rel !== '' && !rel.startsWith('..' + path.sep) && rel !== '..';
@@ -113,8 +91,12 @@ function resolveProjectDir(fromDir) {
 
 /* Snapshot a project: copies manifest + config + theme + assets + ledgers
  * + audio fingerprint and timings (so --reuse works after restore).
- * Returns { name, dir, created, files }. */
-function save(manifestPath, name, opts = {}) {
+ * Returns { name, dir, created, files }.
+ *
+ * Async because scene file references are discovered by loading the config
+ * through the SAME real loader the build uses (config.loadConfigFile, which
+ * handles ESM/CJS/JSON) — never a second regex-based pseudo-parser. */
+async function save(manifestPath, name, opts = {}) {
   const releaseDir = releasePath(name);
   fs.mkdirSync(releaseDir, { recursive: true });
 
@@ -171,14 +153,22 @@ function save(manifestPath, name, opts = {}) {
       }
     }
 
-    // Scene file references: snapshot every project-relative source file
-    // referenced by the config (bodyFile, cssFile, choreographyFile,
+    // Scene file references + imports: snapshot every project-relative source
+    // file referenced by the config (bodyFile, cssFile, choreographyFile,
     // scriptFile, threeFile, threeModule, elementsFile, visualFile, and
-    // config.imports). We load the raw config file to discover the paths.
+    // config.imports). We load the config with the real loader (config.js —
+    // same code path as `narova build`) to discover the paths.
+    //
+    // Files are written at their ORIGINAL project-relative path under the
+    // release dir (e.g. releaseDir/scenes/intro.html, NOT
+    // releaseDir/source/scenes/intro.html). restore() copies each release-dir
+    // entry back to the project root, so the project-relative path round-trips
+    // exactly and the restored config can resolve its file refs again.
     try {
       const configFile = findConfigInDir(projectDir);
       if (configFile) {
-        const raw = loadRawConfig(configFile);
+        const { loadConfigFile } = require('./config');
+        const raw = await loadConfigFile(configFile);
         const sceneRefKeys = ['bodyFile', 'cssFile', 'choreographyFile', 'scriptFile',
           'threeFile', 'threeModule', 'elementsFile', 'visualFile'];
         if (raw && Array.isArray(raw.scenes)) {
@@ -187,10 +177,10 @@ function save(manifestPath, name, opts = {}) {
               if (typeof s[key] !== 'string' || !s[key].trim()) continue;
               const refPath = path.resolve(projectDir, s[key]);
               if (!isInside(projectDir, refPath) || !fs.existsSync(refPath)) continue;
-              const dest = path.join(releaseDir, 'source', s[key]);
+              const dest = path.join(releaseDir, s[key]);
               fs.mkdirSync(path.dirname(dest), { recursive: true });
               fs.copyFileSync(refPath, dest);
-              saved.push('source/' + s[key]);
+              saved.push(s[key]);
             }
           }
         }
@@ -199,10 +189,10 @@ function save(manifestPath, name, opts = {}) {
             if (typeof ref !== 'string' || !ref.trim()) continue;
             const refPath = path.resolve(projectDir, ref);
             if (!isInside(projectDir, refPath) || !fs.existsSync(refPath)) continue;
-            const dest = path.join(releaseDir, 'source', ref);
+            const dest = path.join(releaseDir, ref);
             fs.mkdirSync(path.dirname(dest), { recursive: true });
             fs.copyFileSync(refPath, dest);
-            saved.push('source/' + ref);
+            saved.push(ref);
           }
         }
       }

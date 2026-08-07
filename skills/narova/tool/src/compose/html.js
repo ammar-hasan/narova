@@ -28,7 +28,14 @@ function buildKaraokeOverlays(config) {
 .narration-karaoke-line{position:absolute;left:54px;right:54px;bottom:83px;z-index:21;min-height:110px;padding:10px 10px 19px;display:flex;flex-wrap:wrap;align-content:center;justify-content:center;column-gap:13px;row-gap:2px;color:#fffdf6;font-size:37px;font-weight:600;line-height:1.72;text-align:center;text-shadow:0 3px 8px rgba(0,0,0,.92),0 0 18px rgba(0,0,0,.48);white-space:normal}
 .narration-karaoke-line span{display:inline-block}.narration-karaoke-active{z-index:22;user-select:none}.narration-karaoke-active .ghost{color:transparent;text-shadow:none}.narration-karaoke-active .hot{color:#ffd56a;transform:translateY(-1px) scale(1.055);text-shadow:0 0 8px rgba(255,203,83,.78),0 2px 7px rgba(0,0,0,.95)}`;
 
-  function overlayForScene(sceneStart, sceneDur) {
+  // overlayForScene(sceneStart, sceneDur, offset=0): filtering always uses the
+  // GLOBAL cue coordinates (sceneStart is the scene's global start), but emitted
+  // data-start values are reduced by `offset` so a per-scene isolated project —
+  // whose timeline is rebased to t=0 — gets scene-local timestamps. The full
+  // render passes offset=0 (its timeline is already global); the per-scene
+  // render passes offset=globalStart. Durations are differences, so they are
+  // unaffected by the offset.
+  function overlayForScene(sceneStart, sceneDur, offset = 0) {
     const sceneEnd = sceneStart + sceneDur;
     return cues.filter(c => c.start < sceneEnd && c.end > sceneStart).map((cue, ci) => {
       const start = Math.max(cue.start, sceneStart);
@@ -41,10 +48,10 @@ function buildKaraokeOverlays(config) {
         if (ws >= we) return '';
         const wordsHtml = cue.words.map((ww, idx) =>
           `<span class="${idx === wi ? 'hot' : 'ghost'}">${escapeHtml(ww.text)}</span>`).join(' ');
-        return `<div class="narration-karaoke-line narration-karaoke-active" data-layout-ignore data-start="${fmt(ws)}" data-duration="${fmt(Math.max(0.04, we - ws))}" data-track-index="${tb + 2 + wi}">${wordsHtml}</div>`;
+        return `<div class="narration-karaoke-line narration-karaoke-active" data-layout-ignore data-start="${fmt(ws - offset)}" data-duration="${fmt(Math.max(0.04, we - ws))}" data-track-index="${tb + 2 + wi}">${wordsHtml}</div>`;
       }).join('');
       const baseWords = cue.words.map(w => `<span>${escapeHtml(w.text)}</span>`).join(' ');
-      return `<div class="narration-karaoke-pill" data-start="${fmt(start)}" data-duration="${fmt(duration)}" data-track-index="${tb}"></div><div class="narration-karaoke-line" data-start="${fmt(start)}" data-duration="${fmt(duration)}" data-track-index="${tb + 1}">${baseWords}</div>${activeLayers}`;
+      return `<div class="narration-karaoke-pill" data-start="${fmt(start - offset)}" data-duration="${fmt(duration)}" data-track-index="${tb}"></div><div class="narration-karaoke-line" data-start="${fmt(start - offset)}" data-duration="${fmt(duration)}" data-track-index="${tb + 1}">${baseWords}</div>${activeLayers}`;
     }).join('');
   }
 
@@ -255,9 +262,12 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   const isFirstScene = sceneIdx === 0;
   const r3 = v => Math.round(v * 1000) / 1000;
 
-  // External karaoke captions for this scene's time window.
+  // External karaoke captions for this scene's time window. Filtering uses the
+  // GLOBAL window (globalStart..globalStart+sceneDur); emitted data-start values
+  // are rebased to scene-local by passing offset=globalStart (this project's
+  // timeline starts at 0).
   const karaoke = buildKaraokeOverlays(config);
-  const karaokeOverlay = karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur) : '';
+  const karaokeOverlay = karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur, globalStart) : '';
   const karaokeCss = karaoke.css || '';
 
   // Captions: filter groups within this scene's time window, rebase to t=0.
@@ -279,6 +289,22 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   // Scene-local DATA: only this scene, timeline rebased to t=0.
   // _firstScene metadata tells the runtime whether to apply an entrance
   // transition — see runtime.js transition logic for the contract.
+  //
+  // Timing invariants for an isolated scene project (its timeline is t=0..dur):
+  //   - turns are ALREADY scene-local in timings.json (manifest.mergeTimings
+  //     adds scene.start to convert them to global for the full project). They
+  //     are passed through UNCHANGED here — rebasing them again would corrupt
+  //     them (a local 0.2s turn in scene 2 would become 0.2 - start < 0).
+  //   - markers are GLOBAL project timestamps, so they ARE rebased: a marker
+  //     inside this scene's window becomes a scene-local time; markers outside
+  //     the window are dropped (no element in this scene can fire them).
+  const sceneTurns = scData.turns || [];
+  const localMarkers = {};
+  for (const [mk, mv] of Object.entries(config.markers || {})) {
+    if (typeof mv === 'number' && mv >= globalStart && mv <= globalStart + sceneDur) {
+      localMarkers[mk] = r3(mv - globalStart);
+    }
+  }
   const sceneData = {
     total: sceneDur,
     preset: data.preset,
@@ -286,22 +312,27 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
       id: scData.id,
       start: 0,
       dur: sceneDur,
-      turns: (scData.turns || []).map(t => Math.max(0, r3(t - globalStart))),
+      turns: sceneTurns,
       transition: scData.transition || 'fade',
       _firstScene: isFirstScene,
     }],
     groups: sceneGroups,
-    markers: config.markers || {},
+    markers: localMarkers,
   };
 
-  // Three.js and raw Three.js module scene body (same as composeDoc).
+  // Three.js and raw Three.js module scene body. The scene is rebased to t=0,
+  // so the Three.js bootstrap must schedule its render-driver tween and cue
+  // animations at LOCAL coordinates: start=0 and the (already scene-local)
+  // turns array. Passing the global start here would place the driver tween
+  // beyond the isolated project's duration and the canvas would never animate.
   const enrichedScene = { ...scene };
   const s = enrichedScene;
+  const scLocal = { start: 0, dur: sceneDur, turns: sceneTurns };
   let body = String(s.body || '');
   if (s._threeModuleContents) {
-    body = threeModuleSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + (body || '');
+    body = threeModuleSceneBody(s, scLocal, size.w, size.h) + (body || '');
   } else if (s.three) {
-    body = threeSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + (body || '');
+    body = threeSceneBody(s, scLocal, size.w, size.h) + (body || '');
   }
   body += karaokeOverlay;
   const nsBody = namespaceIds(body, s.id);
@@ -366,7 +397,11 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
     mergedChoreography += '\n/* scene-choreography:' + s.id + ' */\n' + s._choreographyFileContents;
   }
   if (s._scriptFileContents) {
-    mergedChoreography += '\n/* scene-script:' + s.id + ' */\n(function(){ var _scStart=' + globalStart + ', _scDur=' + sceneDur + ';\n' + s._scriptFileContents + '\n})();\n';
+    // _scStart is the scene's anchor on the CURRENT timeline. The full render
+    // sets it to the global start; this isolated project's timeline is t=0, so
+    // _scStart=0 makes `_scStart + offset` resolve to the same scene-local
+    // offset the author intended.
+    mergedChoreography += '\n/* scene-script:' + s.id + ' */\n(function(){ var _scStart=0, _scDur=' + sceneDur + ';\n' + s._scriptFileContents + '\n})();\n';
   }
   if (config.imports) {
     for (const [name, imported] of Object.entries(config.imports)) {

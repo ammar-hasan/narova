@@ -41,6 +41,25 @@ function voiceBlock(voices = {}) {
   }).join('\n');
 }
 
+/* Caption-preset overrides that must come AFTER voiceBlock() in source order.
+ *
+ * subtitle is the default and is meant to be a genuinely PLAIN readable
+ * treatment — not Narova karaoke in disguise. So in subtitle mode:
+ *   - the speaker label + equalizer bar are hidden (they are the loudest
+ *     karaoke signal), and
+ *   - active/past/upcoming words all render as plain ink with no glow.
+ * voiceBlock() emits `.cap-w.<voice>.active{color;text-shadow}` at specificity
+ * (0,3,0); these `.cap-preset-subtitle .cap-w.active` rules are also (0,3,0) so
+ * source order decides — emitting them last makes subtitle win. The richer
+ * speaker-colored behavior is preserved for the explicit karaoke/slam/pop/rise
+ * presets (their authors opted into the karaoke look). */
+function presetOverridesCss() {
+  return `.cap-preset-subtitle .spk{display:none}
+.cap-preset-subtitle .cap-w,
+.cap-preset-subtitle .cap-w.past,
+.cap-preset-subtitle .cap-w.active{color:var(--ink);opacity:.92;text-shadow:none}`;
+}
+
 /* ---- production infrastructure (always included) -------------------------- */
 
 function staticCss(W, H, t = DEFAULT_TOKENS, captionsEnabled = true) {
@@ -90,9 +109,9 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .cap-w{display:inline-block;margin:0 .13em;color:var(--capidle);opacity:.6}
 .cap-w.past{color:var(--ink);opacity:.85}
 .cap-w.active{opacity:1;color:var(--ink)}
-.cap-preset-subtitle .cap-w{color:var(--ink);opacity:.92}
-.cap-preset-subtitle .cap-w.past{color:var(--ink);opacity:.92}
-.cap-preset-subtitle .cap-w.active{color:var(--ink);opacity:.92}
+/* subtitle preset neutrality lives in presetOverridesCss() (emitted after
+   voiceBlock) so it wins the equal-specificity tie with per-voice active word
+   rules — otherwise subtitle words still pick up speaker colors and glow. */
 .cap-preset-karaoke .cap-w.active{color:inherit;transform:translateY(-2px) scale(1.05)}
 .cap-preset-slam .cap-w.active{font-weight:900}
 .cap-preset-pop .cap-w{opacity:.35}
@@ -244,10 +263,11 @@ function composeCss(theme, voices, size, extraCss = '', mode = 'dark', captionsE
     rootBlock(t),
     staticCss(size.w, size.h, t, captionsEnabled),
     voiceBlock(voices),
+    presetOverridesCss(),
   ];
   if (includePatterns) parts.push(patternsCss(t));
   const out = parts.join('\n');
   return extraCss ? `${out}\n${extraCss}` : out;
 }
 
-module.exports = { composeCss, patternsCss, DEFAULT_TOKENS, LIGHT_TOKENS };
+module.exports = { composeCss, patternsCss, presetOverridesCss, DEFAULT_TOKENS, LIGHT_TOKENS };

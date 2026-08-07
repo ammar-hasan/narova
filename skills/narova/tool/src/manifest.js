@@ -159,8 +159,13 @@ function compile(config, opts = {}) {
       // through the manifest so downstream consumers (compose, no-browser,
       // exports) reconstruct the full authored palette.
       ...(theme || {}),
-      accent: (theme && theme.accent) || '#2ee6d6',
-      bg:     (theme && theme.bg)     || '#080d16',
+      // Defaults MUST match compose/css.js DEFAULT_TOKENS so the canonical
+      // project representation agrees with the rendered output. The runtime
+      // palette is monochrome gray by design (zero-style default); the legacy
+      // teal/navy values were a stale contradiction. Keep these in sync with
+      // DEFAULT_TOKENS in src/compose/css.js.
+      accent: (theme && theme.accent) || '#888888',
+      bg:     (theme && theme.bg)     || '#101010',
       mode,
       css:    themeCss || '',
     },
@@ -181,6 +186,12 @@ function compile(config, opts = {}) {
       sfx: (sfx || []).map(s => ({ file: path.relative(projectDir, s.file) || s.file, scene: s.scene || null, at: s.at, volume: s.volume })),
     },
     captions: {
+      // `enabled` distinguishes `captions:false` (band off) from the default
+      // subtitle preset. Without it, both serialize to the same object and the
+      // per-scene render cache cannot tell them apart — serving captioned
+      // pixels for a captions-off build (or vice versa). renderContextHash
+      // already hashes this whole object, so the enabled flag flows in for free.
+      enabled:   config.captionsEnabled !== false,
       preset:   (captions && captions.preset)   || 'subtitle',
       emphasis: (captions && captions.emphasis) || [],
       maxWords: (captions && captions.maxWords) || null,
@@ -194,6 +205,13 @@ function compile(config, opts = {}) {
     variant: variant || null,
     includePatterns: includePatterns !== false,
     markers: markers || {},
+    // Import name → project-relative file. The render cache's selective-render
+    // safety gate reads this to detect project-global JS imports (.js files are
+    // inlined into the composition's choreography and can reference the global
+    // DATA/timeline, so they disable per-scene isolation — see scene-cache.js).
+    imports: Object.fromEntries(
+      Object.entries(config.imports || {}).map(([n, imp]) => [n, imp && imp.file]),
+    ),
     environment: {
       narova:    opts.toolVersion || '0.8.0',
       backend:   opts.backend || config.voices && Object.values(config.voices)[0]?.backend || 'piper',
@@ -334,6 +352,7 @@ function sceneHash(s) {
     choreographyFile: s._choreographyFileContents || null,
     scriptFile: s._scriptFileContents || null,
     threeModule: s._threeModuleContents || null,
+    cssFile: s._cssFileContents || null,
   });
   return sha256(payload);
 }

@@ -74,12 +74,26 @@ test('karaoke keeps the historical active-word look, scoped to its preset class'
     'the unscoped transform is gone — other presets drive transform via timeline tweens');
 });
 
-test('slam, pop, rise, and subtitle presets ship built-in styles', () => {
+test('slam, pop, rise presets ship built-in styles', () => {
   const css = composeCss({}, voices, size);
   assert.match(css, /\.cap-preset-slam \.cap-w\.active\{font-weight:900\}/);
   assert.match(css, /\.cap-preset-pop \.cap-w\{opacity:\.35\}/);
   assert.match(css, /\.cap-preset-rise \.cap-w\.active\{transform:translateY\(-3px\);box-shadow:0 \.1em 0 currentColor\}/);
-  assert.match(css, /\.cap-preset-subtitle \.cap-w\{/);
+});
+
+test('subtitle preset is genuinely neutral: no speaker UI, no voice color, no glow', () => {
+  const css = composeCss({}, voices, size);
+  // Speaker label + equalizer bar are hidden in subtitle mode.
+  assert.match(css, /\.cap-preset-subtitle \.spk\{display:none\}/);
+  // Active/upcoming/past words all render as plain ink with no glow.
+  assert.match(css, /\.cap-preset-subtitle \.cap-w\.active\{color:var\(--ink\);opacity:\.92;text-shadow:none\}/);
+  // The subtitle override MUST come after the per-voice active rule so it wins
+  // the equal-specificity tie (otherwise active subtitle words inherit the
+  // speaker color + glow and the preset is not neutral).
+  const voiceIdx = css.indexOf('.cap-w.a.active{color:#ff7eb6');
+  const subIdx = css.indexOf('.cap-preset-subtitle .cap-w.active');
+  assert.ok(voiceIdx > -1, 'voice active rule present');
+  assert.ok(subIdx > voiceIdx, 'subtitle override emitted after the voice rule');
 });
 
 test('emphasis keywords use the accent token, composing with every preset', () => {

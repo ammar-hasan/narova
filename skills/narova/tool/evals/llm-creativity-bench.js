@@ -117,7 +117,11 @@ function analyzeConfig(rawConfig) {
     voiceCount: Object.keys(voices).length,
     hasVo: scenes.some(s => (s.vo || []).length > 0),
     captionsEnabled: rawConfig.captions !== false,
-    chromeEnabled: rawConfig.chrome !== false,
+    // Chrome is OPT-IN as of v0.26 (off by default). Treat it as enabled only
+    // when the model explicitly turns it on (true, or an object with a true key).
+    chromeEnabled: rawConfig.chrome === true ||
+      (rawConfig.chrome != null && rawConfig.chrome !== false &&
+        Object.values(rawConfig.chrome).some(v => v === true)),
     patternsEnabled: rawConfig.patterns === true,
     usesThemeCss: !!(theme.css),
     usesBodyHtml: scenes.some(s => typeof s.body === 'string'),
@@ -129,7 +133,7 @@ function analyzeConfig(rawConfig) {
     usesAssets: scenes.some(s => typeof s.body === 'string' && /<img|<video|src=["']assets\//.test(s.body)),
     usesDataDrift: scenes.some(s => typeof s.body === 'string' && /data-drift/.test(s.body)),
     hasTransition: scenes.some(s => s.transition),
-    captionPreset: (rawConfig.captions && rawConfig.captions.preset) || 'karaoke',
+    captionPreset: (rawConfig.captions && rawConfig.captions.preset) || 'subtitle',
     usesLayoutClasses: scenes.some(s => typeof s.body === 'string' &&
       /\b(s-title|pane|stat|flow|verdicts|s-close|s-two|planes|stepper|bigquote|ledger|referee|owners|homes|dials|desk|stack|flags)\b/.test(s.body)),
     accentColor: theme.accent || '',

@@ -199,11 +199,13 @@ grammar.
 
 ## Casting the voices
 
-The cast follows the shape (§Video shapes): a promo gets one narrator, a
-duet-driven shape gets two hosts, one male + one female (piper
-`en_US-ryan-high` + `en_US-hfc_female-medium`). More than two only when the
-format needs it (a panel). Match the questioner/explainer roles to the
-voices and keep the casting fixed for the whole video — and across revisions.
+Casting serves the concept, not a default formula. Pick the number of voices
+and the specific speakers that fit the piece: a solo narrator for a promo or
+essay, two hosts when the work is a conversation or debate, more only when the
+format needs it (a panel). Match roles (questioner/explainer, protagonist/foil)
+to voices that read the way the characters should sound, and keep the casting
+fixed for the whole video — and across revisions. There is no prescribed
+male/female duet; choose voices on suitability, not on a default pairing.
 
 ## Iterating: no surprises
 
@@ -253,6 +255,6 @@ comparable script-to-video projects. Word counts and WPM: soundbrandingideas.com
 prepublish.ai, mypromovideos.com. Explainer beats: wpswings.com, gisteo.com.
 Hook window: scriptstorm.ai, ltx.io, inro.social. Teaching principles
 (segment/signal/weed, ≤6 min, modality): Brame 2016, CBE—Life Sciences
-Education (pmc.ncbi.nlm.nih.gov/articles/PMC5132380). Two-host casting:
-github.com/zarazhangrui/personalized-podcast. Scene-as-unit model:
+Education (pmc.ncbi.nlm.nih.gov/articles/PMC5132380). Multi-host podcast
+casting: github.com/zarazhangrui/personalized-podcast. Scene-as-unit model:
 github.com/gyoridavid/short-video-maker.

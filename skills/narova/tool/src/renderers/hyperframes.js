@@ -31,8 +31,14 @@ const provider = {
    * timeline rebased to t=0, a trimmed audio track, and a scene-local DATA
    * object. Dirty scenes re-render as their own projects; cached spans are
    * concatenated + muxed with the full audio track via ffmpeg. The
-   * whole-video path remains as the fallback for any cache failure. */
-  cache: { mode: 'per-scene' },
+   * whole-video path remains as the fallback for any cache failure.
+   *
+   * `isolated: true` marks that this renderer's per-scene path RECOMPOSES a
+   * standalone scene-local project (unlike no-browser, which renders the full
+   * project at absolute frame times). Only isolated per-scene rendering is
+   * subject to the selective-render safety gate in scene-cache.js, because
+   * only it has to rebase authored behavior into a t=0 timeline. */
+  cache: { mode: 'per-scene', isolated: true },
 
   doctor() {
     return {

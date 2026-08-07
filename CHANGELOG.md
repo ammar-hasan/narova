@@ -4,6 +4,60 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.26.1] - 2026-08-07
+
+A narrowly scoped correctness pass on v0.26's per-scene (selective) rendering,
+caching, and branch snapshot features. No new architecture was introduced; the
+guiding rule was "fast when safe, full render when uncertain, never creatively
+wrong."
+
+### Fixed
+
+- **HyperFrames selective-render timing (decoded-frame verified).** Isolated
+  per-scene renders of a non-first scene now match a clean full render at the
+  pixel level (new real-render equivalence test). Previously the scene's
+  Three.js canvas never animated, marker-triggered elements never appeared,
+  external karaoke overlays never showed, and scene-local turn cues fired late
+  — all because the global-to-local rebasing was incomplete. Markers, the
+  Three.js render driver + cue animations + the raw `threeModule` shell,
+  scene-script `_scStart`, and karaoke overlays are rebased to the scene-local
+  timeline; scene-local turns are no longer double-rebased.
+- **`captions:false` cache invalidation.** Toggling the caption band off (or on)
+  now changes the render-cache context hash, so a captioned span can no longer
+  be served for a captions-off build (or vice versa).
+- **`scene.cssFile` now applies.** The schema accepted it but compose silently
+  ignored it; it is now merged into the stylesheet (full and per-scene) and
+  included in the scene content hash.
+- **Branch restore round-trip.** `release save` wrote scene file references
+  under a `source/` prefix that `restore` copied back verbatim, leaving the
+  restored config unable to resolve `bodyFile`/`cssFile`/`scriptFile`/
+  `threeModule`/imports. Files now round-trip at their original project-relative
+  paths, and the release saver uses Narova's real config loader
+  (ESM/CJS/JSON) instead of a regex pseudo-parser.
+- **Cache LRU retention bounds the count.** Pruning mutated the array while
+  iterating it; with old protected spans the iterator terminated early and the
+  cache could stay over its 100-span budget. Survivors are now tracked in plain
+  counters.
+- **Subtitle preset is genuinely neutral.** Active words no longer inherit
+  speaker colors + glow (the voice rule was winning the equal-specificity tie),
+  and the speaker label/equalizer is hidden in subtitle mode. Karaoke/slam/pop/
+  rise keep the richer treatment.
+- **Manifest theme defaults agree with runtime.** The canonical manifest no
+  longer records legacy teal/navy defaults that contradicted the v0.26
+  monochrome runtime palette.
+
+### Changed
+
+- **Selective-render safety gate.** Projects whose authored behavior can depend
+  on the full project timeline (project choreography, `.js` imports) now
+  transparently take a whole-video render for HyperFrames, with a stated reason,
+  instead of attempting an unsafe per-scene isolate. `no-browser` is unaffected
+  (its spans render the full project at absolute frame times by construction).
+- **Docs.** Product position is "deterministic scene-scripted video with
+  exceptionally strong narration synchronization, but narration is optional";
+  the fixed male/female duet casting prescription was removed (casting serves
+  the concept).
+
 ## [0.26.0] - 2026-08-07
 
 ### Changed

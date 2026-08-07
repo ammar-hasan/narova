@@ -25,12 +25,35 @@ function copyThreeAssets(assetsDir) {
   if (!fs.existsSync(dest)) fs.copyFileSync(THREE_MODULE_SRC, dest);
 }
 
+/* External narration (a pre-recorded file + optional word timings) skips TTS
+ * synth; scenes carry explicit `dur`. When word timings are present we
+ * synthesize the same per-scene timing entries synth would have written, so
+ * composeData can build caption groups. Shared by compose() (full project) and
+ * composeSceneProject() (isolated span) — previously only compose() did this,
+ * so per-scene rendering of external-narration projects always threw and fell
+ * back to a full render. Returns null when the project is not external-narrated
+ * or carries no word timings (callers fall back to timings.json). */
+function synthesizeExternalTimings(config) {
+  if (!(config.narrationSource && config.narrationSource.file && config.narrationSource.wordTimings)) {
+    return null;
+  }
+  const cues = config.narrationSource.wordTimings;
+  const timings = { total: config.scenes.reduce((n, s) => n + (s.dur || 0), 0) };
+  let cursor = 0;
+  for (const s of config.scenes) {
+    const sceneEnd = cursor + (s.dur || 0);
+    const sceneCues = cues.filter(c => c.start < sceneEnd && c.end > cursor);
+    timings[s.id] = { dur: s.dur || 0, words: sceneCues.flatMap(c => c.words) };
+    cursor = sceneEnd;
+  }
+  return timings;
+}
+
 function compose(config, outDir) {
   const timingsPath = path.join(outDir, 'timings.json');
   const fullWav = path.join(outDir, 'audio', 'full.wav');
   // External narration: no TTS synth needed — scenes carry explicit dur.
   const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
-  const needsTimings = hasExternalNarration && config.narrationSource.wordTimings;
   if (!hasExternalNarration && (!fs.existsSync(timingsPath) || !fs.existsSync(fullWav))) {
     throw new Error('compose needs out/timings.json and out/audio/full.wav — run `narova synth` first');
   }
@@ -38,20 +61,9 @@ function compose(config, outDir) {
   if (fs.existsSync(timingsPath)) {
     timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
   }
-  if (needsTimings) {
-    // Synthesize minimal timing entries for scenes with external karaoke.
-    const cues = config.narrationSource.wordTimings;
-    let totalDur = 0;
-    for (const s of config.scenes) totalDur += s.dur || 0;
-    timings.total = totalDur;
-    let cursor = 0;
-    for (const s of config.scenes) {
-      const sceneEnd = cursor + (s.dur || 0);
-      const sceneCues = cues.filter(c => c.start < sceneEnd && c.end > cursor);
-      const words = sceneCues.flatMap(c => c.words);
-      timings[s.id] = { dur: s.dur || 0, words };
-      cursor = sceneEnd;
-    }
+  const synthesized = synthesizeExternalTimings(config);
+  if (synthesized) {
+    timings = synthesized;
   } else if (!hasExternalNarration) {
     // Standard mode: validate timings.
   }
@@ -64,6 +76,7 @@ function compose(config, outDir) {
   let mergedExtraCss = config.themeCss || '';
   let mergedChoreography = config.choreography || '';
   for (const s of config.scenes) {
+    if (s._cssFileContents) mergedExtraCss += '\n/* scene-css:' + s.id + ' */\n' + s._cssFileContents;
     if (s._choreographyFileContents) mergedChoreography += '\n/* scene:' + s.id + ' */\n' + s._choreographyFileContents;
     if (s._scriptFileContents) {
       const scData = data.scenes.find(d => d.id === s.id);
@@ -203,8 +216,13 @@ function composeSceneProject(config, outDir, sceneIdx) {
   if (!hasExternalNarration && !fs.existsSync(timingsPath)) {
     throw new Error('composeSceneProject needs out/timings.json — run `narova synth` first');
   }
-  let timings = {};
-  if (fs.existsSync(timingsPath)) timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+  // External narration: synthesize timings from wordTimings the same way the
+  // full compose() does (shared helper), so an isolated span of a karaoke /
+  // external-narration project builds the same scene-local DATA instead of
+  // throwing and forcing a full-render fallback.
+  let timings = synthesizeExternalTimings(config);
+  if (!timings && fs.existsSync(timingsPath)) timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+  if (!timings) timings = {};
 
   const size = config.size;
   const data = composeData(config, timings, config.captionsEnabled !== false);
@@ -213,6 +231,13 @@ function composeSceneProject(config, outDir, sceneIdx) {
   if (!scData) throw new Error(`composeSceneProject: no data for scene "${scene.id}"`);
 
   let mergedExtraCss = config.themeCss || '';
+  // Include this scene's cssFile so an isolated span sees the same styles the
+  // full render applies (the full compose merges every scene's cssFile into the
+  // shared style.css). Other scenes' cssFile is intentionally omitted — it
+  // cannot affect this scene's pixels and omitting it keeps the span faithful.
+  if (scene._cssFileContents) {
+    mergedExtraCss += '\n/* scene-css:' + scene.id + ' */\n' + scene._cssFileContents;
+  }
   if (config.imports) {
     for (const [name, imported] of Object.entries(config.imports)) {
       if (!imported || !imported.contents) continue;

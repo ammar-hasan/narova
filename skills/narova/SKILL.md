@@ -1,8 +1,9 @@
 ---
 name: narova
 description: >
-  Use narova for narration-first video: narrated or captioned explainers,
-  multi-host dialogue (0 to N narrators), prompt/script/README-to-video,
+  Use narova for deterministic scene-scripted video with exceptionally strong
+  narration synchronization (narration is optional): narrated or captioned
+  explainers, multi-host dialogue (0 to N narrators), prompt/script/README-to-video,
   narrated product demos and sales walkthroughs with real browser actions,
   videos sourced from web pages and agent-readable sources (product sites,
   articles, docs, repositories), word-synced karaoke captions,
@@ -27,7 +28,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.26.0"
+  version: "0.26.1"
 ---
 # narova — video from scene scripts
 
@@ -66,9 +67,11 @@ You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }` turns)
 and either an HTML `body` or provider-neutral `visual` tree. Narova makes the
 speech locally, derives word timings, and renders through HyperFrames (default)
-or the no-browser provider to `out/video.mp4`. The speech drives everything:
-captions light up word by word in each speaker's color, and any element with
-`data-cue="k"` appears exactly when turn `k` starts.
+or the no-browser provider to `out/video.mp4`. When there is speech, it drives
+the visuals: captions light up word by word in each speaker's color, and any
+element with `data-cue="k"` appears exactly when turn `k` starts. Narration is
+optional — silent projects, marker-driven events, and music-driven pieces are
+first-class and use the same scene/timeline model.
 
 Or bring your own recording with `narration.file` and `narration.wordTimings`.
 
