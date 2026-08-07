@@ -218,4 +218,146 @@ ${runtimeScript()}${choreography ? `\n/* project choreography */\n${choreography
 `;
 }
 
-module.exports = { composeDoc, escapeHtml, namespaceIds };
+/* Generate a self-contained HyperFrames HTML document for a SINGLE scene.
+ * The scene's internal timeline (DATA scenes[], groups[], turns[]) is rebased
+ * so the scene's start is t=0. This allows an independent HF project to render
+ * just this scene, which can then be concatenated with other scene spans via
+ * ffmpeg. The scene's transition is baked into its first frames. Captions
+ * are filtered to this scene's time window. The progress bar segment reflects
+ * the scene's position in the global video timeline. */
+function composeSceneDoc(config, sceneIdx, size, data, css) {
+  const title = escapeHtml(config.title || 'narova');
+  const scene = config.scenes[sceneIdx];
+  const scData = data.scenes.find(d => d.id === scene.id);
+  if (!scData) throw new Error(`composeSceneDoc: no data for scene "${scene.id}"`);
+  const globalStart = scData.start;
+  const sceneDur = scData.dur;
+  const total = data.total;
+  const chrome = { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
+  const nn = String(data.scenes.length).padStart(2, '0');
+
+  // Captions: filter groups that fall within this scene's time window,
+  // rebasing start/end to scene-local time.
+  const sceneGroups = (data.groups || []).filter(g => {
+    return g.start < globalStart + sceneDur && g.end > globalStart;
+  }).map(g => ({
+    who: g.who, label: g.label,
+    start: Math.max(0, r3(g.start - globalStart)),
+    end: Math.min(sceneDur, r3(g.end - globalStart)),
+    words: g.words.filter(w => {
+      return w.t0 < globalStart + sceneDur && w.t1 > globalStart;
+    }).map(w => ({
+      w: w.w, kw: w.kw || 0,
+      t0: r3(Math.max(0, w.t0 - globalStart)),
+      t1: r3(Math.min(sceneDur, w.t1 - globalStart)),
+    })),
+  })).filter(g => g.start < g.end);
+
+  // Scene-local DATA: only this scene, rebased to t=0.
+  const sceneData = {
+    total: sceneDur,
+    preset: data.preset,
+    scenes: [{
+      id: scData.id,
+      start: 0,
+      dur: sceneDur,
+      turns: (scData.turns || []).map(t => Math.max(0, r3(t - globalStart))),
+      transition: scData.transition || 'fade',
+    }],
+    groups: sceneGroups,
+  };
+
+  const enrichedScene = { ...scene };
+  const s = enrichedScene;
+  let body = String(s.body || '');
+  if (s._threeModuleContents) {
+    body = threeModuleSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + body;
+  } else if (s.three) {
+    body = threeSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + body;
+  }
+  const nsBody = namespaceIds(body, s.id);
+  const bar = chrome.topbar
+    ? `<div class="topbar"><div class="wordmark"><b>${title}</b></div>${
+      chrome.counter ? `<div class="counter">${String(sceneIdx + 1).padStart(2, '0')} / ${nn}</div>` : ''}</div>`
+    : '';
+  const walkthroughClass = s.walkthrough
+    ? ` has-walkthrough walkthrough-layout-${s.walkthrough.layout}`
+    : '';
+
+  // B-roll / walkthrough media clips for this scene only.
+  let mediaClip = '';
+  if (s.walkthrough) {
+    const captureManifests = Object.fromEntries(
+      Object.keys(config.walkthroughs || {}).map(id => [id, readCaptureManifest(config, id)]),
+    );
+    const capture = captureManifests[s.walkthrough.id];
+    const capturedScene = capture && capture.timeline && capture.timeline.scenes
+      ? capture.timeline.scenes.find(item => item.id === s.id)
+      : null;
+    if (capture && capturedScene) {
+      const ref = s.walkthrough;
+      const mediaStart = (capture.timeline.sourceOrigin ?? capture.timeline.preRoll ?? 0) + capturedScene.start;
+      const position = `${fmt(ref.position.x * 100)}% ${fmt(ref.position.y * 100)}%`;
+      const source = capturePaths(config, ref.id).assetRecording;
+      mediaClip = `  <video id="walkthrough-${s.id}" class="walkthrough-media walkthrough-${ref.layout}" src="${escapeHtml(source)}" data-start="0" data-duration="${fmt(sceneDur)}" data-media-start="${fmt(mediaStart)}" data-track-index="200" muted playsinline preload="auto" style="--walkthrough-opacity:${fmt(ref.opacity)};--walkthrough-position:${position};object-fit:${ref.fit}"></video>`;
+    }
+  } else if (s.clip) {
+    const ext = escapeHtml(path.extname(s.clip));
+    mediaClip = `  <video id="broll-${s.id}" class="broll" src="assets/clip-${s.id}${ext}" data-start="0" data-duration="${fmt(sceneDur)}" data-track-index="100" muted loop playsinline preload="auto"></video>`;
+  }
+
+  const dataJson = JSON.stringify(sceneData).replace(/</g, '\\u003c');
+  const useThree = hasThreeScenes(config);
+  const threeScripts = useThree ? threeHeadScripts(hasThreeModels(config)) : '';
+
+  const capPreset = config.captionsEnabled === false ? false
+    : ((config.captions && config.captions.preset) || 'karaoke');
+  const captionsOff = capPreset === false;
+
+  return `<!doctype html>
+<!-- GENERATED by narova compose (per-scene) — do not edit. -->
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=${size.w}, height=${size.h}">
+  <title>${title} / ${s.id}</title>
+  <script src="assets/gsap.min.js"></script>${threeScripts}
+  <link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div id="root" data-composition-id="main" data-start="0"
+     data-width="${size.w}" data-height="${size.h}" data-duration="${fmt(sceneDur)}">
+  <div id="bg" class="stage"></div>
+${mediaClip}
+  <section id="scene-${s.id}" class="clip scene${walkthroughClass}" data-start="0" data-duration="${fmt(sceneDur)}" data-track-index="1">
+    <div class="chrome">
+      ${bar}
+      <div class="canvas"><div class="scenebody">${nsBody}</div></div>
+    </div>
+  </section>
+  <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(sceneDur)}" data-track-index="1000">
+    ${captionsOff ? '' : `<div class="capzone"><div id="cap-stage" class="cap-preset-${capPreset}" style="position:relative;height:100%"></div></div>`}
+    <div class="progress"><i id="progress-bar"></i></div>
+  </section>
+  <audio id="vo" src="narration.wav" data-start="0" data-track-index="1001"></audio>
+</div>
+<script>
+var DATA = ${dataJson};
+${runtimeScript()}
+// The runtime animates progress-bar from scaleX 0→1 over the full DATA.total.
+// For per-scene concatenation, each span must render a continuous segment
+// of the full-video bar. Override the tween with the scene's global range.
+(function(){
+  var bar = document.getElementById('progress-bar');
+  if (bar) {
+    var p0 = ${fmt(globalStart / (total || 1))}, p1 = ${fmt((globalStart + sceneDur) / (total || 1))};
+    bar.style.transform = 'scaleX(' + p0 + ')';
+    tl.fromTo(bar, { scaleX: p0 }, { scaleX: p1, duration: ${fmt(sceneDur)}, ease: 'none' }, 0);
+  }
+})();
+</script>
+</body>
+</html>`;
+}
+
+module.exports = { composeDoc, composeSceneDoc, escapeHtml, namespaceIds };

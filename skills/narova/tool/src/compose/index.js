@@ -9,7 +9,7 @@ const { ensureDir, probe, sh } = require('../util');
 const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
-const { composeDoc } = require('./html');
+const { composeDoc, composeSceneDoc } = require('./html');
 const { collectModelAssets, collectTextureAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
 
@@ -191,6 +191,82 @@ ${s._scriptFileContents}
   return { dir: hfDir, total: data.total, scenes: data.scenes.length };
 }
 
+/* Generate a single-scene HyperFrames HTML file within a fully composed
+ * project directory. The full compose() must be run first to set up assets,
+ * style.css, package.json, etc. This function reads the timings, builds
+ * scene-local DATA, and writes a scene-specific index.html into a span
+ * subdirectory. Used by the per-scene HyperFrames render cache. */
+function composeSceneProject(config, outDir, sceneIdx) {
+  const timingsPath = path.join(outDir, 'timings.json');
+  const fullWav = path.join(outDir, 'audio', 'full.wav');
+  const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
+  if (!hasExternalNarration && !fs.existsSync(timingsPath)) {
+    throw new Error('composeSceneProject needs out/timings.json — run `narova synth` first');
+  }
+  let timings = {};
+  if (fs.existsSync(timingsPath)) timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+
+  const size = config.size;
+  const data = composeData(config, timings, config.captionsEnabled !== false);
+  const scene = config.scenes[sceneIdx];
+  const scData = data.scenes.find(d => d.id === scene.id);
+  if (!scData) throw new Error(`composeSceneProject: no data for scene "${scene.id}"`);
+
+  let mergedExtraCss = config.themeCss || '';
+  if (config.imports) {
+    for (const [name, imported] of Object.entries(config.imports)) {
+      if (!imported || !imported.contents) continue;
+      if ((imported.file || '').toLowerCase().endsWith('.css')) {
+        mergedExtraCss += '\n/* import:' + name + ' */\n' + imported.contents;
+      }
+    }
+  }
+  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false);
+  const sceneHtml = composeSceneDoc(config, sceneIdx, size, data, css);
+
+  const slugTitle = slug(config.title || 'narova');
+  const hfDir = path.join(outDir, `hf-${slugTitle}`);
+  if (!fs.existsSync(hfDir)) throw new Error(`composeSceneProject: full compose not found at ${hfDir} — run compose first`);
+  const spanDir = path.join(hfDir, 'spans', `scene-${scene.id}`);
+  ensureDir(spanDir);
+
+  // Create trimmed audio for just this scene's time window.
+  const audioSrc = fs.existsSync(path.join(outDir, 'audio', 'mix.wav'))
+    ? path.join(outDir, 'audio', 'mix.wav')
+    : (hasExternalNarration ? config.narrationSource.file : fullWav);
+  const spanAudioSrc = path.join(spanDir, 'narration.wav');
+  if (!fs.existsSync(spanAudioSrc)) {
+    sh('ffmpeg', [
+      '-y', '-loglevel', 'error',
+      '-ss', String(scData.start), '-t', String(scData.dur),
+      '-i', audioSrc,
+      '-acodec', 'pcm_s16le', '-ar', '48000', '-ac', '2',
+      spanAudioSrc,
+    ]);
+  }
+
+  // Write scene project files
+  fs.writeFileSync(path.join(spanDir, 'index.html'), sceneHtml);
+  // Link to shared assets (style.css, vendors, project assets)
+  for (const f of ['style.css', 'package.json']) {
+    const src = path.join(hfDir, f);
+    if (fs.existsSync(src)) {
+      try { fs.linkSync(src, path.join(spanDir, f)); } catch { fs.copyFileSync(src, path.join(spanDir, f)); }
+    }
+  }
+  const assetsDest = path.join(spanDir, 'assets');
+  const assetsSrc = path.join(hfDir, 'assets');
+  if (!fs.existsSync(assetsDest) && fs.existsSync(assetsSrc)) {
+    try { fs.symlinkSync(assetsSrc, assetsDest, 'junction'); } catch {
+      try { fs.symlinkSync(assetsSrc, assetsDest, 'dir'); } catch {
+        fs.cpSync(assetsSrc, assetsDest, { recursive: true });
+      }
+    }
+  }
+
+  return { dir: spanDir, sceneId: scene.id, start: scData.start, dur: scData.dur };
+}
+
 function slug(s) {
   return String(s).toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'narova';
 }
@@ -214,4 +290,4 @@ function buildFontFaces(config) {
     `@font-face{font-family:"${family}";src:url("assets/${path.basename(file)}")}`).join('\n');
 }
 
-module.exports = { compose };
+module.exports = { compose, composeSceneProject, buildFontFaces, slug };

@@ -140,12 +140,12 @@ test('spanIsValid rejects missing, empty, and wrong-duration files', () => {
   } finally { fs.rmSync(tmp, { recursive: true, force: true }); }
 });
 
-test('formatCacheStatus reports per-scene vs whole-video honestly', () => {
+test('formatCacheStatus reports per-scene honestly for both renderers', () => {
   const m = makeManifest();
   const perScene = sc.plan({ outDir: os.tmpdir(), manifest: m, renderer: getRenderer('no-browser'), fps: 30 });
-  const whole = sc.plan({ outDir: os.tmpdir(), manifest: m, renderer: getRenderer('hyperframes'), fps: 30 });
+  const hf = sc.plan({ outDir: os.tmpdir(), manifest: m, renderer: getRenderer('hyperframes'), fps: 30 });
   assert.match(sc.formatCacheStatus(perScene), /per-scene/);
-  assert.match(sc.formatCacheStatus(whole), /whole-video/);
+  assert.match(sc.formatCacheStatus(hf), /per-scene/);
   assert.equal(sc.formatCacheStatus({ mode: 'none' }), 'cache: not supported for this renderer');
 });
 
