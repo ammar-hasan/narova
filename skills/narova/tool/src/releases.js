@@ -57,6 +57,42 @@ function rmDir(dir) {
   fs.rmdirSync(dir);
 }
 
+/* Lightweight config reader: load a config file without full schema resolution.
+ * Supports ESM (export default) and CJS (module.exports) and plain JSON. */
+function loadRawConfig(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  const text = fs.readFileSync(filePath, 'utf8');
+  if (ext === '.json') return JSON.parse(text);
+  if (ext === '.cjs' || ext === '.js' || ext === '.mjs') {
+    try {
+      const fn = new Function('exports', 'module', text);
+      const m = { exports: {} };
+      fn(m.exports, m);
+      return m.exports && m.exports.default ? m.exports.default : m.exports;
+    } catch {
+      const defaultMatch = text.match(/export\s+default\s+(\{[\s\S]*\})\s*;?\s*$/);
+      if (defaultMatch) return JSON.parse(defaultMatch[1].replace(/'/g, '"').replace(/(\w+):/g, '"$1":'));
+      const cjsMatch = text.match(/module\.exports\s*=\s*(\{[\s\S]*\})\s*;?\s*$/);
+      if (cjsMatch) return JSON.parse(cjsMatch[1].replace(/'/g, '"').replace(/(\w+):/g, '"$1":'));
+      return null;
+    }
+  }
+  return null;
+}
+
+function isInside(parent, child) {
+  const rel = path.relative(parent, child);
+  return rel !== '' && !rel.startsWith('..' + path.sep) && rel !== '..';
+}
+
+function findConfigInDir(dir) {
+  for (const name of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
+    const p = path.join(dir, name);
+    if (fs.existsSync(p)) return p;
+  }
+  return null;
+}
+
 /* Resolve the project root the same way other commands do — walk up from
  * the given directory to find reel.config.*. Falls back to the directory
  * itself when no config file is found. */
@@ -134,6 +170,43 @@ function save(manifestPath, name, opts = {}) {
         saved.push(ledger);
       }
     }
+
+    // Scene file references: snapshot every project-relative source file
+    // referenced by the config (bodyFile, cssFile, choreographyFile,
+    // scriptFile, threeFile, threeModule, elementsFile, visualFile, and
+    // config.imports). We load the raw config file to discover the paths.
+    try {
+      const configFile = findConfigInDir(projectDir);
+      if (configFile) {
+        const raw = loadRawConfig(configFile);
+        const sceneRefKeys = ['bodyFile', 'cssFile', 'choreographyFile', 'scriptFile',
+          'threeFile', 'threeModule', 'elementsFile', 'visualFile'];
+        if (raw && Array.isArray(raw.scenes)) {
+          for (const s of raw.scenes) {
+            for (const key of sceneRefKeys) {
+              if (typeof s[key] !== 'string' || !s[key].trim()) continue;
+              const refPath = path.resolve(projectDir, s[key]);
+              if (!isInside(projectDir, refPath) || !fs.existsSync(refPath)) continue;
+              const dest = path.join(releaseDir, 'source', s[key]);
+              fs.mkdirSync(path.dirname(dest), { recursive: true });
+              fs.copyFileSync(refPath, dest);
+              saved.push('source/' + s[key]);
+            }
+          }
+        }
+        if (raw && raw.imports && typeof raw.imports === 'object' && !Array.isArray(raw.imports)) {
+          for (const ref of Object.values(raw.imports)) {
+            if (typeof ref !== 'string' || !ref.trim()) continue;
+            const refPath = path.resolve(projectDir, ref);
+            if (!isInside(projectDir, refPath) || !fs.existsSync(refPath)) continue;
+            const dest = path.join(releaseDir, 'source', ref);
+            fs.mkdirSync(path.dirname(dest), { recursive: true });
+            fs.copyFileSync(refPath, dest);
+            saved.push('source/' + ref);
+          }
+        }
+      }
+    } catch { /* best-effort */ }
   }
 
   return { name: safeName, dir: releaseDir, created: new Date().toISOString(), files: saved };

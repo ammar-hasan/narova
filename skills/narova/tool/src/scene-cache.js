@@ -48,9 +48,19 @@ function cacheDir(outDir) { return path.join(outDir, CACHE_DIR); }
  * deliberately EXCLUDED: `config` flips on any scene edit (defeating per-scene
  * caching) and per-scene file contents are already captured in each scene's own
  * hash. Only genuinely shared inputs (theme css, project choreography, imports,
- * and project asset / bed / sfx / clip / walkthrough-capture file hashes) are
- * kept. An asset change therefore re-renders every span — conservative but
- * never stale. */
+ * markers, captions, chrome, series, and project asset / bed / sfx / clip /
+ * walkthrough-capture file hashes) are kept. An asset change therefore
+ * re-renders every span — conservative but never stale.
+ *
+ * Dependency model:
+ *   GLOBAL (in contextHash) — change invalidates all scenes
+ *     theme (tokens + css), chrome, captions config, markers, series,
+ *     project choreography, imports, voices, renderer version, fps, quality,
+ *     format, asset hashes (bed/sfx/clip/capture files), walkthrough manifests
+ *   LOCAL (in sceneHash + timings) — change invalidates only that scene
+ *     scene body, visual, three, threeModule, clip path, walkthrough ref,
+ *     transition, vo text, scene choreo/script file contents,
+ *     measured word/turn timings */
 function renderContextHash(manifest, opts = {}) {
   const m = manifest || {};
   const sharedHashes = {};
@@ -69,6 +79,10 @@ function renderContextHash(manifest, opts = {}) {
     choreography: m.choreography,
     timing: m.timing,
     voices: m.voices,
+    markers: m.markers,
+    series: m.series,
+    platform: (m.project && m.project.platform) || null,
+    includePatterns: m.includePatterns,
     hashes: sharedHashes,
     quality: opts.quality || 'standard',
     fps: opts.fps || (m.format && m.format.fps) || 30,
@@ -329,18 +343,53 @@ function fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, lo
   return rendered;
 }
 
-/* Remove cache entries not referenced by the current build so the cache dir
- * does not grow without bound across unrelated revisions. Best-effort. */
+/* Retain cache entries beyond the current build within a bounded budget.
+ * The goal: "returning to a recently explored visual treatment should often
+ * be effectively free." Current-build spans are always protected. Older
+ * entries are pruned when the cache exceeds a size limit (500 MB default)
+ * or a count limit (100 spans default), using LRU (oldest access time first).
+ * This enables A→B→C→"actually B was better" workflows. */
+const CACHE_MAX_SIZE = 500 * 1024 * 1024; // 500 MB
+const CACHE_MAX_SPANS = 100;
+
 function pruneCache(dir, keepFiles) {
   const keep = new Set(keepFiles.map(f => path.resolve(f)));
   let entries;
   try { entries = fs.readdirSync(dir); } catch { return; }
+
+  // Compute total size and count.
+  let totalSize = 0;
+  const files = [];
   for (const name of entries) {
-    if (/\.(txt|tmp|tmp\.mp4)$/.test(name) || name.endsWith('.tmp.mp4')) continue;
+    if (name.startsWith('.') || name.endsWith('.tmp') || name.endsWith('.tmp.mp4')) continue;
     const full = path.join(dir, name);
-    if (!keep.has(path.resolve(full))) {
-      try { fs.rmSync(full, { force: true }); } catch {}
+    try {
+      const st = fs.statSync(full);
+      if (!st.isFile()) continue;
+      totalSize += st.size;
+      files.push({ path: full, name, size: st.size, mtime: st.mtimeMs });
+    } catch {}
+  }
+
+  // Always keep current-build spans.
+  const protectedPaths = new Set(keep);
+
+  // Prune only if over budget.
+  const overSize = totalSize > CACHE_MAX_SIZE;
+  const overCount = files.length > CACHE_MAX_SPANS;
+  if (!overSize && !overCount) return;
+
+  // Sort by age (oldest first), then prune until within budget.
+  files.sort((a, b) => a.mtime - b.mtime);
+  for (const f of files) {
+    if (protectedPaths.has(f.path)) continue;
+    // Stop pruning once within both limits.
+    if (!overCount || files.length <= CACHE_MAX_SPANS) {
+      if (!overSize || totalSize <= CACHE_MAX_SIZE) break;
     }
+    try { fs.rmSync(f.path, { force: true }); } catch {}
+    totalSize -= f.size;
+    files.length--; // track remaining count
   }
 }
 

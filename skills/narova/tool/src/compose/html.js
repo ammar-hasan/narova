@@ -176,7 +176,7 @@ function composeDoc(config, size, data, css) {
   // tweens off it) and as a cap-preset-* class on the stage (css.js picks its
   // static styles off the class). Both derive from the same resolved config.
   const capPreset = config.captionsEnabled === false ? false
-    : ((config.captions && config.captions.preset) || 'karaoke');
+    : ((config.captions && config.captions.preset) || 'subtitle');
   const captionsOff = capPreset === false;
 
   const seriesBadge = config.series
@@ -222,9 +222,26 @@ ${runtimeScript()}${choreography ? `\n/* project choreography */\n${choreography
  * The scene's internal timeline (DATA scenes[], groups[], turns[]) is rebased
  * so the scene's start is t=0. This allows an independent HF project to render
  * just this scene, which can then be concatenated with other scene spans via
- * ffmpeg. The scene's transition is baked into its first frames. Captions
- * are filtered to this scene's time window. The progress bar segment reflects
- * the scene's position in the global video timeline. */
+ * ffmpeg. Every visual element emitted by composeDoc() has an equivalent here
+ * or an explicit dependency that forces a larger render scope.
+ *
+ * Gap audit (each item must have parity with composeDoc):
+ *   ✅ transitions — _firstScene metadata + runtime fix
+ *   ✅ project choreography — injected
+ *   ✅ scene choreography/script files — injected
+ *   ✅ imported JS — injected
+ *   ✅ named markers — included in DATA
+ *   ✅ captions — filtered + rebased
+ *   ✅ karaoke overlays — injected into body
+ *   ✅ series badge — included
+ *   ✅ walkthrough shell/titlebar — included
+ *   ✅ walkthrough media / b-roll — included
+ *   ✅ Three.js head scripts — included
+ *   ✅ Three.js / threeModule scene body — included
+ *   ✅ caption preset class — included
+ *   ✅ chrome — respects config (topbar, counter, progress)
+ *   ✅ progress bar — respects chrome.progress, segmented correctly
+ *   ✅ imported CSS — merged via composeSceneProject */
 function composeSceneDoc(config, sceneIdx, size, data, css) {
   const title = escapeHtml(config.title || 'narova');
   const scene = config.scenes[sceneIdx];
@@ -235,9 +252,15 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   const total = data.total;
   const chrome = { topbar: true, counter: true, progress: true, ...(config.chrome || {}) };
   const nn = String(data.scenes.length).padStart(2, '0');
+  const isFirstScene = sceneIdx === 0;
+  const r3 = v => Math.round(v * 1000) / 1000;
 
-  // Captions: filter groups that fall within this scene's time window,
-  // rebasing start/end to scene-local time.
+  // External karaoke captions for this scene's time window.
+  const karaoke = buildKaraokeOverlays(config);
+  const karaokeOverlay = karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur) : '';
+  const karaokeCss = karaoke.css || '';
+
+  // Captions: filter groups within this scene's time window, rebase to t=0.
   const sceneGroups = (data.groups || []).filter(g => {
     return g.start < globalStart + sceneDur && g.end > globalStart;
   }).map(g => ({
@@ -253,7 +276,9 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
     })),
   })).filter(g => g.start < g.end);
 
-  // Scene-local DATA: only this scene, rebased to t=0.
+  // Scene-local DATA: only this scene, timeline rebased to t=0.
+  // _firstScene metadata tells the runtime whether to apply an entrance
+  // transition — see runtime.js transition logic for the contract.
   const sceneData = {
     total: sceneDur,
     preset: data.preset,
@@ -263,28 +288,45 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
       dur: sceneDur,
       turns: (scData.turns || []).map(t => Math.max(0, r3(t - globalStart))),
       transition: scData.transition || 'fade',
+      _firstScene: isFirstScene,
     }],
     groups: sceneGroups,
+    markers: config.markers || {},
   };
 
+  // Three.js and raw Three.js module scene body (same as composeDoc).
   const enrichedScene = { ...scene };
   const s = enrichedScene;
   let body = String(s.body || '');
   if (s._threeModuleContents) {
-    body = threeModuleSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + body;
+    body = threeModuleSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + (body || '');
   } else if (s.three) {
-    body = threeSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + body;
+    body = threeSceneBody(s, { start: globalStart, dur: sceneDur }, size.w, size.h) + (body || '');
   }
+  body += karaokeOverlay;
   const nsBody = namespaceIds(body, s.id);
+
+  // Topbar: respects chrome config (topbar/counter).
   const bar = chrome.topbar
     ? `<div class="topbar"><div class="wordmark"><b>${title}</b></div>${
       chrome.counter ? `<div class="counter">${String(sceneIdx + 1).padStart(2, '0')} / ${nn}</div>` : ''}</div>`
     : '';
+
+  // Walkthrough shell (same as composeDoc).
   const walkthroughClass = s.walkthrough
     ? ` has-walkthrough walkthrough-layout-${s.walkthrough.layout}`
     : '';
+  let walkthroughShell = '';
+  if (s.walkthrough && s.walkthrough.layout === 'window') {
+    const flow = config.walkthroughs[s.walkthrough.id];
+    let host = '';
+    try { host = new URL(flow.url).host; } catch {}
+    walkthroughShell = `<div class="walkthrough-shell" aria-hidden="true">
+      <div class="walkthrough-titlebar"><span class="walkthrough-dots"><i></i><i></i><i></i></span><span>${escapeHtml(flow.title)}</span><small>${escapeHtml(host)}</small></div>
+    </div>`;
+  }
 
-  // B-roll / walkthrough media clips for this scene only.
+  // B-roll / walkthrough media for this scene only (same as composeDoc).
   let mediaClip = '';
   if (s.walkthrough) {
     const captureManifests = Object.fromEntries(
@@ -311,8 +353,30 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   const threeScripts = useThree ? threeHeadScripts(hasThreeModels(config)) : '';
 
   const capPreset = config.captionsEnabled === false ? false
-    : ((config.captions && config.captions.preset) || 'karaoke');
+    : ((config.captions && config.captions.preset) || 'subtitle');
   const captionsOff = capPreset === false;
+
+  const seriesBadge = config.series
+    ? `<div class="series-badge">Part ${config.series.part}${config.series.total ? ` / ${config.series.total}` : ''}</div>`
+    : '';
+
+  // Choreography: project + scene-specific + imported JS (same as composeDoc).
+  let mergedChoreography = config.choreography || '';
+  if (s._choreographyFileContents) {
+    mergedChoreography += '\n/* scene-choreography:' + s.id + ' */\n' + s._choreographyFileContents;
+  }
+  if (s._scriptFileContents) {
+    mergedChoreography += '\n/* scene-script:' + s.id + ' */\n(function(){ var _scStart=' + globalStart + ', _scDur=' + sceneDur + ';\n' + s._scriptFileContents + '\n})();\n';
+  }
+  if (config.imports) {
+    for (const [name, imported] of Object.entries(config.imports)) {
+      if (!imported || !imported.contents) continue;
+      if ((imported.file || '').toLowerCase().endsWith('.js')) {
+        mergedChoreography += '\n/* import:' + name + ' */\n' + imported.contents;
+      }
+    }
+  }
+  const choreography = mergedChoreography ? '\n/* project choreography */\n' + mergedChoreography.replace(/<\/script/gi, '<\\/script') : '';
 
   return `<!doctype html>
 <!-- GENERATED by narova compose (per-scene) — do not edit. -->
@@ -322,7 +386,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   <meta name="viewport" content="width=${size.w}, height=${size.h}">
   <title>${title} / ${s.id}</title>
   <script src="assets/gsap.min.js"></script>${threeScripts}
-  <link rel="stylesheet" href="style.css">
+  <link rel="stylesheet" href="style.css">${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
 </head>
 <body>
 <div id="root" data-composition-id="main" data-start="0"
@@ -330,6 +394,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   <div id="bg" class="stage"></div>
 ${mediaClip}
   <section id="scene-${s.id}" class="clip scene${walkthroughClass}" data-start="0" data-duration="${fmt(sceneDur)}" data-track-index="1">
+    ${walkthroughShell}
     <div class="chrome">
       ${bar}
       <div class="canvas"><div class="scenebody">${nsBody}</div></div>
@@ -337,16 +402,14 @@ ${mediaClip}
   </section>
   <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(sceneDur)}" data-track-index="1000">
     ${captionsOff ? '' : `<div class="capzone"><div id="cap-stage" class="cap-preset-${capPreset}" style="position:relative;height:100%"></div></div>`}
-    <div class="progress"><i id="progress-bar"></i></div>
+    ${chrome.progress ? `<div class="progress"><i id="progress-bar"></i></div>` : ''}
+    ${seriesBadge}
   </section>
   <audio id="vo" src="narration.wav" data-start="0" data-track-index="1001"></audio>
 </div>
 <script>
 var DATA = ${dataJson};
-${runtimeScript()}
-// The runtime animates progress-bar from scaleX 0→1 over the full DATA.total.
-// For per-scene concatenation, each span must render a continuous segment
-// of the full-video bar. Override the tween with the scene's global range.
+${runtimeScript()}${choreography}
 (function(){
   var bar = document.getElementById('progress-bar');
   if (bar) {

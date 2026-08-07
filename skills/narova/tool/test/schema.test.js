@@ -169,12 +169,16 @@ test('theme.mode is a directive, not a color token', () => {
   assert.deepEqual(c.theme, { accent: '#123456' });
 });
 
-test('chrome defaults on, false strips all, object tunes per piece', () => {
-  assert.deepEqual(resolveConfig(validRaw(), {}, '.').chrome, { topbar: true, counter: true, progress: true });
+test('chrome defaults off, true enables all, false strips all, object tunes per piece', () => {
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').chrome, { topbar: false, counter: false, progress: false });
+  assert.deepEqual(resolveConfig({ ...validRaw(), chrome: true }, {}, '.').chrome,
+    { topbar: true, counter: true, progress: true });
   assert.deepEqual(resolveConfig({ ...validRaw(), chrome: false }, {}, '.').chrome,
     { topbar: false, counter: false, progress: false });
   assert.deepEqual(resolveConfig({ ...validRaw(), chrome: { counter: false } }, {}, '.').chrome,
-    { topbar: true, counter: false, progress: true });
+    { topbar: false, counter: false, progress: false }); // topbar default is now false
+  assert.deepEqual(resolveConfig({ ...validRaw(), chrome: { topbar: true, counter: true } }, {}, '.').chrome,
+    { topbar: true, counter: true, progress: false });
   assert.throws(() => resolveConfig({ ...validRaw(), chrome: { sparkle: true } }, {}, '.'),
     /chrome\.sparkle: unknown key/);
   assert.throws(() => resolveConfig({ ...validRaw(), chrome: { topbar: 'yes' } }, {}, '.'),
@@ -248,7 +252,7 @@ test('sfx entries anchor to scenes; bad anchors/files throw', () => {
 });
 
 test('captions preset/emphasis resolve with defaults; junk throws', () => {
-  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'karaoke', emphasis: [], maxWords: null });
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'subtitle', emphasis: [], maxWords: null });
   const c = resolveConfig({ ...validRaw(), captions: { preset: 'slam', emphasis: ['Free', ' zero '] } }, {}, '.');
   assert.deepEqual(c.captions, { preset: 'slam', emphasis: ['Free', 'zero'], maxWords: null });
   assert.throws(() => resolveConfig({ ...validRaw(), captions: { preset: 'bounce' } }, {}, '.'),

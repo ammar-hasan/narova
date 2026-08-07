@@ -6,20 +6,20 @@ const { composeCss, DEFAULT_TOKENS, LIGHT_TOKENS } = require('../src/compose/css
 const size = { w: 1280, h: 720 };
 const voices = { a: { color: '#ff7eb6' } };
 
-test('dark mode is the default and keeps the classic palette', () => {
+test('dark mode is the default and uses neutral monochrome tokens', () => {
   const css = composeCss({}, voices, size);
-  assert.match(css, /--bg:#080d16/);
-  assert.match(css, /--ink:#eaf1fb/);
+  assert.match(css, /--bg:#101010/);
+  assert.match(css, /--ink:#e8e8e8/);
   assert.match(css, /--track:rgba\(255,255,255,\.06\)/);
 });
 
 test('light mode flips the field tokens in one switch', () => {
   const css = composeCss({}, voices, size, '', 'light');
-  assert.match(css, /--bg:#f7f9fd/);
-  assert.match(css, /--ink:#0f1c2e/);
+  assert.match(css, /--bg:#f5f5f5/);
+  assert.match(css, /--ink:#1a1a1a/);
   assert.match(css, /--panel:#ffffff/);
-  assert.match(css, /--track:rgba\(15,28,46,\.08\)/);
-  assert.match(css, /--capidle:#93a1bb/);
+  assert.match(css, /--track:rgba\(0,0,0,\.06\)/);
+  assert.match(css, /--capidle:#9e9e9e/);
 });
 
 test('user tokens override both dark and light bases', () => {
@@ -30,10 +30,10 @@ test('user tokens override both dark and light bases', () => {
 test('no dark value is hardcoded outside token definitions', () => {
   for (const mode of ['dark', 'light']) {
     const css = composeCss({}, voices, size, '', mode);
-    assert.ok(!/background:#0c1526/.test(css), `${mode}: chip background must be a token`);
-    assert.ok(!/color:#5f6f8e/.test(css), `${mode}: caption idle color must be a token`);
-    assert.ok(!/#10203a 0%/.test(css), `${mode}: bg gradient must use tokens`);
-    assert.ok(!/color:#04140f/.test(css), `${mode}: dial on-text must be a token`);
+    assert.ok(!/background:#161616/.test(css), `${mode}: chip background must be a token`);
+    assert.ok(!/color:#6e6e6e/.test(css), `${mode}: caption idle color must be a token`);
+    assert.ok(!/#1e1e1e 0%/.test(css), `${mode}: bg gradient must use tokens`);
+    assert.ok(!/color:#f0f0f0/.test(css), `${mode}: dial on-text must be a token`);
   }
 });
 
@@ -50,8 +50,8 @@ test('every token key lands as a CSS var; LIGHT_TOKENS only overrides known keys
     assert.ok(k in DEFAULT_TOKENS, `LIGHT_TOKENS.${k} must override a dark token, not invent one`);
   }
   const css = composeCss({}, voices, size, '', 'light');
-  assert.match(css, /--deep:#dde5f2/);
-  assert.match(css, /--halo:#e7edf8/);
+  assert.match(css, /--deep:#e0e0e0/);
+  assert.match(css, /--halo:#ededed/);
 });
 
 test('theme.css is appended last so it can override the base', () => {
@@ -68,17 +68,18 @@ test('the canvas reserves the caption band; the column width is a token', () => 
 
 test('karaoke keeps the historical active-word look, scoped to its preset class', () => {
   const css = composeCss({}, voices, size);
-  assert.match(css, /\.cap-preset-karaoke \.cap-w\.active\{transform:translateY\(-2px\) scale\(1\.05\)\}/);
-  assert.match(css, /\.cap-w\.active\{opacity:1\}/);
+  assert.match(css, /\.cap-preset-karaoke \.cap-w\.active\{color:inherit;transform:translateY\(-2px\) scale\(1\.05\)\}/);
+  assert.match(css, /\.cap-w\.active\{opacity:1;/);
   assert.ok(!/\.cap-w\.active\{opacity:1;transform/.test(css),
     'the unscoped transform is gone — other presets drive transform via timeline tweens');
 });
 
-test('slam, pop, and rise presets ship built-in styles', () => {
+test('slam, pop, rise, and subtitle presets ship built-in styles', () => {
   const css = composeCss({}, voices, size);
   assert.match(css, /\.cap-preset-slam \.cap-w\.active\{font-weight:900\}/);
   assert.match(css, /\.cap-preset-pop \.cap-w\{opacity:\.35\}/);
   assert.match(css, /\.cap-preset-rise \.cap-w\.active\{transform:translateY\(-3px\);box-shadow:0 \.1em 0 currentColor\}/);
+  assert.match(css, /\.cap-preset-subtitle \.cap-w\{/);
 });
 
 test('emphasis keywords use the accent token, composing with every preset', () => {

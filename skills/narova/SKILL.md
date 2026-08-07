@@ -29,34 +29,38 @@ metadata:
   author: ammar-hasan
   version: "0.25.0"
 ---
-# narova — prompt to narrated, captioned video
+# narova — video from scene scripts
 
-**narova writes the words and the voice. A local renderer draws the pictures.**
+**Write a scene script. Narova handles the rest.**
 
-Pinned to the version above — do NOT auto-update. Check for a newer release
-without modifying anything:
-`curl -s https://raw.githubusercontent.com/ammar-hasan/narova/main/skills/narova/SKILL.md | grep 'version:' | head -1`
-Only upgrade on explicit user request.
+Narova has a deterministic timeline. Narration turns are one powerful timing
+source — word-synced captions, voice-triggered reveals, and speaker-color
+karaoke make speech-driven video exceptionally convenient. Named markers are
+another source. Silent projects with explicit durations or marker-driven events
+are first-class. The tool does not assume every project is narration-led.
+
+The full tool ships bundled inside the skill. Nothing to install beyond
+the machine prerequisites.
 
 ## Creative stance: you are the director
 
 Narova owns timing, orchestration, rendering, caching, and delivery. You and the
-user own creative authorship. Narova should never make your video look like a
-Narova video.
+user own creative authorship.
 
 Narova is **zero-style by default.** The base scaffold gives you production
-infrastructure (captions, chrome, timeline, audio) but no implicit visual
-language. Every aesthetic choice — layout patterns, color palette, typography,
-caption style, chrome treatment — must be an explicit creative decision. You
-design the look from the brief, not from a default theme. Built-in layout
-classes (`.s-title`, `.pane`, `.stat`, etc.), a decorative background grid,
-and recognisable dark/teal palettes are available through explicit opt-in
-(`patterns: true`, `theme: { ... }`).
+infrastructure (caption timing, timeline orchestration, render pipeline) but
+no implicit visual identity:
 
-Trust your own direction. A film without a hook is not "wrong." A scene with
-no visible text is not "broken." A video without a CTA is not "incomplete."
-Different formats have different grammar — and the grammar is yours to set or
-break.
+- No topbar, counter, or progress bar (chrome is off by default; set `chrome: true`)
+- No built-in layout classes (patterns is off by default; set `patterns: true`)
+- No decorative grid background
+- No recognizable navy/teal palette (default tokens are monochrome gray)
+- Captions default to plain subtitle treatment (not karaoke; pick karaoke/slam/
+  pop/rise deliberately via `captions.preset`)
+- SRT/VTT sidecar captions always export for accessibility
+
+Every aesthetic choice must be an explicit creative decision. The tool provides
+capability — it does not provide accidental taste.
 
 You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }` turns)

@@ -42,93 +42,93 @@ never ask again unless the user changes direction.
 
 ## Concept branching: try directions before committing
 
-Before writing the final project, briefly sketch 2-3 meaningfully distinct
-creative directions. These must differ in structure and visual language, not
-just palette. The goal: surface the strongest approach before you invest in
-scene-level details.
+Before writing the final project, briefly sketch 2–3 meaningfully different
+creative directions. Vary multiple orthogonal dimensions, not just palette.
+The goal: surface the strongest approach before investing in scene-level detail.
 
-Think in terms of representation, not templating:
+Vary at least two of these dimensions between concepts:
 
-- **Concept A: typography-led editorial** — graphic design, bold type, custom
-  font pairings, a poster-like grid system. Clean, minimal, high impact.
-- **Concept B: character-led 3D narrative** — a character or object moves
-  through space, the camera follows, the story unfolds physically.
-- **Concept C: documentary media collage** — sourced photos, product images,
-  screenshots, and diagrams composited in time to the narration. Evidence-driven.
-- **Concept D: abstract motion graphics** — shapes, colors, and transitions
-  carry meaning without literal representation. Music-driven.
-- **Concept E: text-only kinetic typography** — every visual is words on
-  screen, animated. No chrome, no illustrations, pure type.
+- **Temporal grammar** — continuous shot, fragmented montage, slow build, rapid edits
+- **Spatial metaphor** — fixed frame, camera-led exploration, diagrammatic, physical space
+- **Representation** — literal/evidence, symbolic/abstract, metaphorical
+- **Visual material** — photography, type, 3D, illustration, UI/screen, code, raw data
+- **Camera logic** — static, orbiting, dolly/zoom, none (type-centric), simulated handheld
+- **Typography role** — information vehicle, physical material, absent, the entire visual
+- **Information density** — sparse/breathing, dense/saturated, progressive, static
+- **Audio relationship** — speech-led, music-led, SFX-led, silent, counterpoint
+- **Narrative voice** — first person, second person, institutional, none, poetic
+- **Diegetic vs designed** — real screen evidence, constructed graphics, mixed
+- **Stability vs flux** — one stable composition system, transforming spaces
+- **Repetition vs progression** — rhythmic loop, linear journey, fractal
 
-Each concept gets one line: the visual system + a 8-12 word description of how
-it serves the brief. The concepts should differ in:
-- Structure (scene count, ordering, pacing)
-- Visual language (type vs. 3D vs. media vs. abstract vs. typography-only)
-- Narration style (host count, tone, external/silent/synthesized)
-- Caption treatment (karaoke, hidden, stylistic overlays, subtitle-style)
-- Use of chrome (full default, restyled, removed)
-- Use of built-in layout classes vs. custom HTML/CSS
+For non-trivial briefs, generate at least one concept that deliberately rejects
+the most obvious format archetype. Ask internally: "If the obvious explainer/
+reel structure were forbidden, what would still communicate this brilliantly?"
+The concept must still serve the brief.
 
-Pick the strongest direction based on the brief. When two directions are
-equally promising and differ substantially, offer a single 1-liner choice
-("typography-led editorial → 60s dense explainer for LinkedIn, or character-led
-→ 30s playful reel?") and keep moving. This is a 1-turn optimization, not a
-questionnaire.
+Record the rationale for each direction and why you picked the final one.
+This enables future "try the rejected surreal concept" requests.
 
-For simple or short requests ("make me a 15s reel from this URL"), a single
-direction is fine — skip the branch and execute.
+For simple or short requests, a single direction is fine.
 
-## Video shapes
+## Craft knowledge
 
-Pick the shape from the prompt, then follow its structure. Word budgets
-assume ~140 wpm (see numbers below).
+Video craft is real and useful. But craft conventions are context-dependent —
+they are tools useful in the right context, not universal laws of video.
 
-**Explainer** (60–90s, `16:9` or `1:1`) — hook (5–10s) → problem (~30% of
-runtime) → solution + how it works (~40%) → proof → one CTA (5–10s). End on
-the transformation, not a tagline. One idea per scene, one CTA per video.
+When craft knowledge applies, use it. When it doesn't, don't.
 
-**Short-form reel** (15–45s, `9:16`) — the hook owns the first 2–3 seconds;
-viewers decide to stay or scroll there. Write the hook first: name the
-viewer + their problem, open a curiosity gap, or make a bold claim. Script
-the hook twice: spoken line AND on-screen text (many watch muted). Then one
-core message, then the payoff. One idea per video — no exceptions.
+For optional craft profiles that encode specific video-grammar conventions
+(social-short hooks, explainer pacing, 3D quality, accessibility), run
+`narova critique [profile]`. These are creative guidance, not correctness gates.
 
-**Teaching aid** (≤6 min; split longer topics into parts) — one concept per
-scene (segment); put 2–3 key words on screen to flag what matters (signal);
-cut anything that doesn't serve the learning goal (weed). Visuals must
-complement the narration (the diagram of the thing being explained), never
-duplicate it. Use "you/your", speak with energy, and ask a guiding question
-before a hard beat so viewers process actively.
+Some conventions that are useful in the right context but NOT universal:
 
-**Research-paper walkthrough** (2–4 min) — hook = the paper's surprising
-result → the problem it attacks → the key idea in plain words → one worked
-example → why it matters. Translate jargon; the moment a term appears, the
-next turn explains it. A questioner/explainer duet shines here.
+- A social reel might benefit from a fast hook, visible on-screen text for
+  muted viewers, and a saveable end-frame.
+- A meditation aid might open with silence and end intimately.
+- A brand film might deliberately ask a question instead of issuing a CTA.
+- A music video needs no narration, no captions, no CTA.
+- A cinematic scene might use one continuous shot with no text at all.
 
-**Two-host dialogue** (any length) — one narova shape, not THE shape. Cast
-asymmetric roles: one host is the curious questioner (proxies the audience),
-the other the explainer (depth, wit). Questions are scene transitions
-("So how does it actually work?") — they reset attention. Reactions and
-light banter ("Wait, really?") are the glue, not the payload. Target: two
-friends talking over coffee — not news anchors, not a lecture.
+The right grammar serves the film. That's the only rule.
 
-**Single-narrator promo** (30–90s) — the right default for a brand/product
-URL. One confident voice, no duet: hook → what it is → three proof beats →
-CTA. The duet's "what if / let me show you" formula on a brand site reads as
-an ad template; a direct narrator lets the brand's own voice lead.
+## Video formats
 
-**Demo walkthrough** (30–120s) — show, then tell. Narration describes what
-the screen is doing while `data-cue` reveals perform it: "Pick a category…
-tap to order… it shows up at your door." Best for products whose UI or
-flow is the proof. Second person, present tense, one action per turn.
+Pick the shape from the prompt. These are starting points, not templates.
 
-**Myth vs fact / contrast** (30–60s) — the questioner states the comfortable
-assumption ("Groceries online means compromise on freshness"), the explainer
-breaks it with evidence. The duet earns its keep here because the tension IS
-the structure. Verdict/contrast layouts (`.verdicts`, `.homes`) carry it.
+**Explainer** — a journey from question to understanding. Typically has
+structure (hook → problem → insight → impact) but vary proportions
+deliberately.
 
-Pick the shape deliberately per brief. Three videos in a row should not
-share a script formula any more than they share a palette.
+**Short-form reel** — one core message, delivered in the grammar of the
+platform. Fast hooks and clear payoffs matter here.
+
+**Teaching aid** — one concept per scene, supplemental visuals. Segments,
+signals, and active engagement beats help retention.
+
+**Research walkthrough** — hook with the surprising result, then explain
+the key idea in plain terms. Translate jargon as you introduce it.
+
+**Two-host dialogue** — asymmetric roles: curious questioner + deep explainer.
+Conversational glue (banter, reactions, questions) holds it together.
+
+**Single-narrator promo** — one confident voice carrying a brand/product
+story. Hook → proof beats → transformation.
+
+**Demo walkthrough** — show the product doing the work, narrate what matters.
+Second person, present tense, one action per beat.
+
+**Myth vs fact** — the tension IS the structure. Pair a comfortable assumption
+with evidence that breaks it.
+
+**Silent / music-driven** — the timeline is the clock, not the voice.
+Markers, scene durations, and motion carry the structure.
+
+**Abstract / experimental** — shape, color, rhythm, and feeling. The brief
+determines whether the result is literal, metaphorical, or procedural.
+
+Choose the cast, density, pacing, and visual language per brief.
 
 ## Script craft: the numbers
 

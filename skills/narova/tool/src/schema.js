@@ -13,7 +13,7 @@ const { validateElements, resolveElementsScene } = require('./compose/elements')
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
-const CAPTION_PRESETS = new Set(['karaoke', 'slam', 'pop', 'rise']);
+const CAPTION_PRESETS = new Set(['subtitle', 'karaoke', 'slam', 'pop', 'rise']);
 const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
@@ -150,13 +150,15 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
-  // Chrome (topbar/counter/progress bar) is generated page furniture — on by
-  // default, `chrome: false` removes all of it, an object tunes the pieces.
-  let chrome = { topbar: true, counter: true, progress: true };
-  if (raw.chrome === false) chrome = { topbar: false, counter: false, progress: false };
+  // Chrome (topbar/counter/progress bar) — off by default. Chrome is page
+  // furniture, a creative/aesthetic choice, not production infrastructure.
+  // Set `chrome: true` or `chrome: { topbar: true, ... }` to opt in.
+  let chrome = { topbar: false, counter: false, progress: false };
+  if (raw.chrome === true) chrome = { topbar: true, counter: true, progress: true };
+  else if (raw.chrome === false) chrome = { topbar: false, counter: false, progress: false };
   else if (raw.chrome != null) {
     if (typeof raw.chrome !== 'object' || Array.isArray(raw.chrome)) {
-      errs.push('config.chrome: expected false or an object like { topbar: true, counter: true, progress: true }');
+      errs.push('config.chrome: expected false, true, or an object like { topbar: true, counter: true, progress: true }');
     } else {
       for (const [k, v] of Object.entries(raw.chrome)) {
         if (!(k in chrome)) errs.push(`config.chrome.${k}: unknown key (topbar|counter|progress)`);
@@ -623,7 +625,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // case-insensitively, punctuation-stripped, against each spoken token).
   // Set `captions: false` to disable the visual caption band entirely —
   // SRT/VTT sidecars are still exported for accessibility and embed use.
-  let captions = { preset: 'karaoke', emphasis: [], maxWords: null };
+  let captions = { preset: 'subtitle', emphasis: [], maxWords: null };
   let captionsEnabled = true;
   if (raw.captions === false) {
     captionsEnabled = false;

@@ -95,7 +95,7 @@ test('compile includes theme, chrome, timing', () => {
 
 test('compile includes captions config', () => {
   const tl = compile(resolve(makeRaw()));
-  assert.equal(tl.captions.preset, 'karaoke');
+  assert.equal(tl.captions.preset, 'subtitle');
   assert.deepEqual(tl.captions.emphasis, []);
   assert.equal(tl.captions.maxWords, null);
 });

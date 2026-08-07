@@ -142,8 +142,8 @@ test('chrome.counter:false keeps a wordmark-only topbar', () => {
   assert.match(h, /id="progress-bar"/);
 });
 
-test('the caption stage carries the preset class (karaoke by default)', () => {
-  assert.match(doc(), /id="cap-stage" class="cap-preset-karaoke"/);
+test('the caption stage carries the preset class (subtitle by default)', () => {
+  assert.match(doc(), /id="cap-stage" class="cap-preset-subtitle"/);
 });
 
 test('a configured caption preset lands on the caption stage', () => {

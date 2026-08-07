@@ -76,7 +76,7 @@ function composeData(config, timings, captionsEnabled = true) {
     delete g.sceneEnd;
   });
 
-  return { total, scenes, groups, preset: captionsEnabled ? (captions.preset || 'karaoke') : false, markers: config.markers || {} };
+  return { total, scenes, groups, preset: captionsEnabled ? (captions.preset || 'subtitle') : false, markers: config.markers || {} };
 }
 
 module.exports = { composeData, r3, normWord };

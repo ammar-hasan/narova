@@ -300,19 +300,29 @@ DATA.scenes.forEach(function (sc) {
   // timeline tweens at scene start, so they are seek-safe. Unknown values
   // fall back to fade — check.js lints the same set. The first scene never
   // transitions.
-  if (sc.start > 0.01) {
+  // Per-scene isolated renders (scene-cache) rebase a scene to t=0 and use
+  // a sentinel start value to signal whether this is logically the first
+  // scene in the project or not. sc.start === 0 and the scene list length is
+  // 1 or sceneIndex is 0 → no transition; otherwise the transition animation
+  // plays at t=0.
+  var isFirstScene = sc.start === 0
+    && (DATA.scenes[0] && DATA.scenes[0]._firstScene !== false);
+  if (!isFirstScene) {
     var tr = sc.transition || 'fade';
+    // Fire the transition at t=0 + a tiny epsilon so GSAP registers
+    // the from-state before the first paint.
+    var t0 = sc.start > 0.01 ? sc.start : 0.001;
     if (tr === 'wipe') {
       tl.fromTo(scene, { clipPath: 'inset(0 0 0 100%)' },
-        { clipPath: 'inset(0 0 0 0%)', duration: 0.7, ease: 'power2.inOut' }, sc.start);
+        { clipPath: 'inset(0 0 0 0%)', duration: 0.7, ease: 'power2.inOut' }, t0);
     } else if (tr === 'slide') {
       tl.fromTo(scene, { x: 90, opacity: 0 },
-        { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }, sc.start);
+        { x: 0, opacity: 1, duration: 0.7, ease: 'power3.out' }, t0);
     } else if (tr === 'zoom') {
       tl.fromTo(scene, { scale: 1.08, opacity: 0 },
-        { scale: 1, opacity: 1, duration: 0.7, ease: 'power2.out' }, sc.start);
+        { scale: 1, opacity: 1, duration: 0.7, ease: 'power2.out' }, t0);
     } else {
-      tl.fromTo(scene, { opacity: 0 }, { opacity: 1, duration: 0.7, ease: 'power1.out' }, sc.start);
+      tl.fromTo(scene, { opacity: 0 }, { opacity: 1, duration: 0.7, ease: 'power1.out' }, t0);
     }
   }
 });

@@ -127,7 +127,7 @@ function compile(config, opts = {}) {
   const { title, size, renderer = 'hyperframes', voices, theme = {}, mode = 'dark', chrome = {},
     themeCss = '', choreography = '', timing = {}, scenes, platform = null, bed = null, sfx = [],
     captions = {}, align = false, variants = [], variant = null, series = null,
-    walkthroughs = {}, projectDir = '.' } = config;
+    walkthroughs = {}, projectDir = '.', includePatterns = false, markers = {} } = config;
 
 
   const assets = collectAssets(config, projectDir);
@@ -181,7 +181,7 @@ function compile(config, opts = {}) {
       sfx: (sfx || []).map(s => ({ file: path.relative(projectDir, s.file) || s.file, scene: s.scene || null, at: s.at, volume: s.volume })),
     },
     captions: {
-      preset:   (captions && captions.preset)   || 'karaoke',
+      preset:   (captions && captions.preset)   || 'subtitle',
       emphasis: (captions && captions.emphasis) || [],
       maxWords: (captions && captions.maxWords) || null,
     },
@@ -192,6 +192,8 @@ function compile(config, opts = {}) {
     variants: compileVariants(variants || []),
     series: series || null,
     variant: variant || null,
+    includePatterns: includePatterns !== false,
+    markers: markers || {},
     environment: {
       narova:    opts.toolVersion || '0.8.0',
       backend:   opts.backend || config.voices && Object.values(config.voices)[0]?.backend || 'piper',

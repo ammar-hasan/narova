@@ -14,18 +14,18 @@
 const { hexToRgba } = require('../util');
 
 const DEFAULT_TOKENS = {
-  bg: '#080d16', stage: '#0b1120', panel: '#111b2e', line: '#223350', ink: '#eaf1fb',
-  muted: '#8595b4', faint: '#5d6d8c', accent: '#2ee6d6', 'accent-dim': '#178f86', pink: '#ff7eb6',
-  gold: '#ffd27a', green: '#46d98a', red: '#ff6363', amber: '#ffb454',
-  deep: '#070b13', halo: '#10203a', chip: '#0c1526', capidle: '#5f6f8e',
-  onaccent: '#04140f', track: 'rgba(255,255,255,.06)',
+  bg: '#101010', stage: '#181818', panel: '#242424', line: '#333333', ink: '#e8e8e8',
+  muted: '#8a8a8a', faint: '#5c5c5c', accent: '#888888', 'accent-dim': '#555555', pink: '#d4789a',
+  gold: '#c4a354', green: '#588c64', red: '#b05353', amber: '#b07d4a',
+  deep: '#0a0a0a', halo: '#1e1e1e', chip: '#161616', capidle: '#6e6e6e',
+  onaccent: '#f0f0f0', track: 'rgba(255,255,255,.06)',
 };
 
 const LIGHT_TOKENS = {
-  bg: '#f7f9fd', stage: '#eef2f9', panel: '#ffffff', line: '#d9e2f0', ink: '#0f1c2e',
-  muted: '#49597a', faint: '#6d7f9c',
-  deep: '#dde5f2', halo: '#e7edf8', chip: '#edf1f8', capidle: '#93a1bb',
-  onaccent: '#ffffff', track: 'rgba(15,28,46,.08)',
+  bg: '#f5f5f5', stage: '#ebebeb', panel: '#ffffff', line: '#dbdbdb', ink: '#1a1a1a',
+  muted: '#6e6e6e', faint: '#8a8a8a',
+  deep: '#e0e0e0', halo: '#ededed', chip: '#f0f0f0', capidle: '#9e9e9e',
+  onaccent: '#ffffff', track: 'rgba(0,0,0,.06)',
 };
 
 function rootBlock(t) {
@@ -88,9 +88,12 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .spk .eq i:nth-child(1){height:6px}.spk .eq i:nth-child(2){height:11px}.spk .eq i:nth-child(3){height:8px}
 .caption2{font-size:clamp(17px,2.7vw,30px);font-weight:800;line-height:1.28;letter-spacing:-.01em;text-align:center;max-width:24em;text-wrap:balance}
 .cap-w{display:inline-block;margin:0 .13em;color:var(--capidle);opacity:.6}
-.cap-w.past{color:var(--ink);opacity:.9}
-.cap-w.active{opacity:1}
-.cap-preset-karaoke .cap-w.active{transform:translateY(-2px) scale(1.05)}
+.cap-w.past{color:var(--ink);opacity:.85}
+.cap-w.active{opacity:1;color:var(--ink)}
+.cap-preset-subtitle .cap-w{color:var(--ink);opacity:.92}
+.cap-preset-subtitle .cap-w.past{color:var(--ink);opacity:.92}
+.cap-preset-subtitle .cap-w.active{color:var(--ink);opacity:.92}
+.cap-preset-karaoke .cap-w.active{color:inherit;transform:translateY(-2px) scale(1.05)}
 .cap-preset-slam .cap-w.active{font-weight:900}
 .cap-preset-pop .cap-w{opacity:.35}
 .cap-preset-rise .cap-w.active{transform:translateY(-3px);box-shadow:0 .1em 0 currentColor}

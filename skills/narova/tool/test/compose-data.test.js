@@ -64,8 +64,8 @@ test('a scene missing from timings.json throws a helpful error', () => {
     /no entry for scene "ghost".*narova synth/);
 });
 
-test('preset defaults to karaoke and passes config.captions.preset through', () => {
-  assert.equal(composeData(config, timings).preset, 'karaoke');
+test('preset defaults to subtitle and passes config.captions.preset through', () => {
+  assert.equal(composeData(config, timings).preset, 'subtitle');
   const slam = { ...config, captions: { preset: 'slam', emphasis: [] } };
   assert.equal(composeData(slam, timings).preset, 'slam');
 });
