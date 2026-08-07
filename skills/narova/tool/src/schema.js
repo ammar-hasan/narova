@@ -70,9 +70,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   // patterns: include the built-in Narova layout pattern classes (.s-title,
   // .pane, .stat, .flow, .verdicts, .s-close, etc.) in the default CSS.
-  // Defaults to true for backward compatibility. Set to false when the project
-  // defines its own visual language in theme.css.
-  let includePatterns = true;
+  // Defaults to false — Narova is zero-style by default. Set to true to
+  // opt into the built-in layout vocabulary as a deliberate creative choice.
+  let includePatterns = false;
   if (raw.patterns != null) {
     if (typeof raw.patterns !== 'boolean') {
       errs.push('config.patterns: expected a boolean (true to include built-in layout classes)');
@@ -387,7 +387,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         && (!s.three || typeof s.three !== 'object' || Array.isArray(s.three))
         && (!s.elements || !Array.isArray(s.elements))
         && !s._threeModuleContents) {
-      errs.push(`${at}.body: HTML string required unless a visual, three, threeModule, or elements object is provided`);
+      errs.push(`${at}.body: HTML string required unless a visual, three, threeModule, or elements object is provided. Drop to a lower-level surface: use elements for common 3D, scene.three for explicit Three.js, scene.threeModule for raw WebGL/Three.js, or scene.visual for the portable renderer contract.`);
     }
     if (s.body != null && typeof s.body !== 'string' && s.visual && typeof s.visual === 'object' && !Array.isArray(s.visual)) {
       errs.push(`${at}.body: must be an HTML string when provided`);

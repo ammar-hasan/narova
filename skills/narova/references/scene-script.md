@@ -527,8 +527,13 @@ These are tools, not templates. Use them when they serve the concept; build
 custom layouts when the video needs an original visual language. A video
 where every scene is a centered title card is one video, re-skinned.
 
-Mix these deliberately (videography judgment: `references/prompt-to-video.md`
-§Videography):
+**Built-in layouts are opt-in.** Set `patterns: true` at the top level of your
+config to include them. The default (`patterns` omitted or `false`) ships no
+layout classes — every scene gets only the production infrastructure
+(captions, chrome, reveal/cue animation mechanics). Add `patterns: true` when
+you deliberately choose to use `.s-title`, `.pane`, `.stat`, etc.
+
+Mix these deliberately (craft guidance: `narova critique`):
 
 - **Title/closing**: `.s-title` + `.display` + `.lede`; `.s-close` +
   `.close-line` + `.close-tags` + `.close-sign`.

@@ -163,39 +163,39 @@ prompt gets its own visual language — you are the director, so direct:
 - **Palette from evidence.** For a brand URL, use verified brand tokens. For
   an article/paper/docs URL, let the subject and source figures lead; publisher
   chrome is context, not automatically the theme. For a text brief, derive
-  tokens from the stated brand or mood.
-  not from habit. A fintech explainer is not a kids' reel is not a security
-  postmortem. The stage glows, progress bar, and caption highlights all
-  follow the tokens — a warm palette gets a warm stage automatically.
+  tokens from the stated brand or mood. Default picks nothing — the base is
+  production infrastructure only. Set `theme: { accent, bg, ... }` for a
+  deliberate palette.
 - **Format from the platform.** `9:16` for reels/shorts/TikTok, `1:1` for
   feed posts, `16:9` for explainers and teaching. Decide it from where the
-  video will live (ask only if the prompt gives no hint).
-- **Vary the layouts.** The built-in menu (`references/scene-script.md`
-  §Built-in scene layouts) has cards, splits, big stats, quotes, steppers,
-  flows, verdicts, ledgers, dials. A 5–8 scene video should use at least
-  three or four distinct layouts. Match layout to beat: the shocking number
-  gets `.stat`, the process gets `.flow`, the comparison gets `.verdicts` or
-  `.homes`, the thesis gets `.bigquote`, the close gets `.s-close`.
+  video will live.
+- **Vary the layouts or build your own.** The built-in menu (opt-in via
+  `patterns: true`) has cards, splits, big stats, quotes, steppers, flows,
+  verdicts, ledgers, dials. Use them when they serve the beat. Write custom
+  HTML/CSS/SVG when the concept needs an original visual voice.
 - **Density follows energy.** Reels: one big element per beat, huge type,
   generous gaps. Teaching: denser, structured, numbered. Announcement: bold
-  single statements. Pace (`timing`) follows too — a reel runs tighter gaps
-  and a hotter tempo than a lecture.
+  single statements.
 - **A signature move per video.** One thing this video owns: a custom font
   stack or wordmark in `theme.css`, a recurring chip motif, a numbered-act
-  convention, a repeated visual rhyme between hook and close. Small,
-  deliberate, and it must not loop (`animation: infinite` breaks rendering).
-- **Chrome is optional, and it's part of the look.** The topbar wordmark,
-  NN / NN counter, and progress bar are byte-identical across every narova
-  video — three videos in, they rhyme. Restyle them in `theme.css`, or cut
-  what the video doesn't need: `chrome: false` strips them,
-  `chrome: { counter: false }` keeps a wordmark-only topbar. A brand promo
-  with the brand's own header treatment beats the default topbar.
+  convention, a repeated visual rhyme between hook and close.
+- **Chrome is optional.** `chrome: false` strips the topbar, counter, and
+  progress bar. `chrome: { counter: false }` keeps a wordmark-only topbar.
+  A brand promo with the brand's own header treatment beats the default topbar.
+- **Caption treatment is a creative choice.** `captions: false` removes the
+  visual band (SRT/VTT still export). Pick a preset (karaoke/slam/pop/rise)
+  or write your own CSS. Captions can be hidden, restyled, or removed
+  entirely — not every work needs word-by-word karaoke.
 - **Self-check before synth:** if this config could become someone else's
   video by swapping only the words, art-direct harder.
 - **Media check before synth:** if the source has useful logos, product
   imagery, figures, diagrams, screenshots, or people and the video uses none
-  of them, revisit the art direction. Use brand assets for brand-led videos;
-  use source figures and subject-native visuals for articles and papers.
+  of them, revisit the art direction.
+
+For craft advice on hook, saveable end-frame, duration bands, 3D quality,
+or accessibility, run `narova critique [profile]`. This is optional
+guidance, not a gate — skip it when the work does not follow social-video
+grammar.
 
 ## Casting the voices
 

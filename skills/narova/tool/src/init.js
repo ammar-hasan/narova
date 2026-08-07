@@ -6,9 +6,17 @@ const path = require('path');
 const { ensureDir } = require('./util');
 
 const CONFIG = `// narova project — see SPEC.md for the full scene API.
-// This scaffold is a minimal starting point: replace everything.
-// It gives you production infrastructure, not an implicit visual style.
-// Design your own visual language, structure, and look from the brief.
+// This scaffold is a minimal production starting point: infrastructure only.
+// Narova is zero-style by default — design your own visual language from the brief.
+//
+// Quick reference:
+//   patterns: true         — include built-in Narova layout classes (.s-title, .pane, .stat, etc.)
+//   theme: { accent, bg }  — set color tokens; omit for neutral monochrome base
+//   chrome: false           — strip all page furniture (topbar, counter, progress bar)
+//   captions: false         — remove visual caption band (SRT/VTT sidecars still export)
+//   timing.tempo            — adjust speech rate (null = 1.18x piper default)
+//   scene.transition        — fade (default) | wipe | slide | zoom
+//
 export default {
   title: "My Project",
   size: "16:9",                         // "16:9" | "1:1" | "9:16"
@@ -17,18 +25,14 @@ export default {
     // Add or remove voices to match your concept. One voice works. Zero voices
     // works for silent projects with explicit scene durations.
   },
-  // theme is optional. Narova has a dark palette for quick starts; override any
-  // token to build your own. Visual style is your domain.
-  //   Tokens: accent, accent-dim, bg, stage, panel, line, ink, muted, faint,
-  //   deep, halo, chip, capidle, onaccent, track, pink, gold, green, red,
-  //   amber, colw (content max-width). Add your own tokens too.
-  //   theme.css adds custom layouts, fonts, and visual systems.
-  // patterns: false to exclude Narova's built-in layout classes (.s-title,
-  //   .pane, .stat, .flow, etc.) — use this when you define your own visual
-  //   language. Defaults to true for quick starts.
+  // theme is fully optional. Omit for the production base; add tokens when you
+  // want a deliberate palette. Tokens: accent, accent-dim, bg, stage, panel,
+  // line, ink, muted, faint, deep, halo, chip, capidle, onaccent, track, pink,
+  // gold, green, red, amber, colw (content max-width). Add your own tokens too.
+  // theme.css adds custom layouts, fonts, and visual systems.
+  // patterns: true to include Narova's built-in layout classes (.s-title,
+  //   .pane, .stat, .flow, etc.) — use when they serve your concept.
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58 },
-  // captions: false to remove the visual caption band (SRT/VTT sidecars still export).
-  // chrome: false to strip all page furniture (topbar, counter, progress bar).
   scenes: [
     {
       id: "opening",
@@ -39,7 +43,7 @@ export default {
         <h1 style="font-size:64px;font-weight:800;line-height:1;color:var(--ink)">My Project</h1>
         <p style="font-size:18px;color:var(--muted);max-width:20em">Write your story here.</p>
       </div>\`,
-      // Add transition, clip, walkthrough, elements, three, or visual.
+      // Add transition, clip, walkthrough, elements, three, threeModule, visual, or bodyFile.
     },
   ],
 };

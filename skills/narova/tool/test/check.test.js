@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { check } = require('../src/check');
+const { check, critique } = require('../src/check');
 
 /* check() prints via console.log; capture it. */
 function run(config, opts = {}) {
@@ -14,6 +14,16 @@ function run(config, opts = {}) {
   let ok;
   try { ok = check(config, opts); } finally { console.log = orig; }
   return { ok, lines };
+}
+
+/* critique() also prints via console.log. */
+function runCritique(config, opts = {}) {
+  const lines = [];
+  const orig = console.log;
+  console.log = (...a) => lines.push(a.join(' '));
+  let results;
+  try { results = critique(config, opts); } finally { console.log = orig; }
+  return { results, lines };
 }
 
 const base = (scenes, themeCss = '', assetsDir = null) => ({
@@ -198,76 +208,104 @@ test('unknown data-mark kinds warn; known kinds do not', () => {
 /* A scene with ~N spoken words for the platform-band tests. */
 const wordy = n => [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: Array(n).fill('word').join(' ') }] }];
 
-test('platform band: narration outside the target range warns, inside does not', () => {
-  // tiktok band 21–34s ≈ 60–100 words at default tempo.
-  const long = run({ ...base(wordy(400)), platform: 'tiktok' }).lines;
-  assert.ok(long.some(l => /platform tiktok targets 21–34s; estimated narration is \d+s — tighten the script or pick a longer format/.test(l)), long.join('\n'));
-  const short = run({ ...base(wordy(8)), platform: 'tiktok' }).lines;
-  assert.ok(short.some(l => /platform tiktok targets 21–34s.*add material or pick a shorter format/.test(l)), short.join('\n'));
-  const ok = run({ ...base(wordy(80)), platform: 'tiktok' }).lines;
-  assert.ok(!ok.some(l => l.includes('platform')), ok.join('\n'));
+test('check: platform band is not in default check output', () => {
+  const { lines } = run({ ...base(wordy(400)), platform: 'tiktok' });
+  assert.ok(!lines.some(l => l.includes('platform tiktok targets') || l.includes('platform x allows')), lines.join('\n'));
 });
 
-test('platform x has no lower bound — only warns above 140s', () => {
-  const short = run({ ...base(wordy(5)), platform: 'x' }).lines;
-  assert.ok(!short.some(l => l.includes('platform')), short.join('\n'));
-  const long = run({ ...base(wordy(600)), platform: 'x' }).lines;
-  assert.ok(long.some(l => /platform x allows up to 140s.*tighten the script/.test(l)), long.join('\n'));
+test('critique: platform band in social-short profile', () => {
+  const long = runCritique({ ...base(wordy(400)), platform: 'tiktok' }, { profile: 'social-short' });
+  assert.ok(long.results.some(r => /platform tiktok targets 21–34s; estimated narration is \d+s — tighten the script/.test(r)), long.results.join('\n'));
+  const short = runCritique({ ...base(wordy(8)), platform: 'tiktok' }, { profile: 'social-short' });
+  assert.ok(short.results.some(r => /platform tiktok targets 21–34s.*add material/.test(r)), short.results.join('\n'));
+  const ok = runCritique({ ...base(wordy(80)), platform: 'tiktok' }, { profile: 'social-short' });
+  assert.ok(!ok.results.some(r => r.includes('platform')), ok.results.join('\n'));
 });
 
-test('no platform set: no platform lint', () => {
-  const { lines } = run(base(wordy(600)));
-  assert.ok(!lines.some(l => l.includes('platform')), lines.join('\n'));
+test('critique: platform x has no lower bound in social-short profile', () => {
+  const short = runCritique({ ...base(wordy(5)), platform: 'x' }, { profile: 'social-short' }).results;
+  assert.ok(!short.some(r => r.includes('platform')), short.join('\n'));
+  const long = runCritique({ ...base(wordy(600)), platform: 'x' }, { profile: 'social-short' });
+  assert.ok(long.results.some(r => /platform x allows up to 140s.*tighten the script/.test(r)), long.results.join('\n'));
 });
 
-// -- hook enforcement --
+// -- craft checks moved to critique (not check) --
 
-test('hook: lead-in silence >200ms warns', () => {
-  const { lines } = run({ ...base(wordy(20)), timing: { lead: 0.38 } });
-  assert.ok(lines.some(l => l.includes('timing.lead is 0.38s') && l.includes('200ms')), lines.join('\n'));
+test('check: hook/saveable checks are not in default check output', () => {
+  const cfg = { ...base(wordy(20)), timing: { lead: 0.38 } };
+  const { lines } = run(cfg);
+  assert.ok(!lines.some(l => l.includes('timing.lead is 0.38s') || l.includes('lead-in')), lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('visible text') || l.includes('muted')), lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('saveable') || l.includes('end-card')), lines.join('\n'));
 });
 
-test('hook: lead-in silence ≤200ms is silent', () => {
-  const { lines } = run({ ...base(wordy(20)), timing: { lead: 0.16 } });
-  assert.ok(!lines.some(l => l.includes('lead-in')), lines.join('\n'));
+// -- critique: social-short profile --
+
+test('critique: lead-in silence >200ms advises on social-short', () => {
+  const cfg = { ...base(wordy(20)), timing: { lead: 0.38 } };
+  const { results } = runCritique(cfg, { profile: 'social-short' });
+  assert.ok(results.some(r => r.includes('timing.lead is 0.38s') && r.includes('200ms')), results.join('\n'));
+  assert.equal(results.length, 1); // social-short: only the lead warning (hook scene has text)
 });
 
-test('hook: scene 1 with no visible text warns', () => {
-  const { lines } = run(base([
+test('critique: scene 1 with no visible text advises on social-short', () => {
+  const cfg = base([
     { id: 'hook', body: '<div class="bg"></div>', vo: [{ who: 'a', text: 'hello' }] },
-  ]));
-  assert.ok(lines.some(l => l.includes('scene 1 has no visible text') && l.includes('muted')), lines.join('\n'));
+  ]);
+  const { results } = runCritique(cfg, { profile: 'social-short' });
+  assert.ok(results.some(r => r.includes('no visible text') && r.includes('muted')), results.join('\n'));
+  assert.ok(results.some(r => r.includes('end-card')), results.join('\n')); // also no saveable
 });
 
-test('hook: scene 1 with text is silent', () => {
-  const { lines } = run(base([
-    { id: 'hook', body: '<div class="bg"></div><h1>Hook Text</h1>', vo: [{ who: 'a', text: 'hello' }] },
-  ]));
-  assert.ok(!lines.some(l => l.includes('no visible text')), lines.join('\n'));
+test('critique: silent/disabled-captions projects skip social-short advice', () => {
+  // Silent project (no voices)
+  const cfgSilent = base([{ id: 's', body: '<div></div>', vo: [] }]);
+  cfgSilent.voices = {};
+  const { results: r1 } = runCritique(cfgSilent, { profile: 'social-short' });
+  assert.ok(!r1.some(l => l.includes('visible text') || l.includes('muted')), r1.join('\n'));
+
+  // captions disabled
+  const cfgNoCaps = { ...base(wordy(20)), captionsEnabled: false };
+  const cfgNoCapsResolved = { ...cfgNoCaps, captions: { preset: 'karaoke', emphasis: [], maxWords: null } };
+  const { results: r2 } = runCritique(cfgNoCapsResolved, { profile: 'social-short' });
+  assert.ok(!r2.some(l => l.includes('visible text') || l.includes('muted')), r2.join('\n'));
 });
 
-test('saveable: last scene with no text or image warns', () => {
-  const { lines } = run(base([
+test('critique: saveable last scene with no text advises on social-short', () => {
+  const cfg = base([
     { id: 'hook', body: '<h1>Start</h1>', vo: [{ who: 'a', text: 'hello' }] },
     { id: 'end', body: '<div class="empty"></div>', vo: [{ who: 'a', text: 'bye' }] },
-  ]));
-  assert.ok(lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
+  ]);
+  const { results } = runCritique(cfg, { profile: 'social-short' });
+  assert.ok(results.some(r => r.includes('social-short') && r.includes('end-card')), results.join('\n'));
 });
 
-test('saveable: last scene with text is silent', () => {
-  const { lines } = run(base([
-    { id: 'hook', body: '<h1>Start</h1>', vo: [{ who: 'a', text: 'hello' }] },
+test('critique: all profile includes social-short, presentation advice', () => {
+  const cfg = base([
+    { id: 's1', body: '<div class="bg"></div>', vo: [{ who: 'a', text: 'hello' }] },
+  ]);
+  const { results } = runCritique(cfg, { profile: 'all' });
+  assert.ok(results.some(r => r.includes('social-short') || r.includes('no visible text')), results.join('\n'));
+});
+
+test('critique: presentation profile checks 3D quality', () => {
+  const cfg = base([
+    { id: 's', body: '<h1>3D</h1>', vo: [{ who: 'a', text: 'one' }],
+      three: { camera: { position: [0, 0, 5] }, lights: [{ type: 'directional', shadow: true }],
+        objects: [{ type: 'cube', roughness: 0.4 }] } },
+  ]);
+  const { results } = runCritique(cfg, { profile: 'presentation' });
+  assert.ok(results.some(r => r.includes('receiveShadow')), results.join('\n'));
+  assert.ok(results.some(r => r.includes('envMap')), results.join('\n'));
+});
+
+test('critique: no results when config passes all heuristics', () => {
+  const cfg = base([
+    { id: 'hook', body: '<h1>Text</h1>', vo: [{ who: 'a', text: 'hello' }] },
     { id: 'end', body: '<h2>Subscribe</h2>', vo: [{ who: 'a', text: 'bye' }] },
-  ]));
-  assert.ok(!lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
-});
-
-test('saveable: last scene with an image is silent', () => {
-  const { lines } = run(base([
-    { id: 'hook', body: '<h1>Start</h1>', vo: [{ who: 'a', text: 'hello' }] },
-    { id: 'end', body: '<img src="logo.svg">', vo: [{ who: 'a', text: 'bye' }] },
-  ]));
-  assert.ok(!lines.some(l => l.includes('saveable') && l.includes('end-card')), lines.join('\n'));
+  ]);
+  const { results } = runCritique(cfg, { profile: 'social-short' });
+  assert.equal(results.length, 0, results.join('\n'));
 });
 
 // -- HyperFrames reserved class names --

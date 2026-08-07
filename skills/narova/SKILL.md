@@ -27,7 +27,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.23.0"
+  version: "0.24.0"
 ---
 # narova — prompt to narrated, captioned video
 
@@ -43,6 +43,20 @@ Only upgrade on explicit user request.
 Narova owns timing, orchestration, rendering, caching, and delivery. You and the
 user own creative authorship. Narova should never make your video look like a
 Narova video.
+
+Narova is **zero-style by default.** The base scaffold gives you production
+infrastructure (captions, chrome, timeline, audio) but no implicit visual
+language. Every aesthetic choice — layout patterns, color palette, typography,
+caption style, chrome treatment — must be an explicit creative decision. You
+design the look from the brief, not from a default theme. Built-in layout
+classes (`.s-title`, `.pane`, `.stat`, etc.), a decorative background grid,
+and recognisable dark/teal palettes are available through explicit opt-in
+(`patterns: true`, `theme: { ... }`).
+
+Trust your own direction. A film without a hook is not "wrong." A scene with
+no visible text is not "broken." A video without a CTA is not "incomplete."
+Different formats have different grammar — and the grammar is yours to set or
+break.
 
 You write a **scene script**: a `reel.config.mjs` with `voices`, `theme`, and
 `scenes`. Each scene has spoken dialogue (`vo`: a list of `{ who, text }` turns)
@@ -81,6 +95,7 @@ External TTS providers are optional registered companion skills — see
    first, then `references/url-to-source.md`.
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
+   For optional craft advice: `narova critique [social-short|explainer|presentation|accessibility]`.
 5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
 6. `compose` — generates the selected renderer project. Run `narova shots` for visual QA.
 7. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
@@ -88,6 +103,10 @@ External TTS providers are optional registered companion skills — see
 
 ## Key gotchas
 
+- **No implicit visual style.** Narova is zero-style by default — no layout
+  patterns, no decorative grid, no implicit dark/teal palette. Set
+  `patterns: true` to include Narova's built-in layout classes when they
+  serve your concept. Every aesthetic choice is yours to make.
 - **No looping CSS in theme.css.** The renderer jumps between frames:
   `animation: ... infinite`, hover effects, and CSS transitions break.
   Motion comes from the timeline: `reveal`/`data-cue` entrances and
@@ -104,6 +123,10 @@ External TTS providers are optional registered companion skills — see
   `claims.md`, but a one-sided narrative built from sourced claims passes
   clean. For contested topics, ledger the major perspectives and re-read the
   script for framing — balance is the author's job.
+- **Craft advice is opt-in.** Hook checks, saveable end-frames, platform
+  duration bands, and 3D quality hints belong to `narova critique`, not
+  `narova check`. `check` reports only correctness and reproducibility
+  concerns. Run `narova critique` when you want optional craft guidance.
 
 Read `references/gotchas.md` for the full list.
 
@@ -145,6 +168,12 @@ sentences; untouched scenes are byte-identical). See
 | `references/gotchas.md`        | avoid the traps (tempo, reuse, sync, models, lint)          |
 | `references/environment.md`    | fix `doctor` failures: ffmpeg, python, venv, hyperframes     |
 | `references/renderers.md`      | choose HyperFrames/no-browser; portable visual nodes and limits |
+
+For optional craft advice (hook, saveable end-card, platform duration band,
+3D quality hints, accessibility), run `narova critique [profile]`. Profiles:
+`social-short`, `explainer`, `presentation`, `accessibility`, or `all`. This is
+creative guidance, not a correctness gate — skip it when the work does not need
+social-video grammar.
 
 For Urdu dialogue, use the `urdu-voice-director` skill before finalizing `vo` text.
 

@@ -138,21 +138,12 @@ function releaseChecks(config, errors) {
       errors.push(`scene "${s.id}": contains an unsupported HTML element (<canvas>, <web-component>) — HyperFrames may not render it deterministically`);
     }
 
-    // 3D scene quality checks: useful hints for a cinematic look.
+    // 3D scene correctness: camera is required for rendering.
     if (s.three) {
       if (!s.three.camera) {
         errors.push(`scene "${s.id}": 3D scene has no camera — add a camera element or three.camera`);
       }
-      const hasShadowLight = (s.three.lights || []).some(l => l.shadow);
-      const hasShadowReceiver = (s.three.objects || []).some(o => o.receiveShadow);
-      if (hasShadowLight && !hasShadowReceiver) {
-        errors.push(`scene "${s.id}": lights cast shadows but no object has receiveShadow:true — shadows won't be visible`);
-      }
-      const usesPBR = (s.three.objects || []).some(o =>
-        o.roughness != null || o.metalness != null || o.roughnessMap || o.metalnessMap);
-      if (usesPBR && !s.three.envMap) {
-        errors.push(`scene "${s.id}": PBR materials (roughness/metalness) used without envMap — surfaces will look flat; add an equirectangular environment map`);
-      }
+      // Shadow/PBR quality hints moved to narova critique --presentation.
     }
   }
 
@@ -529,23 +520,8 @@ function check(config, opts = {}) {
     }
   }
 
-  // Platform duration band
-  if (config.platform && PLATFORMS[config.platform]) {
-    const [lo, hi] = PLATFORMS[config.platform].band;
-    const estSec = estimateSeconds(config);
-    if (estSec < lo) {
-      warnings.push(`platform ${config.platform} targets ${lo}–${hi}s; estimated narration is ${Math.round(estSec)}s — add material or pick a shorter format`);
-    } else if (estSec > hi) {
-      const band = lo > 0 ? `targets ${lo}–${hi}s` : `allows up to ${hi}s`;
-      warnings.push(`platform ${config.platform} ${band}; estimated narration is ${Math.round(estSec)}s — tighten the script or pick a longer format`);
-    }
-  }
-
-  // Hook doctrine
-  // Only check hooks when using TTS narration (external narration has its own pacing).
-  if (!config.narrationSource || !config.narrationSource.file) {
-    checkHook(config, warnings);
-  }
+  // Craft advice (hook, platform bands) has moved to narova critique.
+  // Run `narova critique` or `narova check --critique` for optional craft checks.
 
   // ---- Strict / Release ----
 
@@ -623,4 +599,120 @@ function check(config, opts = {}) {
   return !(release && errors.length > 0);
 }
 
-module.exports = { check };
+/* ---- critique: opt-in creative craft assessment ------------------------------
+ * Critique runs optional craft/heuristic checks that are NOT correctness
+ * concerns. It never fails the build. Checks are organized into profiles
+ * so the model can deliberately request specific advice domains.
+ *
+ * Profiles:
+ *   social-short    — hook, saveable end-card, platform duration
+ *   explainer       — structure, pacing, scene-count distribution
+ *   presentation    — 3D shadow/PBR quality, visual balance hints
+ *   accessibility   — caption contrast, text readability
+ *   all             — every craft check (default when no profile is set)
+ *
+ * Use `narova critique` (or `check --critique`) to run these. A narration-only
+ * edit, a silent mood piece, or an experimental film may skip critique
+ * entirely — these checks exist for moments when craft advice is wanted. */
+function critique(config, opts = {}) {
+  const results = [];
+  const profile = opts.profile || 'all';
+  const active = profile === 'all' ? null : new Set(profile.split(',').map(s => s.trim()));
+
+  function activeFor(p) { return active == null || active.has(p); }
+  function note(msg) { results.push(msg); }
+
+  // -- social-short: hook / saveable / duration-band advice ------------------
+  if (activeFor('social-short') || activeFor('all')) {
+    // Only generate hook advice for projects with voiceover and captions enabled.
+    const voices = config.voices || {};
+    const hasVoiceover = Object.keys(voices).length > 0;
+    const hasSynthesis = config.scenes.some(s => (s.vo || []).length > 0);
+    if ((hasVoiceover || hasSynthesis) && config.captionsEnabled !== false) {
+      const s1 = config.scenes[0];
+      const last = config.scenes[config.scenes.length - 1];
+      const timing = config.timing || {};
+
+      const lead = timing.lead ?? 0.16;
+      if (lead > 0.2) {
+        note(`social-short: timing.lead is ${lead}s (>200ms) — the first syllable should land within 200ms; set timing.lead ≤ 0.2`);
+      }
+
+      if (s1) {
+        const body = String(s1.body || '');
+        const portable = visualFacts(s1.visual);
+        const textEls = body.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
+        if ((!textEls || textEls.length === 0) && !portable.text) {
+          note(s1.walkthrough
+            ? 'social-short: scene 1 shows the product but has no on-screen hook text — add a short claim so muted viewers know why the action matters'
+            : 'social-short: scene 1 has no visible text — muted viewers (80%+ of autoplay) see a blank screen; add hook text on-screen');
+        }
+      }
+
+      if (last) {
+        const lastBody = String(last.body || '');
+        const lastPortable = visualFacts(last.visual);
+        const hasImage = /<(?:img|svg|video)\b/i.test(lastBody);
+        const lastTextEls = lastBody.match(/<(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)\b[^>]*>[^<]+<\/(?:h[1-6]|p|span|div|a|li|label|figcaption|blockquote)>/gi);
+        if (!hasImage && !lastPortable.content && (!lastTextEls || lastTextEls.length === 0)) {
+          note(`social-short: last scene "${last.id}" has no text or image — a saveable end-card lifts completion rate; add a title, logo, or CTA`);
+        }
+      }
+    }
+
+    if (config.platform && PLATFORMS[config.platform]) {
+      const [lo, hi] = PLATFORMS[config.platform].band;
+      const estSec = estimateSeconds(config);
+      if (estSec < lo) {
+        note(`social-short: platform ${config.platform} targets ${lo}–${hi}s; estimated narration is ${Math.round(estSec)}s — add material or pick a shorter format`);
+      } else if (estSec > hi) {
+        const band = lo > 0 ? `targets ${lo}–${hi}s` : `allows up to ${hi}s`;
+        note(`social-short: platform ${config.platform} ${band}; estimated narration is ${Math.round(estSec)}s — tighten the script or pick a longer format`);
+      }
+    }
+  }
+
+  // -- explainer: scene-count distribution, pacing advice -------------------
+  if (activeFor('explainer') || activeFor('all')) {
+    const sceneCount = config.scenes.length;
+    const turns = config.scenes.reduce((n, s) => n + s.vo.length, 0);
+    const estSec = estimateSeconds(config);
+    if (estSec > 30 && sceneCount < 3 && turns > 2) {
+      note('explainer: script has multiple turns but few scenes — consider breaking into more visual segments for clarity');
+    }
+  }
+
+  // -- presentation: 3D quality hints ---------------------------------------
+  if (activeFor('presentation') || activeFor('all')) {
+    for (const s of config.scenes) {
+      if (!s.three) continue;
+      const hasShadowLight = (s.three.lights || []).some(l => l.shadow);
+      const hasShadowReceiver = (s.three.objects || []).some(o => o.receiveShadow);
+      if (hasShadowLight && !hasShadowReceiver) {
+        note(`presentation: scene "${s.id}" — lights cast shadows but no object has receiveShadow:true; shadows won't be visible`);
+      }
+      const usesPBR = (s.three.objects || []).some(o =>
+        o.roughness != null || o.metalness != null || o.roughnessMap || o.metalnessMap);
+      if (usesPBR && !s.three.envMap) {
+        note(`presentation: scene "${s.id}" — PBR materials (roughness/metalness) used without envMap; surfaces will look flat`);
+      }
+    }
+  }
+
+  // -- accessibility: caption/contrast hints --------------------------------
+  if (activeFor('accessibility') || activeFor('all')) {
+    if (config.captionsEnabled && config.captions && config.captions.maxWords != null && config.captions.maxWords > 15) {
+      note('accessibility: caption maxWords is high — shorter caption lines improve readability');
+    }
+  }
+
+  if (results.length) {
+    console.log(`critique (profile: ${profile}):`);
+    for (const r of results) console.log(`  • ${r}`);
+  } else {
+    console.log(`critique (profile: ${profile}): no advice — project passes all craft heuristics`);
+  }
+  return results;
+}
+
+module.exports = { check, critique };

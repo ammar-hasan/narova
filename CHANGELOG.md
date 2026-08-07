@@ -4,6 +4,45 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.24.0] - 2026-08-07
+
+### Changed
+
+- **Zero-style by default.** `config.patterns` now defaults to `false` —
+  built-in layout classes (`.s-title`, `.pane`, `.stat`, `.flow`, etc.) are
+  no longer injected into every project. Set `patterns: true` to opt into them
+  as a deliberate creative choice. The scaffold now describes Narova as
+  production infrastructure, not an implicit visual language.
+- **No decorative grid background.** The subtle background grid texture
+  (`#bg::before` with opacity 0.02) has been removed from the base stylesheet.
+  Add it back in `theme.css` when the concept calls for it.
+- **Craft checks are now opt-in critique.** Hook enforcement (lead-in silence,
+  visible text, saveable end-frame), platform duration bands, and 3D quality
+  hints (shadow receivers, PBR/envMap) have been moved from `narova check` to
+  a new `narova critique` command. `check` now reports only correctness and
+  reproducibility — craft advice is deliberate, not ambient. Profiles:
+  `social-short`, `explainer`, `presentation`, `accessibility`, or `all` (default).
+  Run `narova critique --profile social-short` for hook/CTA/saveable advice;
+  `narova critique --profile presentation` for 3D quality hints.
+  `narova check --critique` also runs critique after check.
+- **Better capability error messages.** No-browser scene-composition errors now
+  suggest the escape hatch (switch to HyperFrames or add a `visual` tree). Schema
+  errors for missing scene content now point to the creative ladder (elements →
+  three → threeModule → visual) instead of just rejecting.
+
+### Added
+
+- **`narova critique` command.** Runs optional craft heuristics by profile.
+  Prints structured advice; never fails the build.
+- SKILL.md now documents the zero-style default and the critique system in its
+  creative-stance section and key-gotchas list.
+
+### Fixed
+
+- `releaseChecks()` no longer fails release builds on 3D shadow/PBR aesthetic
+  hints — those are now critique-only.
+- All 503 tests pass.
+
 ## [0.23.0] - 2026-08-07
 
 ### Added

@@ -64,10 +64,10 @@ function validateConfig(config) {
   for (let i = 0; i < config.scenes.length; i++) {
     const scene = config.scenes[i];
     if (!scene.visual) {
-      errors.push(`config.scenes[${i}].visual: required by no-browser renderer (HTML body is HyperFrames-only)`);
+      errors.push(`config.scenes[${i}].visual: required by no-browser renderer (HTML body is HyperFrames-only). Add a \`visual\` tree to this scene, or switch to the 'hyperframes' renderer with \`--renderer hyperframes\`.`);
     } else errors.push(...validateVisual(scene.visual, `config.scenes[${i}].visual`));
     if (scene.walkthrough && !scene.clip) {
-      errors.push(`config.scenes[${i}].walkthrough: captured walkthrough composition is not supported by no-browser yet; provide scene.clip as the explicit full-frame fallback`);
+      errors.push(`config.scenes[${i}].walkthrough: captured walkthrough composition is not supported by no-browser yet — provide a \`scene.clip\` as the explicit full-frame fallback, or switch to the 'hyperframes' renderer`);
     }
     if (!TRANSITIONS.has(scene.transition || 'fade')) {
       errors.push(`config.scenes[${i}].transition: no-browser supports ${[...TRANSITIONS].join('|')}`);

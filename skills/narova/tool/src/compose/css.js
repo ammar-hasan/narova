@@ -50,9 +50,6 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 
 #root{position:relative;width:${W}px;height:${H}px;overflow:hidden}
 #bg{position:absolute;inset:0;z-index:0;pointer-events:none;background:var(--stage)}
-#bg::before{content:"";position:absolute;inset:0;
-   background-image:linear-gradient(var(--line) 1px,transparent 1px),linear-gradient(90deg,var(--line) 1px,transparent 1px);
-   background-size:44px 44px;opacity:.02}
 
 /* clips */
 .scene{position:absolute;inset:0;z-index:1}

@@ -15,7 +15,7 @@ const { writeCaptions } = require('../src/captions');
 const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
-const { check } = require('../src/check');
+const { check, critique } = require('../src/check');
 const { ingest } = require('../src/ingest');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
@@ -277,8 +277,24 @@ async function main() {
         strict: flags.strict,
         release: flags.release,
         outDir: outDirOf(flags, projectDir),
+        critiqueProfile: flags.critique || null,
       });
+      // Run critique when requested via --critique flag or as a standalone command.
+      if (flags.critique) {
+        console.log('');
+        critique(config, { profile: flags.critique === true ? 'all' : flags.critique });
+      }
       if (!ok) process.exitCode = 1;
+      return;
+    }
+
+    case 'critique': {
+      let config;
+      let projectDir;
+      try { ({ config, projectDir } = await loadResolved(flags)); }
+      catch (e) { console.error(e.message); process.exit(1); }
+      const profile = positionals[1] || flags.profile || 'all';
+      critique(config, { profile });
       return;
     }
 
