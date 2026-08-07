@@ -25,6 +25,7 @@ const { getRenderer } = require('./renderers');
 const { compile, read, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
 const { audioFingerprint } = require('./audio-fingerprint');
+const { renderToMp4 } = require('./scene-cache');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
@@ -278,7 +279,10 @@ function build(config, opts = {}) {
         videoFrameFormat: hasWalkthroughs ? 'png' : null,
       });
     } else {
-      const rendered = selectedRenderer.render(cc, outDir, { ...opts, name });
+      // The no-browser base render goes through the scene cache (per-scene
+      // reuse where possible); hyperframes deliverables render inside
+      // buildDeliverables above and are not cached at the base level.
+      const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, { ...opts, name, log });
       projectDir = rendered.dir;
       const { buildDeliverablesFromSource } = require('./exports');
       results = buildDeliverablesFromSource(cc, rendered.mp4, outDir, { ...opts, log });
@@ -292,8 +296,13 @@ function build(config, opts = {}) {
     };
   }
 
-  const rendered = selectedRenderer.render(cc, outDir, {
-    ...opts, name, videoFrameFormat: hasWalkthroughs ? 'png' : null,
+  // The render goes through the scene-level cache (src/scene-cache.js): for
+  // no-browser, only scenes whose cache key changed are re-rendered and the
+  // rest are reused + concatenated; for hyperframes, the whole MP4 is reused
+  // when nothing changed. Any cache failure falls back to a full render, so
+  // caching can never fail the build.
+  const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, {
+    ...opts, name, videoFrameFormat: hasWalkthroughs ? 'png' : null, log,
   });
   const mp4 = rendered.mp4;
   const seconds = rendered.seconds == null ? probe(mp4) : rendered.seconds;

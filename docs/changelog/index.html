@@ -51,7 +51,26 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.22.0</span>
+        <span class="rel-version" data-narova-version>0.23.0</span>
+        <span class="rel-date">2026-08-07</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Scene-level render cache</strong> — <code>narova build</code> reuses previously rendered output instead of re-rendering the whole video every time. Each rendered span is keyed on a hash of its scene content, measured word/turn timings, and the shared render context (theme, format, fps, quality, voices, assets, choreography), so a span is reused only when reproducing it would yield perceptually-identical pixels. <em>no-browser</em> gets full per-scene caching (only changed scenes re-render, concatenated with the single full audio track); <em>hyperframes</em> gets whole-video caching (reuses the MP4 when nothing changed). Missing, empty, or wrong-duration spans are re-rendered; any cache failure falls back to a full render — caching can never fail a build. <code>--reuse</code> (TTS) is a separate, unaffected layer.</li>
+          <li><strong>Per-scene <code>sceneHash</code> covers author JS</strong> — the manifest's per-scene <code>hash</code> now includes <code>choreographyFile</code>, <code>scriptFile</code>, and <code>threeModule</code> contents (matching the <code>check</code> determinism scan), so editing one of those files invalidates only that scene's cached span.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>HyperFrames engine pinned to 0.7.96</strong> (was 0.7.64).</li>
+          <li><strong><code>build --plan</code> shows the cache reuse decision</strong> — the same per-scene plan the real build uses, so change scope is legible before any work runs.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.22.0</span>
         <span class="rel-date">2026-08-07</span>
       </div>
       <div class="rel-body">

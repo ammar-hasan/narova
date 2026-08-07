@@ -601,6 +601,59 @@ test('no choreography leaves no choreography hash', () => {
   assert.equal(buildHashes(resolve(makeRaw()), os.tmpdir()).choreography, undefined);
 });
 
+// --- per-scene content hash covers inlined author JS -------------------------
+// The scene-level render cache keys off scenes[i].hash, so the hash must cover
+// every per-scene author-JS source that compose inlines (choreographyFile /
+// scriptFile / threeModule). Otherwise editing one of those files would not
+// invalidate the cached span — a determinism-contract hole. The set mirrors
+// the determinism scan in check.js.
+
+function authorJsProjectDir() {
+  const dir = path.join(os.tmpdir(), 'narova-scenehash-' + Date.now() + '-' + Math.random().toString(36).slice(2));
+  fs.mkdirSync(dir, { recursive: true });
+  return dir;
+}
+
+function writeAuthorJsScene(dir, { choreo, script, three } = {}) {
+  const scene = { id: 'intro', vo: [{ who: 'a', text: 'Hello world.' }], body: '<div><h1>Hi</h1></div>' };
+  if (choreo != null) { fs.writeFileSync(path.join(dir, 'choreo.js'), choreo); scene.choreographyFile = 'choreo.js'; }
+  if (script != null) { fs.writeFileSync(path.join(dir, 'script.js'), script); scene.scriptFile = 'script.js'; }
+  if (three != null) { fs.writeFileSync(path.join(dir, 'three.js'), three); scene.threeModule = 'three.js'; }
+  return resolveConfig({
+    title: 'Author JS', size: '16:9',
+    voices: { a: { label: 'A', color: '#0ff', backend: 'piper', speaker: 'x' } },
+    scenes: [scene, { id: 'body', vo: [{ who: 'a', text: 'Body.' }], body: '<p>x</p>' }],
+  }, {}, dir);
+}
+
+for (const [field, key, a, b] of [
+  ['choreographyFile', 'choreo', 'tl.to(".a",{x:1})', 'tl.to(".a",{x:2})'],
+  ['scriptFile', 'script', 'var _n=1;', 'var _n=2;'],
+  ['threeModule', 'three', 'renderer.setClearColor(0x000000)', 'renderer.setClearColor(0x111111)'],
+]) {
+  test(`sceneHash changes when a scene ${field} changes`, () => {
+    const dirA = authorJsProjectDir();
+    const dirB = authorJsProjectDir();
+    const dirC = authorJsProjectDir();
+    try {
+      const cfgA = writeAuthorJsScene(dirA, { [key]: a });
+      const cfgB = writeAuthorJsScene(dirB, { [key]: b });
+      const cfgC = writeAuthorJsScene(dirC, { [key]: a });
+      const ha = compile(cfgA).scenes[0].hash;
+      const hb = compile(cfgB).scenes[0].hash;
+      const hc = compile(cfgC).scenes[0].hash;
+      assert.notEqual(ha, hb, `editing ${field} must change the scene hash`);
+      assert.equal(ha, hc, `identical ${field} must produce a stable scene hash`);
+      // A sibling scene is unaffected — its hash is independent.
+      assert.equal(compile(cfgA).scenes[1].hash, compile(cfgB).scenes[1].hash);
+    } finally {
+      fs.rmSync(dirA, { recursive: true, force: true });
+      fs.rmSync(dirB, { recursive: true, force: true });
+      fs.rmSync(dirC, { recursive: true, force: true });
+    }
+  });
+}
+
 // --- theme token preservation -----------------------------------------------
 
 test('custom theme tokens survive the manifest round-trip', () => {

@@ -9,7 +9,7 @@ prompts, scripts, web pages, and real product walkthroughs into narrated,
 captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.22.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.23.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">

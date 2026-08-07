@@ -312,13 +312,26 @@ function compileScenes(scenes) {
 
 /* Per-scene content hash: covers every datum that would change the rendered
  * output of a single scene. Changing scene 3's body should not invalidate the
- * render cache for scene 1. */
+ * render cache for scene 1.
+ *
+ * The set mirrors the per-scene author-content sources scanned by check.js
+ * (the determinism scan): scene body/visual/three/clip/walkthrough/transition/
+ * duration/vo, PLUS the inlined author-JS blobs that compose folds into the
+ * project — `_choreographyFileContents`, `_scriptFileContents`, and the raw
+ * Three.js escape hatch `_threeModuleContents`. These are part of the scene's
+ * rendered output (they drive GSAP timelines / WebGL), so a cache span is only
+ * valid if they are unchanged. Measured word/turn timings are NOT part of this
+ * content fingerprint — they are not available at compile time and are added
+ * to the scene-level cache key separately (see src/scene-cache.js). */
 function sceneHash(s) {
   const payload = JSON.stringify({
     id: s.id,
     vo: s.vo, body: s.body, visual: s.visual, three: s.three,
     clip: s.clip, walkthrough: s.walkthrough, transition: s.transition,
     dur: s.dur,
+    choreographyFile: s._choreographyFileContents || null,
+    scriptFile: s._scriptFileContents || null,
+    threeModule: s._threeModuleContents || null,
   });
   return sha256(payload);
 }

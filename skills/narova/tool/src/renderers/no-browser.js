@@ -840,6 +840,88 @@ function render(config, outDir, opts = {}) {
   }
 }
 
+/* Render only the given scene frame-spans to video-only MP4s (one per span),
+ * stored at span.spanFile. Used by the scene-level render cache: a build that
+ * changes one scene renders only that scene's span here. Spans are encoded
+ * without B-frames (-bf 0) and with a fixed timebase so the cache layer can
+ * concatenate them losslessly with `ffmpeg -c copy` at the splice points.
+ *
+ * Each frame is produced by the same renderCanvas(project, dir, time, env)
+ * call the full render uses at the absolute time t = frame/fps, so a span is
+ * pixel-identical to the equivalent slice of a full render (chrome counter,
+ * progress bar, and scene transitions all see the full project timeline). */
+function renderSpans(config, outDir, spans, opts = {}) {
+  const composed = compose(config, outDir);
+  const project = readProject(composed.dir);
+  const canvas = canvasModule();
+  registerFonts(project, composed.dir, canvas);
+  const fps = Number(opts.fps || project.fps || 30);
+  if (!Number.isFinite(fps) || fps <= 0 || fps > 120) throw new Error('no-browser renderer fps must be between 1 and 120');
+  const frameRoot = path.join(composed.dir, '.frames');
+  fs.rmSync(frameRoot, { recursive: true, force: true });
+  let clipDirs = new Map();
+  try {
+    clipDirs = extractClipFrames(project, composed.dir, frameRoot, fps);
+    const env = { canvas, fps, clipDirs, images: new Map(), fonts: new Map() };
+    const q = qualityOptions(opts.quality);
+    const gop = Math.max(1, Math.round(fps));
+    for (const span of spans) {
+      const spanFrames = ensureDir(path.join(frameRoot, `span-${span.sceneIndex}`));
+      for (let f = span.frameStart; f < span.frameEnd; f++) {
+        const surface = renderCanvas(project, composed.dir, f / fps, env);
+        const local = f - span.frameStart;
+        fs.writeFileSync(path.join(spanFrames, `${String(local).padStart(6, '0')}.png`), surface.toBuffer('image/png'));
+      }
+      // Atomic temp + rename: a crash mid-encode never leaves a half-written
+      // span that a later build might trust as a valid cache hit. The temp
+      // keeps the .mp4 extension so ffmpeg infers the muxer format.
+      ensureDir(path.dirname(span.spanFile));
+      const tmp = span.spanFile + '.tmp.mp4';
+      sh('ffmpeg', [
+        '-y', '-loglevel', 'error',
+        '-framerate', String(fps), '-start_number', '0',
+        '-i', path.join(spanFrames, '%06d.png'),
+        '-vf', 'setsar=1',
+        '-frames:v', String(span.frameCount),
+        '-c:v', 'libx264', '-preset', q.preset, '-crf', q.crf,
+        '-pix_fmt', 'yuv420p', '-g', String(gop), '-bf', '0',
+        '-video_track_timescale', String(Math.round(fps * 1000)),
+        tmp,
+      ]);
+      fs.renameSync(tmp, span.spanFile);
+    }
+    return { dir: composed.dir, spans };
+  } finally {
+    for (const descriptor of clipDirs.values()) fs.closeSync(descriptor.fd);
+    if (!opts.keepFrames) fs.rmSync(frameRoot, { recursive: true, force: true });
+  }
+}
+
+/* Split an already-rendered full MP4 into per-scene video-only spans. Used by
+ * the cache fallback path: when a per-scene render fails and the build falls
+ * back to a full renderer.render(), this repopulates the cache from that full
+ * render so the next build can reuse spans. Output-seeking (-ss after -i) +
+ * re-encode is frame-accurate; spans are encoded with the same no-B-frame
+ * profile as renderSpans so they remain concat-safe. */
+function splitSpans(srcMp4, spans, fps, outDir) {
+  for (const span of spans) {
+    ensureDir(path.dirname(span.spanFile));
+    const tmp = span.spanFile + '.tmp.mp4';
+    sh('ffmpeg', [
+      '-y', '-loglevel', 'error',
+      '-i', srcMp4,
+      '-ss', String(span.tStart), '-frames:v', String(span.frameCount),
+      '-an',
+      '-vf', 'setsar=1',
+      '-c:v', 'libx264', '-preset', 'medium', '-crf', '18',
+      '-pix_fmt', 'yuv420p', '-g', String(Math.max(1, Math.round(fps))), '-bf', '0',
+      '-video_track_timescale', String(Math.round(fps * 1000)),
+      tmp,
+    ]);
+    fs.renameSync(tmp, span.spanFile);
+  }
+}
+
 function shots(config, outDir, times) {
   const composed = compose(config, outDir);
   const project = readProject(composed.dir);
@@ -910,7 +992,13 @@ module.exports = {
   validate: validateConfig,
   compose,
   render,
+  renderSpans,
+  splitSpans,
   shots,
+  /* Scene-level render cache. no-browser can render an arbitrary frame span,
+   * so it gets full per-scene caching: only scenes whose cache key changed are
+   * re-rendered, the rest are reused and concatenated. */
+  cache: { mode: 'per-scene' },
   _internals: {
     layoutTree, animatedState, renderCanvas, qualityOptions,
     fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, gradientLine,

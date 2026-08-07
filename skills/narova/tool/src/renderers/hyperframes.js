@@ -24,6 +24,17 @@ const provider = {
     studio: true,
   },
 
+  /* Scene-level render cache. HyperFrames renders the full timeline as a
+   * single MP4 and exposes no frame-range option, so an isolated single-scene
+   * re-render is not possible without recomposing a sub-project (which would
+   * change the chrome counter / progress bar / transitions and break the
+   * determinism contract). The cache therefore operates at whole-video
+   * granularity: a build where nothing changed reuses the previous MP4 and
+   * skips the render entirely; any change does a full render and stores the
+   * result for next time. This is declared explicitly rather than silently
+   * degrading — per-scene savings are a no-browser capability today. */
+  cache: { mode: 'whole-video' },
+
   doctor() {
     return {
       ok: !!which('npx'),

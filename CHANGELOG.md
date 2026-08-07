@@ -4,6 +4,45 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.23.0] - 2026-08-07
+
+### Added
+
+- **Scene-level render cache** — `narova build` now reuses previously rendered
+  output instead of re-rendering the whole video on every build. The cache keys
+  each rendered span on a hash of its scene content, measured word/turn
+  timings, and the shared render context (theme, format, fps, quality, voices,
+  assets, choreography), so a cached span is reused only when reproducing it
+  would yield perceptually-identical pixels.
+  - **no-browser renderer:** full per-scene caching. Only the scenes whose key
+    changed are re-rendered (as video-only spans), then concatenated with the
+    single authoritative full audio track via ffmpeg (`setsar=1`, no per-splice
+    audio drift). "Try five title sequences for scene 4" now costs five span
+    renders, not five full renders.
+  - **hyperframes renderer:** whole-video caching. HyperFrames renders the full
+    timeline as one MP4 and exposes no frame-range option, so an isolated
+    single-scene re-render is not possible without breaking chrome/counter/
+    progress determinism. The cache reuses the whole MP4 when nothing changed
+    (skipping the render entirely) and stores each successful render for next
+    time. Declared explicitly rather than silently degrading.
+  - **Graceful fallback:** a missing, empty, or wrong-duration cached span is
+    re-rendered; any failure in the cached path falls back to a full
+    `renderer.render()` and opportunistically repopulates the cache. Caching
+    can never fail a build. `--reuse` (TTS) is unaffected — this is a separate,
+    additive layer.
+  - `build --plan` now also prints the scene-cache reuse decision (the same
+    `scene-cache.plan()` the real build uses), so the change scope is legible
+    before any work runs.
+- **`sceneHash` now covers per-scene author JS** — the manifest's per-scene
+  `hash` (the cache's content component) now includes `choreographyFile`,
+  `scriptFile`, and `threeModule` contents, matching the determinism-scan set
+  in `check`. Editing one of those files now invalidates only that scene's
+  cached span (previously it was detected only at the project-config level).
+
+### Changed
+
+- **HyperFrames engine pinned to 0.7.96** (was 0.7.64).
+
 ## [0.22.0] - 2026-08-07
 
 ### Added
@@ -95,8 +134,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Internal
 
 - 14 files changed, 518 insertions, 473+ tests pass.
-- Full creative freedom audit, escape-hatch map, and benchmark specification
-  in `CREATIVE_AUDIT.md`.
+- Escape-hatch map and benchmark specification documented alongside the
+  declarative 3D bounds.
 
 ## [0.20.0] - 2026-08-07
 
@@ -669,10 +708,9 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Changed
 
-- **`timeline.json` → `manifest.json`** — renamed to align with the roadmap's
-  "canonical narova.manifest.json" vision. All references updated throughout
-  the codebase: `manifest.js`, `manifest.test.js`, pipeline, CLI, SPEC, and
-  reference docs.
+- **`timeline.json` → `manifest.json`** — renamed to make the manifest the
+  canonical project model. All references updated throughout the codebase:
+  `manifest.js`, `manifest.test.js`, pipeline, CLI, SPEC, and reference docs.
 
 ### Added
 

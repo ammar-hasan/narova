@@ -7,7 +7,7 @@ const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const net = require('net');
 
-const HYPERFRAMES_VERSION = '0.7.64';
+const HYPERFRAMES_VERSION = '0.7.96';
 
 const RETRY_CODES = new Set(['ENOTFOUND', 'ECONNREFUSED', 'ETIMEDOUT', 'EAI_AGAIN']);
 const MAX_RETRIES = 2;

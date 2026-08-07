@@ -530,6 +530,21 @@ async function main() {
         if (prev) {
           const result = plan(prev, config, { toolVersion: require('../package.json').version });
           console.log(formatPlan(result));
+          // Scene-cache preview: the same per-scene reuse decision the real
+          // build will make (driven by scene-cache.plan, not just the stage
+          // scope above). Read the enriched manifest on disk so timings are
+          // available; if it can't be read, skip silently.
+          try {
+            const { read } = require('../src/manifest');
+            const { plan: cachePlan, formatCacheStatus } = require('../src/scene-cache');
+            const manifest = read(prev);
+            const renderer = getRenderer(config.renderer);
+            const cp = cachePlan({
+              outDir: out, manifest,
+              renderer, fps: flags.fps, quality: flags.quality,
+            });
+            console.log(formatCacheStatus(cp));
+          } catch { /* cache preview is best-effort */ }
         } else {
           console.log('plan: no previous manifest — this is a first build');
         }
