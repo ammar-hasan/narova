@@ -40,10 +40,8 @@ frames/
 !docs/assets/narova-product-walkthrough-demo.mp4
 !docs/assets/narova-click-highlight-proof.mp4
 
-# Narova generated projects keep editable source, including local source media.
-# generated/.gitignore excludes each project's output and scratch directories.
-!generated/*/assets/
-!generated/*/assets/**
+# Generated video projects (build output, not source) — never tracked.
+generated/
 
 # macOS
 .DS_Store

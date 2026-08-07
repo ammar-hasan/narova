@@ -1,7 +1,0 @@
-1
-00:00:00,160 --> 00:00:02,303
-This video uses forced word alignment.
-
-2
-00:00:02,303 --> 00:00:06,516
-Every word timing is measured from the audio, not estimated from word count.

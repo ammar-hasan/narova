@@ -1,7 +1,0 @@
-{
-  "name": "narova-chatterbox-cloned-voice",
-  "private": true,
-  "devDependencies": {
-    "hyperframes": "0.7.64"
-  }
-}

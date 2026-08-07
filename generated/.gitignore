@@ -1,5 +1,0 @@
-# Keep Narova project source; ignore only reproducible or temporary internals.
-*/out/
-*/build/
-*/.venv/
-*/node_modules/
