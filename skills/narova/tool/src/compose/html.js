@@ -5,7 +5,7 @@
  * direct root child with framework-owned playback, one synchronous paused GSAP
  * timeline registered under the root's data-composition-id. */
 const { runtimeScript } = require('./runtime');
-const { threeHeadScripts, threeSceneBody, hasThreeScenes, hasThreeModels } = require('./three');
+const { threeHeadScripts, threeSceneBody, threeModuleSceneBody, hasThreeScenes, hasThreeModels } = require('./three');
 const path = require('path');
 const { capturePaths, readCaptureManifest } = require('../walkthrough');
 
@@ -95,7 +95,9 @@ function composeDoc(config, size, data, css) {
     const dur = s.dur || 0;
     const overlay = karaoke.overlayForScene ? karaoke.overlayForScene(sceneCursor, dur) : '';
     let body = String(s.body || '');
-    if (s.three) {
+    if (s._threeModuleContents) {
+      body = threeModuleSceneBody(s, { start: sceneCursor, dur }, size.w, size.h) + (body || '');
+    } else if (s.three) {
       body = threeSceneBody(s, { start: sceneCursor, dur }, size.w, size.h) + (body || '');
     }
     sceneCursor += dur;

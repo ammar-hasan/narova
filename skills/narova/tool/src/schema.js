@@ -318,6 +318,21 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (r) { try { s.three = JSON.parse(r.contents); sceneFileRefs.push({ sceneIndex: i, key: 'threeFile', file: s.threeFile }); delete s.threeFile; } catch (e) { errs.push(`${sat}.threeFile: invalid JSON: ${e.message}`); } }
       }
     }
+    // scene.threeModule: the raw Three.js escape hatch. A project-relative JS
+    // file whose body is inlined into the deterministic 3D bootstrap with
+    // THREE, scene, camera, renderer, tl (GSAP timeline), seed, size, duration,
+    // assets(), onRender(), and narova helpers in scope. Same determinism
+    // contract as choreography (no Date/Math.random/rAF/setTimeout/fetch).
+    // Use this for custom shaders, procedural geometry, post-processing, and
+    // any 3D that the declarative scene.three vocabulary cannot express.
+    if (s.threeModule != null) {
+      if (typeof s.threeModule !== 'string') {
+        errs.push(`${sat}.threeModule: expected a project-relative JS file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.threeModule`, s.threeModule);
+        if (r) { s._threeModuleContents = r.contents; sceneFileRefs.push({ sceneIndex: i, key: 'threeModule', file: s.threeModule }); delete s.threeModule; }
+      }
+    }
     if (s.elementsFile != null) {
       if (typeof s.elementsFile !== 'string') {
         errs.push(`${sat}.elementsFile: expected a project-relative JSON file path`);
@@ -370,8 +385,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     else seen.add(s.id);
     if (typeof s.body !== 'string' && (!s.visual || typeof s.visual !== 'object' || Array.isArray(s.visual))
         && (!s.three || typeof s.three !== 'object' || Array.isArray(s.three))
-        && (!s.elements || !Array.isArray(s.elements))) {
-      errs.push(`${at}.body: HTML string required unless a visual, three, or elements object is provided`);
+        && (!s.elements || !Array.isArray(s.elements))
+        && !s._threeModuleContents) {
+      errs.push(`${at}.body: HTML string required unless a visual, three, threeModule, or elements object is provided`);
     }
     if (s.body != null && typeof s.body !== 'string' && s.visual && typeof s.visual === 'object' && !Array.isArray(s.visual)) {
       errs.push(`${at}.body: must be an HTML string when provided`);

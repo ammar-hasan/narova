@@ -4,6 +4,45 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.22.0] - 2026-08-07
+
+### Added
+
+- **`scene.threeModule`** — raw Three.js / WebGL escape hatch beneath the
+  declarative `scene.three` vocabulary. A project-relative JS file inlined into
+  the deterministic 3D bootstrap with `THREE`, `scene`, `camera`, `renderer`,
+  `tl` (GSAP timeline), `seed`, `size`, `duration`, `assets()`, `pending`,
+  `onRender()`, and `narova` helpers in scope. Custom shaders, procedural
+  geometry, post-processing, particle systems, and any 3D the declarative
+  vocabulary cannot express now have a deterministic home. Same determinism
+  contract as choreography (no `Date`/`Math.random`/`requestAnimationFrame`/
+  `setTimeout`/`fetch`). Removes the largest creative-ceiling gap.
+- **Generated-media provenance** — `narova generate` now writes a `.gen.json`
+  spec sidecar next to every generated clip, capturing provider, model, prompt,
+  params, source URL, artifact hash, and timestamp. A generated clip is now a
+  living editable creative source, not an opaque MP4. `--regenerate <mp4>`
+  re-runs a previous generation from its spec; `--model`/`--size`/`--duration`
+  capture/override generation parameters.
+- **`build --plan`** — print what a revision will rebuild (scope: which scenes,
+  which steps) before doing the work. Advisory only. Makes change scope legible
+  at build time so authors/agents can revise without fear of disturbing
+  approved work.
+- **Determinism scan now covers all inlined author JS** — per-scene
+  `choreographyFile`, `scriptFile`, and `threeModule` are now linted for
+  wall-clock/random/rAF/setTimeout/fetch hazards (previously only project-level
+  `choreography` was scanned).
+
+### Changed
+
+- **`check` correctness category is now real** — the `correctness:` warning
+  prefix is wired to genuine determinism/reproducibility issues (e.g. infinite
+  CSS animation). Previously the helper supported the prefix but no rule used
+  it, so correctness and quality warnings were indistinguishable.
+- **`scene.three` documentation honest about its bounds** — removed the false
+  claim that raw 3D was reachable via a "component-custom escape hatch" through
+  choreography (no such mechanism existed). The real escape hatch is now
+  `scene.threeModule`.
+
 ## [0.21.0] - 2026-08-07
 
 ### Added

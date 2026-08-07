@@ -8,7 +8,8 @@ description: >
   articles, docs, repositories), word-synced karaoke captions,
   voice-triggered reveals, background beds and sound effects, per-platform
   presets and comprehensive export profiles (TikTok/Reels/Shorts/LinkedIn/X/YouTube),
-  SRT/VTT sidecar captions, 3D scenes (scene.three / scene.elements),
+  SRT/VTT sidecar captions, 3D scenes (scene.three / scene.elements,
+  with scene.threeModule as the raw Three.js/WebGL escape hatch),
   mixed 2D/3D compositing, AI clip generation (narova generate),
   or local neural TTS with no API keys. It turns a prompt or scene script
   into an MP4 with local
@@ -26,7 +27,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.21.0"
+  version: "0.22.0"
 ---
 # narova — prompt to narrated, captioned video
 

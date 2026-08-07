@@ -12,7 +12,7 @@ const { compile, validate: validateManifest } = require('../src/manifest');
 const { listRenderers, getRenderer } = require('../src/renderers');
 const { validateVisual, visualToHtml, materializeVisualBodies } = require('../src/renderers/visual');
 const { findLatinFont } = require('../src/renderers/system-font');
-const { threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels, collectModelAssets, threeHeadScripts, THREE_IMPORT } = require('../src/compose/three');
+const { threeSetupJs, threeSceneBody, threeModuleSetupJs, threeModuleSceneBody, hasThreeScenes, hasThreeModels, hasThreeModules, collectModelAssets, threeHeadScripts, THREE_IMPORT } = require('../src/compose/three');
 const { resolveElementsScene, validateElements, hasElements } = require('../src/compose/elements');
 
 const VISUAL = {
@@ -743,4 +743,70 @@ test('particles derive deterministic seed from scene id + object index when no e
   // Different scene id = different seed = different JS
   const js3 = threeSetupJs('other-scene', cfg, 0, 5, 800, 600);
   assert.notEqual(js1, js3, 'different scene id must produce different JS');
+});
+
+// ---- scene.threeModule: raw Three.js escape hatch ---------------------------
+
+test('threeModuleSetupJs builds the deterministic shell and inlines author code', () => {
+  const body = 'var g = new THREE.IcosahedronGeometry(1); scene.add(new THREE.Mesh(g));';
+  const js = threeModuleSetupJs('shader-scene', null, body, 0, 6, 1280, 720, [0, 2, 4]);
+  // Shell: renderer, scene, camera (capture-safe flags).
+  assert.match(js, /new THREE\.WebGLRenderer/);
+  assert.match(js, /preserveDrawingBuffer:true/);
+  assert.match(js, /setPixelRatio\(1\)/);
+  assert.match(js, /SRGBColorSpace/);
+  assert.match(js, /new THREE\.Scene/);
+  assert.match(js, /new THREE\.PerspectiveCamera/);
+  // Context the author relies on.
+  assert.match(js, /var size=\{w:1280,h:720\}/);
+  assert.match(js, /var duration=6/);
+  assert.match(js, /function assets\(name\)/);
+  assert.match(js, /function onRender\(fn\)/);
+  assert.match(js, /narova=\{prng:/);
+  // The author's body is inlined verbatim.
+  assert.match(js, /IcosahedronGeometry/);
+  // Frame driver on the shared GSAP timeline.
+  assert.match(js, /window\.__timelines\['main'\]/);
+  assert.match(js, /tl\.to\(T,/);
+  // Default per-frame render paints scene+camera.
+  assert.match(js, /renderer\.render\(scene,camera\)/);
+});
+
+test('threeModuleSetupJs inlines author code safely (try/catch) and seeds deterministically', () => {
+  const body = 'throw new Error("boom");';
+  const js1 = threeModuleSetupJs('s1', null, body, 0, 3, 800, 600, []);
+  const js2 = threeModuleSetupJs('s1', null, body, 0, 3, 800, 600, []);
+  // A throw is contained, never silently blank — and the same scene reproduces.
+  assert.match(js1, /try\{/);
+  assert.match(js1, /catch\(e\)/);
+  assert.equal(js1, js2, 'same scene id + body must produce identical bootstrap');
+});
+
+test('threeModuleSetupJs honors declarative camera/shell when scene.three is also present', () => {
+  const body = 'scene.add(new THREE.Mesh());';
+  const js = threeModuleSetupJs('mix', { camera: { fov: 70, position: [1, 2, 3] }, fog: { color: '#101010', near: 2, far: 20 } }, body, 0, 3, 800, 600, []);
+  assert.match(js, /PerspectiveCamera\(70,/);
+  assert.match(js, /camera\.position\.set\(1,2,3\)/);
+  assert.match(js, /THREE\.Fog\("#101010",2,20\)/);
+});
+
+test('threeModuleSceneBody emits the managed canvas + inlined bootstrap', () => {
+  const html = threeModuleSceneBody(
+    { id: 'sh', _threeModuleContents: 'scene.add(new THREE.Mesh());' },
+    { start: 4, dur: 6, turns: [0, 2] }, 1280, 720,
+  );
+  assert.match(html, /<canvas id="three-sh"/);
+  assert.match(html, /<script>/);
+  assert.match(html, /narova-three-scene/);
+});
+
+test('hasThreeModules and hasThreeScenes recognize escape-hatch and declarative scenes', () => {
+  const declarative = { scenes: [{ three: { objects: [{ type: 'cube' }] } }] };
+  const moduleCfg = { scenes: [{ _threeModuleContents: 'scene.add();' }] };
+  const empty = { scenes: [{ body: '<p>x</p>' }] };
+  assert.equal(hasThreeScenes(declarative), true);
+  assert.equal(hasThreeScenes(moduleCfg), true);
+  assert.equal(hasThreeScenes(empty), false);
+  assert.equal(hasThreeModules(moduleCfg), true);
+  assert.equal(hasThreeModules(declarative), false);
 });

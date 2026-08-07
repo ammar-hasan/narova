@@ -594,6 +594,49 @@ test('scene threeFile reads JSON from a local file', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('scene threeModule reads a JS file as the raw Three.js escape hatch', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  const moduleBody = 'var g = new THREE.IcosahedronGeometry(1); scene.add(new THREE.Mesh(g));';
+  fs.writeFileSync(path.join(dir, 'shader.js'), moduleBody);
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [], dur: 6, threeModule: 'shader.js' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  // Contents are carried on the scene for compose to inline.
+  assert.equal(resolved.scenes[0]._threeModuleContents, moduleBody);
+  // The threeModule key is consumed (deleted) and tracked for build invalidation.
+  assert.equal(resolved.scenes[0].threeModule, undefined);
+  assert.deepEqual(resolved.sceneFileRefs.map(r => r.key).filter(k => k === 'threeModule'), ['threeModule']);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene threeModule alone satisfies the scene-content requirement', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  fs.writeFileSync(path.join(dir, 'm.js'), 'scene.add(new THREE.Mesh());');
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    // No body/visual/three/elements — only a threeModule. Must NOT error.
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], dur: 6, threeModule: 'm.js' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.equal(resolved.scenes[0]._threeModuleContents.length > 0, true);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene threeModule rejects a missing file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [], dur: 6, threeModule: 'nope.js' }],
+  };
+  assert.throws(() => resolveConfig(raw, {}, dir), /threeModule: file not found/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
 test('scene cssFile resolves and stores per-scene CSS', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
   fs.writeFileSync(path.join(dir, 'hero.css'), '.hero { font-size: 60px; }');

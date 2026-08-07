@@ -95,10 +95,10 @@ async function pollSora(jobId, apiKey, timeoutMs = 300000) {
   throw new Error('Sora generation timed out');
 }
 
-async function generateSora(prompt, apiKey) {
+async function generateSora(prompt, apiKey, params = {}) {
   const submit = await postJson(
     'https://api.openai.com/v1/videos',
-    { model: 'sora-2', prompt, size: '1280x720', duration: 5 },
+    { model: params.model || 'sora-2', prompt, size: params.size || '1280x720', duration: params.duration || 5 },
     { Authorization: `Bearer ${apiKey}` },
   );
   if (submit.status !== 200 && submit.status !== 201) {
@@ -111,10 +111,10 @@ async function generateSora(prompt, apiKey) {
   return videoUrl;
 }
 
-async function generateRunway(prompt, apiKey) {
+async function generateRunway(prompt, apiKey, params = {}) {
   const res = await postJson(
     'https://api.runwayml.com/v1/generations',
-    { model: 'gen4.5', prompt },
+    { model: params.model || 'gen4.5', prompt },
     { Authorization: `Bearer ${apiKey}`, 'X-Runway-Version': '2024-11-06' },
   );
   if (res.status !== 200 && res.status !== 201) {
@@ -125,7 +125,7 @@ async function generateRunway(prompt, apiKey) {
   return videoUrl;
 }
 
-async function generate(provider, prompt, apiKey, outputPath, assetsDir) {
+async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = {}) {
   const info = PROVIDERS[provider];
   if (!info) throw new Error(`Unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
 
@@ -133,9 +133,18 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir) {
   console.log(`Prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
 
   let videoUrl;
-  if (provider === 'sora') videoUrl = await generateSora(prompt, apiKey);
-  else if (provider === 'runway') videoUrl = await generateRunway(prompt, apiKey);
-  else throw new Error(`Provider ${provider} not yet implemented`);
+  const params = { ...(opts.params || {}) };
+  if (provider === 'sora') {
+    // Capture the exact generation parameters so the shot can be regenerated
+    // or revised ("make it rainy", "same composition, different seed").
+    params.model = params.model || 'sora-2';
+    params.size = params.size || '1280x720';
+    params.duration = params.duration || 5;
+    videoUrl = await generateSora(prompt, apiKey, params);
+  } else if (provider === 'runway') {
+    params.model = params.model || 'gen4.5';
+    videoUrl = await generateRunway(prompt, apiKey, params);
+  } else throw new Error(`Provider ${provider} not yet implemented`);
 
   console.log(`Downloading video...`);
   const destDir = path.dirname(outputPath);
@@ -145,7 +154,59 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir) {
   const stats = fs.statSync(outputPath);
   console.log(`Saved: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
 
+  // Persist the generative specification as a sidecar so an AI clip remains a
+  // living, editable creative source — not just a downloaded artifact. The
+  // MP4 is cache/output; this spec is the creative source that survives. An
+  // author can later say "regenerate this with the same composition but a
+  // different mood" and the provider/model/prompt/params are all recoverable.
+  const spec = buildSpec(provider, info, prompt, params, videoUrl, outputPath, stats.size);
+  const specPath = specPathFor(outputPath);
+  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n');
+  console.log(`Spec:   ${specPath}`);
+
   return outputPath;
 }
 
-module.exports = { PROVIDERS, providerInfo, generate };
+/* Build the generative specification object for a generated clip. Pure so it
+ * can be tested without network access. The artifact hash pins the bytes; the
+ * prompt/model/params carry the creative intent that survives regeneration. */
+function buildSpec(provider, info, prompt, params, sourceVideoUrl, outputPath, artifactBytes) {
+  return {
+    kind: 'narova-generate-spec',
+    version: 1,
+    provider,
+    providerName: info.name,
+    model: params.model || null,
+    prompt,
+    params,
+    sourceVideoUrl,
+    artifact: path.basename(outputPath),
+    artifactBytes,
+    artifactSha256: sha256File(outputPath),
+    generatedAt: new Date().toISOString(),
+  };
+}
+
+/* The sidecar path that accompanies a generated clip artifact. */
+function specPathFor(artifactPath) {
+  return String(artifactPath).replace(/\.(mp4|webm|mov)$/i, '') + '.gen.json';
+}
+
+function sha256File(file) {
+  try {
+    const { createHash } = require('crypto');
+    const h = createHash('sha256');
+    h.update(fs.readFileSync(file));
+    return h.digest('hex');
+  } catch { return null; }
+}
+
+/* Read a generative spec sidecar for a generated asset (or null if none). */
+function readSpec(artifactPath) {
+  const specPath = specPathFor(artifactPath);
+  if (!fs.existsSync(specPath)) return null;
+  try { return JSON.parse(fs.readFileSync(specPath, 'utf8')); }
+  catch { return null; }
+}
+
+module.exports = { PROVIDERS, providerInfo, generate, buildSpec, readSpec, specPathFor };

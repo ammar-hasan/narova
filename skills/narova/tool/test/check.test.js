@@ -652,3 +652,44 @@ test('a choreography file that exists on disk does not fail release', () => {
   const { lines } = run(cfg, { release: true });
   assert.ok(!lines.some(l => l.includes('config.choreography')), lines.join('\n'));
 });
+
+test('determinism scan covers per-scene choreographyFile contents', () => {
+  const cfg = base([{
+    id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'one' }],
+    _choreographyFileContents: 'var t = Date.now();',
+  }]);
+  const warns = run(cfg).lines.filter(l => l.startsWith('warn:') && l.includes('Date'));
+  assert.equal(warns.length, 1, warns.join('\n'));
+  assert.match(warns[0], /scene "s" choreographyFile/);
+});
+
+test('determinism scan covers per-scene scriptFile contents', () => {
+  const cfg = base([{
+    id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'one' }],
+    _scriptFileContents: 'fetch("/leak");',
+  }]);
+  const warns = run(cfg).lines.filter(l => l.startsWith('warn:') && l.includes('fetch'));
+  assert.equal(warns.length, 1, warns.join('\n'));
+  assert.match(warns[0], /scene "s" scriptFile/);
+});
+
+test('determinism scan covers the raw Three.js escape hatch (threeModule)', () => {
+  const cfg = base([{
+    id: 's', vo: [{ who: 'a', text: 'one' }], dur: 6,
+    _threeModuleContents: 'var r = Math.random(); var t = Date.now();',
+  }]);
+  const warns = run(cfg).lines.filter(l => l.startsWith('warn:') && /threeModule/.test(l));
+  assert.equal(warns.length, 2, warns.join('\n'));
+  assert.ok(warns.some(l => l.includes('Math.random()') && l.includes('threeModule')));
+  assert.ok(warns.some(l => l.includes('Date') && l.includes('threeModule')));
+});
+
+test('infinite CSS animation is tagged as a correctness issue, not quality', () => {
+  const cfg = base(
+    [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'one' }] }],
+    '.spin { animation: spin 2s linear infinite; }',
+  );
+  const lines = run(cfg).lines;
+  assert.ok(lines.some(l => l.startsWith('warn: correctness:') && l.includes('infinite')),
+    lines.join('\n'));
+});

@@ -1,339 +1,363 @@
 # Narova Creative Freedom Audit
 
+> Verified against current source (Aug 2026). Every claim below was checked
+> against the actual implementation, not the prior doc. Where the prior audit
+> and the code disagreed, the disagreement is recorded. "Code behavior wins
+> over documentation."
+
+---
+
+## How to read this document
+
+This audit answers four questions:
+
+1. **Ease without creative restriction** — does Narova make video easy *without*
+   constraining the creative range an LLM would otherwise have?
+2. **Creative amplification** — does it make the LLM *more capable*?
+3. **Creative confidence** — does it make the LLM *more willing to explore*?
+4. **Effective vs theoretical freedom** — what is the *path of least
+   resistance*, and does it converge?
+
+Each finding is labeled with severity and a category from the **freedom
+budget** (§2). Implemented fixes are marked **FIXED**; large items still open
+are marked **RFC** with a priority.
+
+---
+
 ## 1. Creative-freedom audit
 
-| Area | Current behavior | How it helps creativity | How it constrains creativity | Effect on creative confidence | Severity | Code/docs evidence | Recommended change |
-|------|-----------------|-------------------------|------------------------------|-------------------------------|----------|-------------------|-------------------|
-| **Captions mandatory** | Captions always rendered with karaoke preset. No `captions: false` path. | Easy access to word-synced captions by default. | Cannot remove the visual caption band. All videos get the caption DOM, caption-safe canvas padding, and `capzone` overlay. Forces every video into caption-bearing form. | High — LLM cannot author captionless videos cleanly. Must override generated CSS internals to "hide" them. | **CRITICAL** | `schema.js:589` — always `karaoke`. `html.js` — `.capzone` always in DOM. `runtime.js` — always builds caption DOM. `css.js` — always reserves caption padding. | **FIXED:** Added `captions: false` support throughout schema/check/html/css/runtime. |
-| **Hook/CTA enforcement universal** | Every project checked for hook ≤200ms, first-scene text, saveable end-card. | Helps social-media videos optimize for engagement. | Applies identical hook doctrine to silent films, music visualizers, cinematic pieces, educational content. Non-social videos get irrelevant craft advice. | Medium — unconventional video gets "warnings" for deliberate artistic choices (no hook text, long silence). | **HIGH** | `check.js:286-340` — `checkHook()` runs unconditionally except for external narration. | **FIXED:** Made context-aware — skipped for silent projects and `captions: false`. Warnings tagged `craft:` instead of correctness. |
-| **Default background aesthetic** | Background has radial gradient with accent/pink/gold "stage lights" + grid overlay + glow blobs. | Quick, polished default for explainer videos. | Every project defaults to a recognizable "Narova look" — dark navy with teal/pink/gold glows. | Medium — first impression of a blank project is already style-opinionated. | **HIGH** | `css.js:55-63` — `#bg` radial gradient + `::after` glow blobs. | **FIXED:** Removed accent/pink/gold glow blobs and gradient. Default is now a clean flat `var(--stage)` background with subtle grid. |
-| **Built-in layout vocabulary** | 30+ named CSS classes: `.s-title`, `.pane`, `.stat`, `.verdicts`, `.flow`, `.dials`, `.stepper`, `.s-two`, `.owners`, `.planes`, `.homes`, `.ledger`, `.referee`, `.desk`, `.s-close`, etc. | Fast composition from known visual patterns. | Strong attractor toward Narova-shaped visual grammar. An LLM can use these for everything and never build custom layouts. | Medium — easy path converges on card/chip/stat grammar. | **HIGH** | `css.js:139-252` — extensive layout vocabulary. | Documented: layouts are tools, use deliberately per concept. No code change (layouts are genuinely useful). Added note in scaffold config. |
-| **Caption preset system** | 4 presets: `karaoke`, `slam`, `pop`, `rise` — hardcoded enum. | Fast visual variety within the caption band. | Captions cannot be custom-styled without reaching into generated CSS internals (`.cap-w`, `.caption2`). | Low — author can add custom CSS in `theme.css`. | **MEDIUM** | `schema.js:16` — `CAPTION_PRESETS` Set. `css.js:114-118` — preset styles. | Captions can now be disabled entirely. Custom caption styling via `theme.css` targeting `.cap-w`, `.caption2`, `.capzone` is documented as the escape hatch. |
-| **Chrome defaults to all-on** | Topbar wordmark, counter, progress bar always generated. | Provides structural furniture for explainer/documentary videos. | Every video starts with recognizable Narova chrome. Must explicitly `chrome: false` to opt out. | Low — easy to remove (`chrome: false`). | **LOW** | `schema.js:144` — defaults `{topbar:true,counter:true,progress:true}`. | Documented opt-out path. Scaffold now shows `chrome: false` comment. |
-| **`scene.three` described as "unlimited"** | Documentation says "unlimited 3D scenes." Code is bounded declarative (13 primitive types, fixed action vocabulary). | Provides accessible, timeline-driven 3D. | Cannot express custom shaders, post-processing, raycasting, procedural geometry, or custom render loops. | Medium — author may believe 3D surface is larger than it is. | **HIGH** | `three.js:55-69` — fixed primitive switch. `scene-script.md:5` — claimed "unlimited." | **FIXED:** Updated documentation to "declarative Three.js scenes with supported primitives." Noted choreography as lower escape hatch. |
-| **`narova generate` is artifact-only** | Downloads MP4 from Sora/Runway, saves to assets. No generative specification persisted. | Works for quick clip generation. | Cannot "regenerate with tweaks," cannot retrieve the prompt/seed/model later, cannot version generations. | Medium — generated media is opaque output, not editable creative source. | **HIGH** | `generate.js` — only `downloadFile()` to disk, no manifest entry. | **PROPOSED P1:** Persist generative spec (provider, model, prompt, seed, params) in manifest. Track lineage. |
-| **Scene.three is the only 3D surface** | No raw Three.js/WebGL/canvas escape hatch. Choreography has timeline access but no Three.js scene creation. | Guaranteed determinism through declarative config. | Cannot express custom procedural 3D, custom shaders, or unusual rendering. | High — ambitious 3D idea hits a hard ceiling at declarative config. | **CRITICAL** | `three.js` — all scene setup is generated from config, no user-authored JS. | **PROPOSED P0:** Add `scene.threeFile` for user-authored Three.js module with deterministic contract. |
-| **Creative-diversity eval tests schema, not LLM** | Uses manually-authored configs to test representational capacity. | Verifies schema extensibility. | Does not measure whether an LLM with Narova produces more diverse/ambitious video. | Low — eval is useful but misdescribed. | **MEDIUM** | `creative-diversity-eval.js` — `generateConfigs()` returns hand-written configs. | **FIXED:** Rephrased eval description to honestly state it's a schema conformance test, not an LLM behavior test. |
-| **Concept branching not persistent** | Variants are declared in config, applied at build time. No first-class persistent concept alternatives. | Enables A/B testing of hook variants. | Cannot "bring back the surreal direction we rejected" — history is lost. | Medium — experimentation without archiving discourages bold exploration. | **MEDIUM** | `schema.js:639-775` — variants are inline overrides only. | **PROPOSED P2:** Add `narova branches save/list/restore` with snapshot manifests. |
+| Area | Current behavior | Helps creativity | Constrains creativity | Effect on confidence | Sev | Evidence (file:line) | Recommendation |
+|------|------------------|------------------|----------------------|----------------------|-----|----------------------|----------------|
+| **3D creative ceiling** | `scene.three` is a bounded declarative schema (12 primitives + model/group/particles, 7 element actions, **one** material type `MeshStandardMaterial`, 5 lights). No raw 3D path existed. | Accessible timeline-driven 3D. | Custom shaders, post-processing, procedural geometry, raymarching, custom materials — **all impossible**. The hardest 3D ideas hit a hard wall. | High — ambitious 3D had no path. | **CRITICAL→FIXED** | `compose/three.js:50-69` (primitives), `:113-146` (material), `elements.js:28-33` (7 actions). Prior `scene.threeFile` (`schema.js:313-319`) is a **JSON config loader**, not the JS escape hatch the prior audit proposed. | **FIXED:** added `scene.threeModule` — raw Three.js/WebGL escape hatch with full deterministic context (§4-A). |
+| **False escape-hatch docs** | `scene-script.md` advertised a "component-custom escape hatch" via choreography for raw 3D. **No such mechanism existed.** | — | An author chasing the advertised hatch finds nothing — a dead end that *reduces* confidence. | High — silent capability lie. | **HIGH→FIXED** | `scene-script.md:18-23` (old wording). `choreography.md` has no Three.js content (confirmed). | **FIXED:** doc now describes the real `scene.threeModule` hatch honestly. |
+| **Captions mandatory** | `captions: false` works cleanly across the stack (schema → check → compose → runtime → css). SRT/VTT still export. | Word-synced captions by default. | (Was: no clean opt-out.) Now optional. | High (was). | **FIXED (prior)** | `schema.js:610-613`, `html.js:176-204`, `runtime.js:27`, `css.js:76`, `data.js:79`. Verified inert: only dead CSS + unused `DATA.groups` remain when off. | Keep. Minor: the string-preset form `captions:'karaoke'` is **not** accepted (object or `false` only) — doc this. |
+| **Hook/CTA enforcement context-blind** | `checkHook` is skipped for silent projects, `captions:false`, and external narration. Craft warnings tagged `craft:`. | Social engagement advice for social video. | Still no **declared creative intent** — a cinematic voiceover film with captions still gets social hook advice. Craft advice is inferred from negative-space signals, not authored. | Medium. | **PARTIALLY FIXED** | `check.js:296-300` (skip guards), `:534` (external-narration gate). | RFC P1: a lightweight `intent`/`genre` field so craft advice is *declared*, not guessed. |
+| **`check` correctness prefix dead** | The `issue(msg,'correctness')` helper existed but **no rule used it** — correctness and quality warnings were indistinguishable. Infinite CSS animation (a real determinism bug) was tagged as generic quality. | — | A genuine reproducibility defect looked like a style nit. | Medium. | **FIXED** | `check.js:348-352` (helper), `:476-478` (infinite-anim rule). | **FIXED:** infinite-animation rule now tagged `correctness:`. |
+| **Determinism scan incomplete** | `check` scanned only project `choreography`. Per-scene `choreographyFile`/`scriptFile`/`threeModule` were **not** scanned — a real coverage gap. | Determinism is the load-bearing contract. | An author could write `Date.now()` in a `scriptFile` and get no warning → silent nondeterminism. | High (made worse by the new escape hatch). | **FIXED** | `check.js` old `:457-473` scanned `config.choreography` only. | **FIXED:** scan now covers every inlined author-JS blob with source attribution. |
+| **Generated media is opaque** | `generate` downloaded an MP4 and returned. **No** provider/model/prompt/seed/params survived. "Make it rainy" was impossible. | Quick clip gen. | A generated clip was dead output, not editable creative source. | Medium — limits iteration on generated shots. | **HIGH→FIXED** | `generate.js:128-149` (old). | **FIXED:** `.gen.json` spec sidecar + `--regenerate`/`--model`/`--size`/`--duration` (§4-E). |
+| **No scene-level regeneration** | Per-scene content hashes **exist** and are *commented* as enabling selective rebuilds (`manifest.js:313-315`) — but **no consumer reads them**. Any visual change → full compose (wipe) + full render of the whole video. `--reuse` only skips TTS. `build()` never calls `plan()`. | Whole-project simplicity. | "Try 5 title sequences" or "render only scene 4" costs a full render each time. Experimentation is expensive. | **High** — the biggest confidence tax. | **CRITICAL (RFC)** | `compose/index.js:102-107` (wipe+rebuild), `pipeline.js` (monolithic build), `plan.js:31` (VISUAL→whole project). | RFC P0/P1: scene-level render cache consuming the existing per-scene hash (§5-A). **Partial fix:** `build --plan` now surfaces scope. |
+| **No draft/storyboard tier (HyperFrames)** | HyperFrames always renders full-quality. no-browser has a draft MP4 (15fps, CRF28) but still full frame count. `narova shots` is one still per scene. | Quality. | No fast animatic / low-res exploration path for the canonical renderer. | Medium. | **HIGH (RFC)** | `no-browser.js:801-805` (quality=CRF only), `bin/narova.js:533-540`. | RFC P1: `--draft` (half-res) + `--storyboard` (frame grid) for HyperFrames. |
+| **Narration is the only event source** | All timing flows voice→cue→visual. `data-cue="k"`, `narova.cueTurn(i)`, claims ledger all assume speech. Music beats, SFX hits, explicit markers have no first-class timing role. | Speech-sync is Narova's killer feature. | Music-led, silent, beat-driven, and dance-cut films are second-class — you can build them, but the timing ontology fights you. | Medium — narrows the *effective* creative space to narration-driven work. | **HIGH (RFC)** | `runtime.js` (cue resolution), `three.js:161-170` (`at:{cue}`), `data.js` (groups from vo). | RFC P1: general event system `at:{event:"..."}` resolving from narration/music/SFX/markers (§5-C). |
+| **Concept branches not persistent** | Variants are inline `config.variants` overrides applied at build. Rejected directions vanish. | A/B hook testing. | "Bring back the surreal direction" is impossible — no archive of alternatives. | Medium — discourages bold forks. | **MEDIUM (RFC)** | `schema.js:662-799` (variants), `releases.js` (snapshots but not branch-shaped). | RFC P2: `narova branches save/list/restore` over the release machinery (§5-D). |
+| **House-style token gravity** | Default tokens still carry a recognizable Narova identity (`accent:#2ee6d6` teal, `pink`, `gold`; `.stat` defaults to red). Background is now neutral, but the palette + 30+ pattern classes remain a strong attractor. | Fast polished starts. | Path of least resistance converges on a "Narova explainer" look unless the author actively resists. | Medium. | **MEDIUM** | `css.js:16-22` (DEFAULT_TOKENS), `:120-252` (patterns). `patterns:false` opts out. | Documented as tools-not-a-language. Consider a neutral default palette set + opt-in themed palettes. |
+| **Creative-diversity eval is schema-only** | `creative-diversity-eval.js` uses **hand-authored** configs to prove the schema *can* represent 10 concepts. It does **not** measure whether an LLM *produces* more diverse work. Not in the regression `test` command. | Proves representation capacity. | Could be mistaken for an LLM-behavior result. | Low (eval hygiene). | **MEDIUM** | `evals/creative-diversity-eval.js` (`generateConfigs()` hand-written); `package.json` `test` script omits evals. | Honestly relabeled "schema conformance" (prior fix). Build the real LLM-in-the-loop benchmark (§6). |
+| **Failure messages → simplification** | Some errors ("unsupported", bare throws) nudge toward simpler templates rather than toward a lower escape hatch. | — | An ambitious idea that fails looks "broken", not "needing a lower surface". | Medium. | **MEDIUM (RFC)** | `three.js:428-430` (model fallback), `elements.js:458-463` (action not-yet-implemented). | RFC P1: every capability error names the nearest valid alternative + whether a lower hatch exists (§5-E). |
+| **no-browser renderer has no 3D** | The browserless (Skia/FFmpeg) renderer **cannot** render `scene.three` or `scene.threeModule` at all — it requires `scene.visual` and rejects HTML bodies. | Portable, no-browser rendering. | A 3D concept is locked to HyperFrames (needs Chromium/WebGL). | Low (documented renderer split). | **LOW** | `no-browser.js:66-68` (requires visual), no `THREE` path. | Document honestly; the portable `canvas3d`/`model3d` visual nodes are inert (no driver). |
+
+---
 
 ## 2. Freedom budget analysis
 
-### Essential constraints (required for correctness)
-- Deterministic rendering (no `Math.random`, `Date`, wall-clock CSS)
-- Reproducible timing (`data-cue` → measured turn times)
-- Seeded randomness for particles
-- Local-only dependencies (no CDN at render time)
-- Asset integrity (files must exist, no remote URLs)
-- Scene id uniqueness and namespacing
-- Source grounding (claims ledger)
+### Essential constraints (required for correctness — keep)
+- **Deterministic rendering**: no `Math.random`/`Date`/wall-clock CSS; seeded PRNG; `setPixelRatio(1)`, `preserveDrawingBuffer`. `three.js:266-268`, `check.js:270-276`.
+- **Reproducible timing**: `data-cue="k"` → measured turn start (`runtime.js`, `three.js:161-170`).
+- **Local-only at render time**: three + GSAP vendored, copied into project. `compose/index.js:112-117`.
+- **Asset integrity / no remote fetch**: `check.js:189-216`, `schema.js:114-118`.
+- **Source grounding**: claims ledger. `check.js:542-577`.
+- **Scene-id uniqueness + SVG namespacing**: `schema.js:367-370`, `html.js:61-76`.
 
-### Helpful default (useful but genuinely optional)
-- Default voice colors (assigns palette automatically)
-- Timing defaults (gapSentence, gapTurn, lead, tail)
-- Caption data generation (always computed for SRT/VTT export)
-- Platform presets (size + duration bands)
-- Built-in scene layout classes (.pane, .stat, .flow, etc.)
+### Helpful defaults (useful, genuinely optional)
+- Sentence-level TTS cache (byte-identical reuse). `py/narova_tts/pipeline.py:264-288`.
+- `--reuse` (skip synth when audio fingerprint matches). `pipeline.js:111-162`.
+- Platform presets (size + duration band). `util.js`.
+- Built-in layout patterns (opt out via `patterns:false`).
+- Caption presets + SRT/VTT always-export.
 
-### Accidental constraint (implementation limitation, no fundamental reason)
-- Visual caption band uncoditionally rendered (FIXED: now `captions: false`)
-- Hook enforcement applied to all projects (FIXED: now context-aware)
-- No per-scene render cache (full compose + render on any change)
+### Accidental constraints (implementation limitation, no fundamental reason)
+- **Monolithic compose+render**: per-scene hashes exist but nothing consumes them → any visual change rebuilds the whole video. *(Highest-leverage accidental constraint.)*
+- **Per-scene JS was not determinism-scanned** until this audit's fix.
+- **`issue('correctness')` helper unused** until this audit's fix.
+- Portable `canvas3d`/`model3d` visual nodes are inert (no narova driver) — `visual.js:463-471` emits tagged HTML nothing reads.
 
 ### Taste leakage (Narova preference masquerading as universal quality)
-- Default background glow effects (FIXED: removed accent/pink/gold glows)
-- Default scaffold using `.s-title` layout (FIXED: neutral inline styles)
-- Hook/CTA doctrine as universal advice (FIXED: tagged `craft:` and context-aware)
-- Progress bar by default (remains on by default, easy to disable)
-- Grid background texture (reduced to 0.04 opacity, still present as subtle production default)
+- Default palette tokens (`accent` teal, `pink`, `gold`) — `css.js:16-22`.
+- `.stat` defaults to red — `css.js:139`.
+- Hook/CTA/saveable-end-card advice applied whenever a project has narration + captions (no declared intent) — `check.js:290-334`.
+- Progress bar + chrome on by default (easy to disable).
+- *(Background glow blobs were taste leakage — removed in 0.21.0.)*
 
-### Missing escape hatches
-- Raw Three.js/WebGL/canvas per-scene (P0 — proposed `scene.threeFile` or `scene.customRender`)
-- Custom procedural rendering (P1 — proposed `scene.canvas` / `scene.webgl` escape hatch)
-- Programmatic caption control (P1 — runtime exposed to custom caption systems)
-- Sound-reactive/beat-reactive timing (P1 — general event system beyond narration cues)
+### Missing escape hatches (now partially closed)
+- ~~Raw Three.js/WebGL per scene~~ — **CLOSED by `scene.threeModule`**.
+- Raw procedural 2D canvas per scene — **still missing** (RFC P1).
+- General event system (music/SFX/markers as first-class timing) — **missing** (RFC P1).
+- Programmatic/custom caption system beyond 4 presets — **partial** (`theme.css` on `.cap-w`/`.caption2` is the documented hatch; full custom caption module is RFC P2).
+
+---
 
 ## 3. Creative-confidence audit
 
-| Issue | How it makes LLMs conservative | Recommended fix | Status |
-|-------|-------------------------------|-----------------|--------|
-| **Expensive renders** | Full compose + render on any change discourages experimentation. | Per-scene render caching, scene-level compose, draft-quality renders. | Proposed P1 |
-| **Hard-to-reverse decisions** | No way to fork a project direction and compare. | `narova branches save/list/restore` with snapshot manifests. | Proposed P2 |
-| **Insufficient previews** | `narova shots` shows one frame per scene; no real-time review of motion. | Animatic/preview with draft quality, scene-only renders. | Proposed P1 |
-| **Fragile low-level paths** | Choreography is powerful but error messages are cryptic. Failures encourage simplification. | Better error messages with suggested repair paths, not just "X failed." | Proposed P1 |
-| **Undocumented capability boundaries** | scene.three claimed "unlimited" but is bounded. Author hits wall unexpectedly. | Documented honestly now. | FIXED |
-| **Warnings punish experimentation** | Hook/CTA warnings fire on ALL projects regardless of creative intent. | Category-tagged warnings (`craft:` vs `correctness:`). | FIXED |
-| **Captions cannot be removed** | Author must override generated CSS internals to hide them. | `captions: false` disables the visual band cleanly. | FIXED |
-| **Default palette is an aesthetic opinion** | First impression of "blank project" has recognizable Narova glow. | Neutral flat background. | FIXED |
-| **Fear of disturbing approved work** | Revisions could alter approved scenes. Plan already detects change scope; could be more visible. | `narova plan` output already shows what will rebuild. Works well. | N/A (adequate) |
+| What makes LLMs conservative | How it shows up | Fix | Status |
+|------------------------------|-----------------|-----|--------|
+| **Expensive renders** | Any visual change = full compose + full render. "Try 3 camera approaches" costs 3 full renders. | Scene-level render cache (consume the existing per-scene hash); draft tier. | RFC P0/P1 |
+| **Blind change scope** | `build()` never called `plan()`; an author can't see what a revision will touch. | `build --plan` prints scope before building. | **FIXED** |
+| **Vague failure on ambitious work** | "unsupported" / bare throws nudge toward simpler templates. | Capability errors name the nearest valid surface + lower hatch. | RFC P1 |
+| **Hard-to-reverse direction** | Rejected concept branches are lost. | Persistent branches over the release machinery. | RFC P2 |
+| **Warnings that punish experimentation** | Hook/CTA doctrine fired on all narrated projects. | Context-aware skip + `craft:` tag. | Fixed (prior); intent field is RFC P1 |
+| **Undocumented capability boundaries** | `scene.three` was called "unlimited"; a false 3D hatch was advertised. | Honest bounds + real `scene.threeModule`. | **FIXED** |
+| **Generated clips are dead ends** | No way to revise a generated shot. | `.gen.json` spec + `--regenerate`. | **FIXED** |
+| **Fear of disturbing approved work** | Revisions could alter approved scenes invisibly. | `build --plan` now shows per-scene scope; `narova plan` already reported it. | Partial |
+| **Insufficient previews** | Only `narova shots` (stills) is cheap; no animatic. | Draft/storyboard tier for HyperFrames. | RFC P1 |
+| **Silent nondeterminism in escape hatches** | Per-scene JS wasn't linted for hazards. | Determinism scan now covers all inlined author JS. | **FIXED** |
 
-## 4. Changes implemented
+---
 
-### Problem 1: Captions cannot be removed
-**Problem:** No `captions: false` path existed. Caption DOM, CSS padding, and presets were always generated, forcing every video into the caption-bearing form.
+## 4. Changes implemented (this audit)
 
-**Design:** Added `captionsEnabled` flag through the full stack:
-- `schema.js`: Accepts `captions: false`. Sets `captionsEnabled = false`.
-- `html.js`: Skips `.capzone` and `.cap-preset-*` class when disabled.
-- `runtime.js`: Guards caption DOM building behind `if (PRESET && stage && DATA.groups.length)`.
-- `css.js`: Removes caption-safe canvas padding when captions disabled.
-- `compose/data.js`: Returns `preset: false` when disabled (signals runtime to skip).
-- `captions.js`: Unaffected — SRT/VTT sidecars always export.
+### A. Raw Three.js escape hatch — `scene.threeModule` (P0)
+**Problem:** `scene.three` is a finite declarative vocabulary (12 primitives, 1 PBR material, 5 lights, 7 actions). Custom shaders, procedural geometry, post-processing, raymarching, and unusual materials had **no** deterministic path. The prior `scene.threeFile` is a JSON config loader — a different, narrower thing than the raw-JS hatch the prior audit proposed. Docs falsely advertised a "component-custom escape hatch" through choreography that did not exist.
 
-**Files changed:** `schema.js`, `html.js`, `runtime.js`, `css.js`, `compose/data.js`, `compose/index.js`, `init.js`
+**Design:** a project-relative JS file inlined into the deterministic 3D bootstrap. The author's body runs with a clean context in scope:
 
-**Tests:** All existing pass. Runtime test updated to include `preset` in DATA.
+```
+THREE  scene  camera  renderer  tl(GSAP timeline)  seed  size{w,h}
+duration  assets(name)  pending[]  onRender(fn)  narova{prng,cueTurn}
+```
 
-**Backwards compatibility:** Fully compatible. `captions` defaults to `{preset:'karaoke'}` when omitted. Only `captions: false` (explicit boolean) disables.
+The bootstrap builds the capture-safe shell (WebGLRenderer sRGB/ACES/pixelRatio 1/preserveDrawingBuffer, Scene, PerspectiveCamera) — honoring optional `scene.three` camera/toneMapping/fog/background as the shell — then runs the author code in a `try/catch` (a throw is reported, never silently blank), registers a default per-frame `renderer.render(scene,camera)`, and drives frames across the scene span on the shared paused timeline. Determinism contract identical to choreography.
 
-**Creative capability:** Large increase — author can freely express captionless, silent, and non-social grammar.
+**Files:** `schema.js` (resolve `threeModule` → `_threeModuleContents`, scene-content requirement, `sceneFileRefs`), `compose/three.js` (`threeModuleSetupJs`, `threeModuleSceneBody`, `hasThreeModules`, updated `hasThreeScenes`), `compose/html.js` (use module body when present), `compose/index.js` (three assets copied via updated `hasThreeScenes`), `references/scene-script.md` (full section + corrected hierarchy).
 
-**Creative confidence:** Large increase — no longer punished for choosing no captions.
+**Tests:** `schema.test.js` (×3), `renderers.test.js` (×5): resolution, content requirement, missing-file rejection, shell + inline + try/catch + seed determinism, declarative-shell mixing, scene-body emit, `hasThreeModules`/`hasThreeScenes`.
 
-### Problem 2: Hook/CTA enforcement is context-blind
-**Problem:** `checkHook()` ran for ALL projects except external narration, advising social-media hook tactics to silent films, cinematic reveals, and teaching videos.
+**Backwards compat:** fully additive. Existing `scene.three`/`scene.threeFile` unchanged.
 
-**Design:**
-- Skip hook enforcement when project has no voices and no synthesis (silent/motion projects).
-- Skip when `captions: false` (author explicitly opted out of social grammar).
-- Tag hook/CTA warnings with `craft:` prefix to distinguish from correctness issues.
+**Effect on capability:** **large** — the reachable 3D space goes from "13 primitives + 1 material" to "anything Three.js/WebGL can do, deterministically". This is the single largest creative-ceiling lift in the audit.
 
-**Files changed:** `check.js`
+**Effect on confidence:** **large** — ambitious 3D (shaders, particles, procedural) now has a sanctioned, deterministic, linted home instead of a dead end.
 
-**Creative capability:** Medium — non-social concepts no longer get irrelevant craft advice.
+**Effect on cost:** neutral (only paid when used).
 
-**Creative confidence:** Medium — deliberate artistic choices (long silence, no hook text) don't look like warnings.
+### B. `check` correctness category made real + determinism scan extended
+**Problem:** the `issue(msg,'correctness')` helper existed but no rule used it (correctness vs quality were indistinguishable); and `check` scanned only project `choreography`, missing per-scene `choreographyFile`/`scriptFile`/`threeModule`.
 
-### Problem 3: Default scaffold and background carry Narova aesthetic
-**Problem:** Default background had radial gradient halo + accent/pink/gold glow blobs that gave every project a recognizable Narova look. Scaffold used `.s-title` layout.
+**Design:** (1) infinite-CSS-animation rule now passes `'correctness'`; (2) the determinism scan iterates every inlined author-JS blob with source attribution (`scene "X" choreographyFile`, `… scriptFile`, `… threeModule`, `choreography`).
 
-**Design:**
-- Background: flat `var(--stage)` with subtle 4% opacity grid. No more branded glows.
-- Scaffold: neutral inline styles instead of `.s-title`/`.display`/`.lede`.
-- Scaffold comments mention captions/chrome as configurable options.
+**Files:** `check.js`.
 
-**Files changed:** `css.js`, `init.js`
+**Tests:** `check.test.js` (×4): per-scene choreo/script/threeModule hazards warn with correct attribution; infinite animation tagged `correctness:`.
 
-**Creative capability:** Small — blank project is now a clean canvas, not an implicit template.
+**Effect:** correctness defects now look like correctness defects (not style nits); the new escape hatch can't silently introduce nondeterminism. Directly serves "distinguish *unconventional* from *technically broken*".
 
-**Creative confidence:** Small — first impression doesn't suggest a "right" visual style.
+### C. False escape-hatch documentation removed
+**Files:** `references/scene-script.md` (hierarchy §5–6 rewritten; new "Raw Three.js escape hatch" section).
 
-### Problem 4: Documentation misrepresents scene.three capability
-**Problem:** Scene-script claimed "unlimited 3D scenes" but implementation is bounded declarative (13 primitives, fixed actions).
+**Effect:** an LLM chasing raw 3D now finds a real, documented surface instead of a dead reference.
 
-**Design:** Updated to "declarative Three.js scenes with supported primitives, models, lights, and timeline-driven animation." Noted choreography as lower escape hatch.
+### D. `build --plan` — change scope made legible at build time
+**Problem:** `build()` never consulted `plan()`; the author was blind to what a revision would rebuild.
 
-**Files changed:** `scene-script.md`
+**Design:** opt-in `--plan` prints `formatPlan(result)` before building. Advisory only — never changes behavior.
 
-### Problem 5: Creative-diversity eval described as LLM behavior test
-**Problem:** Eval uses manually-authored configs but was presented as a general creative diversity test.
+**Files:** `bin/narova.js`.
 
-**Design:** Added honest preface: "SCHEMA CONFORMANCE test. NOT an LLM-in-the-loop benchmark."
+**Effect:** "fear of disturbing approved work" is reduced — scope is visible without a separate command.
 
-**Files changed:** `creative-diversity-eval.js`
+### E. Generated-media provenance
+**Problem:** `generate` downloaded an MP4 and returned; provider/model/prompt/params were lost.
+
+**Design:** every generated clip gets a `.gen.json` sidecar (`buildSpec`: provider, providerName, model, prompt, params, sourceVideoUrl, artifact, artifactBytes, artifactSha256, generatedAt). `--regenerate <mp4>` re-runs from the spec (inherits provider/model/prompt/params; override any). `--model`/`--size`/`--duration` capture/override. The MP4 is cache/output; the spec is the surviving creative source.
+
+**Files:** `generate.js` (`buildSpec`, `readSpec`, `specPathFor`, refactored `generate`/`generateSora`/`generateRunway` to honor params), `bin/narova.js` (regenerate path + flags + help).
+
+**Tests:** `generate.test.js` (×5): path mapping, spec capture, round-trip, missing-sidecar null, null-model.
+
+**Effect:** "keep this shot but make it rainy" / "same composition, three takes" becomes possible. Generated media is editable creative source.
+
+---
 
 ## 5. Remaining architectural proposals
 
-### P0 (critical — creative ceiling)
+Prioritized by **creative range × creative confidence × ease of exploration × editability × reliability**.
 
-**A. scene.threeFile / scene.customRender — raw Three.js/WebGL escape hatch**
-- Problem: Declarative `scene.three` cannot express custom shaders, post-processing, procedural geometry, or unusual rendering.
-- Design: `scene.threeFile: "my-scene.js"` — user-authored module with deterministic contract: `export function createScene({ THREE, timeline, seed, size, duration, assets })`. Runs in a scoped sandbox with the same GSAP timeline. Must be deterministic (seeded PRNG, no wall-clock).
-- Migration: Additive. Existing `scene.three` unchanged.
-- Determinism contract: Same as choreography — no `Date`, `Math.random`, `requestAnimationFrame`, `fetch`.
-- This is the single most important missing escape hatch. Without it, ambitious 3D/WebGL ideas hit a hard ceiling.
+### P0
 
-**B. scene.canvas — procedural 2D canvas escape hatch**
-- Problem: No way to do procedural 2D rendering (generative art, mathematical visualization, custom drawing).
-- Design: `scene.canvas: { setup, draw(t) }` — deterministic canvas API with seeded PRNG and timeline-driven time parameter.
+**A. Scene-level render cache (consume the existing per-scene hash).**
+- *Problem:* per-scene hashes exist and are commented as enabling selective rebuilds (`manifest.js:313-315`) but **no consumer reads them**. Any visual change wipes `out/hf-*` and re-renders the whole video. This is the **single biggest confidence tax** on experimentation.
+- *Design:* (1) compose per-scene frame spans (or per-scene MP4 segments) keyed by `sceneHash`; (2) on build, render only scenes whose hash changed; (3) composite cached + re-rendered spans with ffmpeg concat (`setsar=1` per AGENTS.md); (4) `narova plan`/`build --plan` already report per-scene scope — drive the cache from it. Audio/timing across the concat is already segmented per-scene in `out/audio/NN.wav`.
+- *Determinism contract:* a cached span reproduces because its inputs (body/visual/three/clip/transition/dur + timings) are fully captured by `sceneHash`.
+- *Migration:* additive behind a cache dir; falls back to full render if any span is missing.
+- *Effect:* "render only the 12s affected by this motion change" / "try 5 title sequences cheaply" — experimentation economics transform from "expensive" to "cheap". Highest-leverage confidence change remaining.
 
-### P1 (important — creative range × exploration)
+### P1
 
-**C. Per-scene render caching and scene-level build**
-- Problem: Any change triggers full compose + render. Experimentation is expensive.
-- Design: Hash each scene independently. Compose/render only changed scenes. Composite cached frames with ffmpeg concat.
-- Effect: Makes "try 5 title sequences" or "show 3 camera approaches" cheap.
+**B. Draft / storyboard / animatic tiers for HyperFrames.**
+- *Design:* `--draft` (half resolution, skip heavy filters), `--storyboard` (one frame per scene → JPEG grid), `--animatic` (low fps, cached spans). Makes "show me three camera approaches before committing" cheap.
+- *Status:* no-browser already has a CRF-only draft; HyperFrames has nothing.
 
-**D. Draft/preview quality tiers**
-- Problem: No fast "animatic" or "storyboard" mode.
-- Design: `--draft` flag: half resolution, skip complex filters, faster render. `--storyboard`: one frame per scene, JPEG grid.
+**C. General event system (narration as one event source among many).**
+- *Problem:* all timing flows voice→cue. Music-led, silent, beat-driven, and dance-cut films are second-class.
+- *Design:* `at: { event: "beat-1" }` / `at: { event: "reveal-world" }` resolving from narration cues, music beats/sections, SFX hits, explicit timeline markers, or captured-interaction timestamps. Speech-sync stays the easy default; speech becomes one excellent event source.
+- *Determinism:* events resolve to absolute timeline times at compose (same as cue resolution today).
 
-**E. Generated media provenance tracking**
-- Problem: `narova generate` downloads MP4 but loses the prompt, model, seed, etc.
-- Design: Persist generative spec in manifest: provider, model, prompt, shot intent, seed, params, version. MP4 is cache/output; spec survives.
+**D. Declared creative intent (`config.intent`).**
+- *Problem:* hook/CTA advice is inferred from negative-space signals (silence, `captions:false`), not authored. A cinematic voiceover film still gets social advice.
+- *Design:* optional `intent: { genre?, pacing?, priority? }` (e.g. `{genre:"cinematic", priority:"rhythm-over-hook"}`). `checkHook` and craft rules branch on it. Expands the option space ("here are six ways") instead of narrowing it.
 
-**F. General event system beyond narration cues**
-- Problem: All timing currently flows through "voice turn → cue." Music-led, silent, and beat-driven projects feel second-class.
-- Design: `at: { event: "beat-1" }`, `at: { event: "reveal-world" }`. Events resolve from narration, music, SFX, or explicit timeline markers. Preserves easy speech-sync while making speech one event source among many.
+**E. Capability-honest failure messages.**
+- *Design:* every validation/capability error answers: what failed, why (creative limitation vs technical defect), what's preserved, the nearest valid alternative, and whether a lower escape hatch exists. "This portable renderer can't do WebGL; the HyperFrames path can — move this scene to `scene.threeModule`." Helps repair ambitious ideas instead of simplifying them to templates.
 
-**G. Better error messages with repair guidance**
-- Problem: When ambitious ideas fail, errors say "unsupported" or throw cryptic exceptions.
-- Design: Every validation error should answer: what failed, why (creative limitation vs technical defect), what remains preserved, nearest valid alternative, and whether a lower escape hatch exists. "This portable renderer cannot execute the requested WebGL effect. The HyperFrames path can. Switch to `renderer: 'hyperframes'` and use `scene.threeFile` for raw Three.js."
-- Effect: Helps LLM repair the ambitious idea, not simplify back to a template.
+**F. Raw procedural 2D canvas escape hatch (`scene.canvas`).**
+- *Design:* deterministic `<canvas>` 2D surface with `setup`/`draw(t)` + seeded PRNG, mirroring `scene.threeModule`'s contract. For generative art, math visualization, custom drawing.
 
-### P2 (valuable — creative confidence × polish)
+**G. Creative-plan layer + creative-knowledge reference.**
+- *Design:* a pre-implementation thinking layer (audience, objective, emotional arc, beat map, representation strategy, motion language, what the video will *not* do) + a reference that enumerates *representation families* ("for 'network latency': racing particles, elastic strings, queues, ripples, split-screen clocks, packets in 3D, literal UI instrumentation…"). Generates imagination without prescribing a choice — directly targets "conceive representations the model may not have considered".
 
-**H. Persistent concept branches**
-- Problem: Variants are runtime overrides. Rejected creative directions are lost.
-- Design: `narova branches save <name>`, `narova branches list`, `narova branches restore <name>`. Stores full project state snapshot including theme, scenes, voices, and creative rationale. Survives across sessions.
+### P2
 
-**I. Creative knowledge as possibility generation**
-- Problem: Small models lack spontaneous representation vocabulary.
-- Design: Reference guide mapping creative intent → possible visual strategies. "For 'network latency,' consider: racing particles, elastic strings, physical queues, ripples, split-screen clocks, distorted typography, packets in 3D space, literal UI instrumentation." Generates imagination without prescribing a choice.
+**H. Persistent concept branches** (`narova branches save/list/restore`) over the release machinery — so "bring back the surreal direction" works and rejected alternatives survive.
 
-## 6. Creativity benchmark specification
+**I. Neutral default palette + opt-in themed palettes** — reduce house-style gravity without removing the useful starter systems.
 
-### Schema conformance (existing — `creative-diversity-eval.js`)
-- Tests: Can Narova's schema represent 10 diverse video concepts?
-- Method: Manually-authored configs matching 10 creative briefs.
-- Measures: Scene count, palette, layout vocabulary, caption preset, voice count, 3D usage, custom CSS, choreography.
-- Status: **Implemented.** Honest about what it measures.
+**J. Honest relabel + wire the diversity eval into regression**, and build the real LLM-in-the-loop benchmark (§6).
 
-### LLM-in-the-loop creativity benchmark (proposed — not yet implemented)
+---
 
-**Methodology:**
-1. Select 3+ models: frontier (Claude 4/GPT-5), mid-tier (Claude Haiku/GPT-4o-mini), small (local).
-2. Run 10+ briefs per model, 3 seeds each.
-3. Two conditions per model:
-   - **Baseline:** Model receives brief + normal capabilities. No Narova skill loaded.
-   - **Narova:** Same brief, same token budget, same external tools. Narova skill loaded.
-4. Autonomously generate project configs. Do NOT manually author.
-5. Measure output diversity, creative ambition, and convergence.
+## 6. Creativity benchmark
 
-**Benchmark briefs (include adversarial ones):**
-- Silent brutalist music film
-- Slow luxury cinematic object study
-- Children's handmade paper animation
-- Surreal scientific metaphor
-- Continuous-shot 3D narrative
-- Kinetic Urdu typography
-- Archival documentary essay
-- Weird procedural data art
-- Abstract emotional film with no literal exposition
-- Product demo where UI itself is the story
-- Calm 3-minute educational piece with no social hook
-- Video explicitly requiring no visible captions
-- Film whose structure follows music rather than narration
-- Visual poem
-- Instruction to invent a visual style that should not resemble a tech explainer
+### What the existing eval actually proves
+`evals/creative-diversity-eval.js` uses **hand-authored** configs to prove the **schema can represent** 10 diverse concepts. That is a **schema-capability / conformance** test. It does **not** measure whether an LLM *produces* more diverse or ambitious work with Narova. (Prior audit relabeled it honestly.)
+
+### Required: LLM-in-the-loop creativity benchmark (specified)
+
+**Methodology (baseline vs Narova, same model tier):**
+1. Pick ≥3 models spanning tiers (frontier, mid, small/local).
+2. Run ≥15 briefs per model, ≥3 seeds each.
+3. Two conditions per model, matched token/time/compute budget:
+   - **Baseline:** brief + normal coding/render capabilities. **No Narova skill.**
+   - **Narova:** same brief, same budget, Narova skill loaded.
+4. **Autonomously** generate projects (no hand-authored configs). Collect the final video + the transcript of the authoring session.
+5. Score blind across the dimensions below.
+
+**Briefs (include adversarial Narova-convergence probes):**
+silent brutalist music film · slow luxury cinematic object study · children's handmade paper animation · surreal scientific metaphor · continuous-shot 3D narrative · kinetic Urdu typography · archival documentary essay · weird procedural data art · abstract emotional film (no literal exposition) · product demo where the UI *is* the story · calm 3-min educational piece (no social hook) · video requiring **no visible captions** · film whose structure follows **music** not narration · visual poem · single-shot spatial metaphor · generative mathematical animation · mixed live-capture + diagram + generated-footage essay · *"invent a visual style that should not resemble a tech explainer"*.
 
 **Measurement dimensions:**
 
-| Dimension | How measured | Why it matters |
-|-----------|-------------|----------------|
-| Creative diversity | Structural similarity, vocabulary overlap, palette convergence, caption-style repetition | Does Narova cause convergence? |
-| Creative quality | Human evaluation: originality, coherence, emotional effect, prompt fidelity, intentionality | Does output look good? |
-| Creative capability | Range of media used, sophistication of motion, 3D/procedural usage, custom composition | Can Narova amplify capability? |
-| Creative confidence | Concept exploration count, genuinely different directions proposed, use of escape hatches, avoidance of template convergence | Does the model trust the system enough to take risks? |
-| Creative leverage | Tokens to first result, iteration count, regeneration cost, edit locality, debugging work | Does Narova reduce production friction? |
-| Creative ceiling | Can the model execute deliberately difficult artistic requests? Does Narova help or become the bottleneck? | Does Narova extend or limit reachable space? |
+| Dimension | Metric | Why it matters |
+|-----------|--------|----------------|
+| Creative diversity | structural similarity across outputs; scene-count/layout/caption/transition/palette/narration-strategy overlap; repeated first/last-scene formulas; repeated built-in vocabulary | Does Narova cause convergence? |
+| Creative quality (human) | originality, coherence, rhythm, emotional effect, prompt fidelity, intentionality, medium-appropriateness, memorability | Is the output good? |
+| Creative capability | range of media used appropriately; motion sophistication; custom composition; metaphor quality; procedural/3D/generated use; whether the model is *limited by Narova's vocabulary* | Does Narova amplify capability? |
+| Creative confidence | concepts explored before settling; genuinely different directions proposed; escape-hatch use; branching vs simplifying; recovery from failed ambitious attempts; avoidance of template convergence | Does the model *trust* the system enough to take risks? |
+| Production quality | successful builds; visual defects; timing correctness; deterministic reproduction; accessibility; caption correctness; renderer failures | Reliable enough to build on? |
+| Creative leverage | tokens/time to first viable result; invented implementation work; iterations needed; regeneration cost; edit locality; low-level debugging work | Does Narova reduce friction? |
+| Creative ceiling | deliberately difficult artistic requests — does Narova help, stay neutral, or become the bottleneck? | The most important dimension. |
 
-**Central benchmark questions:**
-1. Does Narova increase quality AND reliability without reducing diversity or creative ceiling?
-2. Does Narova increase creative capability?
-3. Does Narova increase creative confidence?
-4. Does Narova increase originality, representational diversity, and ambition compared with the same model without Narova?
+**Central questions the benchmark must answer:**
+1. Does Narova increase quality **and** reliability **without** reducing diversity or creative ceiling?
+2. Does Narova increase creative **capability**?
+3. Does Narova increase creative **confidence** — and does that confidence come from **trustworthy capability** (feedback, reversibility, machinery) or merely from defaults/guidance?
+4. Does Narova increase **originality, representational diversity, and ambition** vs the same model without it?
+
+**Adversarial convergence probes (must be in the suite):** a brief that *explicitly* says "do not use built-in layout classes"; a brief requiring a custom shader; a brief requiring no captions and no narration; a brief whose edit follows a music bed. Score whether the Narova condition still converges on house grammar despite the instruction.
+
+---
 
 ## 7. Escape-hatch map
 
+The creative stack, top → bottom. "Drop-down" = how to reach more control. The map makes the creative ceiling explicit.
+
 ```
-Level 1: Creative intent + story structure
-  Makes easy: Thinking about audience, objective, emotional arc, beat map
-  Cannot express: (N/A — this is a thinking layer, not an expression layer)
-  Escape hatch: Skip to any lower level directly
-  Status: PRESENT in prompt-to-video.md + SKILL.md workflow. Concept branching documented.
+Level 0 — Creative intent + creative plan (thinking layer)
+  Easy: audience, objective, emotional arc, beat map, representation strategy
+  Cannot express: (it's a thinking layer, not an expression layer)
+  Drop down: skip straight to any level
+  Status: PROMPTED in prompt-to-video.md / SKILL.md. RFC P1 G to formalize.
 
-Level 2: Semantic elements (scene.elements)
-  Makes easy: Camera, lights, 3D primitives, characters, actions in one line each
-  Cannot express: Custom shaders, post-processing, procedural geometry, custom render loops
-  Escape hatch: scene.three (declarative config), scene.choreography (timeline code)
-  Status: IMPLEMENTED. Actions: appear, disappear, move, rotate, scale, orbit, revolve. Characters: 3 built-in presets.
+Level 1 — Semantic elements (scene.elements)
+  Easy: camera, lights, 3D primitives, characters, 7 actions in one line each
+  Cannot express: anything outside the union of scene.three + scene.body vocab;
+    actions draw/speak/react/follow/transform are rejected (not yet implemented)
+  Drop down: compiles to Level 4 (scene.three) + Level 3 (scene.body)
+  Status: IMPLEMENTED. compose/elements.js.
 
-Level 3: Portable visual trees (scene.visual)
-  Makes easy: Browserless-renderable scene compositions
-  Cannot express: Complex HTML/CSS, WebGL, 3D, arbitrary DOM
-  Escape hatch: scene.body (full HTML/CSS/SVG) for HyperFrames
-  Status: IMPLEMENTED. Both renderers consume this tree.
+Level 2 — Portable visual tree (scene.visual)
+  Easy: browserless-renderable scene compositions (14 node types)
+  Cannot express: arbitrary HTML/CSS; 3D beyond inert canvas3d/model3d stubs
+  Drop down: scene.body (Level 3) for HyperFrames
+  Status: IMPLEMENTED. renderers/visual.js.
 
-Level 4: HTML/CSS/SVG (scene.body + theme.css)
-  Makes easy: Full browser visual expression
-  Cannot express: 3D, WebGL, procedural rendering
-  Escape hatch: scene.three (declarative 3D), scene.choreography (timeline behavior)
-  Status: IMPLEMENTED. Unlimited HTML/CSS/SVG surface for HyperFrames.
+Level 3 — HTML / CSS / SVG (scene.body + theme.css)
+  Easy: full browser visual expression, arbitrary HTML/CSS/SVG, project assets
+  Cannot express: 3D, WebGL, procedural rendering, JS interactivity
+  Drop down: scene.three (Level 4) or scene.threeModule (Level 5) for 3D;
+    choreography/scriptFile (Level 6) for timing logic
+  Status: IMPLEMENTED. Unlimited HTML/CSS/SVG surface (HyperFrames).
 
-Level 5: Declarative 3D (scene.three)
-  Makes easy: Timeline-driven Three.js with primitives, models, lights, PBR, env maps, shadows
-  Cannot express: Custom shaders, post-processing, procedural geometry, raw WebGL, custom render loops
-  Escape hatch: **NONE** (choreography has timeline access but no Three.js scene creation)
-  Status: IMPLEMENTED but bounded. 13 primitive types. Model animation: first clip only.
-  Gap: scene.threeFile / scene.customRender (P0 proposal)
+Level 4 — Declarative 3D (scene.three / scene.threeFile)
+  Easy: timeline-driven Three.js — 12 primitives, models, groups, particles,
+    MeshStandardMaterial (PBR), 5 lights, shadows, envMap, fog, camera animation
+  Cannot express: custom shaders, post-processing, procedural geometry,
+    custom materials, raw WebGL, custom render loops
+  Drop down: scene.threeModule (Level 5)
+  Status: IMPLEMENTED, bounded. 1 material type, 7 actions.
 
-Level 6: Project choreography (config.choreography)
-  Makes easy: Arbitrary timeline-driven DOM manipulation via GSAP
-  Cannot express: Three.js/WebGL scene creation, canvas drawing
-  Escape hatch: **NONE** — this is the current lowest determinisitc surface
-  Status: IMPLEMENTED. Access to tl, DATA, gsap, cueTime(). Local, inlined, deterministic.
+Level 5 — Raw Three.js / WebGL (scene.threeModule)  ← NEW
+  Easy: arbitrary deterministic Three.js/WebGL — shaders, procedural geometry,
+    post-processing, particle systems, custom materials, custom render passes
+  Cannot express: (this is the floor of the 3D stack — anything within the
+    determinism contract)
+  Context in scope: THREE, scene, camera, renderer, tl, seed, size, duration,
+    assets(), pending[], onRender(), narova{prng,cueTurn}
+  Determinism: same as choreography (no Date/Math.random/rAF/setTimeout/fetch);
+    linted by check
+  Status: IMPLEMENTED (this audit). HyperFrames-only.
 
-Level 7: (Proposed) Raw procedural rendering (scene.threeFile / scene.customRender)
-  Makes easy: Arbitrary Three.js, WebGL, canvas with deterministic contract
-  Cannot express: (This is the floor — anything is possible within determinism contract)
-  Escape hatch: N/A (lowest level)
-  Status: NOT IMPLEMENTED. Proposed design: export function createScene({ THREE, timeline, seed, size, duration, assets })
+Level 6 — Project / per-scene choreography (config.choreography, scene.choreographyFile, scene.scriptFile)
+  Easy: arbitrary GSAP timeline code; DOM transforms/opacity/className;
+    cue-anchored timing; tl/DATA/gsap/cueTime in scope
+  Cannot express: (intended) layout props, wall-clock APIs, own rAF;
+    3D now reachable via scene.threeModule instead
+  Drop down: this is the timing/DOM floor
+  Status: IMPLEMENTED. Unsandboxed JS; determinism by contract + lint.
 ```
 
-### Current creative ceiling
-The hardest creative ceiling is at Level 5 → Level 6. Choreography has no Three.js/WebGL access. Any 3D idea beyond the 13 supported primitives, fixed material system, and 7 action types cannot be expressed. A story that needs a custom water shader, particle simulation, or unusual camera behavior has no path forward within Narova's determinism contract.
+**Where is the creative ceiling now?**
+- For **2D/DOM**: effectively unlimited (Level 3 HTML/CSS/SVG + Level 6 choreography).
+- For **3D**: now effectively unlimited **within the determinism contract** (Level 5 `scene.threeModule`). The previous hard ceiling at Level 4 is removed.
+- For **procedural 2D canvas / raw WebGL-without-Three**: a small remaining ceiling — RFC P1 F (`scene.canvas`).
+- For **no-browser renderer**: 3D and Level-3 HTML are unavailable by design (it consumes only `scene.visual`); this is a documented renderer split, not a bug.
+
+---
 
 ## 8. Final verdict
 
 ### If the same competent LLM has Narova versus does not have Narova, is its reachable creative video space larger, smaller, or merely easier to reach?
 
-**Before changes:** Easier to reach, but **smaller.** Narova made explainer/social video dramatically easier but actively constrained the creative ceiling through mandatory captions, hook enforcement on all projects, branded aesthetic defaults, and the absence of a raw 3D/WebGL escape hatch. A narrator-less abstract film, a camera-less music visualizer, or a custom-shader 3D piece was actually harder to express in Narova than without it.
-
-**After changes made in this audit:** Easier to reach AND the creative ceiling has been raised. Captions can be removed, hook advice is not forced on non-social projects, the default canvas is neutral, and the bounded nature of scene.three is honestly documented. However, the raw 3D/WebGL escape hatch (P0) is still missing — this remains a significant ceiling for ambitious 3D work.
-
-**After P0 implementation (scene.threeFile):** Larger — Narova's production infrastructure (local TTS, timeline sync, deterministic rendering, caching, revision locality) combined with a raw WebGL/Three.js escape hatch would make the reachable space larger than without Narova.
+- **Before this audit's changes:** *Easier to reach for narration-driven explainer/social video, but smaller for ambitious/unconventional work.* Mandatory captions, narration-as-only-event-source, hook doctrine on all narrated projects, a bounded 3D vocabulary with a false escape hatch, and (above all) full-rebuild-on-any-change economics actively narrowed the effective creative space. A custom-shader 3D piece, a music-led silent film, or a "render only scene 4" iteration was *harder* in Narova than without it.
+- **After this audit's changes:** *Larger, and still easier to reach.* The 3D ceiling is removed (`scene.threeModule`); the false hatch is replaced by a real one; generated media is editable source; correctness is distinguishable from craft; the determinism contract is enforced across every escape hatch; and change scope is visible (`build --plan`).
+- **After the P0 scene-level render cache (RFC A):** *Materially larger and dramatically cheaper to explore.* That single change converts experimentation from "expensive" to "cheap", which is the dominant lever on creative confidence.
 
 ### Is the LLM meaningfully more creatively confident with Narova?
 
-**Before changes:** Mixed. Narova's defaults, enforcement, and "Narova look" bred complacency. The LLM converged on familiar templates because the path of least resistance was heavily shaped. But Narova's fast iteration, sentence cache, `--reuse`, and `plan` made _safe_ iteration very confident.
-
-**After changes:** Yes. Removing the forced caption band, making hook advice context-aware, and providing a neutral canvas reduces the sense that "Narova has a shape and you should fit it." The LLM can now author a captionless, chrome-less, silent project without fighting the tool.
+- **For safe, narration-driven work:** yes, and it was already — the sentence cache, `--reuse`, `plan`, determinism, and SRT/VTT export make *ordinary* iteration very confident.
+- **For ambitious/unconventional work:** *now meaningfully so*, because the 3D hatch is real and documented, generated clips are revisable, and correctness warnings no longer masquerade as style. The remaining confidence gap is **experimentation cost** (full rebuilds) — closed by RFC A.
 
 ### Does that confidence come from trustworthy capability or merely guidance/defaults?
 
-**More from capability now.** Key changes — `captions: false`, neutral defaults, category-tagged warnings — are trustworthy production capabilities, not mere guidance. The remaining area where defaults still shape behavior is the built-in layout vocabulary (30+ CSS classes) — these remain a strong attractor. The next step is to make the LLM _aware_ it should design custom layouts from its creative plan, not just pick from the menu.
+- **Increasingly from capability.** `scene.threeModule`, `.gen.json` provenance, the determinism scan, the `correctness:` category, and `build --plan` are trustworthy production machinery, not motivational language. The one place confidence still leans on *defaults* rather than capability is **house-style gravity** (palette + 30+ pattern classes) — that's taste leakage, addressable by RFC I.
 
 ### What must change for Narova to make the model much more creatively capable and confident?
 
-1. **P0: scene.threeFile / scene.customRender** — the raw 3D/WebGL escape hatch. This single change removes the biggest creative ceiling.
-2. **P1: Per-scene render caching** — makes experimentation cheap enough to be fearless.
-3. **P1: General event system** — makes music-led, beat-driven, and silent projects first-class.
-4. **P1: Draft/preview quality tiers** — makes iteration faster.
-5. **P1: Better error recovery** — helps LLM repair ambitious ideas instead of simplifying to templates.
-6. **P2: Persistent concept branches** — makes exploration safe and revisitable.
-7. **P2: Creative knowledge as possibility generation** — helps smaller models imagine more.
+1. **P0 — scene-level render cache** (RFC A): the dominant confidence lever. Per-scene hashes already exist; wire a consumer.
+2. **P1 — general event system** (RFC C): make music-led / silent / beat-driven work first-class.
+3. **P1 — draft/storyboard tiers** (RFC B): make preview cheap.
+4. **P1 — capability-honest errors** (RFC E): help repair ambitious ideas, not simplify them.
+5. **P1 — declared creative intent** (RFC D): craft advice that expands the option space instead of narrowing it.
+6. **P1 — creative-plan layer + representation-knowledge reference** (RFC G): enlarge the model's imagination before it reaches implementation vocabulary.
+7. **P2 — persistent branches** (RFC H): make bold forks safe and revisitable.
 
 ### What would make the creative space massively larger?
 
-**A deterministic raw WebGL/Three.js module surface per scene.** This is the single highest-leverage change. Currently, 3D is bounded to the declarative `scene.three` config. The gap between "I want a custom water shader with caustics" and what Narova can express is total. No workaround exists. The choreography escape hatch has GSAP timeline access but cannot create Three.js scenes or WebGL contexts.
+Two changes, together:
 
-The design: `scene.threeFile: "my-scene.js"` where the file exports:
+1. **A real scene-level render cache** — turns "try five radically different treatments of scene 4" from 5 full renders into 5 cheap span renders. This is the difference between a model that *settles* and a model that *explores*.
+2. **A general event system** — frees video from the voice→cue ontology. Music, SFX, explicit markers, and captured interactions become first-class timing sources. The easy speech-sync path stays; speech stops being the *only* shape a Narova video can have.
 
-```js
-export function createScene({ THREE, timeline, seed, size, duration, assets, events }) {
-  // arbitrary deterministic Three.js authoring
-  // timeline is the GSAP timeline — register all tweens on it
-  // seed is a project+scene deterministic seed for PRNG
-  // assets resolves to local asset paths
-  // events: { narration: [{ at, text, speaker }], music: [{ at, beat }], markers: [...] }
-}
-```
+Combined with the now-unlimited deterministic 3D surface (`scene.threeModule`), these would make Narova feel like the model suddenly gained a creative director, 3D artist, motion designer, editor, and production engineer — while leaving creative authorship with the model and the user, and preserving the determinism, reproducibility, local-first rendering, and revision locality that are Narova's spine.
 
-Same determinism contracts as choreography. This makes the reachable 3D space essentially unlimited while preserving local rendering, reproducibility, timeline seeking, and project ownership.
+---
 
-Combined with:
-- `scene.canvas` for 2D procedural rendering
-- The general event system for music/beat/sfx-driven timing
-- Draft rendering for fast exploration
+### Appendix — verification method
 
-...these changes would make the LLM's reachable creative space dramatically larger than without Narova — giving the model the capabilities of a creative director, 3D artist, motion designer, and production engineer while keeping creative authorship with the LLM and user.
+Every claim above was checked against current source via direct reads + three parallel code-audit passes (captions-off, `check` lint, 3D/escape-hatch) + one economics audit (reuse/plan/manifest). The prior `CREATIVE_AUDIT.md`'s "FIXED" items were re-verified; one was found **inaccurate** (`scene.threeFile` is a JSON loader, not the proposed JS hatch) and one was **overstated** (the `correctness:` prefix was dead code). Both are corrected here. Full JS suite: **487 pass / 0 fail** (+17 new). Python suite: **81 pass / 0 fail**.

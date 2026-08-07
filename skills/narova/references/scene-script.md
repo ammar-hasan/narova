@@ -17,10 +17,16 @@ need more control.
 4. **Project choreography** — for timing behavior beyond the built-in animators
 5. **Explicit Three.js** (`scene.three`) — declarative Three.js scenes with
    primitives, models, lights, and timeline-driven animation. Bounded by the
-   supported primitive types, lighting, and animation vocabulary. For raw
-   procedural Three.js, WebGL, or custom shader work, use project choreography
-   to author a `scene.three.js` module and drop to the component-custom
-   escape hatch (see [choreography.md](choreography.md)).
+   supported primitive types, lighting, and animation vocabulary.
+6. **Raw Three.js / WebGL** (`scene.threeModule`) — the escape hatch beneath
+   `scene.three`. A project-relative JS file whose body runs inside the
+   deterministic 3D bootstrap with `THREE`, `scene`, `camera`, `renderer`,
+   `tl`, `seed`, `size`, `duration`, `assets()`, `pending`, `onRender()`, and
+   `narova` helpers in scope. Use it for custom shaders, procedural geometry,
+   post-processing, particle systems, or any 3D the declarative vocabulary
+   cannot express. Same determinism contract as choreography (no `Date`,
+   `Math.random`, `requestAnimationFrame`, `setTimeout`, `fetch`). See
+   [§Raw Three.js escape hatch](#raw-threejs-escape-hatch-scenethreemodule).
 
 The choice is yours. Do not use built-in layouts merely because they exist.
 Use custom HTML, CSS, SVG, Three.js, assets, and choreography where they
@@ -272,6 +278,63 @@ Notes:
 - `.glb`/`.gltf` models are copied from the project, prefetched, and parsed
   before frame 0 so they never pop in mid-scene.
 - 2D `body` HTML overlays the 3D canvas, so mix text/captions over 3D freely.
+
+## Raw Three.js escape hatch (`scene.threeModule`)
+
+`scene.three` is a bounded declarative vocabulary — 12 primitives, models,
+groups, particles, one PBR material, 5 lights, fixed animation axes. When a
+concept needs something that vocabulary cannot express (custom shaders,
+procedural geometry, post-processing, raymarching, data-driven geometry,
+unusual materials, custom render passes), drop to `scene.threeModule`: a
+project-relative JS file whose body is inlined into the deterministic 3D
+bootstrap.
+
+```js
+// reel.config.mjs
+scenes: [
+  { id: "shader", dur: 8, vo: [], threeModule: "caustic-shader.js" },
+]
+```
+
+```js
+// caustic-shader.js — your body runs with these names in scope:
+//   THREE        the Three.js library (r185)
+//   scene        the THREE.Scene — add your objects to it
+//   camera       the THREE.PerspectiveCamera — move it freely
+//   renderer     the THREE.WebGLRenderer (sRGB, ACES, pixelRatio 1)
+//   tl           the paused GSAP timeline — register ALL tweens on it
+//                (frames are produced by seeking tl; never drive your own rAF)
+//   seed         deterministic integer (project + scene hash) — derive PRNGs from it
+//   size         { w, h } render size in pixels
+//   duration     scene duration in seconds
+//   assets(name) resolves a project asset filename to "assets/<name>"
+//   pending      push Promises for async loads (textures, models); the resting
+//                frame waits for all of them before painting
+//   onRender(fn) register a per-frame callback (called on every timeline seek)
+//   narova       { prng(seed), cueTurn(i) } helpers
+var geo = new THREE.PlaneGeometry(2, 2);
+var mat = new THREE.ShaderMaterial({
+  uniforms: { uTime: { value: 0 }, uRes: { value: new THREE.Vector2(size.w, size.h) } },
+  vertexShader: "void main(){gl_Position=vec4(position.xy,0.,1.);}",
+  fragmentShader: "uniform float uTime;uniform vec2 uRes;void main(){vec2 uv=gl_FragCoord.xy/uRes;gl_FragColor=vec4(uv,sin(uTime)*.5+.5,1.);}",
+});
+var quad = new THREE.Mesh(geo, mat);
+scene.add(quad);
+camera.position.set(0, 0, 1);
+// Drive the uniform from the timeline so the render reproduces exactly.
+tl.to(mat.uniforms.uTime, { value: duration, duration: duration, ease: "none" }, 0);
+```
+
+Determinism contract (enforced by `check`, same as choreography): no `Date`,
+`Math.random`, `requestAnimationFrame`, `setTimeout`, or `fetch`. Use `seed`
++ `narova.prng()` for any randomness and register all motion on `tl`. Given
+the same project state + seed + assets, output reproduces exactly.
+
+`scene.three` config (camera, toneMapping, fog, background, lights) is still
+honored as the shell when both are present, so you can mix declarative scene
+setup with raw code. `scene.threeModule` and `scene.threeFile` (a JSON
+declarative-config file) are different things: `threeFile` externalizes the
+declarative config; `threeModule` is the raw-JS escape hatch.
 
 ## What `check` enforces (errors)
 

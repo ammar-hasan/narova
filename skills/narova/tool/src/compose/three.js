@@ -534,8 +534,117 @@ function threeSceneBody(scene, scData, w, h) {
   return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
 }
 
+/* scene.threeModule — the raw Three.js escape hatch.
+ *
+ * Builds the deterministic shell (WebGLRenderer + Scene + PerspectiveCamera,
+ * tone-mapped, sRGB, pixelRatio 1, same capture-safe flags as the declarative
+ * path) and then inlines the author's module body into the bootstrap scope.
+ * The module runs with these names available:
+ *
+ *   THREE      the Three.js library (r185 global bundle)
+ *   scene      the THREE.Scene (add your objects to it)
+ *   camera     the THREE.PerspectiveCamera (move it freely)
+ *   renderer   the THREE.WebGLRenderer
+ *   tl         the paused GSAP timeline — register ALL tweens on it
+ *              (frames are rendered by seeking tl; never drive your own rAF)
+ *   seed       deterministic integer (project + scene hash) — derive PRNGs from it
+ *   size       { w, h } render size in pixels
+ *   duration   scene duration in seconds
+ *   assets(name)   resolves a project asset filename to "assets/<name>"
+ *   pending    array — push Promises for async loads (textures, models);
+ *               the resting frame waits for all of them before painting
+ *   onRender(fn)   register a per-frame callback (called on every timeline seek)
+ *   narova     { prng(seed), cueTurn(i) } helpers
+ *
+ * Determinism contract (same as choreography): no Date, Math.random,
+ * requestAnimationFrame, setTimeout, or fetch — check.js lints these.
+ * Given the same project state + seed + assets, output reproduces exactly.
+ *
+ * Optional `scene.three` config (camera, toneMapping, fog, background, envMap,
+ * lights) is still honored as the shell so authors can mix declarative setup
+ * with raw code. If `scene.three` is absent, neutral defaults are used. */
+function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur, w, h, turns) {
+  const cfg = three || {};
+  const cam = cfg.camera || {};
+  const fov = cam.fov || 45;
+  const near = cam.near || 0.1;
+  const far = cam.far || 100;
+  const camPos = cam.position || [0, 0, 5];
+  const look = cam.lookAt || [0, 0, 0];
+  const tm = cfg.toneMapping || 'aces';
+  const tmExpr = tm === 'aces' ? 'THREE.ACESFilmicToneMapping'
+    : tm === 'agx' ? 'THREE.AgXToneMapping'
+    : tm === 'neutral' ? 'THREE.NeutralToneMapping'
+    : 'THREE.NoToneMapping';
+  const exposure = Number.isFinite(cfg.exposure) ? cfg.exposure : 1;
+  // Deterministic seed derived from the scene id (same scheme as particles).
+  const seed = (hashString('threeModule:' + sceneId) >>> 0);
+
+  let js = `(function(){var _try=0;function boot(){var tl=window.__timelines['main'];`;
+  js += `if(!tl||!window.THREE){if(++_try>200){console.error('narova-three: THREE or GSAP timeline never became ready');return;}setTimeout(boot,50);return;}`;
+  js += `var THREE=window.THREE;`;
+  js += `var cvs=document.getElementById(${esc('three-' + sceneId)});`;
+  js += `if(!cvs){cvs=document.getElementById(${esc(sceneId + '--three-' + sceneId)});}`;
+  js += `cvs.style.width='100%';cvs.style.height='100%';`;
+  js += `var renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});`;
+  js += `renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=${tmExpr};renderer.toneMappingExposure=${exposure};`;
+  js += `renderer.setPixelRatio(1);renderer.setSize(${w},${h});`;
+  js += `var scene=new THREE.Scene();`;
+  js += `var camera=new THREE.PerspectiveCamera(${fov},${w}/${h},${near},${far});`;
+  js += `camera.position.set(${camPos[0]},${camPos[1]},${camPos[2]});camera.lookAt(${look[0]},${look[1]},${look[2]});`;
+  // Optional declarative shell: background, fog, lights (so authors can mix).
+  if (cfg.background) {
+    const bg = typeof cfg.background === 'string' ? cfg.background : (cfg.background.color || '#000000');
+    js += `scene.background=new THREE.Color(${esc(bg)});`;
+  }
+  if (cfg.fog) {
+    js += `scene.fog=new THREE.Fog(${esc(cfg.fog.color || '#000000')},${cfg.fog.near || 1},${cfg.fog.far || 50});`;
+  }
+  // Helpers exposed to the module.
+  js += `var seed=${seed};`;
+  js += `var size={w:${w},h:${h}};`;
+  js += `var duration=${fmt(sceneDur)};`;
+  js += `var pending=[];`;
+  js += `function assets(name){return 'assets/'+name;}`;
+  // Seeded mulberry32 PRNG factory (matches the declarative particles PRNG).
+  js += `function narovaPrng(s){s=(s>>>0)||1;return function(){s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)|0;return((t^t>>>14)>>>0)/4294967296;};}`;
+  js += `var _turns=${esc(turns || [])};`;
+  js += `var narova={prng:narovaPrng,cueTurn:function(i){return (i>=0&&i<_turns.length)?_turns[i]:0;}};`;
+  // Per-frame render callbacks: the timeline driver calls _render() on every
+  // seek; the default callback paints the scene. Modules may add callbacks
+  // (e.g. to advance a procedural simulation) via onRender(fn).
+  js += `var _renderFns=[function(){renderer.render(scene,camera);}];`;
+  js += `function _render(){for(var i=0;i<_renderFns.length;i++){_renderFns[i]();}}`;
+  js += `function onRender(fn){if(typeof fn==='function')_renderFns.push(fn);}`;
+  // Author module body. Wrapped so a throw is reported, not swallowed, and
+  // never silently produces a blank canvas.
+  js += `try{`;
+  js += `/* scene.threeModule: ${esc(sceneId)} */\n${moduleContents}\n`;
+  js += `}catch(e){console.error('narova threeModule "${esc(sceneId)}" threw:',e);}`;
+  // Frame driver: walk the timeline across the scene span, rendering on seek.
+  js += `var T={n:0};tl.to(T,{n:${fmt(sceneDur * 30)},duration:${fmt(sceneDur)},ease:'none',onUpdate:_render},${fmt(sceneStart)});`;
+  // Resting frame: wait for any module-pushed async loads, then paint. The
+  // 3s timeout mirrors the declarative path so a hung load can't freeze the
+  // composition.
+  js += `Promise.all(pending).then(_render).catch(_render);`;
+  js += `setTimeout(_render,3000);`;
+  js += `}boot();})();`;
+  return js;
+}
+
+function threeModuleSceneBody(scene, scData, w, h) {
+  const turns = scData.turns || [];
+  const canvas = `<canvas id="three-${scene.id}" class="narova-three-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>`;
+  const setup = threeModuleSetupJs(scene.id, scene.three, scene._threeModuleContents, scData.start, scData.dur, w, h, turns);
+  return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
+}
+
 function hasThreeScenes(config) {
-  return config.scenes.some(s => !!s.three);
+  return config.scenes.some(s => !!(s.three || s._threeModuleContents));
+}
+
+function hasThreeModules(config) {
+  return config.scenes.some(s => !!s._threeModuleContents);
 }
 
 function hasThreeModels(config) {
@@ -567,6 +676,6 @@ function hashString(s) {
 
 module.exports = {
   THREE_VERSION, THREE_IMPORT, THREE_VENDOR_DIR, THREE_MODULE_SRC,
-  threeHeadScripts, threeSetupJs, threeSceneBody, hasThreeScenes, hasThreeModels,
-  collectModelAssets, collectTextureAssets,
+  threeHeadScripts, threeSetupJs, threeSceneBody, threeModuleSetupJs, threeModuleSceneBody,
+  hasThreeScenes, hasThreeModels, hasThreeModules, collectModelAssets, collectTextureAssets,
 };

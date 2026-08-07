@@ -114,7 +114,8 @@ function releaseChecks(config, errors) {
     const portable = visualFacts(s.visual);
     const hasVisibleWalkthrough = s.walkthrough && s.walkthrough.opacity !== 0;
     const hasThreeScene = !!(s.three && s.three.objects && s.three.objects.length);
-    if (!hasText && !hasVisual && !portable.content && !s.clip && !hasVisibleWalkthrough && !hasThreeScene) {
+    const hasThreeModule = !!s._threeModuleContents;
+    if (!hasText && !hasVisual && !portable.content && !s.clip && !hasVisibleWalkthrough && !hasThreeScene && !hasThreeModule) {
       errors.push(`scene "${s.id}": body/visual has no visible content and no b-roll, walkthrough, or 3D scene — scene will render as a black frame`);
     }
 
@@ -454,27 +455,38 @@ function check(config, opts = {}) {
   if (config.choreographyPath && !fs.existsSync(config.choreographyPath)) {
     releaseIssue(`config.choreography: file not found: ${config.choreographyPath}`);
   }
-  const choreoSrc = config.choreography || '';
-  if (choreoSrc) {
+  // Collect every blob of author-authored JS that gets inlined into the
+  // composition: project choreography + per-scene choreographyFile/scriptFile
+  // + the raw Three.js escape hatch (scene.threeModule). All of them are
+  // seeked on a paused timeline, so all of them carry the same determinism
+  // contract. Scan each against the hazard rules and attribute the source.
+  const authorJsBlobs = [];
+  if (config.choreography) authorJsBlobs.push({ src: 'choreography', code: config.choreography });
+  for (const s of config.scenes) {
+    if (s._choreographyFileContents) authorJsBlobs.push({ src: `scene "${s.id}" choreographyFile`, code: s._choreographyFileContents });
+    if (s._scriptFileContents) authorJsBlobs.push({ src: `scene "${s.id}" scriptFile`, code: s._scriptFileContents });
+    if (s._threeModuleContents) authorJsBlobs.push({ src: `scene "${s.id}" threeModule`, code: s._threeModuleContents });
+  }
+  for (const blob of authorJsBlobs) {
     // Frames are rendered by seeking a paused timeline, so anything that reads
     // wall-clock time, randomizes, or schedules its own work paints a different
     // picture on every pass. Warnings, not errors — string matching has false
     // positives (a variable named `updateDate`, "fetch" inside a comment) and
     // the determinism contract carries the hard rule.
     for (const rule of CHOREOGRAPHY_DETERMINISM_RULES) {
-      if (rule.pattern.test(choreoSrc)) {
-        warnings.push(`choreography: references ${rule.desc} — frames are rendered by seeking a paused timeline, so this will not reproduce`);
+      if (rule.pattern.test(blob.code)) {
+        warnings.push(`${blob.src}: references ${rule.desc} — frames are rendered by seeking a paused timeline, so this will not reproduce`);
       }
     }
-    const bytes = Buffer.byteLength(choreoSrc, 'utf8');
-    if (bytes > CHOREOGRAPHY_MAX_BYTES) {
-      warnings.push(`choreography: ${Math.round(bytes / 1024)}KB exceeds the ${CHOREOGRAPHY_MAX_BYTES / 1024}KB guideline — a choreography file growing without bound is a sign the logic belongs in the tool`);
-    }
+  }
+  const projectChoreoBytes = config.choreography ? Buffer.byteLength(config.choreography, 'utf8') : 0;
+  if (projectChoreoBytes > CHOREOGRAPHY_MAX_BYTES) {
+    warnings.push(`choreography: ${Math.round(projectChoreoBytes / 1024)}KB exceeds the ${CHOREOGRAPHY_MAX_BYTES / 1024}KB guideline — a choreography file growing without bound is a sign the logic belongs in the tool`);
   }
 
   // theme.css
   if (/animation[^;{}]*\binfinite\b/.test(config.themeCss || '')) {
-    issue('theme.css uses "animation: … infinite" — not deterministic under frame rendering; move motion to data-cue/.reveal or drop it');
+    issue('theme.css uses "animation: … infinite" — not deterministic under frame rendering; move motion to data-cue/.reveal or drop it', 'correctness');
   }
   // Check for HyperFrames-reserved class names used as CSS selectors in theme.css.
   for (const klass of HF_RESERVED_CLASSES) {

@@ -22,7 +22,7 @@ const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease } = require('../src/releases');
-const { PROVIDERS, providerInfo, generate } = require('../src/generate');
+const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
@@ -35,7 +35,7 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply']);
+const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -192,6 +192,13 @@ Commands:
   generate <prompt>       generate a video clip via AI (Sora / Runway)
                               --provider sora|runway   API provider (default: sora)
                               --output <path>           output file (default: assets/gen-<provider>-<slug>.mp4)
+                              --model <id>              provider model (e.g. sora-2, gen4.5)
+                              --size <WxH>              generation size (Sora)
+                              --duration <s>            generation duration in seconds (Sora)
+                              --regenerate <mp4>        re-run a previous clip from its .gen.json spec
+                                                        (keeps provider/model/prompt; override any of them)
+                              A .gen.json spec sidecar is written next to every clip so the
+                              generative intent (prompt/model/params) survives as editable source.
   doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
@@ -209,8 +216,10 @@ Options:
                            (--size wins over the platform preset)
   --variant <id>           apply a declared hook variant as scene 1 (check/synth/
                            compose/build; build renders out/video-<id>.mp4)
-  --variants               build the base video.mp4 AND one out/video-<id>.mp4
+   --variants               build the base video.mp4 AND one out/video-<id>.mp4
                             per declared variant (shared sentences are cache-free)
+   --plan                   build: print what this revision will rebuild (scope)
+                            before doing the work — advisory, never changes behavior
   --deliverables           build: render per-platform deliverables (one mp4 per
                             export profile + thumbnails, ffmpeg post-processed)
   --deliverables ids      build: comma-separated export preset ids or "true"
@@ -511,6 +520,20 @@ async function main() {
       }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
+      // --plan: print what this revision will rebuild before doing the work.
+      // Advisory only (never changes build behavior). Makes the change scope
+      // legible at build time so authors/agents can see which scenes are
+      // affected without a separate `narova plan` step — directly serving
+      // "fear of disturbing approved work".
+      if (flags.plan) {
+        const prev = lastManifest(out);
+        if (prev) {
+          const result = plan(prev, config, { toolVersion: require('../package.json').version });
+          console.log(formatPlan(result));
+        } else {
+          console.log('plan: no previous manifest — this is a first build');
+        }
+      }
       build(config, {
         ...buildOpts, out, projectDir,
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
@@ -768,9 +791,10 @@ async function main() {
     }
 
     case 'generate': {
-      const prompt = positionals[1];
-      if (!prompt) {
+      // Minimal early help: only when there is no prompt AND no --regenerate.
+      if (!positionals[1] && !flags.regenerate) {
         console.error('usage: narova generate <prompt> --provider sora|runway [--output <path>]');
+        console.error('       narova generate --regenerate <existing-clip.mp4> [new prompt] [overrides]');
         console.error('');
         console.error('Providers:');
         for (const [id, p] of Object.entries(PROVIDERS)) {
@@ -778,27 +802,72 @@ async function main() {
         }
         process.exit(1);
       }
-      const provider = flags.provider || 'sora';
-      const info = providerInfo(provider);
-      if (!info) {
-        console.error(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
-        process.exit(1);
-      }
-      const apiKey = process.env[info.envKey];
-      if (!apiKey) {
-        console.error(`${info.name} requires ${info.envKey} environment variable`);
-        process.exit(1);
-      }
       try {
         const projectDir = flags.project ? path.resolve(flags.project) : process.cwd();
         const assetsDir = path.join(projectDir, 'assets');
         if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
+
+        // --regenerate <mp4>: re-run a previous generation from its .gen.json
+        // spec sidecar, overriding any of prompt/provider/model/size/duration.
+        // Lets an author say "regenerate this shot, same composition, rainy"
+        // without losing the original generative intent.
+        let baseSpec = null;
+        if (flags.regenerate) {
+          const regenPath = path.resolve(projectDir, flags.regenerate);
+          if (!fs.existsSync(regenPath)) {
+            console.error(`--regenerate: asset not found: ${regenPath}`);
+            process.exit(1);
+          }
+          baseSpec = readSpec(regenPath);
+          if (!baseSpec) {
+            console.error(`--regenerate: no .gen.json spec sidecar found for ${regenPath} (only assets created by \`narova generate\` carry one)`);
+            process.exit(1);
+          }
+          console.log(`regenerating from spec: ${path.basename(regenPath).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json`);
+        }
+
+        const provider = flags.provider || (baseSpec && baseSpec.provider) || 'sora';
+        const info = providerInfo(provider);
+        if (!info) {
+          console.error(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
+          process.exit(1);
+        }
+        const prompt = positionals[1] || (baseSpec && baseSpec.prompt);
+        if (!prompt) {
+          console.error('usage: narova generate <prompt> --provider sora|runway [--output <path>]');
+          console.error('       narova generate --regenerate <existing-clip.mp4> [--provider ..] [new prompt]');
+          process.exit(1);
+        }
+        const apiKey = process.env[info.envKey];
+        if (!apiKey) {
+          console.error(`${info.name} requires ${info.envKey} environment variable`);
+          process.exit(1);
+        }
+
+        const params = {};
+        if (flags.model) params.model = flags.model;
+        if (flags.size) params.size = flags.size;
+        if (flags.duration) params.duration = Number(flags.duration);
+        if (baseSpec && baseSpec.params) {
+          // Inherit unspecified params from the source spec so a regeneration
+          // reproduces the original composition by default.
+          for (const [k, v] of Object.entries(baseSpec.params)) {
+            if (params[k] == null) params[k] = v;
+          }
+        }
+
         const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
         const output = flags.output
           ? path.resolve(projectDir, flags.output)
-          : path.join(assetsDir, `gen-${provider}-${slug}.mp4`);
-        await generate(provider, prompt, apiKey, output, assetsDir);
+          : (baseSpec
+            ? path.resolve(path.dirname(flags.regenerate
+                ? path.resolve(projectDir, flags.regenerate) : projectDir), baseSpec.artifact)
+            : path.join(assetsDir, `gen-${provider}-${slug}.mp4`));
+        await generate(provider, prompt, apiKey, output, assetsDir, { params });
         console.log(`Add to reel.config.mjs:  clip: "assets/${path.basename(output)}"`);
+        if (readSpec(output)) {
+          console.log(`Generative spec:        assets/${path.basename(output).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json (edit/regenerate from here)`);
+        }
       } catch (e) {
         console.error(`generate failed: ${e.message}`);
         process.exit(1);
