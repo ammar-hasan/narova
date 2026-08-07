@@ -173,7 +173,9 @@ function composeDoc(config, size, data, css) {
   // The caption preset is carried twice: in DATA (runtime.js picks its word
   // tweens off it) and as a cap-preset-* class on the stage (css.js picks its
   // static styles off the class). Both derive from the same resolved config.
-  const capPreset = (config.captions && config.captions.preset) || 'karaoke';
+  const capPreset = config.captionsEnabled === false ? false
+    : ((config.captions && config.captions.preset) || 'karaoke');
+  const captionsOff = capPreset === false;
 
   const seriesBadge = config.series
     ? `<div class="series-badge">Part ${config.series.part}${config.series.total ? ` / ${config.series.total}` : ''}</div>`
@@ -199,7 +201,7 @@ function composeDoc(config, size, data, css) {
 ${mediaClips}
 ${sceneClips}
   <section id="overlay" class="clip overlay" data-start="0" data-duration="${fmt(data.total)}" data-track-index="1000">
-    <div class="capzone"><div id="cap-stage" class="cap-preset-${capPreset}" style="position:relative;height:100%"></div></div>
+    ${captionsOff ? '' : `<div class="capzone"><div id="cap-stage" class="cap-preset-${capPreset}" style="position:relative;height:100%"></div></div>`}
     ${chrome.progress ? '<div class="progress"><i id="progress-bar"></i></div>' : ''}
     ${seriesBadge}
   </section>

@@ -10,6 +10,7 @@ const { runtimeScript } = require('../src/compose/runtime');
 
 const DATA = {
   total: 9,
+  preset: 'karaoke',
   scenes: [
     { id: 's1', start: 0, dur: 5, turns: [0.16, 2.5] },
     { id: 's2', start: 5, dur: 4, turns: [0.16] },

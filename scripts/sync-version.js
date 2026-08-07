@@ -43,12 +43,22 @@ update(['SPEC.md'], (s, ver) =>
 
 // Website — current-version markers on the landing page and changelog.
 // Only update the FIRST occurrence (the current/latest release entry).
-// Subsequent entries are historical and must keep their original version.
-update(['docs/index.html', 'docs/changelog/index.html'], (s, ver) =>
-  s.replace(
+// Contract: exactly one element per HTML file may carry data-narova-version.
+// Historical releases (0.20.0, 0.19.0, ...) must NOT have this attribute —
+// only the current version's release article or hero badge. If a fresh release
+// entry is added with the attribute, the old one must have it removed.
+update(['docs/index.html', 'docs/changelog/index.html'], (s, ver) => {
+  const updated = s.replace(
     /(<[^>]+data-narova-version[^>]*>v?)[0-9.]+(<\/[^>]+>)/,
     `$1${ver}$2`
-  )
-);
+  );
+  // Safety: if more than one marker attribute remains, the old release entry
+  // wasn't cleaned up. Warn but don't block — the first match is authoritative.
+  const count = (updated.match(/data-narova-version/g) || []).length;
+  if (count > 1) {
+    console.warn(`  ⚠ ${count} data-narova-version markers found — only the first was updated. Remove the attribute from older release entries.`);
+  }
+  return updated;
+});
 
 console.log('Done.');

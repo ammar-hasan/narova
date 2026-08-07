@@ -58,14 +58,23 @@ function compose(config, outDir) {
   if (!hasExternalNarration) assertFreshCaptures(config, timings, outDir);
 
   const size = config.size;
-  const data = composeData(config, timings);
+  const data = composeData(config, timings, config.captionsEnabled !== false);
 
   // Merge per-scene file-referenced CSS and choreography into the project.
   let mergedExtraCss = config.themeCss || '';
   let mergedChoreography = config.choreography || '';
   for (const s of config.scenes) {
-    if (s._cssFileContents) mergedExtraCss += '\n/* scene:' + s.id + ' */\n' + s._cssFileContents;
     if (s._choreographyFileContents) mergedChoreography += '\n/* scene:' + s.id + ' */\n' + s._choreographyFileContents;
+    if (s._scriptFileContents) {
+      const scData = data.scenes.find(d => d.id === s.id);
+      const scStart = scData ? scData.start : 0;
+      const scDur = scData ? scData.dur : (s.dur || 0);
+      mergedChoreography += `\n/* scene-script:${s.id} */
+(function(){
+  var _scStart=${scStart}, _scDur=${scDur};
+${s._scriptFileContents}
+})();\n`;
+    }
   }
   // Append import module contents: CSS-like files → extra CSS, JS-like files → choreography.
   if (config.imports) {
@@ -81,7 +90,7 @@ function compose(config, outDir) {
       // scene body HTML and element references at authoring time.
     }
   }
-  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode);
+  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false);
   const composeConfig = { ...config, themeCss: mergedExtraCss, choreography: mergedChoreography };
   const html = composeDoc(composeConfig, size, data, css);
 

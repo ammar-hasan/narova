@@ -4,6 +4,61 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.21.0] - 2026-08-07
+
+### Added
+
+- **`captions: false`** — disable the visual caption band entirely. Caption DOM,
+  CSS padding, and presets are cleanly omitted. SRT/VTT sidecars always export
+  for accessibility. Flows through the full stack: schema → check → compose →
+  runtime.
+- **`config.patterns`** — control Narova's built-in layout classes (`.s-title`,
+  `.pane`, `.stat`, `.flow`, `.verdicts`, etc.). Defaults to `true` for backward
+  compatibility. Set `patterns: false` when the project defines its own visual
+  language in `theme.css`.
+- **`scene.scriptFile`** — per-scene raw JavaScript escape hatch. A project-relative
+  JS file inlined into the scene's animation context with access to the GSAP
+  timeline, DOM, and Three.js globals. Runs in a scoped IIFE with the same
+  determinism contract as project choreography.
+- **Per-scene content hashes** — every scene now carries a `hash` field (sha256
+  of id, vo, body, visual, three, clip, transition) in the manifest. `narova
+  plan` shows per-scene hash diffs. Foundation for scene-level render caching.
+
+### Changed
+
+- **Layout patterns separated from production CSS** — 30+ built-in layout classes
+  extracted to `patternsCss(t)`, opt-in via `config.patterns: true`. Default
+  production CSS is now neutral infrastructure only: background, chrome,
+  captions, walkthrough, marks, reveals, typography base.
+- **Default background neutralized** — removed Narova-branded accent/pink/gold
+  radial gradient glow blobs. Default is now a flat `var(--stage)` background
+  with subtle 2% grid. A blank project is a canvas, not an implicit template.
+- **Default scaffold neutralized** — `init` scaffold uses plain inline styles
+  instead of `.s-title` / `.display` / `.lede` layout classes. Documents
+  `captions`, `chrome`, and `patterns` options in comments.
+- **Hook/CTA enforcement is context-aware** — skipped for silent projects (no
+  voices), `captions: false` projects, and projects without spoken narration.
+  Hook/CTA warnings tagged `craft:` to distinguish creative advice from
+  production correctness.
+- **Check warnings categorized** — `correctness:` prefix for determinism and
+  asset integrity, `craft:` prefix for creative craft advice (hook timing,
+  CTA conventions, platform bands). Warnings no longer masquerade as
+  correctness failures.
+
+### Fixed
+
+- **Documentation honesty** — `scene.three` documented as "declarative Three.js
+  scenes with supported primitives" (not "unlimited"). Creative-diversity eval
+  reframed as schema conformance test (not LLM behavior benchmark).
+- Removed `.grad` (gradient text) and `.hairline` (decorative divider) from
+  default CSS — these were pure aesthetic opinions, not production infrastructure.
+
+### Internal
+
+- 14 files changed, 518 insertions, 473+ tests pass.
+- Full creative freedom audit, escape-hatch map, and benchmark specification
+  in `CREATIVE_AUDIT.md`.
+
 ## [0.20.0] - 2026-08-07
 
 ### Fixed

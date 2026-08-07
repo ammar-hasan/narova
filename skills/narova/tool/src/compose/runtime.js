@@ -20,10 +20,11 @@ var stage = document.getElementById('cap-stage');
 // cap-preset-* class on the stage). karaoke/rise are pure class-flip looks;
 // slam/pop add motion as short timeline tweens at word times — never CSS
 // transitions (wall clock, not seek-safe).
-var PRESET = DATA.preset || 'karaoke';
-
+var PRESET = DATA.preset || '';
 // captions: one group per sentence, stacked on the same band; the timeline
 // shows exactly one at a time and walks each word upcoming -> active -> past.
+// When PRESET is falsy, captions are disabled — skip building the DOM.
+if (PRESET && stage && DATA.groups.length) {
 DATA.groups.forEach(function (g, gi) {
   var el = document.createElement('div');
   el.className = 'cap-group';
@@ -71,6 +72,7 @@ DATA.groups.forEach(function (g, gi) {
     }
   });
 });
+}
 
 // When does an element animate? data-cue="k" pins it to the start of turn k
 // (0-based into the scene's vo turns; an unresolvable cue falls back to scene

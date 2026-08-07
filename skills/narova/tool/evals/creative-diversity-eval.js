@@ -1,12 +1,23 @@
 'use strict';
-/* Creative-diversity evaluation: checks that different briefs don't collapse
- * to the same Narova grammar. Generates configs from 10 distinct briefs and
- * measures structural convergence across multiple dimensions.
+/* Creative-diversity evaluation: SCHEMA CONFORMANCE test.
+ *
+ * This is NOT an LLM-in-the-loop benchmark. It uses MANUALLY-AUTHORED configs
+ * that are hand-written to match each brief — so it tests "can Narova's schema
+ * represent diverse videos?", not "does an LLM using Narova naturally produce
+ * diverse, imaginative, or ambitious work?"
+ *
+ * An honest LLM-in-the-loop creativity benchmark would require:
+ *   1. Give the same brief to a model with vs. without Narova
+ *   2. Let the model author its own config autonomously
+ *   3. Measure output diversity, creative ambition, and convergence
+ *
+ * Until then, this eval validates that the schema has sufficient representational
+ * capacity for diverse video concepts. That is a necessary but insufficient
+ * condition for creative freedom.
  *
  * Run: node skills/narova/tool/evals/creative-diversity-eval.js
  *
- * This eval does NOT render video — it works at the config/manifest level.
- * What it measures:
+ * What it measures (on manually-authored configs):
  *   - Scene-count similarity
  *   - Repeated title-card patterns
  *   - Repeated card/chip use
@@ -18,9 +29,7 @@
  *   - Repeated voice casting
  *   - Repeated class/semantic vocabulary
  *   - Custom CSS, choreography, assets, and 3D footprint
- *   - Whether projects have genuinely distinct visual systems
- *
- * Lower scores = less convergence = more creative diversity. */
+ *   - Whether the schema can represent genuinely distinct visual systems */
 
 const assert = require('node:assert/strict');
 const { test } = require('node:test');

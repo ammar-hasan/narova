@@ -163,6 +163,7 @@ function plan(fromManifestPath, toConfig, opts = {}) {
       hasVisualChange = true;
     }
     if (sc.transitionChanged) { s.transitionChanged = true; hasVisualChange = true; }
+    if (sc.hashChanged) { s.hashChanged = true; }
     changes.push(s);
   }
   detail.scenes = sceneChanges;
@@ -287,7 +288,8 @@ function diffScenes(fromScenes, toScenes) {
       entry.walkthroughChanged = true;
     }
     if (f.transition !== t.transition) entry.transitionChanged = true;
-    if (entry.idChanged || entry.voChanged || entry.bodyChanged || entry.visualChanged || entry.clipChanged || entry.walkthroughChanged || entry.transitionChanged) {
+    if (f.hash !== t.hash) entry.hashChanged = true;
+    if (entry.idChanged || entry.voChanged || entry.bodyChanged || entry.visualChanged || entry.clipChanged || entry.walkthroughChanged || entry.transitionChanged || entry.hashChanged) {
       results.push(entry);
     }
   }

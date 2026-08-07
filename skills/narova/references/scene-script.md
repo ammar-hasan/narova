@@ -15,7 +15,12 @@ need more control.
 2. **Portable visual trees** (`scene.visual`) — when browserless portability matters
 3. **Arbitrary HTML, CSS, SVG, assets** (`scene.body` + `theme.css`) — for unique visual design
 4. **Project choreography** — for timing behavior beyond the built-in animators
-5. **Explicit Three.js** (`scene.three`) — unlimited 3D scenes
+5. **Explicit Three.js** (`scene.three`) — declarative Three.js scenes with
+   primitives, models, lights, and timeline-driven animation. Bounded by the
+   supported primitive types, lighting, and animation vocabulary. For raw
+   procedural Three.js, WebGL, or custom shader work, use project choreography
+   to author a `scene.three.js` module and drop to the component-custom
+   escape hatch (see [choreography.md](choreography.md)).
 
 The choice is yours. Do not use built-in layouts merely because they exist.
 Use custom HTML, CSS, SVG, Three.js, assets, and choreography where they
