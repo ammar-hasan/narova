@@ -481,3 +481,186 @@ test('choreography is empty and unset when not declared', () => {
   assert.equal(c.choreography, '');
   assert.equal(c.choreographyPath, null);
 });
+
+// --- semantic element action validation --------------------------------------
+
+function elementsRaw(scenes) {
+  return {
+    title: 'T',
+    size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes,
+  };
+}
+
+test('supported element actions pass validation (appear, disappear, move, rotate, scale, orbit, revolve)', () => {
+  const raw = elementsRaw([{
+    id: 's1', vo: [{ who: 'a', text: 'Hi.' }], dur: 6,
+    elements: [
+      { type: 'cube', actions: [{ type: 'appear' }, { type: 'disappear' }, { type: 'move', to: [1, 0, 0] }] },
+      { type: 'sphere', actions: [{ type: 'rotate', axis: 'y', to: 3.14 }] },
+      { type: 'cylinder', actions: [{ type: 'scale', to: 2 }, { type: 'orbit' }, { type: 'revolve' }] },
+    ],
+  }]);
+  assert.doesNotThrow(() => resolveConfig(raw, {}, '.'));
+});
+
+test('unsupported element actions (draw, speak, react, follow, transform) fail with specific errors', () => {
+  const unsupported = ['draw', 'speak', 'react', 'follow', 'transform'];
+  for (const action of unsupported) {
+    const raw = elementsRaw([{
+      id: 's1', vo: [{ who: 'a', text: 'Hi.' }], dur: 6,
+      elements: [{ type: 'cube', actions: [{ type: action }] }],
+    }]);
+    assert.throws(() => resolveConfig(raw, {}, '.'), new RegExp(`"${action}" is not yet implemented`),
+      `action "${action}" must be rejected, not silently ignored`);
+  }
+});
+
+test('completely unknown action types also fail validation', () => {
+  const raw = elementsRaw([{
+    id: 's1', vo: [{ who: 'a', text: 'Hi.' }], dur: 6,
+    elements: [{ type: 'cube', actions: [{ type: 'explode' }] }],
+  }]);
+  assert.throws(() => resolveConfig(raw, {}, '.'),
+    /expected appear\|disappear\|move\|rotate\|scale\|orbit\|revolve/);
+});
+
+// --- creative modularity: scene file references ------------------------------
+
+test('scene bodyFile resolves HTML from a local file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  const bodyHtml = '<div class="hero reveal"><h1>From file</h1></div>';
+  fs.writeFileSync(path.join(dir, 'opening.html'), bodyHtml);
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], bodyFile: 'opening.html' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.equal(resolved.scenes[0].body, bodyHtml);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene bodyFile rejects remote URLs', () => {
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], bodyFile: 'https://evil.example/body.html' }],
+  };
+  assert.throws(
+    () => resolveConfig(raw, {}, '.'),
+    /remote URLs/,
+  );
+});
+
+test('scene elementsFile reads JSON from a local file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  const elements = [
+    { type: 'cube', size: 1, color: '#ff0000' },
+    { type: 'sphere', size: 0.5, color: '#00ff00' },
+  ];
+  fs.writeFileSync(path.join(dir, 'scene.json'), JSON.stringify(elements));
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], dur: 6, elementsFile: 'scene.json' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  // elements are compiled into scene.three + scene.body by resolveElementsScene.
+  // Check that elements compiled into scene.three objects
+  assert.ok(resolved.scenes[0].three, 'elements should compile to scene.three');
+  const objects = resolved.scenes[0].three.objects || [];
+  // At minimum the cube and sphere should be in the three config
+  const cube = resolved.scenes[0].three.objects.find(o => o.type === 'cube');
+  const sphere = resolved.scenes[0].three.objects.find(o => o.type === 'sphere');
+  assert.ok(cube, 'cube element should compile to a three.js cube object');
+  assert.ok(sphere, 'sphere element should compile to a three.js sphere object');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene threeFile reads JSON from a local file', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  const three = { camera: { position: [0, 0, 10] }, objects: [{ type: 'cube', color: '#ff0000' }] };
+  fs.writeFileSync(path.join(dir, 'three.json'), JSON.stringify(three));
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], dur: 6, threeFile: 'three.json' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.ok(resolved.scenes[0].three);
+  assert.equal(resolved.scenes[0].three.camera.position[2], 10);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene cssFile resolves and stores per-scene CSS', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  fs.writeFileSync(path.join(dir, 'hero.css'), '.hero { font-size: 60px; }');
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], body: '<div class="hero">Hi</div>', cssFile: 'hero.css' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.equal(resolved.scenes[0]._cssFileContents, '.hero { font-size: 60px; }');
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene choreographyFile resolves per-scene choreography', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  fs.writeFileSync(path.join(dir, 'spin.js'), 'tl.to(".x", { rotation: 360, duration: 2 }, 1);');
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], body: '<div class="x">Spin</div>', choreographyFile: 'spin.js' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.ok(resolved.scenes[0]._choreographyFileContents.includes('tl.to'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('scene file refs reject paths outside the project directory', () => {
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], bodyFile: '../outside.html' }],
+  };
+  assert.throws(
+    () => resolveConfig(raw, {}, '.'),
+    /path must be inside the project/
+  );
+});
+
+test('config.imports resolves local module files', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
+  fs.writeFileSync(path.join(dir, 'brand.css'), ':root { --brand-primary: #0f172a; }');
+  fs.writeFileSync(path.join(dir, 'brand-anim.js'), 'gsap.set(".brand", { opacity: 0 });');
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    imports: {
+      brandTokens: 'brand.css',
+      brandAnim: 'brand-anim.js',
+    },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], body: '<div class="brand">Hi</div>' }],
+  };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.ok(resolved.imports.brandTokens);
+  assert.ok(resolved.imports.brandTokens.contents.includes('--brand-primary'));
+  assert.ok(resolved.imports.brandAnim.contents.includes('gsap.set'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('config.imports reject remote URLs', () => {
+  const raw = {
+    title: 'T', size: '16:9',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    imports: { evil: 'https://evil.example/theme.css' },
+    scenes: [{ id: 's1', vo: [{ who: 'a', text: 'Test.' }], body: '<p>Hi</p>' }],
+  };
+  assert.throws(
+    () => resolveConfig(raw, {}, '.'),
+    /remote URLs/,
+  );
+});

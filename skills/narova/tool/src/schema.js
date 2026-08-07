@@ -85,6 +85,60 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
+  // --- file-reference resolution helper -----------------------------------
+  // Resolve a local relative-path file reference into inlined contents.
+  // Returns { contents, resolvedPath } or null on failure (pushes to errs).
+  // Used for scene bodyFile, cssFile, choreographyFile, threeFile,
+  // elementsFile, visualFile; also for config.imports entries.
+  function resolveFileRef(label, ref, extHint) {
+    if (typeof ref !== 'string' || !ref.trim()) {
+      errs.push(`${label}: expected a project-relative file path`);
+      return null;
+    }
+    // Disallow absolute and parent-traversal paths.
+    if (path.isAbsolute(ref) || ref.startsWith(`..${path.sep}`) || ref.includes(`..${path.sep}`)) {
+      errs.push(`${label}: "${ref}" — path must be inside the project`);
+      return null;
+    }
+    // Disallow remote URLs.
+    if (/^(?:https?:)?\/\//i.test(ref)) {
+      errs.push(`${label}: "${ref}" — remote URLs are not allowed, use a local file`);
+      return null;
+    }
+    const resolved = path.resolve(baseDir, ref);
+    if (!fs.existsSync(resolved) || !fs.statSync(resolved).isFile()) {
+      errs.push(`${label}: file not found: ${resolved}`);
+      return null;
+    }
+    try {
+      const contents = fs.readFileSync(resolved, 'utf8');
+      return { contents, resolvedPath: resolved };
+    } catch (e) {
+      errs.push(`${label}: cannot read file: ${e.message}`);
+      return null;
+    }
+  }
+
+  // --- imports: reusable local module references --------------------------
+  // `config.imports` is a map of name → project-relative file. Each entry is
+  // resolved to inlined contents and stored in config.imports. Consumed by
+  // scene resolution and compose. Hashed for build invalidation.
+  const imports = {};
+  if (raw.imports != null) {
+    if (typeof raw.imports !== 'object' || Array.isArray(raw.imports)) {
+      errs.push('config.imports: expected an object of { name: relative-path }');
+    } else {
+      for (const [name, ref] of Object.entries(raw.imports)) {
+        if (!ID_RE.test(name)) {
+          errs.push(`config.imports.${name}: import name must match ${ID_RE}`);
+          continue;
+        }
+        const resolved = resolveFileRef(`config.imports.${name}`, ref);
+        if (resolved) imports[name] = { file: ref, contents: resolved.contents };
+      }
+    }
+  }
+
   // Chrome (topbar/counter/progress bar) is generated page furniture — on by
   // default, `chrome: false` removes all of it, an object tunes the pieces.
   let chrome = { topbar: true, counter: true, progress: true };
@@ -229,6 +283,64 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // config for base + each variant in a --variants build).
   const scenes = Array.isArray(raw.scenes) ? raw.scenes.map(s => ({ ...s })) : [];
   if (scenes.length === 0) errs.push('config.scenes: at least one scene required');
+
+  // Resolve scene file references (bodyFile, threeFile, etc.) BEFORE validation
+  // so the resolved contents satisfy the body/three/elements requirement check.
+  const sceneFileRefs = []; // [{ sceneIndex, key, file }]
+  for (let i = 0; i < scenes.length; i++) {
+    const s = scenes[i];
+    const sat = `config.scenes[${i}]`;
+
+    if (s.bodyFile != null) {
+      if (typeof s.bodyFile !== 'string') {
+        errs.push(`${sat}.bodyFile: expected a project-relative file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.bodyFile`, s.bodyFile);
+        if (r) { s.body = r.contents; sceneFileRefs.push({ sceneIndex: i, key: 'bodyFile', file: s.bodyFile }); delete s.bodyFile; }
+      }
+    }
+    if (s.threeFile != null) {
+      if (typeof s.threeFile !== 'string') {
+        errs.push(`${sat}.threeFile: expected a project-relative JSON file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.threeFile`, s.threeFile);
+        if (r) { try { s.three = JSON.parse(r.contents); sceneFileRefs.push({ sceneIndex: i, key: 'threeFile', file: s.threeFile }); delete s.threeFile; } catch (e) { errs.push(`${sat}.threeFile: invalid JSON: ${e.message}`); } }
+      }
+    }
+    if (s.elementsFile != null) {
+      if (typeof s.elementsFile !== 'string') {
+        errs.push(`${sat}.elementsFile: expected a project-relative JSON file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.elementsFile`, s.elementsFile);
+        if (r) { try { s.elements = JSON.parse(r.contents); sceneFileRefs.push({ sceneIndex: i, key: 'elementsFile', file: s.elementsFile }); delete s.elementsFile; } catch (e) { errs.push(`${sat}.elementsFile: invalid JSON: ${e.message}`); } }
+      }
+    }
+    if (s.visualFile != null) {
+      if (typeof s.visualFile !== 'string') {
+        errs.push(`${sat}.visualFile: expected a project-relative JSON file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.visualFile`, s.visualFile);
+        if (r) { try { s.visual = JSON.parse(r.contents); sceneFileRefs.push({ sceneIndex: i, key: 'visualFile', file: s.visualFile }); delete s.visualFile; } catch (e) { errs.push(`${sat}.visualFile: invalid JSON: ${e.message}`); } }
+      }
+    }
+    if (s.cssFile != null) {
+      if (typeof s.cssFile !== 'string') {
+        errs.push(`${sat}.cssFile: expected a project-relative file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.cssFile`, s.cssFile);
+        if (r) { s._cssFileContents = r.contents; sceneFileRefs.push({ sceneIndex: i, key: 'cssFile', file: s.cssFile }); delete s.cssFile; }
+      }
+    }
+    if (s.choreographyFile != null) {
+      if (typeof s.choreographyFile !== 'string') {
+        errs.push(`${sat}.choreographyFile: expected a project-relative file path`);
+      } else {
+        const r = resolveFileRef(`${sat}.choreographyFile`, s.choreographyFile);
+        if (r) { s._choreographyFileContents = r.contents; sceneFileRefs.push({ sceneIndex: i, key: 'choreographyFile', file: s.choreographyFile }); delete s.choreographyFile; }
+      }
+    }
+  }
+
   const seen = new Set();
   scenes.forEach((s, i) => {
     const at = `config.scenes[${i}]`;
@@ -298,6 +410,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       }
     }
   });
+
   // External narration: use a pre-recorded audio file instead of TTS synthesis.
   // When set, synth copies this file as the narration track (no TTS run).
   // Optional wordTimings: a project-relative JSON file with per-word start/end
@@ -510,39 +623,154 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     } else errs.push('config.align: expected true/false or { engine }');
   }
 
-  // Hook variants: alternative scene-1 definitions for A/B testing openers.
-  // `narova build --variant <id>` swaps one in; the scene keeps the original
-  // scene-1 id so timings keys and DOM ids stay stable across variants.
+  // Hook variants: experimental directions derived from the base project.
+  // Each variant inherits everything from the base and selectively overrides
+  // specific surfaces. Supported kinds:
+  //   "hook"     — alternative opening scene (default)
+  //   "visual"   — different theme tokens or chrome
+  //   "narration" — different voiceover text or casting
+  //   "pacing"   — different timing (tempo, gaps)
+  //   "captions" — different caption preset or emphasis
+  //   "opening"  — legacy alias for "hook"
+  // A variant may combine multiple overrides. Scene overrides target specific
+  // scenes by id and support body, vo, visual, elements, three, and transition.
+  // `narova build --variant <id>` selects one; `--variants` builds all.
+  const VARIANT_KINDS = new Set(['hook', 'visual', 'narration', 'pacing', 'captions', 'opening']);
   const variants = [];
   if (raw.variants != null) {
     if (!Array.isArray(raw.variants)) {
-      errs.push('config.variants: expected an array like [{ id, scene: { body, vo } }]');
+      errs.push('config.variants: expected an array like [{ id, kind?, scene?, theme?, captions?, timing?, sceneOverrides? }]');
     } else raw.variants.forEach((v, i) => {
       const at = `config.variants[${i}]`;
       if (!v || typeof v !== 'object') { errs.push(`${at}: not an object`); return; }
       if (typeof v.id !== 'string' || !ID_RE.test(v.id)) { errs.push(`${at}.id: must match ${ID_RE}`); return; }
       if (variants.some(x => x.id === v.id)) { errs.push(`${at}.id: duplicate "${v.id}"`); return; }
-      const sc = v.scene;
-      if (!sc || typeof sc !== 'object'
-          || (typeof sc.body !== 'string' && (!sc.visual || typeof sc.visual !== 'object' || Array.isArray(sc.visual)))) {
-        errs.push(`${at}.scene: body HTML string or visual object required`); return;
+
+      const kind = v.kind || 'hook';
+      if (!VARIANT_KINDS.has(kind)) {
+        errs.push(`${at}.kind: expected ${[...VARIANT_KINDS].join('|')}, got "${kind}"`);
+        return;
       }
-      if (sc.visual != null) errs.push(...validateVisual(sc.visual, `${at}.scene.visual`));
-      if (!Array.isArray(sc.vo) || sc.vo.length === 0) { errs.push(`${at}.scene.vo: non-empty turn list required`); return; }
-      let ok = true;
-      sc.vo.forEach((turn, j) => {
-        if (!turn || !turn.who || !voices[turn.who]) { errs.push(`${at}.scene.vo[${j}].who: ${turn && turn.who ? `"${turn.who}" not in config.voices` : 'required'}`); ok = false; }
-        if (!turn || typeof turn.text !== 'string' || !turn.text.trim()) { errs.push(`${at}.scene.vo[${j}].text: required`); ok = false; }
-        if (turn && turn.synthesisText != null && (typeof turn.synthesisText !== 'string' || !turn.synthesisText.trim())) {
-          errs.push(`${at}.scene.vo[${j}].synthesisText: must be a non-empty string`); ok = false;
+
+      // Legacy scene shorthand: { scene: { body, vo, ... } } replaces scene-1.
+      // New sceneOverrides: { [sceneId]: { body?, vo?, visual?, elements?, three?, transition? } }
+      const hasLegacyScene = !!(v.scene && typeof v.scene === 'object');
+      const hasSceneOverrides = !!(v.sceneOverrides && typeof v.sceneOverrides === 'object' && !Array.isArray(v.sceneOverrides));
+
+      if (hasLegacyScene) {
+        const sc = v.scene;
+        if (typeof sc.body !== 'string' && (!sc.visual || typeof sc.visual !== 'object' || Array.isArray(sc.visual)) && !sc.three) {
+          errs.push(`${at}.scene: body HTML string, visual object, or three config required`); return;
         }
+        if (sc.visual != null) errs.push(...validateVisual(sc.visual, `${at}.scene.visual`));
+        if (!Array.isArray(sc.vo) || sc.vo.length === 0) { errs.push(`${at}.scene.vo: non-empty turn list required`); return; }
+        let ok = true;
+        sc.vo.forEach((turn, j) => {
+          if (!turn || !turn.who || !voices[turn.who]) { errs.push(`${at}.scene.vo[${j}].who: ${turn && turn.who ? `"${turn.who}" not in config.voices` : 'required'}`); ok = false; }
+          if (!turn || typeof turn.text !== 'string' || !turn.text.trim()) { errs.push(`${at}.scene.vo[${j}].text: required`); ok = false; }
+          if (turn && turn.synthesisText != null && (typeof turn.synthesisText !== 'string' || !turn.synthesisText.trim())) {
+            errs.push(`${at}.scene.vo[${j}].synthesisText: must be a non-empty string`); ok = false;
+          }
+        });
+        if (!ok) return;
+      }
+
+      let sceneOverrides = null;
+      if (hasSceneOverrides) {
+        sceneOverrides = {};
+        for (const [sid, so] of Object.entries(v.sceneOverrides)) {
+          if (!so || typeof so !== 'object') {
+            errs.push(`${at}.sceneOverrides.${sid}: expected an object `); continue;
+          }
+          const entry = {};
+          if (so.body != null) {
+            if (typeof so.body !== 'string') { errs.push(`${at}.sceneOverrides.${sid}.body: must be an HTML string`); continue; }
+            entry.body = so.body;
+          }
+          if (so.visual != null) {
+            if (typeof so.visual !== 'object' || Array.isArray(so.visual)) { errs.push(`${at}.sceneOverrides.${sid}.visual: must be a visual tree object`); continue; }
+            entry.visual = so.visual;
+          }
+          if (so.vo != null) {
+            if (!Array.isArray(so.vo)) { errs.push(`${at}.sceneOverrides.${sid}.vo: expected a turn array`); continue; }
+            entry.vo = so.vo;
+          }
+          if (so.three != null) {
+            if (typeof so.three !== 'object' || Array.isArray(so.three)) { errs.push(`${at}.sceneOverrides.${sid}.three: must be a three config object`); continue; }
+            entry.three = so.three;
+          }
+          if (so.elements != null) {
+            if (!Array.isArray(so.elements)) { errs.push(`${at}.sceneOverrides.${sid}.elements: expected an array`); continue; }
+            entry.elements = so.elements;
+          }
+          if (so.transition != null) entry.transition = so.transition;
+          sceneOverrides[sid] = entry;
+        }
+      }
+
+      // Validate theme overrides
+      let themeOverride = null;
+      if (v.theme != null) {
+        if (typeof v.theme !== 'object' || Array.isArray(v.theme)) {
+          errs.push(`${at}.theme: expected an object of token overrides`);
+        } else {
+          themeOverride = {};
+          for (const [tk, tv] of Object.entries(v.theme)) {
+            if (!ID_RE.test(tk)) errs.push(`${at}.theme.${tk}: token name must match ${ID_RE}`);
+            if (/[;{}<]/.test(String(tv))) errs.push(`${at}.theme.${tk}: value must not contain ; { } <`);
+            themeOverride[tk] = tv;
+          }
+        }
+      }
+
+      // Validate captions override
+      let captionsOverride = null;
+      if (v.captions != null) {
+        if (typeof v.captions !== 'object' || Array.isArray(v.captions)) {
+          errs.push(`${at}.captions: expected an object like { preset, emphasis }`);
+        } else {
+          captionsOverride = {};
+          if (v.captions.preset != null) {
+            if (!CAPTION_PRESETS.has(v.captions.preset)) {
+              errs.push(`${at}.captions.preset: unknown preset "${v.captions.preset}"`);
+            } else captionsOverride.preset = v.captions.preset;
+          }
+          if (v.captions.emphasis != null) {
+            if (!Array.isArray(v.captions.emphasis)) {
+              errs.push(`${at}.captions.emphasis: expected an array of words`);
+            } else captionsOverride.emphasis = v.captions.emphasis;
+          }
+        }
+      }
+
+      // Validate timing override
+      let timingOverride = null;
+      if (v.timing != null) {
+        if (typeof v.timing !== 'object' || Array.isArray(v.timing)) {
+          errs.push(`${at}.timing: expected an object like { tempo, gapSentence, gapTurn, lead, tail }`);
+        } else {
+          timingOverride = {};
+          const timingKeys = ['gapSentence', 'gapTurn', 'lead', 'tail', 'tempo'];
+          for (const tk of timingKeys) {
+            if (v.timing[tk] != null) timingOverride[tk] = v.timing[tk];
+          }
+        }
+      }
+
+      variants.push({
+        id: v.id, kind,
+        ...(hasLegacyScene ? { scene: {
+          ...(typeof v.scene.body === 'string' ? { body: v.scene.body } : {}),
+          ...(v.scene.visual ? { visual: v.scene.visual } : {}),
+          ...(v.scene.three ? { three: v.scene.three } : {}),
+          vo: v.scene.vo,
+          ...(v.scene.transition ? { transition: v.scene.transition } : {}),
+        } } : {}),
+        ...(sceneOverrides ? { sceneOverrides } : {}),
+        ...(themeOverride ? { theme: themeOverride } : {}),
+        ...(captionsOverride ? { captions: captionsOverride } : {}),
+        ...(timingOverride ? { timing: timingOverride } : {}),
       });
-      if (ok) variants.push({ id: v.id, scene: {
-        ...(typeof sc.body === 'string' ? { body: sc.body } : {}),
-        ...(sc.visual ? { visual: sc.visual } : {}),
-        vo: sc.vo,
-        ...(sc.transition ? { transition: sc.transition } : {}),
-      } });
     });
   }
 
@@ -568,9 +796,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
-  // --variant <id>: swap the variant's scene in as scene 1 (keeping its id)
-  // before resolving walkthroughs. Narration anchors must be validated against
-  // the selected variant's actual turn list, not the base scene.
+  // --variant <id>: apply the selected variant's overrides to the base config.
+  // sceneOverrides replace specific scenes; scene (legacy) replaces scene-1.
+  // theme, captions, and timing overrides merge into the base config.
   let variant = null;
   if (overrides.variant != null) {
     const v = variants.find(x => x.id === overrides.variant);
@@ -579,13 +807,56 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       errs.push(`unknown variant "${overrides.variant}" — declared variants: ${ids}`);
     } else {
       variant = v.id;
-      scenes[0] = {
-        ...scenes[0],
-        ...(typeof v.scene.body === 'string' ? { body: v.scene.body } : {}),
-        ...(v.scene.visual ? { visual: v.scene.visual } : {}),
-        vo: v.scene.vo,
-        ...(v.scene.transition ? { transition: v.scene.transition } : {}),
-      };
+
+      // Merge theme overrides into themeTokens
+      if (v.theme) {
+        for (const [tk, tv] of Object.entries(v.theme)) {
+          themeTokens[tk] = tv;
+        }
+      }
+      // Merge captions overrides
+      if (v.captions) {
+        if (v.captions.preset != null) captions.preset = v.captions.preset;
+        if (v.captions.emphasis != null) captions.emphasis = v.captions.emphasis;
+      }
+      // Merge timing overrides
+      if (v.timing) {
+        for (const [tk, tv] of Object.entries(v.timing)) {
+          if (tv != null) timing[tk] = tv;
+        }
+      }
+
+      // Apply scene overrides
+      if (v.sceneOverrides) {
+        for (const [sid, so] of Object.entries(v.sceneOverrides)) {
+          const sceneIdx = scenes.findIndex(s => s.id === sid);
+          if (sceneIdx < 0) {
+            errs.push(`variant "${v.id}": sceneOverrides.${sid}: scene "${sid}" not found`);
+            continue;
+          }
+          const base = scenes[sceneIdx];
+          scenes[sceneIdx] = {
+            ...base,
+            ...(so.body != null ? { body: so.body } : {}),
+            ...(so.visual != null ? { visual: so.visual } : {}),
+            ...(so.three != null ? { three: so.three } : {}),
+            ...(so.vo != null ? { vo: so.vo } : {}),
+            ...(so.elements != null ? { elements: so.elements } : {}),
+            ...(so.transition != null ? { transition: so.transition } : {}),
+          };
+        }
+      }
+      // Legacy scene-1 override (backward compat)
+      if (v.scene) {
+        scenes[0] = {
+          ...scenes[0],
+          ...(typeof v.scene.body === 'string' ? { body: v.scene.body } : {}),
+          ...(v.scene.visual ? { visual: v.scene.visual } : {}),
+          ...(v.scene.three ? { three: v.scene.three } : {}),
+          vo: v.scene.vo,
+          ...(v.scene.transition ? { transition: v.scene.transition } : {}),
+        };
+      }
     }
   }
 
@@ -596,7 +867,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, align, variants, variant, series, narrationSource, imports, sceneFileRefs };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {
@@ -660,7 +931,11 @@ function min3dSceneDuration(scene) {
       if (typeof anim.at === 'number') {
         offset = anim.at;
       } else if (typeof anim.at === 'object' && anim.at.cue != null) {
-        // cue * 2 approximates narration turn timing before real durations exist.
+        // PLANNING ESTIMATE: approximate ~2s per narration turn.
+        // Before synthesis, exact turn durations are unknown. Final rendering
+        // uses measured turn timings from timings.json (see compose/three.js
+        // animationTweens). This estimate only determines the minimum scene
+        // duration needed for the pre-build fallback.
         offset = anim.at.cue * 2 + (anim.at.offset || 0);
       }
     }

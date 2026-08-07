@@ -159,10 +159,13 @@ test('data-delay nudges both cue and entry triggers', () => {
 test('data-grow tweens scaleX 0 -> 1 from the left origin', () => {
   const bar = makeNode('div', { 'data-grow': '' });
   const { calls } = runScript({ sceneEls: { 'scene-s1': sceneEl([bar]) } });
+  // transformOrigin is pre-seeded via tl.set before the tween (avoids
+  // timeline breakage from tweening transformOrigin under hyperframes@0.7.64).
+  const set = calls.find(c => c.op === 'set' && c.target === bar);
+  assert.equal(set.vars.transformOrigin, 'left center');
   const tw = calls.find(c => c.op === 'fromTo' && c.target === bar);
   assert.equal(tw.from.scaleX, 0);
   assert.equal(tw.to.scaleX, 1);
-  assert.equal(tw.from.transformOrigin, 'left center');
 });
 
 test('data-draw walks the stroke dash over the path length', () => {
@@ -454,9 +457,11 @@ test('data-mark highlight: an accent rect swept in with scaleX from the left', (
   const rect = layer.children.find(c => c.tag === 'rect');
   assert.ok(rect, 'the highlight is a rect, not a path');
   assert.equal(rect.getAttribute('class'), 'markhl');
+  // transformOrigin is pre-seeded via tl.set before the tween.
+  const set = calls.find(c => c.op === 'set' && c.target === rect);
+  assert.equal(set.vars.transformOrigin, 'left center');
   const tw = calls.find(c => c.op === 'fromTo' && c.target === rect);
   assert.equal(tw.from.scaleX, 0);
-  assert.equal(tw.from.transformOrigin, 'left center');
   assert.equal(tw.to.scaleX, 1);
   assert.equal(tw.at, 0.16);
   assert.equal(layer.children.filter(c => c.tag === 'path').length, 0);

@@ -78,17 +78,17 @@ Without this, a shuffled-seek pass and a sequential pass differ by a few dozen
 pixels on moving text edges. With it, they are identical.
 
 **Do not tween `transformOrigin`.** Under `hyperframes@0.7.64` a tween carrying
-`transformOrigin` times out the sub-composition timeline script
-(`sub_timeline_script_failure`), and the whole composition renders static — no
-choreography, and no captions either. Declare the pivot statically in
-`theme.css` instead:
+`transformOrigin` on the `fromTo` or `to` side times out the sub-composition
+timeline script (`sub_timeline_script_failure`), and the whole composition
+renders static — no choreography, and no captions either. The built-in
+`data-grow` animator now pre-seeds `transformOrigin` via a `tl.set()` before
+tweening `scaleX` alone, which avoids this failure. For custom choreography
+that needs a transform origin, declare it statically in `theme.css` or use
+a `tl.set()` before the tween:
 
 ```css
 .evict { transform-origin: 30% 100%; }
 ```
-
-This is not specific to choreography: the built-in `data-grow` animator sets
-`transformOrigin: 'left center'` and reproduces the same failure on its own.
 
 ## What `check` enforces
 

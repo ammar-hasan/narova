@@ -35,6 +35,16 @@ function threeHeadScripts() {
 }
 
 function esc(v) { return JSON.stringify(v); }
+
+/* Deterministic seeded PRNG (mulberry32). Generates the same sequence of
+ * pseudo-random numbers from the same seed. Used for particle positions so the
+ * same project + scene + object produces identical layouts across builds.
+ * The seed is derived during compose from the scene id and object index.
+ * An explicit per-object seed (obj.prngSeed) overrides the default. */
+function prngJs(seed) {
+  // mulberry32: fast, 32-bit state, deterministic
+  return `function(){var s=${seed >>> 0};return function(){s|=0;s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)|0;return((t^t>>>14)>>>0)/4294967296;}}()`;
+}
 function fmt(n) { return String(Math.round(n * 1000) / 1000); }
 
 function primitiveGeometry(type, obj) {
@@ -135,7 +145,7 @@ function cachedMaterialJs(obj) {
   return `_m(${esc(materialKey(obj))},function(){return new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity}${transparent}${pbrPart}})})`;
 }
 
-function animationTweens(objVar, obj, sceneStart) {
+function animationTweens(objVar, obj, sceneStart, turns) {
   const anims = obj.animate
     ? (Array.isArray(obj.animate) ? obj.animate : [obj.animate])
     : (obj.keyframes || []);
@@ -149,13 +159,21 @@ function animationTweens(objVar, obj, sceneStart) {
     let at = sceneStart;
     if (anim.at != null) {
       if (typeof anim.at === 'object' && anim.at.cue != null) {
-        at = `(${sceneStart}+${anim.at.cue}*2+${anim.at.offset || 0})`;
+        // Resolve cue to the measured turn start time (scene-local seconds).
+        // turns[] is the measured turn start array from timings.json.
+        const cueIndex = anim.at.cue;
+        if (turns && Array.isArray(turns) && cueIndex >= 0 && cueIndex < turns.length) {
+          at = sceneStart + turns[cueIndex] + (anim.at.offset || 0);
+        } else {
+          // Fallback: approximate ~2s per turn for planning/pre-synthesis.
+          at = `(${sceneStart}+${cueIndex}*2+${anim.at.offset || 0})`;
+        }
       } else if (typeof anim.at === 'number') {
         at = `${sceneStart}+${anim.at}`;
       }
     }
     if (anim.wait != null) {
-      at = typeof at === 'number' ? `${at}+${anim.wait}` : `(${at}+${anim.wait})`;
+      at = typeof at === 'number' ? at + anim.wait : `(${at}+${anim.wait})`;
     }
     const loop = anim.loop ? ',repeat:-1' : '';
     const parts = prop.split('.');
@@ -218,7 +236,7 @@ function collectTextureAssets(three) {
   return paths;
 }
 
-function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
+function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
   const cam = three.camera || {};
   const fov = cam.fov || 45;
   const near = cam.near || 0.1;
@@ -406,7 +424,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
         js += `${name}Mixer.clipAction(g.animations[0]).play();`;
         js += `_mixers.push({m:${name}Mixer,start:${fmt(sceneStart)}});}`;
       }
-      js += `${animationTweens(name, obj, sceneStart)}`;
+      js += `${animationTweens(name, obj, sceneStart, turns)}`;
       js += `});}).catch(function(e){console.error('narova-three: model load failed',e);` +
         `${name}.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:${esc(obj.color || '#ff6363')},wireframe:true})));` +
         `}));`;
@@ -432,9 +450,9 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
         if (child.receiveShadow) js += `${cname}.receiveShadow=true;`;
         js += `${name}.add(${cname});`;
         js += textureLoadJs(cname, child);
-        js += animationTweens(cname, child, sceneStart);
+        js += animationTweens(cname, child, sceneStart, turns);
       });
-      js += animationTweens(name, obj, sceneStart);
+      js += animationTweens(name, obj, sceneStart, turns);
     } else if (obj.instances && Array.isArray(obj.instances) && obj.instances.length) {
       // InstancedMesh: N copies of the same primitive share one draw call.
       // Each instance gets its own transform matrix; the whole object can
@@ -452,16 +470,21 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
       js += `S.add(${name});`;
       js += textureLoadJs(name, obj);
-      js += animationTweens(name, obj, sceneStart);
+      js += animationTweens(name, obj, sceneStart, turns);
     } else if (obj.type === 'particles') {
       const count = obj.count || 100;
       const spread = obj.spread || [1, 1, 1];
       const pcolor = obj.color || '#ffffff';
       const psize = obj.size || 0.1;
       const popacity = obj.opacity ?? 1;
+      // Deterministic seed: derived from scene + object identity.
+      // An explicit prngSeed on the object overrides the default.
+      const pseed = obj.prngSeed != null ? obj.prngSeed
+        : (hashString(sceneId + ':particles:' + i) >>> 0);
       js += `var ${name}Geo=new THREE.BufferGeometry();`;
       js += `var _pPos=new Float32Array(${count}*3);`;
-      js += `for(var _pi=0;_pi<${count};_pi++){_pPos[_pi*3]=(Math.random()-0.5)*${spread[0]};_pPos[_pi*3+1]=Math.random()*${spread[1]};_pPos[_pi*3+2]=(Math.random()-0.5)*${spread[2]};}`;
+      js += `var _rng=${prngJs(pseed)};`;
+      js += `for(var _pi=0;_pi<${count};_pi++){_pPos[_pi*3]=(_rng()-0.5)*${spread[0]};_pPos[_pi*3+1]=_rng()*${spread[1]};_pPos[_pi*3+2]=(_rng()-0.5)*${spread[2]};}`;
       js += `${name}Geo.setAttribute('position',new THREE.BufferAttribute(_pPos,3));`;
       js += `var ${name}Mat=new THREE.PointsMaterial({color:${esc(pcolor)},size:${psize},transparent:${popacity < 1 ? 'true' : 'false'},opacity:${popacity},blending:THREE.AdditiveBlending,depthWrite:false});`;
       if (obj.texture) {
@@ -475,7 +498,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
       if (obj.animated !== false) {
         js += `tl.to(${name}.rotation,{y:Math.PI*2,duration:${obj.rotateDuration || 8},ease:'none',repeat:-1},${fmt(sceneStart)});`;
       }
-      js += animationTweens(name, obj, sceneStart);
+      js += animationTweens(name, obj, sceneStart, turns);
     } else {
       const pos = obj.position || [0, 0, 0];
       const rot = obj.rotation || [0, 0, 0];
@@ -505,8 +528,9 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h) {
 }
 
 function threeSceneBody(scene, scData, w, h) {
+  const turns = scData.turns || [];
   const canvas = `<canvas id="three-${scene.id}" class="narova-three-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>`;
-  const setup = threeSetupJs(scene.id, scene.three, scData.start, scData.dur, w, h);
+  const setup = threeSetupJs(scene.id, scene.three, scData.start, scData.dur, w, h, turns);
   return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
 }
 
@@ -532,6 +556,13 @@ function collectModelAssets(config) {
     }
   }
   return paths;
+}
+
+/* Simple string hash for deterministic seed derivation (djb2). */
+function hashString(s) {
+  let h = 5381;
+  for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0;
+  return h;
 }
 
 module.exports = {

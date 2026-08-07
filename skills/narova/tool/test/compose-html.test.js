@@ -250,3 +250,19 @@ test('choreography keeps "<" comparisons intact (unlike the DATA block)', () => 
   assert.ok(h.includes(cmp), 'comparison operators must survive verbatim');
   assert.ok(!h.includes('sc.start \\u003c 3'), '"<" must not be entity-escaped in choreography');
 });
+
+test('GSAP is loaded from local vendored asset, never a CDN', () => {
+  const h = doc();
+  assert.ok(!h.includes('cdn.jsdelivr.net'), 'generated HTML must not reference jsdelivr CDN');
+  assert.ok(!h.includes('unpkg.com'), 'generated HTML must not reference unpkg CDN');
+  assert.ok(h.includes('src="assets/gsap.min.js"'), 'GSAP must be loaded from local vendored assets');
+});
+
+test('generated HTML contains no remote script dependencies', () => {
+  const h = doc();
+  const scriptSrcs = [...h.matchAll(/<script\s[^>]*src="([^"]+)"/g)].map(m => m[1]);
+  for (const src of scriptSrcs) {
+    assert.ok(!src.startsWith('http://') && !src.startsWith('https://'),
+      'script src must be local, not remote: ' + src);
+  }
+});

@@ -189,7 +189,7 @@ function composeDoc(config, size, data, css) {
   <meta charset="utf-8">
   <meta name="viewport" content="width=${size.w}, height=${size.h}">
   <title>${title}</title>
-  <script src="https://cdn.jsdelivr.net/npm/gsap@3.14.2/dist/gsap.min.js"></script>${threeScripts}
+  <script src="assets/gsap.min.js"></script>${threeScripts}
   <link rel="stylesheet" href="style.css">${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
 </head>
 <body>

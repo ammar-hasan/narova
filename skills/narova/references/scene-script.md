@@ -5,6 +5,41 @@ A project is a folder with one config file: `reel.config.mjs` (also accepted:
 the repo. Full example: `generated/us-iran-standoff/` (11 scenes;
 `generated/narova-skill-reel/` is the flagship demo).
 
+## Creative hierarchy: pick the right level
+
+Narova gives you a ladder from fast shared work to unrestricted expression.
+Start at the highest level that serves your concept; drop down only when you
+need more control.
+
+1. **Semantic elements** (`scene.elements`) — fastest for common 3D work
+2. **Portable visual trees** (`scene.visual`) — when browserless portability matters
+3. **Arbitrary HTML, CSS, SVG, assets** (`scene.body` + `theme.css`) — for unique visual design
+4. **Project choreography** — for timing behavior beyond the built-in animators
+5. **Explicit Three.js** (`scene.three`) — unlimited 3D scenes
+
+The choice is yours. Do not use built-in layouts merely because they exist.
+Use custom HTML, CSS, SVG, Three.js, assets, and choreography where they
+improve the concept. Remove Narova chrome when it does not belong. Change or
+remove captions when the work does not need karaoke captions. Use one narrator,
+many narrators, external narration, or silence according to the concept.
+Prefer HyperFrames when full browser creativity matters; prefer no-browser
+when browserlessness or portability is an actual requirement.
+
+## Hard invariants
+
+These are enforced by the tool:
+
+- **Deterministic rendering**: same config + seed → identical output. No
+  `Math.random`, `Date`, wall-clock CSS in `theme.css`. Particles use
+  seeded randomness.
+- **Reproducible timing**: `data-cue="k"` resolves to the measured start of
+  turn `k`. GSAP is vendored and loaded locally.
+- **Source grounding**: every factual claim must trace to `claims.md`.
+- **Valid assets**: all referenced files must exist; URLs validated.
+- **No silent feature degradation**: unsupported semantic actions fail at
+  validation with clear errors. The currently supported actions are:
+  `appear`, `disappear`, `move`, `rotate`, `scale`, `orbit`, `revolve`.
+
 ```js
 export default {
   title: "The Venture Factory",
@@ -141,11 +176,10 @@ captures deterministic, and rendering is driven by the GSAP timeline — not
 `.glb`/`.gltf` models are prefetched and parsed before frame 0 (no mid-scene
 pop-in), and output is tone-mapped (ACES filmic by default) to sRGB for video.
 
-Note on the version: narova pins three.js **r149** — the last release with a
-real UMD `build/three.min.js` (r150+ ships only a deprecation stub) that the
-inline-script composition needs. The UMD GLTFLoader (removed at r148) is
-vendored into the tool. Newer releases (r155+) add AgX/Neutral tone mapping and
-WebGPU but require ESM/import maps, a future migration.
+Note on the version: narova pins three.js **r185** — shipped as a vendored
+global script (`vendor/three/three.global.js`) that exposes `window.THREE`.
+GLTF loading uses the vendored GLTFLoader. All rendering dependencies are
+local; no CDN is needed at render time.
 
 ### `scene.three` — explicit Three.js
 
@@ -227,8 +261,9 @@ Add `{ type: "particles", count: 500, spread: [8, 4, 8], color: "#ffaa44", size:
 to `objects`. Particles use additive blending and auto-rotate.
 
 Notes:
-- Three.js is downloaded once to `out/hf-*/assets/` at compose time (no CDN
-  dependency at render); the GLTFLoader ships vendored in the tool.
+- Three.js (r185) and GSAP (3.14.2) are vendored in the tool (`vendor/three/`,
+  `vendor/gsap/`) and copied to `out/hf-*/assets/` at compose time. Rendering
+  and preview have zero CDN dependencies. The GLTFLoader ships vendored too.
 - `.glb`/`.gltf` models are copied from the project, prefetched, and parsed
   before frame 0 so they never pop in mid-scene.
 - 2D `body` HTML overlays the 3D canvas, so mix text/captions over 3D freely.
@@ -299,8 +334,9 @@ Notes:
   picks the frame size when `size` is unset and gives `check` a target
   duration band — it warns when the estimated narration falls outside it
   (`x` only warns above 140 s). A warning, never an error.
-- **Two hosts**: voices trading lines — question, answer, handoff — sound much
-  better than one narrator. Give each a different `color`; the active caption
+- **Casting is a creative choice.** The number and style of voices follows
+  the concept. One narrator, two hosts, a panel, or silence — match the
+  cast to the work. Give each active voice a `color`; the active caption
   word takes that color.
 - **Voices**: piper uses ONNX voice names (`en_US-ryan-high`). xtts has 58
   named speakers (`Damien Black`). qwen has 9 (`Ryan`, `Serena`).
@@ -419,8 +455,12 @@ can make HyperFrames fetch additional font families.
 
 ## Built-in scene layouts
 
-Don't center a title on every scene — that is the template look. Mix these
-(videography judgment: `references/prompt-to-video.md` §Videography):
+These are tools, not templates. Use them when they serve the concept; build
+custom layouts when the video needs an original visual language. A video
+where every scene is a centered title card is one video, re-skinned.
+
+Mix these deliberately (videography judgment: `references/prompt-to-video.md`
+§Videography):
 
 - **Title/closing**: `.s-title` + `.display` + `.lede`; `.s-close` +
   `.close-line` + `.close-tags` + `.close-sign`.
@@ -501,11 +541,11 @@ Omitting `chrome` keeps all three. `narova check` validates the keys.
 
 ## Writing scenes from a prompt
 
-- 5–10 scenes for a 60–90 second video. One idea per scene.
-- Short turns: 1–2 sentences. Alternate the speakers.
+- Scene count follows the concept. An explainer might use 5–10 scenes for a
+  60–90 second video; a slow meditative piece might use 2–3; a reel might use
+  one scene. One concept per scene.
+- Short turns: 1–2 sentences each. Alternate speakers when using multiple voices.
 - Put `data-cue` on the visual that matches each key turn, so the screen
   reacts while the point is spoken.
 - Fewer words on screen than words spoken — the captions already show the
   transcript word by word.
-- Use `var(--muted)` for small text, not `var(--faint)` — faint text fails
-  the contrast check.

@@ -6,37 +6,39 @@ const path = require('path');
 const { ensureDir } = require('./util');
 
 const CONFIG = `// narova project — see SPEC.md for the full scene API.
-// This scaffold is a starting point: replacing it wholesale is the normal flow.
+// This scaffold is a minimal starting point: replace everything.
+// Design your own visual language and structure from the brief.
 export default {
-  title: "My Reel",
+  title: "My Project",
   size: "16:9",                         // "16:9" | "1:1" | "9:16"
-  assets: "assets",                     // copied into out/hf/assets/
   voices: {
-    a: { backend: "piper", speaker: "en_US-ryan-high",        color: "#2ee6d6", label: "narrator · A" },
-    b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "narrator · B" },
+    a: { backend: "piper", speaker: "en_US-ryan-high", label: "Narrator" },
+    // Add or remove voices to match your concept. One voice works. Zero voices
+    // works for silent projects with explicit scene durations.
   },
-  theme: { accent: "#2ee6d6", bg: "#080d16" },   // token overrides (optional)
+  // theme is optional. Narova has a dark default palette; override any token:
+  //   theme: { accent: "#your-color", bg: "#your-bg", mode: "light" }
+  //   Available tokens: accent, accent-dim, bg, stage, panel, line, ink,
+  //   muted, faint, deep, halo, chip, capidle, onaccent, track, pink, gold,
+  //   green, red, amber, colw (content max-width). Add your own tokens too.
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58 },
   scenes: [
     {
-      id: "title",
+      id: "opening",
       vo: [
-        { who: "a", text: "This is narova. You write scenes as plain HTML plus data." },
-        { who: "b", text: "And it becomes a narrated, word-synced, kinetic explainer. Let's go." },
+        { who: "a", text: "This is a narova project. Design it from the brief." },
       ],
-      // Elements with data-cue="k" reveal when the voice reaches turn index k (0-based into vo).
       body: \`<div class="s-title">
-        <div class="eyebrow reveal">NAROVA</div>
-        <h1 class="display reveal">Scenes to <span class="grad">video</span></h1>
-        <p class="lede cue" data-cue="1">Word-synced captions. Reactive reveals. Two hosts by default — add more, use one, or go host-free.</p>
-        <div class="hairline reveal"></div>
+        <h1 class="display reveal">My Project</h1>
+        <p class="lede reveal">Write your story here.</p>
       </div>\`,
+      // Add transition, clip, walkthrough, elements, three, or visual.
     },
   ],
 };
 `;
 
-const README = `# My Reel
+const README = `# My Project
 
 A narova project. Edit \`reel.config.mjs\`, then:
 

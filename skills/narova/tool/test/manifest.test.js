@@ -600,3 +600,224 @@ test('no choreography leaves no choreography hash', () => {
   const { buildHashes } = require('../src/manifest');
   assert.equal(buildHashes(resolve(makeRaw()), os.tmpdir()).choreography, undefined);
 });
+
+// --- theme token preservation -----------------------------------------------
+
+test('custom theme tokens survive the manifest round-trip', () => {
+  const { configFromManifest } = require('../src/pipeline');
+  const raw = makeRaw({
+    theme: {
+      accent: '#ff0000', bg: '#111111', mode: 'dark',
+      stage: '#222222', deep: '#000033', halo: '#330066',
+      panel: '#333344', line: '#444455', ink: '#eeeeff',
+      muted: '#777788', faint: '#555566', gold: '#ffd700',
+      pink: '#ff69b4', green: '#00ff00', colw: '1180px',
+      chip: '#111122', capidle: '#888899', onaccent: '#000000',
+      track: 'rgba(255,255,255,.04)', 'accent-dim': '#cc0000',
+      red: '#ff4444', amber: '#ffaa00',
+      // arbitrary user-defined token
+      'brand-primary': '#0f172a', 'brand-muted': '#64748b',
+    },
+  });
+  const resolved = resolve(raw);
+  const tl = compile(resolved);
+  const round = configFromManifest(JSON.parse(JSON.stringify(tl)), resolved);
+
+  // Standard tokens
+  assert.equal(round.theme.accent, '#ff0000');
+  assert.equal(round.theme.bg, '#111111');
+  assert.equal(round.mode, 'dark');
+
+  // Custom tokens must survive
+  assert.equal(round.theme.stage, '#222222');
+  assert.equal(round.theme.deep, '#000033');
+  assert.equal(round.theme.halo, '#330066');
+  assert.equal(round.theme.panel, '#333344');
+  assert.equal(round.theme.line, '#444455');
+  assert.equal(round.theme.ink, '#eeeeff');
+  assert.equal(round.theme.muted, '#777788');
+  assert.equal(round.theme.faint, '#555566');
+  assert.equal(round.theme.gold, '#ffd700');
+  assert.equal(round.theme.pink, '#ff69b4');
+  assert.equal(round.theme.green, '#00ff00');
+  assert.equal(round.theme.colw, '1180px');
+  assert.equal(round.theme['accent-dim'], '#cc0000');
+  assert.equal(round.theme.chip, '#111122');
+  assert.equal(round.theme.capidle, '#888899');
+  assert.equal(round.theme.onaccent, '#000000');
+  assert.equal(round.theme.track, 'rgba(255,255,255,.04)');
+  assert.equal(round.theme.red, '#ff4444');
+  assert.equal(round.theme.amber, '#ffaa00');
+
+  // User-defined tokens survive
+  assert.equal(round.theme['brand-primary'], '#0f172a');
+  assert.equal(round.theme['brand-muted'], '#64748b');
+});
+
+test('custom theme tokens appear in the CSS output', () => {
+  const { composeCss } = require('../src/compose/css');
+  const theme = {
+    accent: '#ff0000', bg: '#111', stage: '#222', deep: '#333',
+    gold: '#ffd700', colw: '1180px', ink: '#eee', 'brand-primary': '#0f172a',
+  };
+  const css = composeCss(theme, {}, { w: 1280, h: 720 }, '', 'dark');
+  assert.ok(css.includes('--accent:#ff0000;'), 'accent token must appear in :root');
+  assert.ok(css.includes('--bg:#111;'), 'bg token must appear in :root');
+  assert.ok(css.includes('--stage:#222;'), 'custom stage token must appear in :root');
+  assert.ok(css.includes('--deep:#333;'), 'custom deep token must appear in :root');
+  assert.ok(css.includes('--gold:#ffd700;'), 'gold token must appear in :root');
+  assert.ok(css.includes('--colw:1180px;'), 'colw token must appear in :root');
+  assert.ok(css.includes('--brand-primary:#0f172a;'), 'brand-primary user token must appear in :root');
+  assert.ok(!css.includes('--mode:'), 'mode is not a color token');
+  assert.ok(!css.includes('--css:'), 'css file ref must not leak as a token');
+});
+
+// --- revision guarantee: audio fingerprint stability ------------------------
+
+const { audioFingerprint } = require('../src/audio-fingerprint');
+
+function baseConfig(overrides = {}) {
+  return {
+    title: 'R', size: '16:9',
+    voices: { a: { label: 'A', backend: 'piper', speaker: 'en_US-ryan-high' } },
+    theme: { accent: '#ff0000', bg: '#111111' },
+    scenes: [
+      { id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<p>Hi</p>' },
+    ],
+    ...overrides,
+  };
+}
+
+test('revision: visual-only edit (body change) does not change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.scenes[0].body = '<p>Different body</p>';
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'changing scene body must not invalidate audio fingerprint — visual-only edits avoid TTS');
+});
+
+test('revision: visual-only edit (theme change) does not change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.theme.accent = '#00ff00';
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'changing theme must not invalidate audio fingerprint — theme edits avoid TTS');
+});
+
+test('revision: visual-only edit (captions preset change) does not change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.captions.preset = 'slam';
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'changing captions preset must not invalidate audio fingerprint');
+});
+
+test('revision: visual-only edit (choreography change) does not change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.choreography = 'tl.set(".x", { opacity: 1 }, 2);';
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'adding choreography must not invalidate audio fingerprint');
+});
+
+test('revision: narration edit (text change) DOES change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.scenes[0].vo[0].text = 'Different text.';
+  assert.notEqual(audioFingerprint(a), audioFingerprint(b),
+    'changing narration text MUST invalidate audio fingerprint — text edits need re-synth');
+});
+
+test('revision: voice change (speaker swap) DOES change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.voices.a.speaker = 'en_US-amy-medium';
+  assert.notEqual(audioFingerprint(a), audioFingerprint(b),
+    'changing voice speaker MUST invalidate audio fingerprint');
+});
+
+test('revision: tempo change DOES change audio fingerprint', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.timing.tempo = 1.5;
+  assert.notEqual(audioFingerprint(a), audioFingerprint(b),
+    'changing tempo MUST invalidate audio fingerprint');
+});
+
+test('revision: adding bed audio does NOT change audio fingerprint (re-mix only)', () => {
+  const dir = os.tmpdir();
+  const bedFile = path.join(dir, 'bed.mp3');
+  fs.writeFileSync(bedFile, 'fake');
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig({ bed: { file: bedFile, volume: 0.2 } }));
+  try {
+    assert.equal(audioFingerprint(a), audioFingerprint(b),
+      'adding a bed must not invalidate audio fingerprint — bed/SFX are re-mixed on reuse path');
+  } finally {
+    try { fs.unlinkSync(bedFile); } catch {}
+  }
+});
+
+test('revision: adding SFX does NOT change audio fingerprint (re-mix only)', () => {
+  const dir = os.tmpdir();
+  const sfxFile = path.join(dir, 'bang.mp3');
+  fs.writeFileSync(sfxFile, 'fake');
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig({ sfx: [{ file: sfxFile, scene: 's1', at: 0.5  }] }));
+  try {
+    assert.equal(audioFingerprint(a), audioFingerprint(b),
+      'adding SFX must not invalidate audio fingerprint — SFX are re-mixed on reuse path');
+  } finally {
+    try { fs.unlinkSync(sfxFile); } catch {}
+  }
+});
+
+test('revision: identical configs produce identical audio fingerprints', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'identical configs must produce byte-identical audio fingerprints');
+  // Run twice — fingerprint must be stable across calls
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'audio fingerprint must be stable across repeated calls');
+});
+
+test('revision: scene count change DOES change audio fingerprint (structure change)', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig({
+    scenes: [
+      { id: 's1', vo: [{ who: 'a', text: 'Hello.' }], body: '<p>1</p>' },
+      { id: 's2', vo: [{ who: 'a', text: 'World.' }], body: '<p>2</p>' },
+    ],
+  }));
+  assert.notEqual(audioFingerprint(a), audioFingerprint(b),
+    'adding a scene MUST change the audio fingerprint (more turns to synthesize)');
+});
+
+test('revision: synthesisText change DOES change audio fingerprint (different TTS input)', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.scenes[0].vo[0].synthesisText = '[whispering] Hello world.';
+  assert.notEqual(audioFingerprint(a), audioFingerprint(b),
+    'changing synthesisText MUST invalidate audio fingerprint — TTS receives different input');
+});
+
+test('revision: scene id rename does NOT change audio fingerprint (same turns, same order)', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig({ scenes: [
+    { id: 'renamed', vo: [{ who: 'a', text: 'Hello world.' }], body: '<p>Hi</p>' },
+  ] }));
+  // scene id changes don't affect audio fingerprint — only turn who/text matter
+  assert.equal(audioFingerprint(a), audioFingerprint(b),
+    'renaming a scene id while keeping turns identical must not change audio fingerprint');
+});
+
+test('revision: visual-only edit (add scene with same vo text) SHOULD change fingerprint (new turn added)', () => {
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig({ scenes: [
+    { id: 's1', vo: [{ who: 'a', text: 'Hello world.' }], body: '<p>Hi</p>' },
+    { id: 's2', vo: [{ who: 'a', text: 'Hello world.' }], body: '<p>Extra scene</p>' },
+  ] }));
+  assert.notEqual(audioFingerprint(a), audioFingerprint(b),
+    'adding a scene with the same text still changes fingerprint — additional turn to synthesize');
+});

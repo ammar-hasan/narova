@@ -155,3 +155,46 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   `claims.md`, but a one-sided narrative built from sourced claims passes
   clean. For contested topics, ledger the major perspectives and re-read the
   script for framing before synth (`references/url-to-source.md` §3).
+
+## Revision guarantees
+
+Narova's contract: a revision changes only what the user asked for.
+
+| Edit type | What rebuilds | `--reuse` behavior |
+|---|---|---|
+| Scene body HTML | Compose + render only | Audio replayed verbatim |
+| Theme tokens / theme.css | Compose + render only | Audio replayed verbatim |
+| Captions preset / emphasis | Compose + render only | Audio replayed verbatim |
+| Choreography | Compose + render only | Audio replayed verbatim |
+| Chrome (topbar/counter/progress) | Compose + render only | Audio replayed verbatim |
+| Transition style | Compose + render only | Audio replayed verbatim |
+| Bed / SFX | Re-mix + compose + render | Audio replayed, bed/SFX re-mixed |
+| Voiceover text | Full re-synth | Sentence cache re-synthesizes only changed sentences |
+| Voice speaker/backend/gainDb | Re-synth affected voice | Other voices replayed from cache |
+| Tempo / timing gaps | Re-synth all sentences | All sentences re-processed |
+| Scene added/removed/renamed | Full rebuild | Structure change invalidates timings |
+| Walkthrough capture stale | Re-capture + compose + render | Audio replayed |
+| Release restore | Full synth | Sentence cache serves identical audio, fast rebuild |
+
+The fingerprint (`out/.audio-fingerprint`) determines whether audio can be
+replayed. Visual-only edits don't change it. Text edits do.
+
+## Resolved issues (version 0.17.0+)
+
+- **`data-grow` / `data-mark highlight` transformOrigin**: Previously, these
+  animators included `transformOrigin` inside GSAP tweens, which could break
+  the sub-composition timeline under hyperframes@0.7.64. Now transformOrigin
+  is pre-seeded via `tl.set()` before the tween — safe and functional.
+- **Theme token preservation**: Custom theme tokens (`stage`, `deep`, `halo`,
+  `colw`, user-defined tokens, etc.) now survive the manifest round-trip
+  through all pipeline stages. Previously only `accent` and `bg` were preserved.
+- **3D cue timing**: Cues on 3D animations (`{ at: { cue: N, offset } }`)
+  now resolve to measured turn start times after synthesis. Previously used
+  `cue * 2` approximation.
+- **GSAP vendored locally**: No CDN dependency at render time. GSAP 3.14.2
+  ships in `vendor/gsap/gsap.min.js`.
+- **Particle randomness is seeded**: Same project + scene + object produces
+  identical particle layouts across builds.
+- **Unsupported semantic actions fail validation**: `draw`, `speak`, `react`,
+  `follow`, `transform` now produce clear validation errors instead of
+  silently compiling to nothing.
