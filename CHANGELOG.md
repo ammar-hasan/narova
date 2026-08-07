@@ -72,6 +72,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **`references/gotchas.md`** — added revision guarantee matrix and resolved
   issues section documenting all 6 fixes.
 
+## [0.19.0] - 2026-08-06
+
 ### Changed
 
 - **Three.js upgraded from r149 UMD to r185 ESM** — the old UMD build was
