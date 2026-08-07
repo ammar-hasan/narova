@@ -51,7 +51,34 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.24.0</span>
+        <span class="rel-version" data-narova-version>0.25.0</span>
+        <span class="rel-date">2026-08-07</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Per-scene HyperFrames render cache.</strong> HyperFrames now renders each scene as its own independent project — same per-scene caching architecture no-browser has had. Only changed scenes re-render; the rest reuse cached spans via ffmpeg concat. "Try five versions of scene 4" is cheap on both renderers.</li>
+          <li><strong>Named time markers.</strong> <code>config.markers = { reveal: 2.5 }</code> creates author-defined time anchors. Use <code>data-cue="marker:reveal"</code> or <code>at: { marker: "reveal" }</code>. Decouples timing from narration turns — music beats, SFX, and creative beats all share the same timeline.</li>
+          <li><strong>Creative branch system.</strong> <code>narova branch set|list|show &lt;name&gt;</code> adds rationale, status (<em>exploring</em> / <em>candidate</em> / <em>approved</em> / <em>rejected</em> / <em>archived</em>), and parentage to saved releases. Enables "bring back the rejected concept" workflows.</li>
+          <li><strong>LLM creativity benchmark framework.</strong> 10 adversarial briefs (music-only, no-captions, one-shot, slow-opening, anti-CTA, shader-piece, Urdu-typography, archival-collage, no-UI-metaphors) + diversity scorer. Fixture-based for deterministic CI; LLM-adapter substitution for real model evaluation.</li>
+          <li><strong><code>narova critique</code> command.</strong> Opt-in craft heuristics by profile: <code>social-short</code>, <code>explainer</code>, <code>presentation</code>, <code>accessibility</code>, or <code>all</code>. Structured advice; never fails the build.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Zero-style by default.</strong> <code>config.patterns</code> defaults to <code>false</code> — built-in layout classes are opt-in. No decorative background grid. <code>narova check</code> reports only correctness; craft advice moved to <code>narova critique</code>. A slow opening, blank final frame, or film with no CTA is no longer warned.</li>
+          <li><strong>Better capability error messages.</strong> No-browser and schema errors now point to available escape hatches instead of just rejecting.</li>
+          <li><strong>Skill docs rewritten</strong> for zero-style philosophy and the critique system.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>3D shadow/PBR hints no longer fail release builds — they're critique-only.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.24.0</span>
         <span class="rel-date">2026-08-07</span>
       </div>
       <div class="rel-body">

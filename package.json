@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.24.0",
+  "version": "0.25.0",
   "description": "Narration-first video with local voices, word-synced captions, and two free local renderers.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"

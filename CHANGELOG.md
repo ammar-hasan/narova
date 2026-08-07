@@ -4,44 +4,67 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
-## [0.24.0] - 2026-08-07
-
-### Changed
-
-- **Zero-style by default.** `config.patterns` now defaults to `false` —
-  built-in layout classes (`.s-title`, `.pane`, `.stat`, `.flow`, etc.) are
-  no longer injected into every project. Set `patterns: true` to opt into them
-  as a deliberate creative choice. The scaffold now describes Narova as
-  production infrastructure, not an implicit visual language.
-- **No decorative grid background.** The subtle background grid texture
-  (`#bg::before` with opacity 0.02) has been removed from the base stylesheet.
-  Add it back in `theme.css` when the concept calls for it.
-- **Craft checks are now opt-in critique.** Hook enforcement (lead-in silence,
-  visible text, saveable end-frame), platform duration bands, and 3D quality
-  hints (shadow receivers, PBR/envMap) have been moved from `narova check` to
-  a new `narova critique` command. `check` now reports only correctness and
-  reproducibility — craft advice is deliberate, not ambient. Profiles:
-  `social-short`, `explainer`, `presentation`, `accessibility`, or `all` (default).
-  Run `narova critique --profile social-short` for hook/CTA/saveable advice;
-  `narova critique --profile presentation` for 3D quality hints.
-  `narova check --critique` also runs critique after check.
-- **Better capability error messages.** No-browser scene-composition errors now
-  suggest the escape hatch (switch to HyperFrames or add a `visual` tree). Schema
-  errors for missing scene content now point to the creative ladder (elements →
-  three → threeModule → visual) instead of just rejecting.
+## [0.25.0] - 2026-08-07
 
 ### Added
 
-- **`narova critique` command.** Runs optional craft heuristics by profile.
-  Prints structured advice; never fails the build.
-- SKILL.md now documents the zero-style default and the critique system in its
-  creative-stance section and key-gotchas list.
+- **Per-scene HyperFrames render cache.** HyperFrames now renders each scene as
+  its own independent project with a scene-local timeline, trimmed audio, and
+  rebased captions — the same per-scene caching architecture no-browser has had.
+  Only scenes whose content hash changed re-render; the rest reuse cached spans
+  via ffmpeg concat + full-audio mux. "Try five versions of scene 4" is now
+  cheap on both renderers. Whole-video fallback on any cache failure.
+- **Named time markers.** `config.markers = { reveal: 2.5, zoom: 5.0 }` creates
+  author-defined time anchors on the project timeline. Resolve them as
+  `data-cue="marker:reveal"` in HTML or `at: { marker: "reveal" }` in 3D/animation
+  specs. Decouples timing from narration turns — music beats, SFX anchors,
+  walkthrough actions, and explicit creative beats all resolve on the same
+  deterministic timeline. `check` lints unresolved marker references.
+- **Creative branch system.** `narova branch set|list|show <name>` adds
+  rationale, status (exploring/candidate/approved/rejected/archived), and
+  parentage metadata to saved releases. Enables "bring back the rejected surreal
+  concept" and cross-branch comparison workflows.
+- **LLM creativity benchmark framework.** 10 adversarial test briefs (music-only,
+  no-captions, one-continuous-shot, slow-opening, empty-final-frame,
+  anti-CTA-brand, shader-piece, Urdu-typography, archival-collage,
+  no-UI-metaphors) plus a diversity scorer that measures palette uniqueness,
+  scene-count spread, caption-preset diversity, layout-class independence,
+  escape-hatch usage, hook/CTA convergence, and chrome/patterns reliance.
+  Fixture-based for deterministic CI; LLM-adapter substitution contract for
+  real model evaluation.
+- **`narova critique` command.** Runs optional craft heuristics by profile
+  (`social-short`, `explainer`, `presentation`, `accessibility`, `all`). Prints
+  structured advice; never fails the build. `narova check --critique` also runs
+  critique after check.
+
+### Changed
+
+- **Zero-style by default.** `config.patterns` now defaults to `false` — built-in
+  layout classes (`.s-title`, `.pane`, `.stat`, `.flow`, `.verdicts`, etc.) are
+  no longer injected into every project. Set `patterns: true` to opt into them
+  as a deliberate creative choice. The scaffold now describes Narova as
+  production infrastructure, not an implicit visual language.
+- **No decorative grid background.** The subtle background grid (`#bg::before`
+  with `opacity: 0.02`) has been removed from the base stylesheet.
+- **Craft checks moved from `check` to `critique`.** Hook enforcement (lead-in
+  silence, visible text, saveable end-frame), platform duration bands, and 3D
+  quality hints (shadow receivers, PBR/envMap) are now opt-in craft advice under
+  `narova critique`. `narova check` reports only correctness and reproducibility.
+  A slow opening, a blank final frame, or a film with no CTA is no longer warned.
+- **Better capability error messages.** No-browser scene-composition errors now
+  suggest the escape hatch (switch to HyperFrames or add a `visual` tree). Schema
+  errors for missing scene content now point to the creative ladder (elements →
+  three → threeModule → visual).
+- **SKILL.md, prompt-to-video.md, scene-script.md** all updated to reflect the
+  zero-style default, the critique system, and reduced prescriptive grammar.
 
 ### Fixed
 
 - `releaseChecks()` no longer fails release builds on 3D shadow/PBR aesthetic
-  hints — those are now critique-only.
+  hints — those are critique-only.
 - All 503 tests pass.
+
+## [0.24.0] - 2026-08-07
 
 ## [0.23.0] - 2026-08-07
 
