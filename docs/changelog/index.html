@@ -52,6 +52,39 @@
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
         <span class="rel-version" data-narova-version>0.20.0</span>
+        <span class="rel-date">2026-08-07</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><strong>Theme token preservation</strong> — custom theme tokens (stage, deep, halo, colw, user-defined) now survive the full manifest round-trip. Previously only accent and bg were preserved.</li>
+          <li><strong>Measured cue timing for 3D</strong> — <code>{ at: { cue: N } }</code> now resolves to actual measured turn start times from timings.json, not <code>cue * 2</code>.</li>
+          <li><strong>Semantic action validation</strong> — <code>draw</code>/<code>speak</code>/<code>react</code>/<code>follow</code>/<code>transform</code> now fail validation with clear errors. Supported: appear, disappear, move, rotate, scale, orbit, revolve.</li>
+          <li><strong>Deterministic particle randomness</strong> — mulberry32 seeded PRNG replaces <code>Math.random()</code> in particle generation. Same scene + object identity → identical layouts across builds.</li>
+          <li><strong>data-grow / data-mark highlight</strong> — transformOrigin is now pre-seeded via <code>tl.set()</code> before tween, avoiding the HyperFrames sub-composition timeline breakage.</li>
+          <li><strong>GSAP vendored locally</strong> — GSAP 3.14.2 ships in <code>vendor/gsap/</code>. Generated compositions have zero CDN dependencies at render time.</li>
+          <li><strong>Release restore + --reuse</strong> — releases now save fingerprint and timings so <code>--reuse</code> works after restore.</li>
+          <li><strong>Version consistency</strong> — all 7 version sources (root pkg, tool pkg, SKILL.md, README, SPEC.md, CLI, docs) now fail CI when they drift.</li>
+        </ul>
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Creative modularity</strong> — 6 file-reference types per scene (bodyFile, cssFile, choreographyFile, threeFile, elementsFile, visualFile). <code>config.imports</code> for reusable project-level modules. All file contents hashed for deterministic build invalidation.</li>
+          <li><strong>Expanded variant model</strong> — kind tags (hook, visual, narration, pacing, captions), sceneOverrides, theme/captions/timing overrides per variant. Backward-compatible.</li>
+          <li><strong>Concept branching</strong> — SKILL.md encourages sketching 2-3 distinct creative directions before committing to the final project.</li>
+          <li><strong>Creative-diversity eval suite</strong> — 10 radically different briefs, 11 convergence metrics, human review checklist. Run via <code>node skills/narova/tool/evals/creative-diversity-eval.js</code>.</li>
+          <li><strong>476 tests pass</strong> (470 unit + 6 eval) — revision guarantee tests, planner accuracy tests, version consistency CI test.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Skill restructured into hard invariants, optional craft heuristics, and creative mandate — encouraging custom HTML/CSS/SVG/Three.js over built-in templates.</li>
+          <li>Project scaffold is now neutral — one narrator, no default palette, replace-everything design.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.19.0</span>
         <span class="rel-date">2026-08-06</span>
       </div>
       <div class="rel-body">
@@ -82,7 +115,7 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.20.0</span>
+        <span class="rel-version">0.17.0</span>
         <span class="rel-date">2026-08-03</span>
       </div>
       <div class="rel-body">
