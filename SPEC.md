@@ -353,7 +353,7 @@ code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
 
-## Status: 0.25.0 shipped
+## Status: 0.26.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -408,13 +408,13 @@ dependencies), semantic action validation (unsupported actions fail clearly),
 `--reuse` audio integrity check, release save/restore includes fingerprint for
 reuse, creative-diversity eval suite (10 briefs), 470+ unit + 6 eval tests.
 
-Since 0.25.0: per-scene HyperFrames render cache (each scene its own HF project),
-named time markers (decouple timing from narration turns), creative branch
-system (rationale/status/parentage on releases), LLM creativity benchmark
-framework (10 adversarial briefs, fixture-based CI), `narova critique` command
-(opt-in craft profiles), zero-style defaults (`patterns: false`, no decorative
-grid), craft checks separated from correctness checks, better capability error
-messages with escape-hatch guidance.
+Since 0.26.0: neutral defaults (chrome off, monochrome palette, subtitle captions),
+skill instruction de-anchoring (orthogonal creative dimensions replace archetype
+menu, craft rules as optional critique), HF selective-render equivalence fixes
+(transitions, choreography, markers, chrome, overlays), complete branch
+snapshots (scene file refs + imports), bounded LRU cache retention,
+deterministic timeline ontology (narration + markers + silence as co-equal
+timing sources).
 
 ## Timeline intermediate representation
 

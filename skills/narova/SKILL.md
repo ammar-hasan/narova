@@ -27,7 +27,7 @@ compatibility: >
   Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.25.0"
+  version: "0.26.0"
 ---
 # narova — video from scene scripts
 

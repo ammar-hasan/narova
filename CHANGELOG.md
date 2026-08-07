@@ -4,6 +4,53 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.26.0] - 2026-08-07
+
+### Changed
+
+- **Chrome off by default.** Topbar, counter, and progress bar are no longer
+  rendered unless explicitly enabled (`chrome: true` or individual keys).
+  `chrome: false` is still valid but redundant — the absence of chrome is now
+  the baseline, not a deviation.
+- **Neutral default palette.** Base theme tokens are now monochrome gray
+  (`#101010` bg, `#e8e8e8` ink, `#888888` accent) instead of the
+  recognizable navy/teal identity. Light mode is similarly neutral. Narova
+  no longer has an accidental house style.
+- **Subtitles as default caption treatment.** `captions.preset` defaults to
+  `subtitle` — plain, non-animated text that matches the speech timing without
+  per-word color highlights or motion. SRT/VTT sidecars always export. Choose
+  `karaoke`, `slam`, `pop`, or `rise` explicitly when the concept calls for
+  word-by-word animation.
+- **Skill instructions de-anchored.** Concept branching now uses orthogonal
+  creative dimensions (temporal grammar, spatial metaphor, representation,
+  audio relationship, etc.) instead of a fixed menu of five archetypes.
+  Prescriptive craft rules ("one idea per video — no exceptions," mandatory
+  hook/CTA/saveable end-card) moved to optional `narova critique` profiles.
+  Product ontology shifted from "narration-first" to "deterministic timeline
+  with narration as one powerful timing source."
+
+### Fixed
+
+- **HyperFrames selective-render equivalence.** Per-scene renders now apply
+  transitions correctly (using `_firstScene` metadata instead of relying on
+  non-zero `start` values). Scene-local DATA includes named markers, series
+  badges, karaoke overlays, walkthrough shells, project choreography, scene
+  choreography/script files, and imported JS modules — every element emitted
+  by `composeDoc` has an equivalent in `composeSceneDoc`. Progress bar
+  correctly respects `chrome.progress` setting.
+- **Cache invalidation model.** `renderContextHash` now includes `markers`,
+  `includePatterns`, `series`, `platform`, captions config, theme tokens,
+  chrome state, tool version, renderer version, FPS, and quality. Scene hash
+  captures all per-scene author content. Invalidation is conservative —
+  changing a global input invalidates all spans.
+- **Branch snapshots complete.** Releases now preserve all scene file
+  references (`bodyFile`, `cssFile`, `choreographyFile`, `scriptFile`,
+  `threeFile`, `threeModule`, `elementsFile`, `visualFile`) and
+  `config.imports` entries alongside config, theme, assets, and ledgers.
+- **Bounded cache retention.** Scene cache now uses LRU pruning (500 MB /
+  100 spans) instead of aggressive deletion of all non-current entries.
+  Returning to a recently explored visual treatment is often free.
+
 ## [0.25.0] - 2026-08-07
 
 ### Added
