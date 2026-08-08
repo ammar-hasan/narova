@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.27.0",
+  "version": "0.28.0",
   "description": "Deterministic scene-scripted video with local voices, word-synced captions, and two free local renderers. Narration is optional.",
   "bin": {
     "narova": "skills/narova/tool/bin/narova.js"

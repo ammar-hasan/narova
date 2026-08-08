@@ -141,7 +141,7 @@ function compile(config, opts = {}) {
   const { title, size, renderer = 'hyperframes', voices, theme = {}, mode = 'dark', chrome = {},
     themeCss = '', choreography = '', timing = {}, scenes, platform = null, bed = null, sfx = [],
     captions = {}, align = false, variants = [], variant = null, series = null,
-    walkthroughs = {}, projectDir = '.', includePatterns = false, markers = {} } = config;
+    walkthroughs = {}, projectDir = '.', includePatterns = false, safeLayout = false, markers = {} } = config;
 
 
   const assets = collectAssets(config, projectDir);
@@ -218,6 +218,7 @@ function compile(config, opts = {}) {
     series: series || null,
     variant: variant || null,
     includePatterns: includePatterns !== false,
+    safeLayout: safeLayout === true,
     markers: markers || {},
     // Import name → project-relative file. The render cache's selective-render
     // safety gate reads this to detect project-global JS imports (.js files are

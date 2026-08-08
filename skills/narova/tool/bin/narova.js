@@ -16,14 +16,16 @@ const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previe
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
-const { auditMotion, formatMotionAudit } = require('../src/motion-audit');
+const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = require('../src/motion-audit');
+const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
+const { hashFile } = require('../src/manifest');
 const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
 const { ingest } = require('../src/ingest');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
-const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus } = require('../src/releases');
+const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, branchDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
 const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
@@ -37,9 +39,9 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'verify-motion']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique']);
-const VALUE_FLAGS = new Set(['at', 'backend', 'config', 'duration', 'engine', 'fps', 'max-words', 'model', 'new-project', 'out', 'output', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'backend', 'config', 'duration', 'engine', 'fps', 'max-words', 'model', 'new-project', 'out', 'output', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -93,8 +95,37 @@ function overridesFrom(flags) {
 async function loadResolved(flags) {
   const projectDir = flags.project || '.';
   const { raw, dir } = await loadProjectConfig(projectDir, flags.config);
-  const config = resolveConfig(raw, overridesFrom(flags), dir);
-  return { config, projectDir: dir };
+  const out = path.resolve(flags.out || path.join(dir, 'out'));
+  let restoredOverrides = {};
+  const restoredOverridesFile = path.join(out, RESTORE_OVERRIDES);
+  if (fs.existsSync(restoredOverridesFile)) {
+    try {
+      const parsed = JSON.parse(fs.readFileSync(restoredOverridesFile, 'utf8'));
+      const allowed = new Set(['backend', 'size', 'platform', 'variant', 'renderer', 'tempo', 'voiceA', 'voiceB']);
+      restoredOverrides = Object.fromEntries(Object.entries(parsed).filter(([key]) => allowed.has(key)));
+    } catch { /* malformed restored overrides are ignored; schema still validates CLI input */ }
+  }
+  const effectiveOverrides = { ...restoredOverrides, ...overridesFrom(flags) };
+  const config = resolveConfig(raw, effectiveOverrides, dir);
+  const manifestFile = path.join(out, 'manifest.json');
+  const markerFile = path.join(out, RESTORE_MARKER);
+  if (fs.existsSync(markerFile) && fs.existsSync(manifestFile)) {
+    try {
+      const marker = JSON.parse(fs.readFileSync(markerFile, 'utf8'));
+      const restored = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
+      const legacySafeLayout = marker.legacySafeLayout === true || restored.safeLayout == null;
+      if (marker.manifestSha256 === hashFile(manifestFile) && legacySafeLayout) {
+        if (config._safeLayoutAuthored && config.safeLayout === false) {
+          config._retireLegacySafeLayout = true;
+          fs.rmSync(markerFile, { force: true });
+        } else {
+          config._legacySafeLayout = true;
+          if (!config._safeLayoutAuthored) config.safeLayout = true;
+        }
+      }
+    } catch { /* malformed or stale restore metadata cannot change layout */ }
+  }
+  return { config, projectDir: dir, effectiveOverrides };
 }
 
 const outDirOf = (flags, projectDir) =>
@@ -145,6 +176,20 @@ function projectSlug(config) {
   return String(config.title || 'narova').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '') || 'narova';
 }
 
+function proofContactSheets(reviewDir) {
+  const found = [];
+  function visit(dir) {
+    if (!fs.existsSync(dir)) return;
+    for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+      const full = path.join(dir, entry.name);
+      if (entry.isDirectory()) visit(full);
+      else if (/^contact-sheet\.jpe?g$/i.test(entry.name)) found.push(full);
+    }
+  }
+  visit(reviewDir);
+  return found.sort();
+}
+
 /* Print when each scene starts — the QA timeline for snapshots and review. */
 function printSceneTable(config, out) {
   const timings = JSON.parse(fs.readFileSync(path.join(out, 'timings.json'), 'utf8'));
@@ -183,6 +228,10 @@ Commands:
   release list         list all saved releases
   release restore <n>  restore a saved release to out/manifest.json
   release remove <n>   delete a saved release
+  branch save <name>   snapshot the current small proof as a candidate branch
+                           --rationale "why this direction may serve the brief"
+  branch set <name>    approve/reject/archive a proof branch with --status
+  branch list|show     compare saved proof directions and their rationale
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> selected renderer project + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
@@ -252,6 +301,8 @@ Options:
   --motion                 shots: capture start/middle/end of every scene
   --beats                  shots: capture arrival/resolved frames for every
                            narration sentence and both sides of named markers
+  --proof                  shots: fail when most sampled pilot frames are
+                           near-black or no visual evidence was rendered
   --verify-motion          build: fail on >=2s frozen or >=0.5s black segments
   --port N                 Studio port (default 3002)
   --detach                 keep Studio running and return its URL + pid
@@ -462,16 +513,75 @@ async function main() {
 
     case 'branch': {
       const sub = positionals[1] || 'list';
+      if (sub === 'save') {
+        const name = positionals[2];
+        const rationale = String(flags.rationale || '').trim();
+        if (!name || !rationale) {
+          console.error('usage: narova branch save <name> --rationale "why this small proof may serve the brief" [--status candidate|exploring] [--parent <name>]');
+          process.exit(1);
+        }
+        const status = validBranchStatus(flags.status || 'candidate');
+        const { config, projectDir, effectiveOverrides } = await loadResolved(flags);
+        const out = outDirOf(flags, projectDir);
+        const mp = path.join(out, 'manifest.json');
+        if (!fs.existsSync(mp)) {
+          console.error(`no manifest found in ${out} — run narova compile or compose for the small proof first`);
+          process.exit(1);
+        }
+        const proof = verifyProofReceipt(config, out);
+        if (!proof.ok) {
+          console.error(`${proof.reason} — rerun narova compose && narova shots --motion --proof before saving this branch`);
+          process.exit(1);
+        }
+        // Build the complete snapshot and external proof bundle under a unique
+        // stage name. Only a complete pair can replace an existing branch.
+        const stagedName = `branch-stage-${process.pid}-${Date.now()}`;
+        const expectedRevision = branchRevision(name);
+        let staged = null;
+        let published;
+        try {
+          staged = await saveRelease(mp, stagedName, { projectDir, resolvedOverrides: effectiveOverrides });
+          const currentProof = verifyProofReceipt(config, out);
+          if (!currentProof.ok) throw new Error(currentProof.reason);
+          const metadataDir = branchDir(staged.name);
+          fs.mkdirSync(metadataDir, { recursive: true });
+          const identity = projectIdentity(projectDir);
+          const bundle = writeProofBundle(out, currentProof, metadataDir, staged.dir);
+          const stagedBranch = saveBranch(staged.name, {
+            rationale,
+            status,
+            parent: flags.parent || undefined,
+            ...bundle,
+            snapshotManifestSha256: hashFile(path.join(staged.dir, 'manifest.json')),
+            projectIdentity: identity,
+          });
+          if (!verifyProofBundle(metadataDir, staged.dir, stagedBranch, identity)) {
+            throw new Error('staged proof bundle failed integrity verification');
+          }
+          const expectedStagedRevision = branchRevision(staged.name);
+          published = publishStagedBranch(staged.name, name, { expectedRevision, expectedStagedRevision });
+        } catch (error) {
+          if (staged) {
+            try { removeRelease(staged.name); } catch { /* already published or cleaned */ }
+          }
+          throw error;
+        }
+        const branch = readBranch(published.name);
+        console.log(`proof branch "${published.name}" saved: status=${branch.status} evidence=${branch.evidence.length} proof=${branch.proofIdentity} rationale="${branch.rationale}"`);
+        console.log('keep this branch small; compare 2–3 proofs, approve one, then expand only the winner');
+        return;
+      }
       if (sub === 'list') {
         const entries = listBranches();
         if (!entries.length) {
-          console.log('no branches saved yet — save a release first with narova release save <name>, then narova branch set <name>');
+          console.log('no branches saved yet — compose a small proof, then narova branch save <name> --rationale "..."');
         } else {
           for (const e of entries) {
             const status = e.branch ? `[${e.branch.status}]` : '[—]';
             const parent = e.branch && e.branch.parent ? ` ← ${e.branch.parent}` : '';
             console.log(`  ${status} ${e.name.padEnd(24)} ${parent} ${e.title || ''}`);
             if (e.branch && e.branch.rationale) console.log(`       "${e.branch.rationale}"`);
+            if (e.branch && e.branch.proofIdentity) console.log(`       proof identity: ${e.branch.proofIdentity}`);
           }
           console.log(`\n${entries.length} branch(es) in ${require('../src/releases').RELEASES_DIR}`);
         }
@@ -489,8 +599,7 @@ async function main() {
         } else {
           if (status) { setBranchStatus(name, status); branch.status = status; }
           if (rationale) {
-            branch.rationale = rationale;
-            fs.writeFileSync(path.join(require('../src/releases').releasePath(name), 'branch.json'), JSON.stringify(branch, null, 2));
+            branch = setBranchRationale(name, rationale);
           }
         }
         console.log(`branch "${name}": status=${branch.status}${branch.rationale ? ' rationale="' + branch.rationale + '"' : ''}`);
@@ -504,7 +613,7 @@ async function main() {
         console.log(JSON.stringify(branch, null, 2));
         return;
       }
-      console.error('usage: narova branch list|set|show [name]');
+      console.error('usage: narova branch save|list|set|show [name]');
       process.exit(1);
       return;
     }
@@ -559,6 +668,13 @@ async function main() {
         console.error('shots needs out/timings.json — run `narova synth` first');
         process.exit(1);
       }
+      if (flags.proof) {
+        // Invalidate any older successful proof before rendering. Recompile the
+        // current source into the manifest that a later branch snapshot saves.
+        clearProofReceipt(out);
+        writeStageInputs(config, out);
+        enrichTimeline(out);
+      }
       const data = composeData(config, JSON.parse(fs.readFileSync(timingsPath, 'utf8')));
       // One QA frame per scene, mid-scene by default; --at t1,t2 overrides.
       const reviewModes = [flags.at, flags.motion, flags.beats].filter(Boolean).length;
@@ -579,6 +695,21 @@ async function main() {
       }
       const rendered = shotsWithRenderer(config, out, times);
       console.log(`frames -> ${rendered.dir}  (${times.length} @ ${times.join(', ')})`);
+      if (flags.proof) {
+        const report = auditProofFrames(rendered.dir);
+        console.log(formatProofAudit(report));
+        if (!report.ok) {
+          process.exitCode = 1;
+        } else {
+          try {
+            writeProofReceipt(config, out, proofContactSheets(rendered.dir), report.frames.map(frame => frame.file));
+            console.log('proof receipt: pass — evidence is bound to the current config, manifest, timings, and frames');
+          } catch (error) {
+            console.error(`proof receipt: FAIL — ${error.message}`);
+            process.exitCode = 1;
+          }
+        }
+      }
       console.log('look at every frame — lint misses glyph bleed and chrome collisions; your eyes are the check');
       return;
     }

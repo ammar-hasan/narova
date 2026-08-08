@@ -39,7 +39,7 @@ test('no dark value is hardcoded outside token definitions', () => {
 
 test('accent glows derive from the accent token, never a hardcoded teal', () => {
   for (const mode of ['dark', 'light']) {
-    const css = composeCss({ accent: '#ff0000' }, voices, size, '', mode);
+    const css = composeCss({ accent: '#ff0000' }, voices, size, '', mode, true, true);
     assert.match(css, /rgba\(255,0,0,0\.12\)/, `${mode}: owner glow follows the accent`);
     assert.ok(!/rgba\(46,230,214/.test(css), `${mode}: no teal may survive an accent override`);
   }
@@ -59,11 +59,31 @@ test('theme.css is appended last so it can override the base', () => {
   assert.ok(css.trimEnd().endsWith('.x{color:red}'));
 });
 
-test('the canvas reserves the caption band; the column width is a token', () => {
-  const css = composeCss({}, voices, size);
-  assert.match(css, /\.canvas\{[^}]*padding-bottom:var\(--cap-pad,\s*clamp\(84px,15vh,170px\)\)/);
+test('layout patterns remain an explicit opt-in at the CSS assembly boundary', () => {
+  assert.doesNotMatch(composeCss({}, voices, size), /\.s-title\{/);
+  assert.match(composeCss({}, voices, size, '', 'dark', true, true), /\.s-title\{/);
+});
+
+test('zero-style canvas is full-frame with no centering, gutter, max-width, or caption reserve', () => {
+  const css = composeCss({}, voices, size, '', 'dark', true, false, false);
+  assert.match(css, /\.canvas,\.scenebody\{position:absolute;inset:0\}/);
+  assert.doesNotMatch(css, /\.canvas\{[^}]*padding-bottom:/);
+  assert.doesNotMatch(css, /\.canvas\{[^}]*justify-content:center/);
+  assert.doesNotMatch(css, /\.scenebody\{[^}]*max-width:/);
+  assert.doesNotMatch(css, /\.chrome\{[^}]*padding:/);
+});
+
+test('safeLayout explicitly restores centering, gutter, max-width, and caption reserve', () => {
+  const css = composeCss({ colw: '1180px' }, voices, size, '', 'dark', true, false, true);
+  assert.match(css, /--colw:1180px/);
+  assert.match(css, /\.chrome\{[^}]*padding:clamp\(16px,3\.1vw,32px\)/);
+  assert.match(css, /\.canvas\{[^}]*justify-content:center[^}]*padding-bottom:var\(--cap-pad,\s*clamp\(84px,15vh,170px\)\)/);
   assert.match(css, /\.scenebody\{[^}]*max-width:var\(--colw,1000px\)/);
-  assert.match(composeCss({ colw: '1180px' }, voices, size), /--colw:1180px/);
+});
+
+test('safeLayout does not reserve captions when visual captions are disabled', () => {
+  const css = composeCss({}, voices, size, '', 'dark', false, false, true);
+  assert.match(css, /\.canvas\{[^}]*padding-bottom:0\}/);
 });
 
 test('karaoke keeps the historical active-word look, scoped to its preset class', () => {

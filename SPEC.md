@@ -242,8 +242,10 @@ timeline tweens (opacity, y, scale); `data-grow`/`data-draw` are property
 tweens (scaleX, stroke-dashoffset); `data-count` is stepped `tl.set` on
 textContent. An animated SVG element carrying a `transform` attribute is
 wrapped in a fresh `<g>` at load and the tween targets the wrapper, so the
-attribute survives GSAP's CSS transform. The canvas reserves the caption
-band's height; the content column is `var(--colw, 1000px)`.
+attribute survives GSAP's CSS transform. The raw canvas and scene body fill the
+frame without centering, gutters, max-width, or caption reserve. Top-level
+`safeLayout: true` restores a centered `var(--colw, 1000px)` content column,
+responsive gutters, and caption reserve.
 
 Also in out/hf: the copied project `assets/`, `assets/narration.wav` (a copy
 of `out/audio/mix.wav` when a bed/SFX mix was made, else
@@ -353,7 +355,7 @@ code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
 
-## Status: 0.27.0 shipped
+## Status: 0.28.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -415,6 +417,26 @@ menu, craft rules as optional critique), HF selective-render equivalence fixes
 snapshots (scene file refs + imports), bounded LRU cache retention,
 deterministic timeline ontology (narration + markers + silence as co-equal
 timing sources).
+
+Since 0.28.0: both bundled renderers provide a genuinely full-frame raw path (no
+implicit centering, max-width, gutter, or caption reserve), with `safeLayout`
+as an independent opt-in; ambitious creation defaults to 2–3 small rationale-
+backed proof branches and one selected expansion; creative briefs are medium-
+neutral; `branch save` snapshots a candidate proof in one command; and
+`shots --proof` rejects pilots whose sampled visual evidence is predominantly
+near-black. Ambitious release validation requires 2–3 intact declared proof
+branches and one approved selection. Its durable, project-bound branch proof bundle retains and validates byte-exact resolved
+config, manifest, timings, audited frames, contact sheets, the originating
+project identity, a stable proof identity, and hashes for every restorable
+snapshot file. Declared branches must differ in both reviewed proof content and
+restorable snapshot content, so aliases, edited sources, added sources, or
+relabelled foreign evidence cannot satisfy divergence. The final brief records
+the selected branch's exact stable proof identity as expansion lineage, and
+restored snapshots automatically reapply proof-time CLI overrides. Snapshot and proof metadata publish under a per-branch lock and compare-and-swap as one staged pair, so a failed or concurrent
+overwrite leaves the prior branch intact, while cleanup starts only after the
+new pair commits. A live eight-pilot
+with/without-Narova experiment is documented in
+`docs/experiments/0.28-creativity-ab.md`.
 
 ## Timeline intermediate representation
 

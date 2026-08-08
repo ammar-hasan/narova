@@ -38,6 +38,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova renderers list` | list the bundled local `hyperframes` and `no-browser` renderer providers. | instant |
 | `narova shots --motion` | capture start/middle/end frames for every scene; WebGL scenes are isolated to avoid browser context limits. | browser snapshot pass |
 | `narova shots --beats` | capture arrival and resolved frames for every narration sentence, both sides of named markers, and motion coverage for silent scenes. Use this as the visual-production gate for internally directed long scenes. | browser snapshot pass |
+| `narova shots --motion --proof` | capture pilot coverage and fail when at least 75% of sampled frames are near-black or no frames render. This narrow visibility gate complements, but never replaces, direct creative review. | browser snapshot pass + local FFmpeg frame scan |
 | `narova build --verify-motion` | render, then fail when FFmpeg detects a ≥2s frozen or ≥0.5s black segment. | build + verification pass |
 | `narova build --release` | preflight strict source/creative checks, recheck measured duration before rendering, then fail on frozen or black encoded intervals. Use for final delivery. | build + release verification |
 | `narova renderers doctor <name>` | verify provider-local dependencies; no-browser explicitly reports that a browser is unnecessary. | instant |
@@ -46,6 +47,9 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova release list` | list all saved releases with size and date. | instant |
 | `narova release restore <name>` | copy a saved release back to `out/manifest.json`. | instant |
 | `narova release remove <name>` | delete a saved release. | instant |
+| `narova branch save <name> --rationale "…"` | require a current passing `shots --proof` receipt, then transactionally publish the editable snapshot plus a durable, project-bound proof bundle containing byte-hashed resolved config, manifest, timings, contact sheets, every audited frame, candidate status, rationale, stable semantic identities, and proof-time CLI overrides. Another project's same-named branch cannot satisfy the release gate. Ambitious release requires 2–3 content-distinct branches, one approved selection, and exact expansion lineage in the brief. Later added/edited snapshot files, timing, frame, receipt, or evidence changes invalidate selection; locked compare-and-swap replacement preserves the prior branch on failure or a concurrent stale save. | instant |
+| `narova branch set <name> --status approved|rejected|archived` | record the proof decision before expanding one selected branch. | instant |
+| `narova branch list|show` | compare saved proof directions, rationale, status, and parentage. | instant |
 
 `narova render` was removed in 0.3.0. Use `compose` or `build`.
 Walkthrough config, auth, semantic locator, security, timing, and layout details:

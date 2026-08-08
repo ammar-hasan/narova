@@ -138,7 +138,7 @@ Keep the fixes in the code so they never come back.
     body's own `url(#…)` / `href="#…"` / `for` / aria references
     (compose/html.js `namespaceIds`). Ids must be unique only within a scene;
     theme.css `#id` selectors silently stop matching, so `check` warns on them.
-30. **Fixed chrome + no auto-fit = manual collisions.** Tall scenes slid under
+30. **Fixed chrome + no auto-fit = manual collisions (pre-0.28 safe layout).** Tall scenes slid under
     the topbar/caption band while box-lint reported 0 issues. Fix: the canvas
     reserves the caption band height (`padding-bottom:clamp(84px,15vh,170px)`)
     and the column width is a token (`--colw`, default 1000px). There is still
@@ -267,6 +267,33 @@ Keep the fixes in the code so they never come back.
   the base plus selected/all variants before production begins. Because actual
   speech duration is unknowable until synthesis, it records a scene-topology-aware
   timing fingerprint and rechecks measured duration before compose/render.
+
+## Creative divergence needs evidence, not encouragement (0.28.0)
+
+- **Capability awareness is not conceptual diversity.** In an eight-pilot,
+  same-model A/B, both conditions used raw `threeModule` successfully, but all
+  music runs converged on violet/cyan tidal fields and all shader runs on a
+  central event horizon. Narova improved explicit caption compliance, not
+  imagination. A platform must operationalize divergence instead of merely
+  telling the model to be creative.
+- **Branch risky ideas, not finished productions.** Two or three 8–12 second
+  proofs expose the decisive representation/behavior question cheaply. Saving
+  each with rationale preserves rejected possibilities; expanding only the
+  winner prevents “exploration” from tripling production cost.
+- **Cinematic fields can anchor the answer.** Requiring camera, depth, and light
+  before the medium is chosen quietly tells the model that unusual means
+  cinematic 3D. Start with intended effect, evidence, representation, temporal
+  behavior, and medium; ask for camera or light only when they carry the idea.
+- **A successful render can still prove nothing.** Three of eight pilot contact
+  sheets were effectively near-black despite clean config, synth, compose, and
+  snapshot stages. A proof gate needs actual rendered-frame evidence.
+- **Proof identity includes source bytes and the absence of extras.** Hashing a
+  config is insufficient when mutable assets live outside it. Rehash source
+  assets when a proof is saved, bind the complete restorable snapshot, and
+  require the durable proof directory to match an exact file inventory.
+- **Raw means no invisible composition.** Removing pattern CSS is insufficient
+  if the wrapper still centers, constrains, gutters, and reserves captions.
+  Layout help is valuable only when its use is explicit.
 
 ## Render-path CSS compatibility (0.8.3)
 

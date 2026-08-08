@@ -183,11 +183,13 @@ test('external caption transcript must match the declared voiceover', () => {
   }, {}, project), /transcript text does not match scene voiceover/);
 });
 
-test('no-browser reserves one caption-safe band without shrinking the scene background', () => {
+test('no-browser keeps the raw frame unreserved and adds a caption band only with safeLayout', () => {
   const noBrowser = getRenderer('no-browser');
   const child = { type: 'rect', style: {} };
   const root = { type: 'stack', style: { direction: 'column' }, children: [child] };
   const project = { size: { w: 640, h: 360 }, timeline: { groups: [{ words: [{ w: 'caption' }] }] } };
+  assert.equal(noBrowser._internals.captionSafeInset(project), 0);
+  project.safeLayout = true;
   const reserve = noBrowser._internals.captionSafeInset(project);
   const frames = noBrowser._internals.layoutTree(root, 640, 360, { b: reserve });
   assert.deepEqual(frames.get(root), { x: 0, y: 0, w: 640, h: 360 });
@@ -286,6 +288,10 @@ test('no-browser provider renders a real browserless MP4 with local audio', { ti
   ], { encoding: 'utf8' });
   assert.equal(dimensions.status, 0, dimensions.stderr);
   assert.equal(dimensions.stdout.trim(), '320x180');
+  const proof = getRenderer('no-browser').shots(config, path.join(project, 'out'), [0.2, 0.8]);
+  assert.ok(fs.existsSync(path.join(proof.dir, 'contact-sheet.jpg')),
+    'browserless proof review must include a discoverable contact sheet');
+  assert.equal(fs.readdirSync(proof.dir).filter(file => file.endsWith('.png')).length, 2);
 });
 
 // --- canvas3d node type ---

@@ -66,6 +66,7 @@ export default {
     css: "theme.css",                    // extra CSS file (optional, path relative to config)
   },
   chrome: { topbar: true, counter: true, progress: true },  // or false to strip all page furniture
+  safeLayout: true,                    // optional centered max-width content + gutters + caption reserve
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   platform: "tiktok",                // optional: tiktok|reels|shorts|linkedin|x|youtube — picks the frame size
                                      // (when size is unset) and a target duration band for `check`
@@ -346,9 +347,10 @@ declarative config; `threeModule` is the raw-JS escape hatch.
 
 Using Three.js proves only that the scene is rendered in 3D; it does not make
 the result detailed or cinematic. Before authoring an ambitious film, turn the
-reference and creative direction into an explicit production brief. New
-projects scaffold this as `creative-brief.md`; keep it at `Status: draft` until
-establishing, close, and action pilot frames prove the direction:
+reference and creative direction into an explicit production brief. For
+ambitious 3D work, keep `creative-brief.md` at `Status: draft` until 2–3 small
+proof branches test the riskiest world, subject, material, action, or camera
+claims and one is selected:
 
 - silhouette and geometry density: hero forms, secondary props, and small-scale
   breakup rather than one primitive per idea;
@@ -457,11 +459,13 @@ compare the actual rendered frames directly with the approved pilot/reference.
   JSON-compatible, non-secret synthesis settings in `providerOptions`.
   Provider credentials stay in environment variables. Install, register, and
   configure it from its companion skill; Narova remains local-first.
-- **Styling**: the base look ships built in (background, top bar, captions,
-  progress bar) plus a menu of scene-layout classes (below). Add your own
-  classes in `theme.css`. Bodies are plain HTML with no scripts. Inline SVG,
-  small `data:` URIs, and files from project `assets/` are supported; remote
-  render-time files are not.
+- **Styling**: the default scene body owns the full frame with no implicit
+  centering, max-width, gutter, or caption reserve. Captions and optional chrome
+  overlay that canvas. Set `safeLayout: true` to opt into conservative content
+  geometry, and `patterns: true` for the separate layout-class menu below. Add
+  your own classes in `theme.css`. Bodies are plain HTML with no scripts. Inline
+  SVG, small `data:` URIs, and files from project `assets/` are supported;
+  remote render-time files are not.
 
 ## Motion
 
@@ -515,15 +519,17 @@ SVG notes:
   unique within a single scene, and style with classes — a `#id` selector in
   `theme.css` will not match after namespacing (`check` warns).
 
-## Layout: the safe area
+## Layout: raw canvas and opt-in safe area
 
-- Scenes center content in a fixed frame with a topbar above and the caption
-  band overlaid at the bottom. The canvas reserves the caption band's height,
-  but nothing auto-fits: **cap the height of tall visuals** (maps, big SVGs)
-  yourself — a full-bleed map can still reach the topbar. `narova shots` +
-  eyeballs is the verification step.
-- The content column defaults to 1000px wide. Wide infographics and maps can
-  widen it with a theme token: `theme: { colw: "1180px" }`.
+- By default `.canvas` and `.scenebody` are absolute and full-frame. There is no
+  content max-width, centering, outer gutter, or reserved caption band. Optional
+  captions and chrome overlay the same coordinate space. This is the raw path.
+- Set top-level `safeLayout: true` when conventional guardrails serve the work.
+  It restores centered flex layout, responsive outer gutters, a caption reserve,
+  and a 1000px content column. Widen that helper with
+  `theme: { colw: "1180px" }`.
+- `patterns: true` and `chrome: true` do not imply `safeLayout`; all three are
+  independent creative choices.
 - Box-based overlap lint misses glyphs that paint outside their box (big
   display type, map markers). Trust snapshot frames, not `0 layout issues`.
 - HyperFrames contrast lint may flag decorative glyphs (flag emblems, icons)
@@ -613,8 +619,7 @@ The user never writes CSS. You build the look from what they say. In order:
 3. **Fill in the rest.** Tokens: `bg, stage, panel, line, ink, muted, faint,
    accent, accent-dim, pink, gold, green, red, amber`, plus the
    chrome/support tokens `deep, halo, chip, capidle, onaccent, track` and
-   `colw` (content-column max-width, default `1000px` — widen for maps and
-   dense infographics).
+   `colw` (the opt-in safe-layout content max-width, default `1000px`).
    Typical mapping:
    main/brand color → `accent`; mood → `bg` and `stage`; extra brand colors →
    the `pink` / `gold` slots.

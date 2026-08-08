@@ -16,6 +16,9 @@ const path = require('path');
 const { PLATFORMS } = require('./util');
 const { captureStatus } = require('./walkthrough');
 const { timingsFingerprint } = require('./audio-fingerprint');
+const { hashFile } = require('./manifest');
+const { verifyProofBundle } = require('./proof-receipt');
+const { projectIdentity } = require('./releases');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -153,12 +156,21 @@ function needsCreativeBrief(config, opts = {}) {
 
 /* Release-mode checks that are too slow or pedantic for normal `check`. */
 function releaseChecks(config, errors, opts = {}) {
-  if (needsCreativeBrief(config, opts)) {
-    const brief = creativeBriefStatus(config);
-    if (!brief.exists) {
+  const requiresBrief = needsCreativeBrief(config, opts);
+  const brief = creativeBriefStatus(config, opts);
+  if (requiresBrief || brief.ambitious) {
+    if (requiresBrief && !brief.exists) {
       errors.push('creative: non-trivial release needs creative-brief.md with an approved pilot and observable rejection criteria');
     } else if (!brief.approved) {
-      errors.push('creative: creative-brief.md is not approved — prove the establishing, close, and action pilot frames before release');
+      errors.push('creative: creative-brief.md is not approved — prove the declared creative risks before release');
+    } else if (brief.ambitious && !brief.proofSet) {
+      errors.push('creative: ambitious brief needs 2–3 existing project-bound proof branches with rationale and rendered evidence before full release');
+    } else if (brief.ambitious && !brief.selectedProof) {
+      errors.push('creative: ambitious brief must select one approved branch from its declared proof set before full release');
+    } else if (brief.ambitious && !brief.expansionLineage) {
+      errors.push('creative: ambitious release must record the selected branch and exact proof identity it expanded from');
+    } else if (brief.ambitious && !brief.rejectionCriteria) {
+      errors.push('creative: ambitious brief needs observable, medium-specific rejection criteria before full release');
     }
   }
 
@@ -860,7 +872,70 @@ function creativeBriefStatus(config, opts = {}) {
   if (!fs.existsSync(briefPath)) return { exists: false, approved: false, path: briefPath };
   try {
     const text = fs.readFileSync(briefPath, 'utf8');
-    return { exists: true, approved: /^Status:\s*approved\s*$/im.test(text), path: briefPath };
+    const selected = text.match(/^Selected proof branch:\s*(.+?)\s*$/im);
+    const selectedName = selected && selected[1].trim();
+    const expandedFrom = text.match(/^Expanded from proof branch:\s*(.+?)\s*$/im);
+    const expandedFromName = expandedFrom && expandedFrom[1].trim();
+    const expandedIdentity = text.match(/^Expanded proof identity:\s*([a-f0-9]{64})\s*$/im);
+    const expandedProofIdentity = expandedIdentity && expandedIdentity[1].toLowerCase();
+    const proofSection = text.match(/^## Proof branches[^\n]*\n([\s\S]*?)(?=\n## |(?![\s\S]))/im);
+    const proofNames = proofSection ? [...proofSection[1].matchAll(/^\|\s*([^|\n]+?)\s*\|/gm)]
+      .map(match => match[1].trim())
+      .filter(name => name && !/^branch$/i.test(name) && !/^[-: ]+$/.test(name)) : [];
+    const distinctProofNames = [...new Set(proofNames)];
+    const rejection = text.match(/^## Rejection criteria[^\n]*\n([\s\S]*?)(?=\n## |(?![\s\S]))/im);
+    const rejectionText = rejection ? rejection[1].replace(/<!--[^]*?-->/g, '').trim() : '';
+    let selectedProof = false;
+    let expansionLineage = false;
+    let proofSet = false;
+    if (distinctProofNames.length || selectedName) {
+      try {
+        const branchStore = opts.branchStore || require('./releases');
+        const validProof = (name, requireApproved = false) => {
+          const branch = branchStore.readBranch(name);
+          const metadataDir = branchStore.branchDir ? branchStore.branchDir(name) : branchStore.releasePath(name);
+          const snapshotDir = branchStore.releasePath(name);
+          const snapshotManifest = path.join(snapshotDir, 'manifest.json');
+          const hasSnapshot = branch && typeof branch.snapshotManifestSha256 === 'string'
+            && branch.snapshotManifestSha256 && hashFile(snapshotManifest) === branch.snapshotManifestSha256;
+          const hasEvidence = branch && Array.isArray(branch.evidence) && branch.evidence.length > 0
+            && branch.evidence.every(ref => {
+            if (typeof ref !== 'string' || !ref.trim()) return false;
+            const candidate = path.resolve(metadataDir, ref);
+            const relative = path.relative(metadataDir, candidate);
+            const expected = branch.evidenceHashes && branch.evidenceHashes[ref];
+            return relative && relative !== '..' && !relative.startsWith('..' + path.sep)
+              && typeof expected === 'string' && hashFile(candidate) === expected;
+          });
+          return branch && (!requireApproved || branch.status === 'approved') && hasSnapshot
+            && String(branch.rationale || '').trim() && hasEvidence
+            && verifyProofBundle(metadataDir, snapshotDir, branch, projectIdentity(projectDir))
+            ? branch : null;
+        };
+        const proofs = distinctProofNames.map(name => validProof(name));
+        proofSet = distinctProofNames.length >= 2 && distinctProofNames.length <= 3
+          && proofs.every(Boolean)
+          && new Set(proofs.map(branch => branch.snapshotIdentity)).size === proofs.length
+          && new Set(proofs.map(branch => branch.proofIdentity)).size === proofs.length;
+        const selectedBranch = proofSet && selectedName && distinctProofNames.includes(selectedName)
+          ? validProof(selectedName, true) : null;
+        selectedProof = !!selectedBranch;
+        expansionLineage = !!(selectedBranch && expandedFromName === selectedName
+          && expandedProofIdentity === selectedBranch.proofIdentity);
+      } catch { /* a missing, malformed, or inaccessible branch is not approved proof */ }
+    }
+    return {
+      exists: true,
+      approved: /^Status:\s*approved\s*$/im.test(text),
+      ambitious: /^Ambition:\s*ambitious\s*$/im.test(text),
+      proofSet,
+      proofBranchNames: distinctProofNames,
+      selectedProof,
+      selectedProofName: selectedName || '',
+      expansionLineage,
+      rejectionCriteria: rejectionText.length >= 20,
+      path: briefPath,
+    };
   } catch {
     return { exists: true, approved: false, path: briefPath };
   }
@@ -881,7 +956,15 @@ function critique(config, opts = {}) {
       if (!brief.exists) {
         note('creative: non-trivial project has no creative-brief.md — define the visual contract, pilot gate, and rejection criteria before full production');
       } else if (!brief.approved) {
-        note('creative: creative-brief.md is still draft — approve it only after establishing, close, and action pilot frames meet the visual contract');
+        note('creative: creative-brief.md is still draft — approve it only after the selected proof meets the declared intent');
+      } else if (brief.ambitious && !brief.proofSet) {
+        note('creative: ambitious brief needs 2–3 intact project-bound proof branches with rationale before expansion');
+      } else if (brief.ambitious && !brief.selectedProof) {
+        note('creative: ambitious brief must select one approved branch from its declared proof set');
+      } else if (brief.ambitious && !brief.expansionLineage) {
+        note('creative: ambitious release must record the selected branch and exact proof identity it expanded from');
+      } else if (brief.ambitious && !brief.rejectionCriteria) {
+        note('creative: ambitious brief needs observable, medium-specific rejection criteria');
       }
     }
   }

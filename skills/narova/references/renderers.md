@@ -125,7 +125,7 @@ or `progress`. Each item needs numeric `from`, `to`, `duration`, optional
   browser server.
 - `narova build`, variants, custom narration, beds/SFX, captions, and export
   deliverables work through either renderer.
-- Both renderers reserve the lower caption-safe band for scene content. No-browser
+- Both renderers leave the raw visual frame unreserved. With `safeLayout: true`, no-browser
   keeps the root background and `scene.clip` full-frame while laying out root
   visual children above the karaoke overlay.
 

@@ -103,7 +103,7 @@ ${s._scriptFileContents}
       // scene body HTML and element references at authoring time.
     }
   }
-  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false);
+  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true);
   const composeConfig = { ...config, themeCss: mergedExtraCss, choreography: mergedChoreography };
   const html = composeDoc(composeConfig, size, data, css);
 
@@ -246,7 +246,7 @@ function composeSceneProject(config, outDir, sceneIdx) {
       }
     }
   }
-  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false);
+  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true);
   const sceneHtml = composeSceneDoc(config, sceneIdx, size, data, css);
 
   const slugTitle = slug(config.title || 'narova');

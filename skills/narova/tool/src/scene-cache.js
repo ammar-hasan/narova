@@ -82,6 +82,8 @@ function renderContextHash(manifest, opts = {}) {
     series: m.series,
     platform: (m.project && m.project.platform) || null,
     includePatterns: m.includePatterns,
+    // Missing means a pre-0.28 manifest with historical safe geometry.
+    safeLayout: m.safeLayout == null ? true : m.safeLayout,
     hashes: sharedHashes,
     quality: opts.quality || 'standard',
     fps: opts.fps || (m.format && m.format.fps) || 30,

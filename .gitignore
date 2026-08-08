@@ -43,5 +43,8 @@ frames/
 # Generated video projects (build output, not source) — never tracked.
 generated/
 
+# Local GitHub Pages/Jekyll dependency file (intentionally not shipped).
+docs/Gemfile
+
 # macOS
 .DS_Store

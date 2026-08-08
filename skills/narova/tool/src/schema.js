@@ -79,6 +79,18 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     } else includePatterns = raw.patterns;
   }
 
+  // safeLayout: opt into Narova's conservative content column, centering,
+  // gutters, and caption reserve. The default canvas is deliberately raw:
+  // scene authors own the entire frame and captions/chrome overlay it without
+  // silently changing their coordinate space.
+  let safeLayout = false;
+  const safeLayoutAuthored = raw.safeLayout != null;
+  if (raw.safeLayout != null) {
+    if (typeof raw.safeLayout !== 'boolean') {
+      errs.push('config.safeLayout: expected a boolean (true to add centering, gutters, max-width, and caption reserve)');
+    } else safeLayout = raw.safeLayout;
+  }
+
   // choreography is a FILE reference too — project timeline code, inlined into
   // the composition after the built-in animators (compose/html.js). Resolved
   // exactly like theme.css: local path, read here, no remote fetch introduced.
@@ -975,7 +987,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, imports, sceneFileRefs, includePatterns, markers };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

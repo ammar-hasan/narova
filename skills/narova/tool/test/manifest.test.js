@@ -598,6 +598,7 @@ test('all render-affecting escape hatches survive the manifest bridge', () => {
   const resolved = resolve(makeRaw({
     captions: false,
     patterns: false,
+    safeLayout: true,
     markers: { beat: 1.25 },
   }));
   resolved.imports = { shared: { file: 'shared.js', contents: 'window.shared = true;' } };
@@ -610,11 +611,23 @@ test('all render-affecting escape hatches survive the manifest bridge', () => {
   const round = configFromManifest(JSON.parse(JSON.stringify(tl)), resolved);
   assert.equal(round.captionsEnabled, false);
   assert.equal(round.includePatterns, false);
+  assert.equal(round.safeLayout, true);
   assert.deepEqual(round.markers, { beat: 1.25 });
   assert.deepEqual(round.imports, resolved.imports);
   for (const key of ['_choreographyFileContents', '_scriptFileContents', '_threeModuleContents', '_cssFileContents']) {
     assert.equal(round.scenes[0][key], resolved.scenes[0][key], `${key} survives`);
   }
+});
+
+test('pre-0.28 manifests retain historical safe geometry while new manifests stay raw', () => {
+  const { configFromManifest } = require('../src/pipeline');
+  const resolved = resolve(makeRaw());
+  const current = compile(resolved, { toolVersion: '0.28.0' });
+  assert.equal(current.safeLayout, false);
+  assert.equal(configFromManifest(current, resolved).safeLayout, false);
+  const legacy = JSON.parse(JSON.stringify(current));
+  delete legacy.safeLayout;
+  assert.equal(configFromManifest(legacy, resolved).safeLayout, true);
 });
 
 test('manifest is independently composable with modular scene and import contents', () => {

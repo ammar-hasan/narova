@@ -9,7 +9,7 @@ prompts, scripts, web pages, and real product walkthroughs into narrated,
 captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.27.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.28.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -25,9 +25,13 @@ captioned video. Rendered on your machine.
 - **Two voices, one conversation** — local-first neural TTS dialogue, with optional registered providers when a project needs them. Give each speaker a color; narova writes the banter and the timing.
 - **Karaoke captions** — every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.
 - **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
-- **Creative confidence before render cost** — non-trivial projects compare
-  directions, write a visual contract, and prove an establishing shot, close shot,
-  and action/reveal pilot before scaling to the full film.
+- **Creative confidence before render cost** — ambitious projects save 2–3
+  small, orthogonal proof branches with rationale, select one against explicit
+  rejection criteria, and expand only the winner—not three complete videos.
+- **A genuinely raw canvas** — zero-style scenes own the full frame with no
+  implicit centering, max-width, gutter, or caption reserve. Patterns, chrome,
+  and `safeLayout` are independent opt-ins; captions remain a default-on overlay
+  and can be disabled with `captions: false`.
 - **Beat-level visual QA** — deterministic snapshots cover the arrival and resolved
   state of every narration beat, both sides of named markers, and silent scenes.
 - **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
@@ -82,11 +86,13 @@ up to five images, and optionally capturing a browser screenshot — but
 interpretation, repository analysis, PDF reading, and content selection remain
 the agent's responsibility.
 
-Your agent uses Narova to compare creative directions, turn the chosen direction
-into an explicit visual contract, prove a small pilot, create the editable project,
-and show you beat-level snapshots plus a preview. You direct revisions in the same
-conversation; the release build refuses to start when a non-trivial project's
-creative brief is not approved.
+For ambitious work, your agent turns medium-neutral creative intent into 2–3
+small proof branches, renders their decisive states, records why each might work,
+and expands only the selected branch. You direct revisions in the same
+conversation; deterministic timelines, sentence and scene caching, and explicit
+branches keep bold exploration surgically editable. Proof bundles are bound to
+their originating project, so a same-named global branch cannot satisfy another
+project's final release gate.
 
 ## Direct CLI control
 
@@ -98,11 +104,14 @@ npm link            # optional: gives you the `narova` command
 narova doctor       # core tools + optional agent-browser walkthrough adapter
 
 narova init generated/myreel && cd generated/myreel
-# complete creative-brief.md and approve its pilot gate
-narova critique creative,cinematic
+# complete the medium-neutral creative brief; keep each direction to a small proof
+narova critique creative
 narova synth        # makes narration + word timings
 narova walkthrough capture   # product demos only: explicit, timed browser take
-narova compose && narova shots --beats  # inspect every narrative/marker beat
+narova compose && narova shots --motion --proof  # reject an invisible pilot
+narova branch save proof-a --rationale "why this direction may serve the brief"
+# repeat for proof-b/proof-c; approve + restore one; record its proof identity
+# in creative-brief.md, then expand only that config
 narova preview --detach   # direct the film in HyperFrames Studio
 narova build --reuse --release  # fail-before-render final gate → out/video.mp4
 ```
@@ -130,6 +139,7 @@ export default {
   title: "My Reel",
   renderer: "hyperframes",                    // default; or "no-browser"
   size: "16:9",                              // "16:9" | "1:1" | "9:16"
+  safeLayout: true,                          // optional centering/gutters/max-width/caption reserve
   assets: "assets",                          // copied into out/hf/assets/
   voices: {
     a: { backend: "piper", speaker: "en_US-ryan-high",         color: "#2ee6d6", label: "host · A" },
@@ -349,7 +359,7 @@ Useful flags: `--backend <built-in-or-registered-provider>`,
 
 ```
 creative-brief.md
-   │  compare directions → visual contract → three-shot pilot approval
+   │  2–3 small proof branches → rendered evidence → select one
    ▼
 reel.config.mjs
    │

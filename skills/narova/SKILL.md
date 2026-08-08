@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.27.0"
+  version: "0.28.0"
 ---
 # narova — video from scene scripts
 
@@ -40,6 +40,8 @@ no implicit visual identity:
 
 - No topbar, counter, or progress bar (chrome is off by default; set `chrome: true`)
 - No built-in layout classes (patterns is off by default; set `patterns: true`)
+- No implicit max-width, centering, gutter, or caption reserve. Scene bodies own
+  the full frame; set `safeLayout: true` only when those guardrails help.
 - No decorative grid background
 - No recognizable navy/teal palette (default tokens are monochrome gray)
 - Captions default to plain subtitle treatment (not karaoke; pick karaoke/slam/
@@ -82,11 +84,18 @@ External TTS providers are optional registered companion skills — see
 
 ## Workflow: prompt → video
 
-0. **Creative contract**: for non-trivial, reference-driven, or ambitious 3D
-   work, fill `creative-brief.md`, branch 2–3 genuinely different directions,
-   and prove the chosen direction with establishing, close, and action pilot
-   frames. Set `Status: approved` only when the pilot meets the written visual
-   contract. See `references/prompt-to-video.md` §Creative confidence loop.
+0. **Creative contract**: for difficult, reference-driven, or ambitious work,
+   fill `creative-brief.md` around creative intent rather than a default film
+   grammar. Build 2–3 *small* visual proofs, save each with `branch save <name>
+   --rationale "..."`, compare their rendered evidence, approve one, and expand
+   only that winner. Restore the winner (its saved CLI overrides are reapplied),
+   then copy the branch and exact `proofIdentity` from `branch show <name>` into
+   the brief's `Expanded from proof branch` and `Expanded proof identity` fields.
+   Proof selection is project-bound; never reuse another
+   project's same-named branch. Never build three complete videos. Camera, depth, lighting,
+   dialogue, and typography fields are conditional on the chosen medium. Set
+   `Status: approved` only when the selected proof meets the written intent and
+   rejection criteria. See `references/prompt-to-video.md` §Creative confidence loop.
 1. **Intake** — `references/prompt-to-video.md` §Intake.
 2. `doctor` — check the machine. Fix with `references/environment.md`.
 2. `init generated/<slug>` + write `reel.config.mjs`. Format: `references/scene-script.md`.
@@ -106,7 +115,9 @@ External TTS providers are optional registered companion skills — see
 ## Key gotchas
 
 - **No implicit visual style.** Narova is zero-style by default — no layout
-  patterns, no decorative grid, no implicit dark/teal palette. Set
+  patterns, no decorative grid, no implicit dark/teal palette, and no centered
+  max-width safe area or caption reserve. Set `safeLayout: true` to opt into
+  those layout guardrails. Set
   `patterns: true` to include Narova's built-in layout classes when they
   serve your concept. Every aesthetic choice is yours to make.
 - **No looping CSS in theme.css.** The renderer jumps between frames:

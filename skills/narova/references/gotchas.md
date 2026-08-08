@@ -44,12 +44,14 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   snapshot frame, not just `npx hyperframes check`.
 - **Lint misses real collisions; frames don't.** Tall content can slide under
   the topbar or the caption band while `hyperframes check` reports 0 layout
-  issues. The canvas reserves the caption band's height, but there is no
-  auto-fit: cap the height of tall maps/SVGs yourself and verify with
-  `narova shots`. Contrast lint can also false-positive on decorative glyphs
-  (flag emblems, icons) — warnings, not errors; judge by eye.
-- **Wide visuals: widen the column, don't fight it.** `.scenebody` defaults
-  to 1000px; set `theme: { colw: "1180px" }` for maps/infographics.
+  issues. The raw canvas deliberately reserves nothing: optional chrome and
+  captions overlay it. Author that relationship explicitly, or opt into
+  `safeLayout: true`, then verify with `narova shots`. Contrast lint can also
+  false-positive on decorative glyphs (flag emblems, icons) — warnings, not
+  errors; judge by eye.
+- **Safe layout is opt-in.** Raw `.scenebody` fills the frame. Only
+  `safeLayout: true` adds centering, gutters, caption reserve, and a 1000px
+  column; when using it, widen with `theme: { colw: "1180px" }`.
 - **Target duration is tuned before synth, not after.** `narova check`
   estimates narration length from word count + tempo (≈170 wpm × tempo plus
   fixed gaps, calibrated against real piper builds). Adjust words and
@@ -149,6 +151,16 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   `out/hf/snapshots/review/`. Manual equivalent inside `out/hf`:
   `npx hyperframes snapshot --at <t1,t2,…> -o snapshots/review` — `-o` takes
   a **directory**, not a file path.
+- **A technically successful pilot can still be invisible.** Use `narova shots
+  --motion --proof` while proving a direction. It fails when most sampled
+  frames are near-black or no frame exists. Deliberate black frames are valid;
+  the threshold allows a minority, and direct contact-sheet judgment remains
+  authoritative. A passing run binds a receipt to the current config, manifest,
+  timings, audited frames, and contact sheet; any later edit requires new proof
+  shots before `branch save`. The branch keeps the full receipt-bound proof set
+  outside the authored snapshot namespace and validates it again at release.
+  Restore the approved proof before expansion and record its exact
+  `proofIdentity` in the brief; proof-time CLI overrides reapply automatically.
 - **Agent shells don't persist variables.** Spell out
   `node <skill-dir>/tool/bin/narova.js` in every call — a `NAROVA=...`
   assignment from an earlier call is gone (exit 127).
@@ -168,6 +180,7 @@ Narova's contract: a revision changes only what the user asked for.
 | Captions preset / emphasis | Compose + render only | Audio replayed verbatim |
 | Choreography | Compose + render only | Audio replayed verbatim |
 | Chrome (topbar/counter/progress) | Compose + render only | Audio replayed verbatim |
+| `safeLayout` | Compose + render only | Audio replayed verbatim |
 | Transition style | Compose + render only | Audio replayed verbatim |
 | Bed / SFX | Re-mix + compose + render | Audio replayed, bed/SFX re-mixed |
 | Voiceover text | Full re-synth | Sentence cache re-synthesizes only changed sentences |

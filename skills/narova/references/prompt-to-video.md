@@ -40,11 +40,13 @@ is your call. If you do ask: one short batch of at most 2–3 questions, each
 with a default you'd pick ("I'll go with X unless you say otherwise"). Then
 never ask again unless the user changes direction.
 
-## Concept branching: try directions before committing
+## Concept branching: prove directions before committing
 
-Before writing the final project, briefly sketch 2–3 meaningfully different
-creative directions. Vary multiple orthogonal dimensions, not just palette.
-The goal: surface the strongest approach before investing in scene-level detail.
+Before writing the final project, form 2–3 meaningfully different creative
+directions. Vary multiple orthogonal dimensions, not just palette. For an
+ambitious or difficult brief, turn each direction into only the smallest visual
+proof that can settle its risky claim, save it as a branch with rationale, then
+choose. Do not generate three complete videos.
 
 Vary at least two of these dimensions between concepts:
 
@@ -66,8 +68,27 @@ the most obvious format archetype. Ask internally: "If the obvious explainer/
 reel structure were forbidden, what would still communicate this brilliantly?"
 The concept must still serve the brief.
 
-Record the rationale for each direction and why you picked the final one.
-This enables future "try the rejected surreal concept" requests.
+Save each proof with its rationale:
+
+```bash
+narova synth && narova compose
+narova shots --motion --proof
+narova branch save proof-a --rationale "the procedural field makes accumulation tangible"
+# Repeat for proof-b/proof-c after replacing only the small pilot config.
+narova branch set proof-b --status approved
+narova branch set proof-a --status rejected
+narova branch show proof-b  # copy proofIdentity into creative-brief.md
+narova release restore proof-b --overwrite
+# Expand only now; record proof-b + its exact identity in the two lineage fields.
+```
+
+`shots --proof` writes an identity receipt only after the visibility audit
+passes. `branch save` rejects stale frames or any config, manifest, timing, or
+evidence change made afterward; rerun the small proof instead of attaching old
+evidence to new source.
+
+Record why the selected direction won. This enables future "try the rejected
+surreal concept" requests without paying for three full productions.
 
 Do not choose a direction merely because it is cheaper, faster, or fixes the
 last version's most obvious defect. Select against the user's ambition and the
@@ -82,22 +103,25 @@ Use this loop for non-trivial, reference-driven, expensive, or ambitious 3D
 work. It lets the agent be bold without gambling a full production on an
 unproven visual assumption.
 
-1. **Diverge** — form 2–3 structurally different concepts.
-2. **Specify** — fill the project's `creative-brief.md`: emotional promise,
-   production ambition, world/subject design, camera grammar, signature move,
-   beat map, and observable rejection criteria.
-3. **Prove** — make a small pilot in the final visual language: at minimum one
-   establishing frame, one close frame, and one action frame (or an equivalent
-   8–12 second sequence).
-4. **Commit** — compare the pilot directly with the reference or written visual
-   contract. Rebuild weak directions now. Set `Status: approved` only when the
-   pilot passes.
-5. **Expand** — build the complete film from the approved world, subjects,
-   materials, lighting, and camera rules. Reuse coherent visual systems; do not
-   drift into a different style scene by scene.
-6. **Reject** — run beat-level QA and actively fail frames for hidden action,
-   generic or empty staging, repeated silhouettes, weak depth, flat light,
-   broken continuity, or reference mismatch.
+1. **Diverge** — form 2–3 structurally different hypotheses.
+2. **Specify** — fill `creative-brief.md`: intended effect, unusual hypothesis,
+   evidence, constraints, representation, temporal behavior, medium choice,
+   and observable rejection criteria. Add camera, depth, light, performance,
+   or interaction fields only when the chosen medium actually uses them.
+3. **Prove separately** — give each direction only the smallest decisive proof:
+   a representative state plus the risky transition/detail/interaction, or an
+   equivalent 8–12 second sequence. Save each as a branch with rationale.
+4. **Commit** — compare the 2–3 rendered proofs directly with the reference or
+   written intent. Approve one branch; reject or archive the others. Set
+   `Status: approved` only when the selected proof passes.
+5. **Expand once** — restore the approved branch, record its exact proof identity
+   in the brief's expansion-lineage fields, then build the complete work from
+   it. Saved CLI overrides such as `--variant` are reapplied automatically.
+   Preserve its coherent rules without drifting scene by scene.
+6. **Reject observably** — run beat-level QA and fail output for the declared,
+   medium-specific problems: conceptual familiarity, invisible change, lost
+   evidence, ambiguous interaction, generic craft, broken continuity, or
+   reference mismatch.
 
 The brief is a creative launchpad, not paperwork. It gives the model enough
 specificity to make confident decisions without collapsing into generic defaults.
@@ -226,9 +250,9 @@ prompt gets its own visual language — you are the director, so direct:
 - **Media check before synth:** if the source has useful logos, product
   imagery, figures, diagrams, screenshots, or people and the video uses none
   of them, revisit the art direction.
-- **Pilot check before scale:** for costly or ambitious work, do not author the
-  whole timeline until the establishing, close, and action pilot frames meet
-  the approved visual contract.
+- **Proof check before scale:** for costly or ambitious work, do not author the
+  whole timeline until 2–3 small proof branches have been rendered, compared,
+  and one selected against the declared intent and rejection criteria.
 
 For craft advice on hook, saveable end-frame, duration bands, 3D quality,
 or accessibility, run `narova critique [profile]`. This is optional

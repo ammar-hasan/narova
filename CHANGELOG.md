@@ -6,6 +6,58 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.28.0] - 2026-08-08
+
+### Added
+
+- **Proof-oriented branch command.** `narova branch save <name> --rationale
+  "..."` now snapshots the current small pilot and records candidate metadata
+  in one step. The command requires a passing receipt bound to the exact config,
+  manifest, timings, audited frames, and contact sheet, then preserves hashed
+  evidence outside the authored snapshot namespace. The durable proof bundle
+  retains byte-hashed resolved config, manifest, timings, contact sheets, every audited
+  frame, the originating project identity, and hashes for the complete restorable snapshot. Saving rehashes current
+  source assets, while release validation rejects any file outside the recorded
+  proof inventory or duplicate proof/snapshot identities. The ambitious workflow
+  creates 2–3 small proofs, approves one, records its exact identity as expansion
+  lineage, and expands only the winner. Restores reapply proof-time CLI overrides.
+  Branch replacement uses a per-name lock and compare-and-swap, stages the snapshot and proof bundle together, binds approval to
+  the originating project, and preserves the previous approved branch if
+  publication fails. Post-commit backup cleanup cannot roll a successful
+  replacement back.
+- **Pilot visibility audit.** `narova shots --motion --proof` scans the actual
+  rendered pilot frames and fails when at least 75% are near-black or no visual
+  evidence exists. Deliberate darkness remains possible because the gate is
+  explicit and normal frame inspection remains authoritative.
+- **Live creativity A/B.** A deliberately tiny runner executes the existing
+  music-only and raw-shader adversarial briefs with the same capable model,
+  with and without Narova guidance, across independent runs and renders every
+  pilot. The eight-run result and limitations are recorded in
+  `docs/experiments/0.28-creativity-ab.md`.
+
+### Changed
+
+- **Genuinely raw zero-style canvas.** Both bundled renderers now give authored
+  visuals the full frame with no implicit content max-width, centering, gutter,
+  or caption reserve. `safeLayout: true` restores conservative guardrails;
+  patterns and chrome remain independent opt-ins. Restored pre-0.28 manifests
+  retain their historical safe geometry unless the config explicitly opts out.
+- **Medium-neutral creative intent.** New `creative-brief.md` scaffolds intended
+  effect, unusual hypothesis, evidence, representation, temporal behavior,
+  medium choice, proof branches, selection rationale, and observable rejection
+  criteria. Camera, depth, lighting, performance, typography, and interaction
+  are requested only when relevant to the chosen medium.
+- **Ambitious release evidence.** An explicitly `Ambition: ambitious` approved
+  brief must declare 2–3 intact, project-bound, rationale-backed proof branches,
+  select one approved branch from that set, and include concrete rejection
+  criteria, regardless of runtime. Routine briefs remain backward-compatible.
+
+### Preserved
+
+- Deterministic timelines, local-only render dependencies, surgical revisions,
+  sentence caching, scene caching, release snapshots, and explicit branches
+  remain strict. Creativity work did not loosen reproducibility or editability.
+
 ## [0.27.0] - 2026-08-08
 
 ### Added

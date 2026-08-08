@@ -7,6 +7,9 @@ const path = require('node:path');
 const { check, critique, internalShotCount, needsCreativeBrief } = require('../src/check');
 const { resolveConfig } = require('../src/schema');
 const { timingsFingerprint } = require('../src/audio-fingerprint');
+const { hashFile, buildHashes } = require('../src/manifest');
+const { writeProofReceipt, verifyProofReceipt, writeProofBundle } = require('../src/proof-receipt');
+const { projectIdentity } = require('../src/releases');
 
 /* check() prints via console.log; capture it. */
 function run(config, opts = {}) {
@@ -540,6 +543,178 @@ test('release: non-trivial projects require an approved creative pilot', () => {
 
   fs.writeFileSync(path.join(projectDir, 'creative-brief.md'), 'Status: approved\n');
   assert.equal(run(config, { release: true }).ok, true);
+});
+
+test('release: ambitious briefs require a selected proof and concrete rejection criteria', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-release-ambitious-'));
+  const releaseDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-branch-'));
+  const metadataDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-metadata-'));
+  const proofOut = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-out-'));
+  const releaseDirA = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-a-branch-'));
+  const metadataDirA = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-a-metadata-'));
+  const proofOutA = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-a-out-'));
+  let proofARelease = releaseDirA;
+  let proofAMetadata = metadataDirA;
+  let branch = null;
+  let branchA = null;
+  const branchStore = {
+    readBranch: name => name === 'proof-a' ? branchA : (name === 'proof-b' ? branch : null),
+    branchDir: name => name === 'proof-a' ? proofAMetadata : metadataDir,
+    releasePath: name => name === 'proof-a' ? proofARelease : releaseDir,
+  };
+  const config = { title: 'R', size: { w: 100, h: 100 }, themeCss: '', projectDir,
+    voices: {}, scenes: [{ id: 's', body: '<p>x</p>', dur: 12, vo: [] }],
+  };
+  const manifest = JSON.stringify({ snapshot: 'proof-b', hashes: buildHashes(config, projectDir) }) + '\n';
+  const timings = '{"total":12}\n';
+  fs.writeFileSync(path.join(proofOut, 'manifest.json'), manifest);
+  fs.writeFileSync(path.join(proofOut, 'timings.json'), timings);
+  const { assetsDir: _assetsDir, ...serializableConfig } = config;
+  fs.writeFileSync(path.join(proofOut, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
+  fs.writeFileSync(path.join(proofOut, 'contact-sheet.jpg'), 'rendered proof');
+  fs.writeFileSync(path.join(proofOut, 'frame.jpg'), 'audited frame');
+  fs.writeFileSync(path.join(releaseDir, 'manifest.json'), manifest);
+  fs.writeFileSync(path.join(releaseDir, 'timings.json'), timings);
+  fs.writeFileSync(path.join(releaseDir, 'reel.config.json'), '{"title":"R"}\n');
+  writeProofReceipt(config, proofOut, [path.join(proofOut, 'contact-sheet.jpg')], [path.join(proofOut, 'frame.jpg')]);
+  const bundle = writeProofBundle(proofOut, verifyProofReceipt(config, proofOut), metadataDir, releaseDir);
+  const snapshotManifest = path.join(releaseDir, 'manifest.json');
+  const snapshotManifestSha256 = hashFile(snapshotManifest);
+  const manifestA = JSON.stringify({ snapshot: 'proof-a', hashes: buildHashes(config, projectDir) }) + '\n';
+  fs.writeFileSync(path.join(proofOutA, 'manifest.json'), manifestA);
+  fs.writeFileSync(path.join(proofOutA, 'timings.json'), timings);
+  fs.writeFileSync(path.join(proofOutA, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
+  fs.writeFileSync(path.join(proofOutA, 'contact-sheet.jpg'), 'rendered proof a');
+  fs.writeFileSync(path.join(proofOutA, 'frame.jpg'), 'audited frame a');
+  fs.writeFileSync(path.join(releaseDirA, 'manifest.json'), manifestA);
+  fs.writeFileSync(path.join(releaseDirA, 'timings.json'), timings);
+  fs.writeFileSync(path.join(releaseDirA, 'reel.config.json'), '{"title":"R","direction":"a"}\n');
+  writeProofReceipt(config, proofOutA, [path.join(proofOutA, 'contact-sheet.jpg')], [path.join(proofOutA, 'frame.jpg')]);
+  const bundleA = writeProofBundle(proofOutA, verifyProofReceipt(config, proofOutA), metadataDirA, releaseDirA);
+  const brief = (selected = '', criteria = 'Reject a proof whose decisive transformation is not visible.', rows = ['proof-a', 'proof-b'], lineageIdentity = null, lineageBranch = selected) => {
+    const selectedBranch = selected === 'proof-a' ? branchA : (selected === 'proof-b' ? branch : null);
+    const identity = lineageIdentity == null ? (selectedBranch && selectedBranch.proofIdentity || '') : lineageIdentity;
+    return `Status: approved\nAmbition: ambitious\n\n## Proof branches\n\n| Branch | Rationale | Smallest decisive proof | Status |\n|---|---|---|---|\n${rows.map(name => `| ${name} | distinct direction | decisive state | candidate |`).join('\n')}\n\nSelected proof branch: ${selected}\nExpanded from proof branch: ${lineageBranch}\nExpanded proof identity: ${identity}\n\n## Rejection criteria\n${criteria}\n`;
+  };
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'),
+    brief('', 'Template-like result must be rebuilt.'));
+  const noSelection = run(config, { release: true, branchStore });
+  assert.equal(noSelection.ok, false);
+  assert.ok(noSelection.lines.some(l => l.includes('2–3 existing')), noSelection.lines.join('\n'));
+
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'),
+    brief('does-not-exist'));
+  const nonexistent = run(config, { release: true, branchStore });
+  assert.equal(nonexistent.ok, false);
+  assert.ok(nonexistent.lines.some(l => l.includes('2–3 existing')), nonexistent.lines.join('\n'));
+
+  branch = {
+    status: 'candidate',
+    rationale: 'A distinct procedural direction.',
+    projectIdentity: projectIdentity(projectDir),
+    ...bundle,
+    snapshotManifestSha256,
+  };
+  branchA = {
+    status: 'candidate',
+    rationale: 'A contrasting typographic direction.',
+    projectIdentity: projectIdentity(projectDir),
+    ...bundleA,
+    snapshotManifestSha256: hashFile(path.join(releaseDirA, 'manifest.json')),
+  };
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'),
+    brief('proof-b'));
+  assert.equal(run(config, { release: true, branchStore }).ok, false, 'candidate proof must not release');
+
+  branch = { ...branch, status: 'approved' };
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'), brief('proof-b', undefined, ['proof-b']));
+  assert.equal(run(config, { release: true, branchStore }).ok, false,
+    'one approved branch must not bypass the 2–3 proof divergence workflow');
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'),
+    brief('proof-b', '<!-- Long scaffold instructions are not authored criteria. -->'));
+  const weakCriteria = run(config, { release: true, branchStore });
+  assert.equal(weakCriteria.ok, false);
+  assert.ok(weakCriteria.lines.some(l => l.includes('rejection criteria')), weakCriteria.lines.join('\n'));
+
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'),
+    brief('proof-b', 'Reject if the procedural transformation reads as a familiar title card.', undefined, ''));
+  const missingLineage = run(config, { release: true, branchStore });
+  assert.equal(missingLineage.ok, false);
+  assert.ok(missingLineage.lines.some(l => l.includes('exact proof identity')), missingLineage.lines.join('\n'));
+
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'),
+    brief('proof-b', 'Reject if the procedural transformation reads as a familiar title card.'));
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  const originalBranchA = branchA;
+  const duplicateRelease = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-duplicate-branch-'));
+  const duplicateMetadata = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-duplicate-metadata-'));
+  fs.cpSync(releaseDir, duplicateRelease, { recursive: true });
+  fs.cpSync(metadataDir, duplicateMetadata, { recursive: true });
+  proofARelease = duplicateRelease;
+  proofAMetadata = duplicateMetadata;
+  branchA = branch;
+  assert.equal(run(config, { release: true, branchStore }).ok, false,
+    'the same reviewed proof saved under two names must not satisfy divergence');
+  branchA = originalBranchA;
+  proofARelease = releaseDirA;
+  proofAMetadata = metadataDirA;
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  const otherProject = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-other-project-'));
+  branch = { ...branch, projectIdentity: projectIdentity(otherProject) };
+  assert.equal(run(config, { release: true, branchStore }).ok, false,
+    'an intact approved proof from another project must not release this project');
+  fs.rmSync(otherProject, { recursive: true, force: true });
+  branch = { ...branch, projectIdentity: projectIdentity(projectDir) };
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  const bundledFrame = path.join(metadataDir, 'proof', 'frames', 'frame-01.jpg');
+  fs.writeFileSync(bundledFrame, 'tampered frame');
+  assert.equal(run(config, { release: true, branchStore }).ok, false, 'audited frame tampering must invalidate proof');
+  fs.writeFileSync(bundledFrame, 'audited frame');
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  const bundledResolvedConfig = path.join(metadataDir, 'proof', 'config.resolved.json');
+  const resolvedConfigBytes = fs.readFileSync(bundledResolvedConfig, 'utf8');
+  const resolvedConfigData = JSON.parse(resolvedConfigBytes);
+  fs.writeFileSync(bundledResolvedConfig, JSON.stringify({ ...resolvedConfigData, projectDir: '/tampered/path' }));
+  assert.equal(run(config, { release: true, branchStore }).ok, false,
+    'portable semantic equality must not hide byte-level resolved-config tampering');
+  fs.writeFileSync(bundledResolvedConfig, resolvedConfigBytes);
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  fs.writeFileSync(path.join(releaseDir, 'reel.config.json'), '{"title":"tampered"}\n');
+  assert.equal(run(config, { release: true, branchStore }).ok, false, 'editable snapshot tampering must invalidate proof');
+  fs.writeFileSync(path.join(releaseDir, 'reel.config.json'), '{"title":"R"}\n');
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  fs.writeFileSync(path.join(releaseDir, 'timings.json'), '{"total":99}\n');
+  assert.equal(run(config, { release: true, branchStore }).ok, false, 'saved timing tampering must invalidate proof');
+  fs.writeFileSync(path.join(releaseDir, 'timings.json'), timings);
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  fs.writeFileSync(path.join(releaseDir, 'injected-after-proof.json'), '{}');
+  assert.equal(run(config, { release: true, branchStore }).ok, false,
+    'an added restorable file outside the recorded snapshot set must invalidate proof');
+  fs.unlinkSync(path.join(releaseDir, 'injected-after-proof.json'));
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  const unrecordedProofArtifact = path.join(metadataDir, 'proof', 'unrecorded.txt');
+  fs.writeFileSync(unrecordedProofArtifact, 'not part of the reviewed proof');
+  assert.equal(run(config, { release: true, branchStore }).ok, false,
+    'an added file outside the durable proof inventory must invalidate proof');
+  fs.unlinkSync(unrecordedProofArtifact);
+  assert.equal(run(config, { release: true, branchStore }).ok, true);
+
+  fs.rmSync(snapshotManifest);
+  const orphaned = run(config, { release: true, branchStore });
+  assert.equal(orphaned.ok, false, 'proof metadata without its restorable snapshot must not release');
+  assert.ok(orphaned.lines.some(l => l.includes('2–3 existing')), orphaned.lines.join('\n'));
+  fs.rmSync(projectDir, { recursive: true, force: true });
+  fs.rmSync(releaseDir, { recursive: true, force: true });
+  fs.rmSync(metadataDir, { recursive: true, force: true });
+  fs.rmSync(proofOut, { recursive: true, force: true });
 });
 
 test('creative gate ignores narrated fallback durations but counts silent runtime', () => {

@@ -100,6 +100,16 @@ test('sceneCacheKey changes when shared render context changes (theme/quality/fp
   assert.notEqual(sc.sceneCacheKey(m.scenes[0], themeChanged), sc.sceneCacheKey(m.scenes[0], base));
 });
 
+test('legacy missing safeLayout hashes as historical safe geometry, not raw', () => {
+  const m = makeManifest();
+  delete m.safeLayout;
+  const legacy = sc.renderContextHash(m, { fps: 30 });
+  const explicitSafe = sc.renderContextHash({ ...m, safeLayout: true }, { fps: 30 });
+  const explicitRaw = sc.renderContextHash({ ...m, safeLayout: false }, { fps: 30 });
+  assert.equal(legacy, explicitSafe);
+  assert.notEqual(legacy, explicitRaw);
+});
+
 test('wholeVideoKey changes when any single scene changes', () => {
   const m = makeManifest();
   const ctx = sc.renderContextHash(m, { fps: 30 });

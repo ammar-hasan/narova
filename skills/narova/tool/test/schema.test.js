@@ -185,6 +185,15 @@ test('chrome defaults off, true enables all, false strips all, object tunes per 
     /chrome\.topbar: must be a boolean/);
 });
 
+test('safeLayout is an explicit opt-in and rejects non-booleans', () => {
+  assert.equal(resolveConfig(validRaw(), {}, '.').safeLayout, false);
+  assert.equal(resolveConfig(validRaw(), {}, '.')._safeLayoutAuthored, false);
+  assert.equal(resolveConfig({ ...validRaw(), safeLayout: true }, {}, '.').safeLayout, true);
+  assert.equal(resolveConfig({ ...validRaw(), safeLayout: false }, {}, '.')._safeLayoutAuthored, true);
+  assert.throws(() => resolveConfig({ ...validRaw(), safeLayout: 'yes' }, {}, '.'),
+    /config\.safeLayout: expected a boolean/);
+});
+
 test('resolveConfig returns the project dir for downstream checks', () => {
   assert.equal(resolveConfig(validRaw(), {}, '.').projectDir, path.resolve('.'));
 });

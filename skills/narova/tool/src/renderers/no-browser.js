@@ -170,6 +170,7 @@ function compose(config, outDir) {
     voices: config.voices || {},
     captions: config.captions || {},
     captionsEnabled: config.captionsEnabled !== false,
+    safeLayout: config.safeLayout === true,
     scenes,
     timeline: data,
   };
@@ -725,6 +726,7 @@ function drawChrome(ctx, project, time, sceneIndex) {
 }
 
 function captionSafeInset(project) {
+  if (project.safeLayout !== true) return 0;
   if (project.captionsEnabled === false || project.timeline.preset === false) return 0;
   if (!(project.timeline.groups || []).length) return 0;
   return Math.round(Math.min(170, Math.max(84, project.size.h * 0.26)) * 1000) / 1000;
@@ -813,8 +815,8 @@ function renderCanvas(project, projectDir, time, env) {
       drawRawFrame(ctx, env.canvas, descriptor, Math.floor(localTime * env.fps), project.size.w, project.size.h);
     }
   }
-  // Keep root backgrounds and full-frame clips edge-to-edge, but constrain the
-  // root's children to the same caption-safe region HyperFrames reserves.
+  // Raw mode gives authored visuals the complete frame. The conservative
+  // caption reserve exists only when safeLayout is explicitly enabled.
   const frames = layoutTree(current.source.visual, project.size.w, project.size.h, {
     b: captionSafeInset(project),
   });
@@ -974,6 +976,15 @@ function shots(config, outDir, times) {
       const surface = renderCanvas(project, composed.dir, time, env);
       fs.writeFileSync(path.join(dir, `${String(i + 1).padStart(3, '0')}-${time.toFixed(2)}s.png`), surface.toBuffer('image/png'));
     });
+    // HyperFrames emits a contact sheet itself. Keep the bundled browserless
+    // renderer proof-compatible by deriving the same review artifact locally.
+    const columns = Math.max(1, Math.ceil(Math.sqrt(times.length)));
+    const rows = Math.max(1, Math.ceil(times.length / columns));
+    sh('ffmpeg', [
+      '-y', '-loglevel', 'error', '-pattern_type', 'glob', '-i', path.join(dir, '*.png'),
+      '-filter_complex', `scale=480:-1,tile=${columns}x${rows}:nb_frames=${times.length}:padding=8:margin=8:color=black`,
+      '-frames:v', '1', path.join(dir, 'contact-sheet.jpg'),
+    ]);
     return { dir, project: composed.dir };
   } finally {
     fs.rmSync(temp, { recursive: true, force: true });

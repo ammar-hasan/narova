@@ -22,7 +22,7 @@ const { ensureDir, probe } = require('./util');
 const { narration } = require('./schema');
 const { writeCaptions } = require('./captions');
 const { getRenderer } = require('./renderers');
-const { compile, read, mergeTimings } = require('./manifest');
+const { compile, read, mergeTimings, hashFile } = require('./manifest');
 const { buildDeliverables } = require('./exports');
 const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
@@ -86,7 +86,20 @@ function writeStageInputs(config, outDir) {
   ensureDir(outDir);
   // manifest.json — canonical versioned project model
   const tl = compile(config, { toolVersion: require('../package.json').version });
-  fs.writeFileSync(path.join(outDir, 'manifest.json'), JSON.stringify(tl, null, 2));
+  const manifestFile = path.join(outDir, 'manifest.json');
+  fs.writeFileSync(manifestFile, JSON.stringify(tl, null, 2));
+  // A restored pre-0.28 project keeps its historical safe geometry across
+  // repeated commands. Rebind the provenance marker to every regenerated
+  // manifest; an explicitly authored safeLayout:false retires it permanently.
+  const restoreMarker = path.join(outDir, '.restored-manifest.json');
+  if (config._retireLegacySafeLayout) {
+    fs.rmSync(restoreMarker, { force: true });
+  } else if (config._legacySafeLayout) {
+    fs.writeFileSync(restoreMarker, JSON.stringify({
+      manifestSha256: hashFile(manifestFile),
+      legacySafeLayout: true,
+    }, null, 2));
+  }
   // narration.json — Python TTS contract (compatibility projection)
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
   // config.resolved.json — resolved config for Python (compatibility projection)
@@ -499,6 +512,9 @@ function configFromManifest(manifest, resolvedConfig) {
     captions: m.captions || {},
     captionsEnabled: m.captions?.enabled !== false,
     includePatterns: m.includePatterns !== false,
+    // Pre-0.28 manifests predate the flag and used this geometry implicitly.
+    // New manifests always serialize false for the genuinely raw default.
+    safeLayout: m.safeLayout == null ? true : m.safeLayout === true,
     markers: m.markers || original.markers || {},
     imports: resolvedConfig ? (resolvedConfig.imports || {}) : (m.importSources || {}),
     align: m.align || false,

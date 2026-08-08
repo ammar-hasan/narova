@@ -7,7 +7,11 @@
  *
  * Architecture:
  *   staticCss()  → production infrastructure (background, chrome, captions,
- *                  walkthrough, reveals, marks). Always included.
+ *                  walkthrough, reveals, marks). Always included. Its scene
+ *                  coordinate space is genuinely raw: no centering, gutter,
+ *                  max-width, or caption reserve.
+ *   safeLayoutCss() → optional conservative layout helper. Opt-in via
+ *                  config.safeLayout; never implied by patterns or chrome.
  *   PATTERNS_CSS → optional layout patterns (.s-title, .pane, .stat, .flow,
  *                  .verdicts, .s-close, etc.). Opt-in via config.patterns
  *                  or project theme.css. Not a default visual language. */
@@ -62,7 +66,7 @@ function presetOverridesCss() {
 
 /* ---- production infrastructure (always included) -------------------------- */
 
-function staticCss(W, H, t = DEFAULT_TOKENS, captionsEnabled = true) {
+function staticCss(W, H, t = DEFAULT_TOKENS) {
   return `*{box-sizing:border-box;margin:0;padding:0}
 html,body{height:100%}
 body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-smoothing:antialiased}
@@ -85,12 +89,11 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 .walkthrough-dots i:first-child{background:var(--red)}.walkthrough-dots i:nth-child(2){background:var(--amber)}.walkthrough-dots i:last-child{background:var(--green)}
 .overlay{position:absolute;inset:0;z-index:5;pointer-events:none}
 
-.chrome{position:absolute;inset:0;padding:clamp(16px,3.1vw,32px);display:flex;flex-direction:column;z-index:3}
-.topbar{display:flex;justify-content:space-between;align-items:flex-start;font-family:var(--mono);font-size:clamp(9px,1.15vw,12px);letter-spacing:.14em;color:var(--faint)}
+.chrome{position:absolute;inset:0;z-index:3}
+.topbar{position:absolute;left:clamp(16px,3.1vw,32px);right:clamp(16px,3.1vw,32px);top:clamp(16px,3.1vw,32px);display:flex;justify-content:space-between;align-items:flex-start;font-family:var(--mono);font-size:clamp(9px,1.15vw,12px);letter-spacing:.14em;color:var(--faint)}
 .wordmark b{color:var(--muted);font-weight:600}
 .counter{color:var(--accent);opacity:.85}
-.canvas{flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding-bottom:${captionsEnabled ? 'var(--cap-pad, clamp(84px,15vh,170px))' : '0'}}
-.scenebody{width:100%;max-width:var(--colw,1000px);display:flex;flex-direction:column;align-items:stretch}
+.canvas,.scenebody{position:absolute;inset:0}
 .progress{position:absolute;left:0;right:0;bottom:0;height:3px;background:var(--track);z-index:6}
 .progress > i{display:block;height:100%;width:100%;transform:scaleX(0);transform-origin:left center;background:linear-gradient(90deg,var(--accent-dim),var(--accent));box-shadow:0 0 12px var(--accent)}
 .series-badge{position:absolute;top:clamp(10px,2vw,20px);right:clamp(10px,2vw,32px);font-family:var(--mono);font-size:clamp(10px,1.3vw,13px);letter-spacing:.1em;color:var(--accent);background:rgba(0,0,0,.38);border:1px solid var(--accent-dim);border-radius:6px;padding:5px 13px;z-index:10}
@@ -132,6 +135,18 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 /* 3D */
 .narova-three-scene{position:absolute;inset:0;z-index:0;pointer-events:none}
 .narova-three-canvas{position:absolute;inset:0;width:100%;height:100%;display:block}`;
+}
+
+/* ---- optional safe layout -------------------------------------------------
+ * Restores the conservative pre-0.28 content geometry for authors who want
+ * guardrails. It is intentionally independent from patterns and chrome: using
+ * a card class or a progress bar must not silently shrink the visual canvas. */
+function safeLayoutCss(captionsEnabled = true) {
+  return `/* Narova safe layout — optional. Include via config.safeLayout: true. */
+.chrome{padding:clamp(16px,3.1vw,32px);display:flex;flex-direction:column}
+.topbar{position:static}
+.canvas{position:static;flex:1;display:flex;align-items:center;justify-content:center;min-height:0;padding-bottom:${captionsEnabled ? 'var(--cap-pad, clamp(84px,15vh,170px))' : '0'}}
+.scenebody{position:static;inset:auto;width:100%;max-width:var(--colw,1000px);display:flex;flex-direction:column;align-items:stretch}`;
 }
 
 /* ---- optional layout patterns (opt-in via config.patterns) ---------------- */
@@ -256,18 +271,19 @@ function patternsCss(t) { return `/* Narova layout patterns — optional. Includ
 
 /* ---- stylesheet assembly -------------------------------------------------- */
 
-function composeCss(theme, voices, size, extraCss = '', mode = 'dark', captionsEnabled = true, includePatterns = true) {
+function composeCss(theme, voices, size, extraCss = '', mode = 'dark', captionsEnabled = true, includePatterns = false, includeSafeLayout = false) {
   const base = mode === 'light' ? { ...DEFAULT_TOKENS, ...LIGHT_TOKENS } : DEFAULT_TOKENS;
   const t = { ...base, ...theme };
   const parts = [
     rootBlock(t),
-    staticCss(size.w, size.h, t, captionsEnabled),
+    staticCss(size.w, size.h, t),
     voiceBlock(voices),
     presetOverridesCss(),
   ];
+  if (includeSafeLayout) parts.push(safeLayoutCss(captionsEnabled));
   if (includePatterns) parts.push(patternsCss(t));
   const out = parts.join('\n');
   return extraCss ? `${out}\n${extraCss}` : out;
 }
 
-module.exports = { composeCss, patternsCss, presetOverridesCss, DEFAULT_TOKENS, LIGHT_TOKENS };
+module.exports = { composeCss, patternsCss, safeLayoutCss, presetOverridesCss, DEFAULT_TOKENS, LIGHT_TOKENS };
