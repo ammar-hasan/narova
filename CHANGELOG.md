@@ -4,6 +4,49 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+## [0.27.0] - 2026-08-08
+
+### Added
+
+- **Creative confidence loop.** Non-trivial projects now begin with an authored
+  `creative-brief.md`: competing directions, a concrete visual contract, beat
+  map, pilot gate, and rejection criteria. The skill workflow requires proving
+  an establishing shot, close shot, and action/reveal before scaling a concept.
+- **Narration-beat visual review.** `narova shots --beats` samples the arrival
+  and resolved state of every narration group, both sides of named markers,
+  and useful coverage for silent scenes. This closes the gap between sparse
+  motion checks and reviewing the actual visual promises of a film.
+
+### Changed
+
+- **Creative release gate.** `critique creative` reports brief/pilot readiness,
+  and `build --release` now runs the checker before synthesis, then rechecks
+  measured production timing before compose/render. It refuses a non-trivial
+  project whose brief is missing or still draft. Final workflows pair creative
+  and cinematic critique with the encoded motion audit.
+- **Camera-aware cinematic critique.** Raw Three.js productions are assessed
+  using their directed internal camera cuts and moves, not only the number of
+  top-level Narova scenes, so persistent-world films receive meaningful shot
+  density feedback.
+
+### Fixed
+
+- **Release duration provenance.** Creative gating distinguishes schema fallback
+  durations from explicitly authored runtime, and only trusts synthesized timing
+  files whose timing fingerprint matches current scene topology and silent runtime.
+  Short narrated projects no longer become non-trivial merely because of fallback
+  scene timing, measured narration cannot cross the gate unnoticed, and `--reuse`
+  cannot replay stale silent audio after a topology/duration change.
+- **Complete release preflight.** `build --release --variant` checks the base and
+  selected variant before writing; `--variants` checks the base and every declared
+  variant before any render starts.
+- **Raw Three.js shot accounting.** Cinematic critique recognizes helper calls,
+  direct timeline camera operations, bounded inline callbacks, and named function,
+  arrow, or function-expression callbacks. Mixed forms add correctly without
+  counting helper implementations as extra shots.
+
 ## [0.26.1] - 2026-08-07
 
 A narrowly scoped correctness pass on v0.26's per-scene (selective) rendering,

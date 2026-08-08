@@ -228,7 +228,8 @@ Keep the fixes in the code so they never come back.
   GSAP was the last runtime CDN dependency. Vendored 3.14.2 in `vendor/gsap/`.
 - **Release restore needs fingerprint for `--reuse`.** Without it, every restore
   forces a full synth (even though the sentence cache would serve identical audio).
-  Saving `.audio-fingerprint` and `timings.json` in releases makes `--reuse` work.
+  Saving `.audio-fingerprint`, `.timings-fingerprint`, and `timings.json` in
+  releases preserves safe reuse and measured-duration provenance.
 - **Variant model must support more than hook copy.** The original `{ scene: { body, vo } }`
   was scene-1 only. `sceneOverrides`, `theme`/`captions`/`timing` overrides, and
   kind tags (visual/narration/pacing/captions) expand the model without making
@@ -240,6 +241,32 @@ Keep the fixes in the code so they never come back.
   automated convergence checks (palette topology, caption presets, chrome usage,
   css/choreo/3D footprint, scene-count distributions, hook/CTA patterns), makes
   creative sameness visible before it ships.
+
+## Creative confidence before production scale (0.27.0)
+
+- **Motion QA is not ambition QA.** A sparse low-poly film can have valid motion,
+  no blank frames, and no freezes while still missing the requested density,
+  atmosphere, character acting, spatial continuity, and cinematic detail. The
+  old Karpathy/Hobbiton cut passed mechanical checks and still needed a rebuild.
+- **More cuts do not repair an underbuilt world.** Splitting thin production
+  design into additional scenes changes pacing, not richness. Establish the
+  world, material language, character system, environmental layers, and
+  foreground/midground/background behavior in an explicit visual contract.
+- **Prove the expensive assumptions early.** Before producing a non-trivial
+  film, render an establishing shot, a close shot, and an action/reveal from the
+  intended final system. Reject or revise the direction at pilot scale; only mark
+  `creative-brief.md` approved when all three demonstrate the contract.
+- **Review promises at their actual beats.** Start/middle/end snapshots can miss
+  a weak reveal between samples. `shots --beats` captures both arrival and
+  resolved narration states, both sides of markers, and silent-scene coverage.
+- **Persistent worlds have internal editorial structure.** Top-level scene count
+  is not shot count. Cinematic critique must count directed camera helpers,
+  timeline operations, and callback cuts inside raw Three.js films without
+  double-counting their implementations.
+- **Release gates must run before render writes.** `build --release` preflights
+  the base plus selected/all variants before production begins. Because actual
+  speech duration is unknowable until synthesis, it records a scene-topology-aware
+  timing fingerprint and rechecks measured duration before compose/render.
 
 ## Render-path CSS compatibility (0.8.3)
 

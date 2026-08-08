@@ -69,7 +69,38 @@ The concept must still serve the brief.
 Record the rationale for each direction and why you picked the final one.
 This enables future "try the rejected surreal concept" requests.
 
+Do not choose a direction merely because it is cheaper, faster, or fixes the
+last version's most obvious defect. Select against the user's ambition and the
+whole visual contract. "More cuts" does not repair a sparse world; "uses
+Three.js" does not establish production value.
+
 For simple or short requests, a single direction is fine.
+
+## Creative confidence loop
+
+Use this loop for non-trivial, reference-driven, expensive, or ambitious 3D
+work. It lets the agent be bold without gambling a full production on an
+unproven visual assumption.
+
+1. **Diverge** — form 2–3 structurally different concepts.
+2. **Specify** — fill the project's `creative-brief.md`: emotional promise,
+   production ambition, world/subject design, camera grammar, signature move,
+   beat map, and observable rejection criteria.
+3. **Prove** — make a small pilot in the final visual language: at minimum one
+   establishing frame, one close frame, and one action frame (or an equivalent
+   8–12 second sequence).
+4. **Commit** — compare the pilot directly with the reference or written visual
+   contract. Rebuild weak directions now. Set `Status: approved` only when the
+   pilot passes.
+5. **Expand** — build the complete film from the approved world, subjects,
+   materials, lighting, and camera rules. Reuse coherent visual systems; do not
+   drift into a different style scene by scene.
+6. **Reject** — run beat-level QA and actively fail frames for hidden action,
+   generic or empty staging, repeated silhouettes, weak depth, flat light,
+   broken continuity, or reference mismatch.
+
+The brief is a creative launchpad, not paperwork. It gives the model enough
+specificity to make confident decisions without collapsing into generic defaults.
 
 ## Craft knowledge
 
@@ -81,6 +112,10 @@ When craft knowledge applies, use it. When it doesn't, don't.
 For optional craft profiles that encode specific video-grammar conventions
 (social-short hooks, explainer pacing, 3D quality, accessibility), run
 `narova critique [profile]`. These are creative guidance, not correctness gates.
+
+Use `narova critique creative` to challenge production readiness and pilot
+approval. Combine profiles when useful, for example
+`narova critique creative,cinematic` for a long 3D film.
 
 Some conventions that are useful in the right context but NOT universal:
 
@@ -191,6 +226,9 @@ prompt gets its own visual language — you are the director, so direct:
 - **Media check before synth:** if the source has useful logos, product
   imagery, figures, diagrams, screenshots, or people and the video uses none
   of them, revisit the art direction.
+- **Pilot check before scale:** for costly or ambitious work, do not author the
+  whole timeline until the establishing, close, and action pilot frames meet
+  the approved visual contract.
 
 For craft advice on hook, saveable end-frame, duration bands, 3D quality,
 or accessibility, run `narova critique [profile]`. This is optional
@@ -235,10 +273,12 @@ stays identical, and narova's machinery backs you up:
 
 ## Working with the user
 
-- **Snapshot to verify, preview to watch, render to ship.** Composing is
-  cheap; rendering is the commitment. After `compose` (which prints every
-  scene's start time), run `narova shots` and look at one frame per scene —
-  that is the verification step (layout, overlap, contrast, framing).
+- **Pilot to commit, beat snapshots to verify, preview to watch, render to
+  ship.** Composing is cheap; rendering is the commitment. After `compose`,
+  run `narova shots --beats` for narration/marker-driven work and inspect both
+  the arriving and resolved state of every beat. Use `shots --motion` for
+  scene-level coverage. Judge composition, action, depth, light, continuity,
+  and the written visual contract—not only layout and technical correctness.
   Studio preview is the live look for the user; it does not hot-reload, so
   `compose`/`build` restart a live detached preview on the new build
   automatically. Show the preview, say what you made and why in two

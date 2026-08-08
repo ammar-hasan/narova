@@ -9,11 +9,13 @@
  *   check(config, {release:true}) — all checks, errors fail the build (exit 1)
  *
  * Release mode elevates: remote assets, unresolved references, unsupported HTML,
- * missing claims, black frames, and remote dependencies from warnings to errors. */
+ * missing claims, black frames, remote dependencies, and missing non-trivial
+ * creative approval from warnings to errors. */
 const fs = require('fs');
 const path = require('path');
 const { PLATFORMS } = require('./util');
 const { captureStatus } = require('./walkthrough');
+const { timingsFingerprint } = require('./audio-fingerprint');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -105,8 +107,61 @@ function visualFacts(root) {
   return facts;
 }
 
+function measuredProductionSeconds(config, opts = {}) {
+  const outDir = opts.outDir;
+  if (!outDir) return null;
+  const timingsPath = path.join(outDir, 'timings.json');
+  const fingerprintPath = path.join(outDir, '.timings-fingerprint');
+  if (!fs.existsSync(timingsPath) || !fs.existsSync(fingerprintPath)) return null;
+  try {
+    if (fs.readFileSync(fingerprintPath, 'utf8').trim() !== timingsFingerprint(config)) return null;
+    const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+    // The audio fingerprint deliberately ignores silent-scene duration because
+    // it identifies synthesized speech. Compose measured narration with the
+    // current silent runtime so a stale timing file cannot keep an old silence
+    // length alive after the author shortens or extends that scene.
+    const durations = (config.scenes || []).map(s => (s.vo || []).length === 0
+      ? s.dur
+      : timings[s.id] && timings[s.id].dur);
+    return durations.every(d => Number.isFinite(d) && d >= 0)
+      ? durations.reduce((n, d) => n + d, 0) : null;
+  } catch {
+    return null;
+  }
+}
+
+function productionSeconds(config, opts = {}) {
+  const scenes = config.scenes || [];
+  let planned = 0;
+  for (const scene of scenes) {
+    if ((scene.vo || []).length === 0) {
+      if (Number.isFinite(scene.dur)) planned += scene.dur;
+      continue;
+    }
+    const estimated = estimateSeconds({ ...config, scenes: [scene] });
+    const authored = scene._durAuthored && Number.isFinite(scene.dur) ? scene.dur : 0;
+    planned += Math.max(estimated, authored);
+  }
+  const measured = measuredProductionSeconds(config, opts);
+  return Math.max(planned, measured == null ? 0 : measured);
+}
+
+function needsCreativeBrief(config, opts = {}) {
+  const scenes = config.scenes || [];
+  return productionSeconds(config, opts) >= 30 || scenes.length >= 5;
+}
+
 /* Release-mode checks that are too slow or pedantic for normal `check`. */
-function releaseChecks(config, errors) {
+function releaseChecks(config, errors, opts = {}) {
+  if (needsCreativeBrief(config, opts)) {
+    const brief = creativeBriefStatus(config);
+    if (!brief.exists) {
+      errors.push('creative: non-trivial release needs creative-brief.md with an approved pilot and observable rejection criteria');
+    } else if (!brief.approved) {
+      errors.push('creative: creative-brief.md is not approved — prove the establishing, close, and action pilot frames before release');
+    }
+  }
+
   for (const s of config.scenes) {
     // Black-frame / empty scene: body with no visible text, images, videos, or SVG.
     const body = String(s.body || '');
@@ -585,7 +640,7 @@ function check(config, opts = {}) {
 
   // Release-mode exclusive checks
   if (release) {
-    releaseChecks(config, errors);
+    releaseChecks(config, errors, opts);
   }
 
   // Print
@@ -624,6 +679,7 @@ function check(config, opts = {}) {
  * so the model can deliberately request specific advice domains.
  *
  * Profiles:
+ *   creative        — visual contract, pilot approval, production readiness
  *   social-short    — hook, saveable end-card, platform duration
  *   explainer       — structure, pacing, scene-count distribution
  *   presentation    — 3D shadow/PBR quality, visual balance hints
@@ -634,6 +690,182 @@ function check(config, opts = {}) {
  * Use `narova critique` (or `check --critique`) to run these. A narration-only
  * edit, a silent mood piece, or an experimental film may skip critique
  * entirely — these checks exist for moments when craft advice is wanted. */
+function matchingBraceEnd(code, open) {
+  let depth = 0;
+  let quote = null;
+  let escaped = false;
+  let lineComment = false;
+  let blockComment = false;
+  for (let i = open; i < code.length; i++) {
+    const ch = code[i];
+    const next = code[i + 1];
+    if (lineComment) {
+      if (ch === '\n') lineComment = false;
+      continue;
+    }
+    if (blockComment) {
+      if (ch === '*' && next === '/') { blockComment = false; i++; }
+      continue;
+    }
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '/' && next === '/') { lineComment = true; i++; continue; }
+    if (ch === '/' && next === '*') { blockComment = true; i++; continue; }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === '{') depth++;
+    else if (ch === '}' && --depth === 0) return i + 1;
+  }
+  return code.length;
+}
+
+function maskRanges(code, ranges) {
+  if (!ranges.length) return code;
+  const chars = [...code];
+  for (const [start, end] of ranges) {
+    for (let i = start; i < end; i++) if (chars[i] !== '\n') chars[i] = ' ';
+  }
+  return chars.join('');
+}
+
+function maskCameraHelperImplementations(code) {
+  const helperNames = '(?:shot|cameraCut|cameraMove|cameraTrack)';
+  const starts = [];
+  const declarations = new RegExp(`\\bfunction\\s+${helperNames}\\s*\\([^)]*\\)\\s*\\{`, 'g');
+  for (const match of code.matchAll(declarations)) {
+    const open = match.index + match[0].lastIndexOf('{');
+    starts.push([match.index, matchingBraceEnd(code, open)]);
+  }
+  const assignments = new RegExp(`\\b(?:const|let|var)\\s+${helperNames}\\s*=\\s*(?:async\\s+)?(?:function(?:\\s+[A-Za-z_$][\\w$]*)?\\s*\\([^)]*\\)|(?:\\([^)]*\\)|[A-Za-z_$][\\w$]*)\\s*=>)\\s*`, 'g');
+  for (const match of code.matchAll(assignments)) {
+    let end;
+    if (code[match.index + match[0].length] === '{') {
+      end = matchingBraceEnd(code, match.index + match[0].length);
+    } else {
+      const terminator = code.slice(match.index + match[0].length).search(/[;\n]/);
+      end = terminator < 0 ? code.length : match.index + match[0].length + terminator + 1;
+    }
+    starts.push([match.index, end]);
+  }
+  return maskRanges(code, starts);
+}
+
+function expressionArgumentEnd(code, start) {
+  const stack = [];
+  let quote = null;
+  let escaped = false;
+  for (let i = start; i < code.length; i++) {
+    const ch = code[i];
+    if (quote) {
+      if (escaped) escaped = false;
+      else if (ch === '\\') escaped = true;
+      else if (ch === quote) quote = null;
+      continue;
+    }
+    if (ch === '"' || ch === "'" || ch === '`') { quote = ch; continue; }
+    if (ch === '(' || ch === '[' || ch === '{') stack.push(ch);
+    else if (ch === ')' || ch === ']' || ch === '}') stack.pop();
+    else if (ch === ',' && stack.length === 0) return i;
+  }
+  return code.length;
+}
+
+function callableDefinitionRanges(code) {
+  const ranges = [];
+  const declarations = /\bfunction\s+[A-Za-z_$][\w$]*\s*\([^)]*\)\s*\{/g;
+  for (const match of code.matchAll(declarations)) {
+    const open = match.index + match[0].lastIndexOf('{');
+    ranges.push([match.index, matchingBraceEnd(code, open)]);
+  }
+  const assignments = /\b(?:const|let|var)\s+[A-Za-z_$][\w$]*\s*=\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)\s*/g;
+  for (const match of code.matchAll(assignments)) {
+    const bodyStart = match.index + match[0].length;
+    if (code[bodyStart] === '{') ranges.push([match.index, matchingBraceEnd(code, bodyStart)]);
+    else {
+      const offset = code.slice(bodyStart).search(/[;\n]/);
+      ranges.push([match.index, offset < 0 ? code.length : bodyStart + offset + 1]);
+    }
+  }
+  return ranges;
+}
+
+const ownCallableBody = body => maskRanges(body, callableDefinitionRanges(body));
+
+function namedCameraCallbackInfo(code, cameraMutation) {
+  const names = new Set();
+  const ranges = [];
+  const declarations = /\bfunction\s+([A-Za-z_$][\w$]*)\s*\([^)]*\)\s*\{/g;
+  for (const match of code.matchAll(declarations)) {
+    const open = match.index + match[0].lastIndexOf('{');
+    const end = matchingBraceEnd(code, open);
+    if (cameraMutation.test(ownCallableBody(code.slice(open + 1, end - 1)))) {
+      names.add(match[1]);
+      ranges.push([match.index, end]);
+    }
+  }
+  const assignments = /\b(?:const|let|var)\s+([A-Za-z_$][\w$]*)\s*=\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>)\s*/g;
+  for (const match of code.matchAll(assignments)) {
+    const bodyStart = match.index + match[0].length;
+    const block = code[bodyStart] === '{';
+    const end = block
+      ? matchingBraceEnd(code, bodyStart)
+      : (() => {
+        const offset = code.slice(bodyStart).search(/[;\n]/);
+        return offset < 0 ? code.length : bodyStart + offset + 1;
+      })();
+    const body = code.slice(bodyStart + (block ? 1 : 0), end - (block ? 1 : 0));
+    if (cameraMutation.test(ownCallableBody(body))) {
+      names.add(match[1]);
+      ranges.push([match.index, end]);
+    }
+  }
+  return { names, ranges };
+}
+
+function internalShotCount(code = '') {
+  const helperNames = '(?:shot|cameraCut|cameraMove|cameraTrack)';
+  const outsideHelpers = maskCameraHelperImplementations(code);
+  const calls = (outsideHelpers.match(new RegExp(`\\b${helperNames}\\s*\\(`, 'g')) || []).length;
+  const cameraMutation = /\bcamera(?:\.(?:position|rotation))?\.(?:set|copy)\s*\(|\bcamera\.lookAt\s*\(|\b(?:sceneTl|timeline|tl)\.(?:set|to|from|fromTo)\s*\(\s*camera(?:\.(?:position|rotation))?\b/;
+  const callbackStarts = [...outsideHelpers.matchAll(/\b(?:sceneTl|timeline|tl)\.call\s*\(\s*(?:async\s+)?(?:function(?:\s+[A-Za-z_$][\w$]*)?\s*\([^)]*\)\s*|(?:\([^)]*\)|[A-Za-z_$][\w$]*)\s*=>\s*)/g)];
+  let inlineCallbacks = 0;
+  for (const match of callbackStarts) {
+    const bodyStart = match.index + match[0].length;
+    const block = outsideHelpers[bodyStart] === '{';
+    const end = block
+      ? matchingBraceEnd(outsideHelpers, bodyStart)
+      : expressionArgumentEnd(outsideHelpers, bodyStart);
+    const body = outsideHelpers.slice(bodyStart + (block ? 1 : 0), end - (block ? 1 : 0));
+    if (cameraMutation.test(ownCallableBody(body))) inlineCallbacks++;
+  }
+  // Inspect definitions in the original source so a helper-named function used
+  // as timeline.call(cameraCut) is not erased by direct-helper masking. Calls
+  // are still counted from outsideHelpers, which prevents implementation code
+  // from becoming phantom scheduled cuts.
+  const named = namedCameraCallbackInfo(code, cameraMutation);
+  const namedCalls = [...outsideHelpers.matchAll(/\b(?:sceneTl|timeline|tl)\.call\s*\(\s*([A-Za-z_$][\w$]*)\b/g)]
+    .filter(match => named.names.has(match[1])).length;
+  const directSource = maskRanges(outsideHelpers, named.ranges);
+  const directOps = (directSource.match(/\b(?:sceneTl|timeline|tl)\.(?:set|to|from|fromTo)\s*\(\s*camera(?:\.(?:position|rotation))?\b/g) || []).length;
+  return calls + directOps + inlineCallbacks + namedCalls;
+}
+
+function creativeBriefStatus(config, opts = {}) {
+  const projectDir = opts.projectDir || config.projectDir;
+  if (!projectDir) return { exists: false, approved: false };
+  const briefPath = path.join(projectDir, 'creative-brief.md');
+  if (!fs.existsSync(briefPath)) return { exists: false, approved: false, path: briefPath };
+  try {
+    const text = fs.readFileSync(briefPath, 'utf8');
+    return { exists: true, approved: /^Status:\s*approved\s*$/im.test(text), path: briefPath };
+  } catch {
+    return { exists: true, approved: false, path: briefPath };
+  }
+}
+
 function critique(config, opts = {}) {
   const results = [];
   const profile = opts.profile || 'all';
@@ -641,6 +873,18 @@ function critique(config, opts = {}) {
 
   function activeFor(p) { return active == null || active.has(p); }
   function note(msg) { results.push(msg); }
+
+  // -- creative: ambition and pilot readiness -------------------------------
+  if (activeFor('creative') || activeFor('cinematic') || activeFor('all')) {
+    if (needsCreativeBrief(config, opts)) {
+      const brief = creativeBriefStatus(config, opts);
+      if (!brief.exists) {
+        note('creative: non-trivial project has no creative-brief.md — define the visual contract, pilot gate, and rejection criteria before full production');
+      } else if (!brief.approved) {
+        note('creative: creative-brief.md is still draft — approve it only after establishing, close, and action pilot frames meet the visual contract');
+      }
+    }
+  }
 
   // -- social-short: hook / saveable / duration-band advice ------------------
   if (activeFor('social-short') || activeFor('all')) {
@@ -721,13 +965,13 @@ function critique(config, opts = {}) {
 
   // -- cinematic: temporal density and directed action ----------------------
   if (activeFor('cinematic') || activeFor('all')) {
-    const authoredSeconds = (config.scenes || []).every(s => Number.isFinite(s.dur))
-      ? config.scenes.reduce((n, s) => n + s.dur, 0) : 0;
-    const seconds = Math.max(estimateSeconds(config), authoredSeconds);
+    const seconds = productionSeconds(config, opts);
     const scenes = config.scenes || [];
     const threeScenes = scenes.filter(s => s.three || s._threeModuleContents);
-    if (seconds >= 30 && scenes.length && seconds / scenes.length > 8) {
-      note(`cinematic: ${scenes.length} scenes across ~${Math.round(seconds)}s average ${(seconds / scenes.length).toFixed(1)}s per shot — add visual beats or cuts to avoid long tableaux`);
+    const directedShots = scenes.reduce((count, s) => count
+      + Math.max(1, s._threeModuleContents ? internalShotCount(s._threeModuleContents) : 0), 0);
+    if (seconds >= 30 && directedShots && seconds / directedShots > 8) {
+      note(`cinematic: ${directedShots} directed shot${directedShots === 1 ? '' : 's'} across ~${Math.round(seconds)}s average ${(seconds / directedShots).toFixed(1)}s — add visual beats or cuts to avoid long tableaux`);
     }
     if (threeScenes.length) {
       const raw = threeScenes.filter(s => s._threeModuleContents);
@@ -758,4 +1002,4 @@ function critique(config, opts = {}) {
   return results;
 }
 
-module.exports = { check, critique };
+module.exports = { check, critique, internalShotCount, creativeBriefStatus, needsCreativeBrief, productionSeconds, measuredProductionSeconds };

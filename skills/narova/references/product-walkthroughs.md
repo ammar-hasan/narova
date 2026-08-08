@@ -22,9 +22,10 @@ rewriting the video.
 5. Run `narova walkthrough capture <id>` (omit `<id>` to capture all declared
    walkthroughs). This is deliberately explicit: `build`, `compose`, and
    `preview` never replay browser actions.
-6. Run `narova compose`, inspect `narova shots`, and watch
+6. Run `narova compose`, inspect `narova shots --beats`, and watch
    `narova preview --detach`.
-7. Run `narova check --release`, then `narova build --reuse`.
+7. Run `narova build --reuse --release` (strict source checks plus encoded
+   motion/black-frame verification).
 
 If narration timing or the walkthrough recipe changes, the capture is stale
 and compose/build stop with the exact recapture command. A body/CSS/layout-only

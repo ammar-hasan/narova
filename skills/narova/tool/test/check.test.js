@@ -4,7 +4,9 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { check, critique } = require('../src/check');
+const { check, critique, internalShotCount, needsCreativeBrief } = require('../src/check');
+const { resolveConfig } = require('../src/schema');
+const { timingsFingerprint } = require('../src/audio-fingerprint');
 
 /* check() prints via console.log; capture it. */
 function run(config, opts = {}) {
@@ -506,8 +508,11 @@ test('release: a zero-opacity walkthrough does not hide an empty black frame', (
 });
 
 test('release: platform duration bands stay as warnings not errors', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-release-brief-'));
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'), 'Status: approved\n');
   const longBody = Array(400).fill('word').join(' ');
   const config = { title: 'R', size: { w: 100, h: 100 }, themeCss: '', platform: 'tiktok',
+    projectDir,
     voices: { a: { backend: 'piper' } },
     scenes: [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: longBody }] }],
   };
@@ -516,6 +521,62 @@ test('release: platform duration bands stay as warnings not errors', () => {
   const durWarn = lines.filter(l => l.includes('platform tiktok'));
   assert.ok(durWarn.every(l => l.startsWith('warn:')), 'duration bands must be warnings in release mode: ' + durWarn.join('\n'));
   assert.equal(ok, true, 'release should pass despite out-of-band duration');
+});
+
+test('release: non-trivial projects require an approved creative pilot', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-release-pilot-'));
+  const config = { title: 'R', size: { w: 100, h: 100 }, themeCss: '', projectDir,
+    voices: {},
+    scenes: [{ id: 's', body: '<p>x</p>', dur: 31, vo: [] }],
+  };
+  const missing = run(config, { release: true });
+  assert.equal(missing.ok, false);
+  assert.ok(missing.lines.some(l => l.includes('needs creative-brief.md')), missing.lines.join('\n'));
+
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'), 'Status: draft\n');
+  const draft = run(config, { release: true });
+  assert.equal(draft.ok, false);
+  assert.ok(draft.lines.some(l => l.includes('is not approved')), draft.lines.join('\n'));
+
+  fs.writeFileSync(path.join(projectDir, 'creative-brief.md'), 'Status: approved\n');
+  assert.equal(run(config, { release: true }).ok, true);
+});
+
+test('creative gate ignores narrated fallback durations but counts silent runtime', () => {
+  const projectDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-duration-provenance-'));
+  const raw = { title: 'Quick', voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 'quick', body: '<p>x</p>',
+      vo: Array.from({ length: 6 }, () => ({ who: 'a', text: 'Hi' })) }],
+  };
+  const shortNarration = resolveConfig(raw, {}, projectDir);
+  assert.equal(shortNarration.scenes[0].dur, 30, 'schema fixture exercises the synthetic fallback');
+  assert.equal(needsCreativeBrief(shortNarration), false,
+    'resolved vo.length*5 planning duration is not real runtime');
+  const nullDuration = resolveConfig({
+    ...raw, scenes: [{ ...raw.scenes[0], dur: null }],
+  }, {}, projectDir);
+  assert.equal(needsCreativeBrief(nullDuration), false,
+    'dur:null is absence, not authored production intent');
+  const authoredLong = resolveConfig({
+    ...raw, scenes: [{ ...raw.scenes[0], dur: 40 }],
+  }, {}, projectDir);
+  assert.equal(needsCreativeBrief(authoredLong), true, 'explicit narrated duration remains production intent');
+
+  const outDir = path.join(projectDir, 'out');
+  fs.mkdirSync(outDir);
+  fs.writeFileSync(path.join(outDir, '.timings-fingerprint'), timingsFingerprint(shortNarration));
+  fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify({ quick: { dur: 31 } }));
+  assert.equal(needsCreativeBrief(shortNarration, { outDir }), true, 'current measured narration wins over estimate');
+
+  assert.equal(needsCreativeBrief({ ...base([{ id: 'silent', body: '<p>x</p>', dur: 30, vo: [] }]), voices: {} }), true,
+    'silent duration is explicitly authored runtime');
+
+  const silentNow = resolveConfig({ title: 'Silent', voices: {},
+    scenes: [{ id: 'silent', body: '<p>x</p>', dur: 10, vo: [] }] }, {}, projectDir);
+  fs.writeFileSync(path.join(outDir, '.timings-fingerprint'), timingsFingerprint(silentNow));
+  fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify({ silent: { dur: 40 } }));
+  assert.equal(needsCreativeBrief(silentNow, { outDir }), false,
+    'silent runtime comes from the current config, not fingerprint-blind stale timings');
 });
 
 test('release: slow-path CSS stays as warnings', () => {
@@ -741,12 +802,96 @@ test('check reports WebGL-heavy full previews while isolated build remains suppo
 });
 
 test('critique: cinematic profile detects long tableaux and sparse raw action', () => {
+  const longText = Array(35).fill('deliberate').join(' ');
   const scenes = Array.from({ length: 4 }, (_, i) => ({ id: `s${i}`, dur: 12,
-    vo: [{ who: 'a', text: 'This is a deliberately long spoken sequence with several words and little visual change.' }],
+    vo: [{ who: 'a', text: longText }],
     _threeModuleContents: 'scene.add(new THREE.Group());' }));
   const { results } = runCritique(base(scenes), { profile: 'cinematic' });
   assert.ok(results.some(r => r.includes('average') && r.includes('tableaux')), results.join('\n'));
   assert.ok(results.some(r => r.includes('fewer than three timeline actions')), results.join('\n'));
+});
+
+test('critique: cinematic profile recognizes internal camera cuts in one raw scene', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cinematic-brief-'));
+  fs.writeFileSync(path.join(dir, 'creative-brief.md'), '# Creative brief\n\nStatus: approved\n');
+  const cuts = Array.from({ length: 10 }, (_, i) => `shot(${i});`).join('');
+  const scene = { id: 'film', dur: 60,
+    vo: [{ who: 'a', text: 'A continuous film can contain many deliberately directed internal shots.' }],
+    _threeModuleContents: `function shot(i){sceneTl.set(camera.position,{x:i},i);} ${cuts}` };
+  const { results } = runCritique({ ...base([scene]), projectDir: dir }, { profile: 'cinematic' });
+  assert.ok(!results.some(r => r.includes('long tableaux') || r.includes('creative-brief')), results.join('\n'));
+});
+
+test('cinematic shot count recognizes direct timeline and callback camera cuts', () => {
+  const direct = Array.from({ length: 9 }, (_, i) =>
+    `sceneTl.to(camera.position,{x:${i},duration:0},${i});`).join('');
+  const callbacks = Array.from({ length: 8 }, (_, i) =>
+    `sceneTl.call(() => camera.position.set(${i},0,5),[],${i});`).join('');
+  const namedCallbacks = `function setCamera(x){camera.position.set(x,0,5);}`
+    + Array.from({ length: 7 }, (_, i) => `sceneTl.call(setCamera,[${i}],${i});`).join('');
+  const namedExpression = 'const setCamera = function(x){camera.position.set(x,0,5);}; sceneTl.call(setCamera,[1],0);';
+  const unrelatedAfterCallback = 'sceneTl.call(() => noop(),[],0); camera.position.set(1,0,5);';
+  const nestedUnused = 'function callback(){ function helper(){ camera.position.set(1,0,5); } } sceneTl.call(callback,[],0);';
+  const nestedArrowUnused = 'const callback=()=>{ const helper=()=>camera.position.set(1,0,5); }; sceneTl.call(callback,[],0);';
+  const nestedExpressionUnused = 'const callback=function(){ const helper=function(){camera.position.set(1,0,5);} }; sceneTl.call(callback,[],0);';
+  const directNamedTwice = 'function callback(){ sceneTl.to(camera.position,{x:1},0); } sceneTl.call(callback); sceneTl.call(callback);';
+  const asyncNamed = 'const callback = async () => camera.position.set(1,0,5); sceneTl.call(callback);';
+  const helperNamedCallback = 'function cameraCut(){ sceneTl.to(camera.position,{x:1},0); } sceneTl.call(cameraCut);';
+  const helperNamedArrow = 'const shot = () => camera.position.set(1,0,5); sceneTl.call(shot);';
+  const helperNamedExpression = 'const cameraMove = function(){ sceneTl.set(camera.position,{x:1},0); }; timeline.call(cameraMove);';
+  const mixed = `function shot(i){sceneTl.set(camera.position,{x:i},i);}`
+    + Array.from({ length: 6 }, (_, i) => `shot(${i});`).join('')
+    + Array.from({ length: 6 }, (_, i) => `sceneTl.to(camera.position,{x:${i},duration:0},${i + 6});`).join('');
+  const arrowHelper = 'const shot = (i) => { sceneTl.set(camera.position,{x:i},i); }; shot(0);';
+  const expressionHelper = 'const cameraCut = function(i) { sceneTl.set(camera.position,{x:i},i); }; cameraCut(0);';
+  const nestedHelper = 'function cameraMove(i){ if(i){noop();} sceneTl.set(camera.position,{x:i},i); } cameraMove(0);';
+  assert.equal(internalShotCount(direct), 9);
+  assert.equal(internalShotCount(callbacks), 8);
+  assert.equal(internalShotCount(namedCallbacks), 7);
+  assert.equal(internalShotCount(namedExpression), 1);
+  assert.equal(internalShotCount(unrelatedAfterCallback), 0);
+  assert.equal(internalShotCount(nestedUnused), 0);
+  assert.equal(internalShotCount(nestedArrowUnused), 0);
+  assert.equal(internalShotCount(nestedExpressionUnused), 0);
+  assert.equal(internalShotCount(directNamedTwice), 2);
+  assert.equal(internalShotCount(asyncNamed), 1);
+  assert.equal(internalShotCount(helperNamedCallback), 1);
+  assert.equal(internalShotCount(helperNamedArrow), 1);
+  assert.equal(internalShotCount(helperNamedExpression), 1);
+  assert.equal(internalShotCount(mixed), 12);
+  assert.equal(internalShotCount(arrowHelper), 1);
+  assert.equal(internalShotCount(expressionHelper), 1);
+  assert.equal(internalShotCount(nestedHelper), 1);
+
+  const longWords = Array(120).fill('world').join(' ');
+  for (const code of [direct, callbacks, namedCallbacks, mixed]) {
+    const scene = { id: 'film', vo: [{ who: 'a', text: longWords }], _threeModuleContents: code };
+    const { results } = runCritique(base([scene]), { profile: 'cinematic' });
+    assert.ok(!results.some(r => r.includes('long tableaux')), results.join('\n'));
+  }
+});
+
+test('critique: ambitious 3D requires an approved creative brief', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cinematic-draft-'));
+  const scene = { id: 'film', dur: 40,
+    vo: [{ who: 'a', text: Array(110).fill('A long film needs a visual contract before production.').join(' ') }],
+    _threeModuleContents: 'sceneTl.to(camera.position,{x:2,duration:40},0);' };
+  const missing = runCritique({ ...base([scene]), projectDir: dir }, { profile: 'cinematic' }).results;
+  assert.ok(missing.some(r => r.includes('no creative-brief.md')), missing.join('\n'));
+  fs.writeFileSync(path.join(dir, 'creative-brief.md'), '# Creative brief\n\nStatus: draft\n');
+  const draft = runCritique({ ...base([scene]), projectDir: dir }, { profile: 'cinematic' }).results;
+  assert.ok(draft.some(r => r.includes('still draft')), draft.join('\n'));
+});
+
+test('critique: creative profile applies the pilot gate beyond 3D', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-creative-brief-'));
+  const scenes = [{ id: 'essay', dur: 35, body: '<div>Designed film</div>',
+    vo: [{ who: 'a', text: Array(110).fill('A substantial designed film proves its visual direction before scaling.').join(' ') }] }];
+  const missing = runCritique({ ...base(scenes), projectDir: dir }, { profile: 'creative' }).results;
+  assert.ok(missing.some(r => r.startsWith('creative:') && r.includes('no creative-brief.md')), missing.join('\n'));
+  fs.writeFileSync(path.join(dir, 'creative-brief.md'), 'Status: approved\n');
+  const approved = runCritique({ ...base(scenes), projectDir: dir }, { profile: 'creative' }).results;
+  assert.ok(!approved.some(r => r.includes('creative-brief')), approved.join('\n'));
 });
 
 test('infinite CSS animation is tagged as a correctness issue, not quality', () => {

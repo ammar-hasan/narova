@@ -24,6 +24,7 @@ test('help shows on no command, help, and -h', () => {
     assert.match(r.stdout, /Usage: narova/);
     assert.match(r.stdout, /walkthrough explore/);
     assert.match(r.stdout, /walkthrough capture/);
+    assert.match(r.stdout, /critique \[profiles\]/);
   }
 });
 
@@ -84,6 +85,9 @@ test('init scaffolds a project that passes check; init never overwrites', () => 
   const again = run(['init', proj]);
   assert.match(again.stdout, /skip\s+reel\.config\.mjs \(exists\)/);
   assert.ok(fs.statSync(path.join(proj, 'assets')).isDirectory());
+  const brief = fs.readFileSync(path.join(proj, 'creative-brief.md'), 'utf8');
+  assert.match(brief, /^Status: draft$/m);
+  assert.match(brief, /## Pilot gate/);
 });
 
 test('preview --stop is safe when no detached preview exists', () => {
@@ -101,6 +105,36 @@ test('check exits 1 with the full error list on an invalid config', () => {
   assert.equal(r.status, 1);
   assert.match(r.stderr, /body: HTML string required/);
   assert.match(r.stderr, /empty turn list requires a positive explicit dur/);
+});
+
+test('build --release runs the pre-build checker before synthesis', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-release-gate-'));
+  fs.writeFileSync(path.join(dir, 'reel.config.json'), JSON.stringify({
+    title: 'Release gate',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 'empty', body: '<div></div>', vo: [{ who: 'a', text: 'hello' }] }],
+  }));
+  const r = run(['build', '--release', '--project', dir]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stdout, /black frame/);
+  assert.match(r.stdout, /FAIL \(release\)/);
+  assert.doesNotMatch(r.stdout + r.stderr, /synth complete/);
+});
+
+test('build --release --variant preflights the base before synthesis', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-variant-release-gate-'));
+  fs.writeFileSync(path.join(dir, 'reel.config.json'), JSON.stringify({
+    title: 'Variant release gate',
+    voices: { a: { speaker: 'en_US-ryan-high' } },
+    scenes: [{ id: 'opening', body: '<div></div>', vo: [{ who: 'a', text: 'Base.' }] }],
+    variants: [{ id: 'fixed', scene: {
+      body: '<p>Visible variant.</p>', vo: [{ who: 'a', text: 'Variant.' }],
+    } }],
+  }));
+  const r = run(['build', '--release', '--variant', 'fixed', '--project', dir]);
+  assert.equal(r.status, 1, r.stderr);
+  assert.match(r.stdout, /scene "opening".*black frame/);
+  assert.doesNotMatch(r.stdout + r.stderr, /synth complete/);
 });
 
 test('commands work from a subdirectory (config discovered by walking up)', () => {
@@ -172,6 +206,7 @@ test('help documents force synthesis and temporal QA flags', () => {
   assert.equal(r.status, 0);
   assert.match(r.stdout, /--force\s+synth/);
   assert.match(r.stdout, /--motion\s+shots/);
+  assert.match(r.stdout, /--beats\s+shots/);
   assert.match(r.stdout, /--verify-motion\s+build/);
 });
 
@@ -188,6 +223,13 @@ function projectWithTimings() {
   }));
   return proj;
 }
+
+test('shots review modes are mutually exclusive', () => {
+  const proj = projectWithTimings();
+  const r = run(['shots', '--project', proj, '--at', '0.5', '--beats']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /--at, --motion, and --beats are mutually exclusive/);
+});
 
 test('captions rewrites out/captions.{srt,vtt} from timings.json', () => {
   const proj = projectWithTimings();

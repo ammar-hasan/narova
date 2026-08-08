@@ -63,6 +63,9 @@ test('restore writes manifest to destination', async () => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-'));
   const mp = path.join(tmp, 'manifest.json');
   fs.writeFileSync(mp, JSON.stringify({ narova: '0.8.2', version: '1.0', project: { title: 'Test' }, restored: true }));
+  fs.writeFileSync(path.join(tmp, '.audio-fingerprint'), 'audio-id\n');
+  fs.writeFileSync(path.join(tmp, '.timings-fingerprint'), 'timeline-id\n');
+  fs.writeFileSync(path.join(tmp, 'timings.json'), '{"total":3}\n');
   const destDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-restore-'));
   try {
     await releases().save(mp, 'restore-test');
@@ -70,6 +73,8 @@ test('restore writes manifest to destination', async () => {
     assert.ok(fs.existsSync(result.manifest), 'manifest restored');
     const content = JSON.parse(fs.readFileSync(result.manifest, 'utf8'));
     assert.equal(content.restored, true);
+    assert.equal(fs.readFileSync(path.join(destDir, '.timings-fingerprint'), 'utf8'), 'timeline-id\n');
+    assert.equal(fs.readFileSync(path.join(destDir, 'timings.json'), 'utf8'), '{"total":3}\n');
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.rmSync(destDir, { recursive: true, force: true });

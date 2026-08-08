@@ -17,6 +17,7 @@ const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
 const { auditMotion, formatMotionAudit } = require('../src/motion-audit');
+const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
 const { ingest } = require('../src/ingest');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
@@ -36,7 +37,7 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'verify-motion']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'verify-motion']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique']);
 const VALUE_FLAGS = new Set(['at', 'backend', 'config', 'duration', 'engine', 'fps', 'max-words', 'model', 'new-project', 'out', 'output', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
@@ -171,8 +172,11 @@ Commands:
   check                validate config fast — no TTS, no browser, no writes
                             --strict: verify every claim in claims.md ledger
                             --release: strict + fail on remote deps, missing
-                              claims, unsupported HTML, black frames, or stale
-                              walkthrough captures (exit 1, for build gates)
+                              claims, unsupported HTML, black frames, stale
+                              walkthrough captures, or an unapproved non-trivial
+                              creative brief (exit 1, for build gates)
+  critique [profiles]  opt-in craft review; comma-separate creative, cinematic,
+                           social-short, explainer, presentation, accessibility
   plan                 compare current config against the last manifest;
                            classify what changed and which stages will rebuild
   release save <name>  save out/manifest.json as a named release
@@ -185,7 +189,7 @@ Commands:
   walkthrough explore <id>  open source and print agent-readable interactive page state
   walkthrough capture [id]  record narration-timed product actions with agent-browser
   walkthrough status [id]   report missing/stale/fresh captured walkthrough assets
-  shots                snapshot one QA frame per scene with the selected renderer
+  shots                snapshot QA frames with the selected renderer
   build                synth + compose + selected renderer -> out/video.mp4
   preview              HyperFrames Studio, or a no-browser draft preview MP4
   renderers list       list bundled local renderer providers and capabilities
@@ -246,6 +250,8 @@ Options:
                             TikTok deliverable (requires --deliverables)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
   --motion                 shots: capture start/middle/end of every scene
+  --beats                  shots: capture arrival/resolved frames for every
+                           narration sentence and both sides of named markers
   --verify-motion          build: fail on >=2s frozen or >=0.5s black segments
   --port N                 Studio port (default 3002)
   --detach                 keep Studio running and return its URL + pid
@@ -301,7 +307,11 @@ async function main() {
       // Run critique when requested via --critique flag or as a standalone command.
       if (flags.critique) {
         console.log('');
-        critique(config, { profile: flags.critique === true ? 'all' : flags.critique });
+        critique(config, {
+          profile: flags.critique === true ? 'all' : flags.critique,
+          projectDir,
+          outDir: outDirOf(flags, projectDir),
+        });
       }
       if (!ok) process.exitCode = 1;
       return;
@@ -313,7 +323,7 @@ async function main() {
       try { ({ config, projectDir } = await loadResolved(flags)); }
       catch (e) { console.error(e.message); process.exit(1); }
       const profile = positionals[1] || flags.profile || 'all';
-      critique(config, { profile });
+      critique(config, { profile, projectDir, outDir: outDirOf(flags, projectDir) });
       return;
     }
 
@@ -524,7 +534,7 @@ async function main() {
       const caps = writeCaptions(config, out);
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
-      console.log(`  qa: narova shots   ·   preview: narova preview --detach   ·   render: narova build --reuse`);
+      console.log(`  qa: narova shots --beats   ·   preview: narova preview --detach   ·   release: narova build --reuse --release`);
       if (renderer.name === 'hyperframes') refreshPreviewIfLive(out);
       return;
     }
@@ -551,14 +561,17 @@ async function main() {
       }
       const data = composeData(config, JSON.parse(fs.readFileSync(timingsPath, 'utf8')));
       // One QA frame per scene, mid-scene by default; --at t1,t2 overrides.
-      if (flags.at && flags.motion) {
-        console.error('--at and --motion are mutually exclusive');
+      const reviewModes = [flags.at, flags.motion, flags.beats].filter(Boolean).length;
+      if (reviewModes > 1) {
+        console.error('--at, --motion, and --beats are mutually exclusive');
         process.exit(1);
       }
       const times = flags.at
         ? String(flags.at).split(',').map(Number)
+        : flags.beats
+          ? beatReviewTimes(data)
         : flags.motion
-          ? data.scenes.flatMap(sc => [0.1, 0.5, 0.9].map(p => Math.round((sc.start + sc.dur * p) * 1000) / 1000))
+          ? motionReviewTimes(data)
         : data.scenes.map(sc => Math.round((sc.start + sc.dur / 2) * 10) / 10);
       if (times.some(t => !Number.isFinite(t))) {
         console.error('--at needs comma-separated seconds, e.g. --at 0.8,6.2,14');
@@ -577,6 +590,7 @@ async function main() {
       }
       const buildOpts = {
         backend: flags.backend, reuse: flags.reuse,
+        release: flags.release,
         renderer: flags.renderer,
         fps: flags.fps, quality: flags.quality,
         deliverables: flags.deliverables
@@ -594,15 +608,28 @@ async function main() {
         // but keep the fresh-copy discipline cheap and explicit per pass.
         const fresh = () => JSON.parse(JSON.stringify(raw));
         const base = resolveConfig(fresh(), overridesFrom(flags), dir);
+        const variantConfigs = base.variants.map(v => ({
+          id: v.id,
+          config: resolveConfig(fresh(), { ...overridesFrom(flags), variant: v.id }, dir),
+        }));
+        // Preflight every deliverable before rendering any of them. A broken
+        // variant must not leave a misleading partial "release" on disk.
+        if (flags.release) {
+          for (const candidate of [base, ...variantConfigs.map(v => v.config)]) {
+            if (!check(candidate, { release: true, outDir: out })) {
+              process.exitCode = 1;
+              return;
+            }
+          }
+        }
         if (base.variants.length === 0) {
           console.log('no variants declared in config — building the base video only');
           verifyMotionIfRequested(build(base, { ...buildOpts, out, projectDir: dir }), flags);
         } else {
           verifyMotionIfRequested(build(base, { ...buildOpts, out, projectDir: dir }), flags);
-          for (const v of base.variants) {
-            console.log(`\nvariant "${v.id}": only its scene-1 sentences re-synthesize — the sentence cache covers the rest`);
-            const vc = resolveConfig(fresh(), { ...overridesFrom(flags), variant: v.id }, dir);
-            verifyMotionIfRequested(build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` }), flags);
+          for (const variant of variantConfigs) {
+            console.log(`\nvariant "${variant.id}": only its scene-1 sentences re-synthesize — the sentence cache covers the rest`);
+            verifyMotionIfRequested(build(variant.config, { ...buildOpts, out, projectDir: dir, name: `video-${variant.id}.mp4` }), flags);
           }
         }
         if (base.renderer === 'hyperframes') refreshPreviewIfLive(out);
@@ -610,6 +637,22 @@ async function main() {
       }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
+      if (flags.release) {
+        const candidates = [];
+        if (flags.variant) {
+          const { raw, dir } = await loadProjectConfig(flags.project || '.', flags.config);
+          const baseOverrides = overridesFrom(flags);
+          delete baseOverrides.variant;
+          candidates.push(resolveConfig(JSON.parse(JSON.stringify(raw)), baseOverrides, dir));
+        }
+        candidates.push(config);
+        for (const candidate of candidates) {
+          if (!check(candidate, { release: true, outDir: out })) {
+            process.exitCode = 1;
+            return;
+          }
+        }
+      }
       // --plan: print what this revision will rebuild before doing the work.
       // Advisory only (never changes build behavior). Makes the change scope
       // legible at build time so authors/agents can see which scenes are
@@ -669,7 +712,7 @@ async function main() {
       }
       const webglScenes = config.scenes.filter(s => s.three || s._threeModuleContents).length;
       if (webglScenes > 12 && !flags.scene) {
-        throw new Error(`${webglScenes} WebGL scenes exceed the safe full-preview context budget; use \`narova preview --scene <id>\` or \`narova shots --motion\``);
+        throw new Error(`${webglScenes} WebGL scenes exceed the safe full-preview context budget; use \`narova preview --scene <id>\`, \`narova shots --beats\`, or \`narova shots --motion\``);
       }
       if (flags.scene && flags.detach) {
         throw new Error('isolated --scene preview currently runs in the foreground; omit --detach');

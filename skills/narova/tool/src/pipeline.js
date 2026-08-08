@@ -24,7 +24,7 @@ const { writeCaptions } = require('./captions');
 const { getRenderer } = require('./renderers');
 const { compile, read, mergeTimings } = require('./manifest');
 const { buildDeliverables } = require('./exports');
-const { audioFingerprint } = require('./audio-fingerprint');
+const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
 
 /* ---- Python (synth) handoff -------------------------------------------------
@@ -94,28 +94,34 @@ function writeStageInputs(config, outDir) {
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
 }
 
-/* Commit the audio fingerprint atomically after successful synthesis.
+/* Commit the audio and timing fingerprints after successful synthesis.
  * Uses a write-to-temp + rename pattern so a crash partway through
  * never leaves a corrupt fingerprint behind. */
 function commitFingerprint(config, outDir) {
-  const fp = audioFingerprint(config);
-  const tmp = path.join(outDir, '.audio-fingerprint.tmp');
-  const dest = path.join(outDir, '.audio-fingerprint');
-  fs.writeFileSync(tmp, fp + '\n');
-  fs.renameSync(tmp, dest);
+  for (const [name, fp] of [
+    ['.audio-fingerprint', audioFingerprint(config)],
+    ['.timings-fingerprint', timingsFingerprint(config)],
+  ]) {
+    const tmp = path.join(outDir, `${name}.tmp`);
+    const dest = path.join(outDir, name);
+    fs.writeFileSync(tmp, fp + '\n');
+    fs.renameSync(tmp, dest);
+  }
 }
 
-/* `--reuse` replays the previous synth's audio + timings only when the
- * complete audio fingerprint matches AND the audio files are intact. A text
+/* `--reuse` replays previous audio + timings only when both identities match
+ * and the audio files are intact. A text
  * change, voice swap, backend change, tempo change, gain change, clone-sample
  * replacement, language change, or instruct change all force a full synth. */
 function resolveReuse(config, outDir, requested, log = console.log) {
   if (!requested) return false;
   const fingerprintPath = path.join(outDir, '.audio-fingerprint');
+  const timingsFingerprintPath = path.join(outDir, '.timings-fingerprint');
   const timingsPath = path.join(outDir, 'timings.json');
   const audioDir = path.join(outDir, 'audio');
 
-  if (!fs.existsSync(fingerprintPath) || !fs.existsSync(timingsPath)) {
+  if (!fs.existsSync(fingerprintPath) || !fs.existsSync(timingsFingerprintPath)
+      || !fs.existsSync(timingsPath)) {
     log('note: --reuse but no previous synth found — running a full synth');
     return false;
   }
@@ -141,6 +147,11 @@ function resolveReuse(config, outDir, requested, log = console.log) {
     } catch {
       log('note: audio configuration changed — ignoring --reuse and re-synthesizing');
     }
+    return false;
+  }
+
+  if (fs.readFileSync(timingsFingerprintPath, 'utf8').trim() !== timingsFingerprint(config)) {
+    log('note: scene topology or silent duration changed — ignoring --reuse and rebuilding timings');
     return false;
   }
 
@@ -179,8 +190,9 @@ function synth(outDir, opts = {}) {
   // no longer exists, so a later --reuse won't pick up partially overwritten
   // audio by mistake.
   if (!opts.reuse && opts.config) {
-    const fp = path.join(outDir, '.audio-fingerprint');
-    try { fs.unlinkSync(fp); } catch {}
+    for (const name of ['.audio-fingerprint', '.timings-fingerprint']) {
+      try { fs.unlinkSync(path.join(outDir, name)); } catch {}
+    }
   }
   const r = spawnSync(py, args, { stdio: 'inherit', cwd: TOOL_ROOT, env: { ...process.env, PYTHONPATH: pyPath } });
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
@@ -250,6 +262,15 @@ function build(config, opts = {}) {
     });
   }
   enrichTimeline(outDir);
+  // The first preflight deliberately runs before expensive work. Actual voice
+  // duration is unknowable until synth, so release builds run the same gate once
+  // more here: after timings exist, before compose or rendering writes a video.
+  if (opts.release) {
+    const { check } = require('./check');
+    if (!check(config, { release: true, outDir })) {
+      throw new Error('release check failed after measured narration timing');
+    }
+  }
 
   const selectedRenderer = getRenderer(opts.renderer || config.renderer);
   log(`[2/3] compose (${selectedRenderer.name})`);

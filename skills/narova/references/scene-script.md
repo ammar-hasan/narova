@@ -346,7 +346,9 @@ declarative config; `threeModule` is the raw-JS escape hatch.
 
 Using Three.js proves only that the scene is rendered in 3D; it does not make
 the result detailed or cinematic. Before authoring an ambitious film, turn the
-reference and creative direction into an explicit production brief:
+reference and creative direction into an explicit production brief. New
+projects scaffold this as `creative-brief.md`; keep it at `Status: draft` until
+establishing, close, and action pilot frames prove the direction:
 
 - silhouette and geometry density: hero forms, secondary props, and small-scale
   breakup rather than one primitive per idea;
@@ -362,9 +364,9 @@ reference and creative direction into an explicit production brief:
 
 Models and textures are optional; production depth is not. Procedural geometry
 can satisfy the brief, but a sparse low-poly scene should be an intentional art
-direction rather than Narova's default. Run `narova critique cinematic` and
-`narova shots --motion`, inspect the actual rendered frames at the beginning,
-middle, and end of every scene, and compare them directly with the reference.
+direction rather than Narova's default. Run `narova critique creative,cinematic` and
+`narova shots --beats`; inspect both sides of every narration/marker beat and
+compare the actual rendered frames directly with the approved pilot/reference.
 
 ## What `check` enforces (errors)
 

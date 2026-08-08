@@ -9,7 +9,7 @@ prompts, scripts, web pages, and real product walkthroughs into narrated,
 captioned video. Rendered on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.26.1-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.27.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -25,6 +25,11 @@ captioned video. Rendered on your machine.
 - **Two voices, one conversation** — local-first neural TTS dialogue, with optional registered providers when a project needs them. Give each speaker a color; narova writes the banter and the timing.
 - **Karaoke captions** — every word lights up exactly as it's spoken, in the speaker's color. No manual timing, ever.
 - **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
+- **Creative confidence before render cost** — non-trivial projects compare
+  directions, write a visual contract, and prove an establishing shot, close shot,
+  and action/reveal pilot before scaling to the full film.
+- **Beat-level visual QA** — deterministic snapshots cover the arrival and resolved
+  state of every narration beat, both sides of named markers, and silent scenes.
 - **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
   HyperFrames, or select Narova No-Browser for deterministic Skia + FFmpeg output
   on machines where no browser is available. No render service or fee.
@@ -77,9 +82,11 @@ up to five images, and optionally capturing a browser screenshot — but
 interpretation, repository analysis, PDF reading, and content selection remain
 the agent's responsibility.
 
-Your agent uses Narova to recommend the creative direction, create the editable
-project, synthesize the narration, check the result, and show you a preview.
-You direct revisions in the same conversation.
+Your agent uses Narova to compare creative directions, turn the chosen direction
+into an explicit visual contract, prove a small pilot, create the editable project,
+and show you beat-level snapshots plus a preview. You direct revisions in the same
+conversation; the release build refuses to start when a non-trivial project's
+creative brief is not approved.
 
 ## Direct CLI control
 
@@ -91,10 +98,13 @@ npm link            # optional: gives you the `narova` command
 narova doctor       # core tools + optional agent-browser walkthrough adapter
 
 narova init generated/myreel && cd generated/myreel
+# complete creative-brief.md and approve its pilot gate
+narova critique creative,cinematic
 narova synth        # makes narration + word timings
 narova walkthrough capture   # product demos only: explicit, timed browser take
-narova preview --detach   # review it in HyperFrames Studio
-narova build --reuse      # after approval → out/video.mp4
+narova compose && narova shots --beats  # inspect every narrative/marker beat
+narova preview --detach   # direct the film in HyperFrames Studio
+narova build --reuse --release  # fail-before-render final gate → out/video.mp4
 ```
 
 You need: **ffmpeg**, **Node 18+**, **Python 3.10+**.
@@ -111,7 +121,9 @@ Without `npm link`, run `node skills/narova/tool/bin/narova.js` instead of `naro
 
 ## The scene script
 
-A project is a folder with one config file: `reel.config.mjs`.
+A project is a folder with `reel.config.mjs` as its render source of truth. New
+projects also include `creative-brief.md`; approve its pilot gate before releasing
+a non-trivial production.
 
 ```js
 export default {
@@ -254,8 +266,8 @@ narova walkthrough explore onboarding   # inspect real semantic controls
 narova synth                             # establishes measured narration timing
 narova walkthrough capture onboarding   # explicit live action + WebM/evidence
 narova preview --detach
-narova check --release
-narova build --reuse
+narova shots --beats
+narova build --reuse --release
 ```
 
 Recipes prefer roles, labels, test ids, and visible text over brittle
@@ -313,7 +325,7 @@ narova check          validate the config (fast, no side effects)
 narova synth          make the audio + word timings
 narova compose        make the selected renderer project
 narova walkthrough    explore/capture/status narrated product demos
-narova shots          snapshot one QA frame per scene
+narova shots          snapshot QA frames per scene, motion sample, or narration beat
 narova build          synth + compose + render -> out/video.mp4
 narova preview        HyperFrames Studio, or a no-browser draft MP4
 narova preview --detach   keep Studio alive; stop with preview --stop
@@ -336,6 +348,9 @@ Useful flags: `--backend <built-in-or-registered-provider>`,
 ## How it works
 
 ```
+creative-brief.md
+   │  compare directions → visual contract → three-shot pilot approval
+   ▼
 reel.config.mjs
    │
    ▼  synth      Python makes the speech and the word timings.
@@ -350,7 +365,8 @@ out/video.mp4
 ```
 
 `out/`, `out/hf-*`, and `out/no-browser-*` are build folders. Never edit them.
-The config file is the only source of truth.
+The config remains the render source of truth; the approved brief records why the
+creative direction is ready to scale.
 
 ## Repo layout
 

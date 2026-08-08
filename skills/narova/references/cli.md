@@ -16,7 +16,7 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | Command | Does | Cost |
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
-| `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, and stale walkthrough captures. Exit 1 on release-mode failures. | instant |
+| `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, stale walkthrough captures, and missing/draft creative approval for non-trivial work. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. **Skipped automatically when `config.narration.file` is set** — external audio is copied directly and mixed with bed/sfx. | built-ins are local; external-provider cost depends on its service |
@@ -37,7 +37,9 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
 | `narova renderers list` | list the bundled local `hyperframes` and `no-browser` renderer providers. | instant |
 | `narova shots --motion` | capture start/middle/end frames for every scene; WebGL scenes are isolated to avoid browser context limits. | browser snapshot pass |
+| `narova shots --beats` | capture arrival and resolved frames for every narration sentence, both sides of named markers, and motion coverage for silent scenes. Use this as the visual-production gate for internally directed long scenes. | browser snapshot pass |
 | `narova build --verify-motion` | render, then fail when FFmpeg detects a ≥2s frozen or ≥0.5s black segment. | build + verification pass |
+| `narova build --release` | preflight strict source/creative checks, recheck measured duration before rendering, then fail on frozen or black encoded intervals. Use for final delivery. | build + release verification |
 | `narova renderers doctor <name>` | verify provider-local dependencies; no-browser explicitly reports that a browser is unnecessary. | instant |
 | `narova doctor` | check ffmpeg, python, venv, optional agent-browser, and HyperFrames. Exit 1 if a required core tool is missing; missing optional adapters/backends are reported separately. | first run downloads the HyperFrames CLI |
 | `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |
@@ -64,8 +66,9 @@ Renderer providers are different: both are bundled, local, and free. See
 - `--renderer hyperframes|no-browser` — renderer provider. HyperFrames is the
   default; no-browser is browserless and requires `scene.visual` on every scene.
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
-  Meant for visual-only edits; if the spoken text changed since the last
-  synth, `--reuse` is ignored with a note and a full synth runs instead.
+  Meant for visual-only edits; if spoken text, scene topology, or silent runtime
+  changed since the last synth, `--reuse` is ignored with a note and the needed
+  audio/timing rebuild runs instead.
 - `--tempo N` — speech speed (1.1–1.2 reads well).
 - `--size 16:9|1:1|9:16` — frame shape.
 - `--platform tiktok|reels|shorts|linkedin|x|youtube` — frame preset plus the target
@@ -84,6 +87,10 @@ Renderer providers are different: both are bundled, local, and free. See
   `build --variants`; the build remains read-only and never records implicitly.
 - `--fps N`, `--quality draft|standard|high` — render settings.
 - `--at t1,t2,…` — `shots`: explicit frame times in seconds.
+- `--motion` — `shots`: start/middle/end of each scene.
+- `--beats` — `shots`: arrival/resolved state of every narration sentence,
+  both sides of named markers, and scene coverage for silent work. Mutually
+  exclusive with `--at` and `--motion`.
 - `--port N` — Studio port (default 3002; auto-detects next available if 3002 is in use).
 - `--detach` / `preview --stop` — start or stop persistent Studio.
 - `--voice-a <s>`, `--voice-b <s>` — replace the first two voices (add more voices directly in the config).
@@ -157,13 +164,13 @@ times for you.
   degrades to the right one.)
 - Product walkthrough: declare → `walkthrough explore <id>` → script/check →
   synth → `walkthrough capture <id>` → compose/shots/preview → release check →
-  `build --reuse`. A narration/action change needs recapture; body/theme or
+  `build --reuse --release`. A narration/action change needs recapture; body/theme or
   window/full presentation edits reuse the recording.
-- Visual QA: `narova shots` snapshots one mid-scene frame per scene into the
-  selected provider project (`--at t1,t2` for explicit times; the `compose`
-  scene table lists every start). Then LOOK at the frames — box-based overlap
-  lint misses oversized display type bleeding over neighbors and content
-  sliding under the topbar/caption band.
+- Visual QA: use `narova shots --beats` for narration/marker-driven work and
+  `shots --motion` for scene coverage (`--at t1,t2` remains available for a
+  custom shot plan). Then LOOK at every frame against `creative-brief.md` —
+  technical lint cannot reject hidden action, empty staging, weak hierarchy,
+  broken continuity, or a generic visual direction.
 - Extra checks on the generated page, inside `out/hf`:
   `npx hyperframes lint`, `npx hyperframes check`,
   `npx hyperframes snapshot --at <t1,t2> -o <directory>`. Snapshot `-o` /

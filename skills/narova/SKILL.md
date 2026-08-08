@@ -1,34 +1,20 @@
 ---
 name: narova
 description: >
-  Use narova for deterministic scene-scripted video with exceptionally strong
-  narration synchronization (narration is optional): narrated or captioned
-  explainers, multi-host dialogue (0 to N narrators), prompt/script/README-to-video,
-  narrated product demos and sales walkthroughs with real browser actions,
-  videos sourced from web pages and agent-readable sources (product sites,
-  articles, docs, repositories), word-synced karaoke captions,
-  voice-triggered reveals, background beds and sound effects, per-platform
-  presets and comprehensive export profiles (TikTok/Reels/Shorts/LinkedIn/X/YouTube),
-  SRT/VTT sidecar captions, 3D scenes (scene.three / scene.elements,
-  with scene.threeModule as the raw Three.js/WebGL escape hatch),
-  mixed 2D/3D compositing, AI clip generation (narova generate),
-  or local neural TTS with no API keys. It turns a prompt or scene script
-  into an MP4 with local
-  piper/xtts/qwen/chatterbox voiceover, word-level captions, and
-  speech-timed visuals rendered through local HyperFrames (2D HTML/CSS,
-  3D Three.js/WebGL, SVG, video compositing) or the browserless
-  no-browser Skia/FFmpeg provider. The full tool ships
-  inside the skill. Also use whenever the user names narova or a
-  reel.config file. For silent motion graphics without narration, use plain
-  HyperFrames instead.
+  Use narova whenever the user names Narova or reel.config, or wants a
+  deterministic scene-scripted video: narrated/captioned explainers,
+  multi-host dialogue, prompt/script/README-to-video, product walkthroughs
+  with real browser actions, or source-grounded videos from sites, articles,
+  docs, and repositories. Supports optional local neural TTS, word-synced
+  captions and reveals, music/SFX, platform export presets, SRT/VTT, 2D
+  HTML/CSS/SVG, Three.js/WebGL 3D, mixed compositing, AI clips, and silent
+  marker-driven work. It turns a scene script into MP4 through HyperFrames or
+  the browserless Skia/FFmpeg provider; scene.threeModule is the raw 3D escape
+  hatch. Use plain HyperFrames for unrelated silent motion graphics.
 license: MIT
-compatibility: >
-  Requires Node.js 18+, Python 3.10+ and ffmpeg.
-  First-time model setup and HyperFrames setup require internet access.
-  Product walkthrough capture optionally requires agent-browser.
 metadata:
   author: ammar-hasan
-  version: "0.26.1"
+  version: "0.27.0"
 ---
 # narova — video from scene scripts
 
@@ -77,6 +63,10 @@ Or bring your own recording with `narration.file` and `narration.wordTimings`.
 
 ## The tool ships bundled — nothing to install
 
+Requires Node.js 18+, Python 3.10+, and FFmpeg. First-time model and
+HyperFrames setup requires internet access. Product walkthrough capture can
+optionally use agent-browser.
+
 ```bash
 node <this-skill-dir>/tool/bin/narova.js <command>
 ```
@@ -92,9 +82,11 @@ External TTS providers are optional registered companion skills — see
 
 ## Workflow: prompt → video
 
-0. **Concept branch** (when appropriate): sketch 2–3 distinct creative
-   directions that differ in visual language and structure. Pick the strongest.
-   See `references/prompt-to-video.md` §Concept branching.
+0. **Creative contract**: for non-trivial, reference-driven, or ambitious 3D
+   work, fill `creative-brief.md`, branch 2–3 genuinely different directions,
+   and prove the chosen direction with establishing, close, and action pilot
+   frames. Set `Status: approved` only when the pilot meets the written visual
+   contract. See `references/prompt-to-video.md` §Creative confidence loop.
 1. **Intake** — `references/prompt-to-video.md` §Intake.
 2. `doctor` — check the machine. Fix with `references/environment.md`.
 2. `init generated/<slug>` + write `reel.config.mjs`. Format: `references/scene-script.md`.
@@ -102,11 +94,14 @@ External TTS providers are optional registered companion skills — see
    first, then `references/url-to-source.md`.
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
-   For optional craft advice: `narova critique [social-short|explainer|presentation|cinematic|accessibility]`.
+   For optional craft advice: `narova critique [creative|social-short|explainer|presentation|cinematic|accessibility]`.
 5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
-6. `compose` — generates the selected renderer project. Run `narova shots` for visual QA.
+6. `compose` — generates the selected renderer project. Run `narova shots --beats`
+   for narration/marker-driven work, or `shots --motion` for scene coverage.
 7. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
-8. `build` — renders `out/video.mp4`. Verify: audio `dur` by eye, then ffprobe.
+8. `build --release` — preflights strict checks before synthesis, rechecks
+   measured timing before compose/render, writes `out/video.mp4`, then runs the
+   temporal audit. Verify the encoded contact sheet against the approved brief.
 
 ## Key gotchas
 
@@ -140,8 +135,8 @@ External TTS providers are optional registered companion skills — see
   foreground-midground-background layering, material variation, lighting and
   atmosphere, character blocking, camera language, motion beats, and final
   compositing. A few low-poly primitives can be technically correct Three.js
-  and still look like a moving diorama. Use `critique cinematic` and
-  `shots --motion`, then judge the rendered frames against the reference.
+  and still look like a moving diorama. Use `critique creative,cinematic` and
+  `shots --beats`, then judge the rendered frames against the reference.
 
 Read `references/gotchas.md` for the full list.
 
@@ -172,7 +167,7 @@ sentences; untouched scenes are byte-identical). See
 
 | Read…                          | to…                                                          |
 |--------------------------------|--------------------------------------------------------------|
-| `references/prompt-to-video.md` | intake, creative direction, iterating                       |
+| `references/prompt-to-video.md` | creative contract, pilot gate, intake, direction, iteration |
 | `references/url-to-source.md`   | classify a source page and extract factual & visual evidence |
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
 | `references/product-walkthroughs.md` | explore, capture, compose, and QA product demos         |
@@ -186,7 +181,7 @@ sentences; untouched scenes are byte-identical). See
 
 For optional craft advice (hook, saveable end-card, platform duration band,
 3D quality hints, cinematic shot/action density, accessibility), run `narova critique [profile]`. Profiles:
-`social-short`, `explainer`, `presentation`, `cinematic`, `accessibility`, or `all`. This is
+`creative`, `social-short`, `explainer`, `presentation`, `cinematic`, `accessibility`, or `all`. This is
 creative guidance, not a correctness gate — skip it when the work does not need
 social-video grammar.
 

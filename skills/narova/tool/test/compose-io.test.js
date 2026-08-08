@@ -97,5 +97,11 @@ test('--reuse holds only while the spoken text is unchanged', () => {
   assert.equal(resolveReuse(config, out, true), true, 'same vo -> reuse the audio');
   const edited = { ...config, scenes: [{ ...config.scenes[0], vo: [{ who: 'a', text: 'Changed.' }] }] };
   assert.equal(resolveReuse(edited, out, true), false, 'changed vo -> force a full synth');
+  const renamed = { ...config, scenes: [{ ...config.scenes[0], id: 'renamed' }] };
+  assert.equal(resolveReuse(renamed, out, true), false, 'scene topology change -> rebuild timings');
+  const silent = { ...config, voices: {}, scenes: [{ id: 'pause', body: '<p>x</p>', vo: [], dur: 3 }] };
+  commitFingerprint(silent, out);
+  assert.equal(resolveReuse({ ...silent, scenes: [{ ...silent.scenes[0], dur: 8 }] }, out, true), false,
+    'silent duration change -> rebuild silent audio and timings');
   assert.equal(resolveReuse(config, out, false), false, '--reuse not requested -> never reuse');
 });

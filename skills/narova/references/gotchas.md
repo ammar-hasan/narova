@@ -143,9 +143,10 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   is automatically restarted on the new build (same port) by `compose`,
   `build`, and `preview --detach` itself. Manual restart is only a fallback.
 - **Snapshots verify; Studio watches.** The reliable visual-QA loop is
-  `narova shots` (one mid-scene frame per scene into
-  `out/hf/snapshots/review/`, `--at` for explicit times) plus actually
-  viewing the frames. Manual equivalent inside `out/hf`:
+  `narova shots --beats` for the arriving and resolved state of every narration
+  or marker beat, `shots --motion` for scene coverage, and `--at` for explicit
+  times, plus actually viewing the frames. Snapshots land in
+  `out/hf/snapshots/review/`. Manual equivalent inside `out/hf`:
   `npx hyperframes snapshot --at <t1,t2,…> -o snapshots/review` — `-o` takes
   a **directory**, not a file path.
 - **Agent shells don't persist variables.** Spell out
@@ -176,8 +177,10 @@ Narova's contract: a revision changes only what the user asked for.
 | Walkthrough capture stale | Re-capture + compose + render | Audio replayed |
 | Release restore | Full synth | Sentence cache serves identical audio, fast rebuild |
 
-The fingerprint (`out/.audio-fingerprint`) determines whether audio can be
-replayed. Visual-only edits don't change it. Text edits do.
+Two identities protect reuse: `out/.audio-fingerprint` covers synthesized speech,
+while `out/.timings-fingerprint` adds scene topology and silent durations. A
+visual-only edit changes neither; text, scene structure, or silent runtime changes
+force the appropriate rebuild.
 
 ## Resolved issues (version 0.17.0+)
 

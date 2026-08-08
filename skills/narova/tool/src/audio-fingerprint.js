@@ -67,4 +67,18 @@ function audioFingerprint(config) {
   }));
 }
 
-module.exports = { audioFingerprint };
+/* Identity for timings.json reuse. Unlike the speech-only fingerprint above,
+ * this includes the scene topology and current silent runtimes because both
+ * affect the measured production timeline without changing synthesized audio. */
+function timingsFingerprint(config) {
+  return sha256(stableStringify({
+    audio: audioFingerprint(config),
+    scenes: (config.scenes || []).map(scene => ({
+      id: scene.id,
+      turns: (scene.vo || []).length,
+      silentDur: (scene.vo || []).length === 0 ? scene.dur : null,
+    })),
+  }));
+}
+
+module.exports = { audioFingerprint, timingsFingerprint };

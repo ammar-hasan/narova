@@ -110,9 +110,9 @@ async function save(manifestPath, name, opts = {}) {
   const outDir = path.dirname(manifestPath);
   const saved = ['manifest.json'];
 
-  // Save audio fingerprint + timings so --reuse works after restore.
-  // These are small text files; saving them avoids a full re-synth.
-  for (const fname of ['.audio-fingerprint', 'timings.json']) {
+  // Save audio/timeline identities + timings so --reuse and measured release
+  // checks remain trustworthy after restore.
+  for (const fname of ['.audio-fingerprint', '.timings-fingerprint', 'timings.json']) {
     const src = path.join(outDir, fname);
     if (fs.existsSync(src)) {
       fs.copyFileSync(src, path.join(releaseDir, fname));
@@ -354,8 +354,8 @@ function restore(name, destDir, opts = {}) {
 
   const results = { manifest: manifestDest, restored: [], skipped: [], conflicts: [] };
 
-  // Restore audio fingerprint and timings to the output directory (not project root).
-  for (const fname of ['.audio-fingerprint', 'timings.json']) {
+  // Restore fingerprints and timings to the output directory (not project root).
+  for (const fname of ['.audio-fingerprint', '.timings-fingerprint', 'timings.json']) {
     const src = path.join(srcDir, fname);
     const dest = path.join(manifestDestDir, fname);
     if (fs.existsSync(src)) {
@@ -369,7 +369,7 @@ function restore(name, destDir, opts = {}) {
 
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     if (entry.name === 'manifest.json') continue;
-    if (entry.name === '.audio-fingerprint' || entry.name === 'timings.json') continue;
+    if (['.audio-fingerprint', '.timings-fingerprint', 'timings.json'].includes(entry.name)) continue;
     const src = path.join(srcDir, entry.name);
     const dest = path.join(projectDir, entry.name);
 

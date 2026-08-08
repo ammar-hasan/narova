@@ -297,7 +297,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Copy the scenes array: the variant swap below replaces scenes[0], and the
   // caller's raw config must never be mutated (the CLI re-resolves one raw
   // config for base + each variant in a --variants build).
-  const scenes = Array.isArray(raw.scenes) ? raw.scenes.map(s => ({ ...s })) : [];
+  const scenes = Array.isArray(raw.scenes) ? raw.scenes.map(s => ({
+    ...s,
+    // Preserve duration provenance before narrated scenes receive the schema's
+    // pre-synth planning fallback. Release readiness must not confuse the two.
+    _durAuthored: typeof s.dur === 'number' && Number.isFinite(s.dur) && s.dur > 0,
+  })) : [];
   if (scenes.length === 0) errs.push('config.scenes: at least one scene required');
 
   // Resolve scene file references (bodyFile, threeFile, etc.) BEFORE validation
@@ -417,6 +422,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         errs.push(`${at}.vo[${j}].lang: must be a language code string (e.g. "en", "ar", "ur")`);
       }
     });
+    if (s.dur != null && !(typeof s.dur === 'number' && Number.isFinite(s.dur) && s.dur > 0)) {
+      errs.push(`${at}.dur: when provided, must be a positive finite number`);
+    }
     if (s.elements != null) {
       validateElements(s.elements, `${at}`, errs);
     }
