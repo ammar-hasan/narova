@@ -16,6 +16,7 @@ const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previe
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
+const { auditMotion, formatMotionAudit } = require('../src/motion-audit');
 const { ingest } = require('../src/ingest');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
@@ -35,18 +36,24 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'verify-motion']);
+const BOOL_OR_VALUE = new Set(['deliverables', 'critique']);
+const VALUE_FLAGS = new Set(['at', 'backend', 'config', 'duration', 'engine', 'fps', 'max-words', 'model', 'new-project', 'out', 'output', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
   const positionals = [];
   const flags = {};
-  // Flags that can be either boolean OR take a value (bare = true, with value = string).
-  const BOOL_OR_VALUE = new Set(['deliverables']);
   for (let i = 0; i < argv.length; i++) {
     const a = argv[i];
     if (a.startsWith('--')) {
       const eq = a.indexOf('=');
-      if (eq !== -1) { flags[a.slice(2, eq)] = a.slice(eq + 1); continue; }
+      if (eq !== -1) {
+        const key = a.slice(2, eq);
+        if (!BOOL_FLAGS.has(key) && !BOOL_OR_VALUE.has(key) && !VALUE_FLAGS.has(key)) {
+          console.error(`unknown option --${key}`); process.exit(1);
+        }
+        flags[key] = a.slice(eq + 1); continue;
+      }
       const key = a.slice(2);
       if (BOOL_OR_VALUE.has(key)) {
         const nxt = argv[i + 1];
@@ -58,6 +65,7 @@ function parseArgs(argv) {
         continue;
       }
       if (BOOL_FLAGS.has(key)) { flags[key] = true; continue; }
+      if (!VALUE_FLAGS.has(key)) { console.error(`unknown option --${key}`); process.exit(1); }
       // Every remaining flag expects a value; a bare `--tempo` must error, not
       // silently resolve to `true` (Number(true)===1, "true" -> hyperframes).
       const nxt = argv[i + 1];
@@ -90,6 +98,13 @@ async function loadResolved(flags) {
 
 const outDirOf = (flags, projectDir) =>
   path.resolve(flags.out || path.join(projectDir || '.', 'out'));
+
+function verifyMotionIfRequested(built, flags) {
+  if (!flags['verify-motion'] && !flags.release) return;
+  const report = auditMotion(built.mp4);
+  console.log(formatMotionAudit(report));
+  if (!report.ok) process.exitCode = 1;
+}
 
 /* Studio serves out/hf-<slug> from disk and does not hot-reload; compose deletes and
  * recreates that directory, so a detached preview left running would keep
@@ -193,8 +208,8 @@ Commands:
                               --provider sora|runway   API provider (default: sora)
                               --output <path>           output file (default: assets/gen-<provider>-<slug>.mp4)
                               --model <id>              provider model (e.g. sora-2, gen4.5)
-                              --size <WxH>              generation size (Sora)
-                              --duration <s>            generation duration in seconds (Sora)
+                              --size <WxH>              generation size/ratio
+                              --duration <s>            Sora: 4|8|12; Runway: provider-supported seconds
                               --regenerate <mp4>        re-run a previous clip from its .gen.json spec
                                                         (keeps provider/model/prompt; override any of them)
                               A .gen.json spec sidecar is written next to every clip so the
@@ -210,6 +225,7 @@ Options:
   --renderer hyperframes|no-browser   local renderer (default: hyperframes)
   --reuse                  skip synth, reuse out/audio + out/timings.json
                            (ignored automatically if the spoken text changed)
+  --force                  synth even when reusable audio exists
   --tempo N                narration tempo (atempo)
   --size 16:9|1:1|9:16     frame aspect
   --platform tiktok|reels|shorts|linkedin|x|youtube   frame preset + target duration band
@@ -229,8 +245,11 @@ Options:
   --safe-area-guides       build: overlay TikTok safe-area zones on the
                             TikTok deliverable (requires --deliverables)
   --at t1,t2,...           shots: explicit frame times (default: mid-scene)
+  --motion                 shots: capture start/middle/end of every scene
+  --verify-motion          build: fail on >=2s frozen or >=0.5s black segments
   --port N                 Studio port (default 3002)
   --detach                 keep Studio running and return its URL + pid
+  --scene <id>             preview one isolated scene (safe for WebGL-heavy films)
   --stop                   stop a detached Studio preview
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
@@ -488,7 +507,7 @@ async function main() {
     case 'synth': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
-      const reuse = resolveReuse(config, out, flags.reuse);
+      const reuse = flags.force ? false : resolveReuse(config, out, flags.reuse);
       writeStageInputs(config, out);
       synth(out, { backend: flags.backend, reuse, projectDir, config });
       enrichTimeline(out);   // merge measured timings into manifest.json
@@ -532,8 +551,14 @@ async function main() {
       }
       const data = composeData(config, JSON.parse(fs.readFileSync(timingsPath, 'utf8')));
       // One QA frame per scene, mid-scene by default; --at t1,t2 overrides.
+      if (flags.at && flags.motion) {
+        console.error('--at and --motion are mutually exclusive');
+        process.exit(1);
+      }
       const times = flags.at
         ? String(flags.at).split(',').map(Number)
+        : flags.motion
+          ? data.scenes.flatMap(sc => [0.1, 0.5, 0.9].map(p => Math.round((sc.start + sc.dur * p) * 1000) / 1000))
         : data.scenes.map(sc => Math.round((sc.start + sc.dur / 2) * 10) / 10);
       if (times.some(t => !Number.isFinite(t))) {
         console.error('--at needs comma-separated seconds, e.g. --at 0.8,6.2,14');
@@ -571,13 +596,13 @@ async function main() {
         const base = resolveConfig(fresh(), overridesFrom(flags), dir);
         if (base.variants.length === 0) {
           console.log('no variants declared in config — building the base video only');
-          build(base, { ...buildOpts, out, projectDir: dir });
+          verifyMotionIfRequested(build(base, { ...buildOpts, out, projectDir: dir }), flags);
         } else {
-          build(base, { ...buildOpts, out, projectDir: dir });
+          verifyMotionIfRequested(build(base, { ...buildOpts, out, projectDir: dir }), flags);
           for (const v of base.variants) {
             console.log(`\nvariant "${v.id}": only its scene-1 sentences re-synthesize — the sentence cache covers the rest`);
             const vc = resolveConfig(fresh(), { ...overridesFrom(flags), variant: v.id }, dir);
-            build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` });
+            verifyMotionIfRequested(build(vc, { ...buildOpts, out, projectDir: dir, name: `video-${v.id}.mp4` }), flags);
           }
         }
         if (base.renderer === 'hyperframes') refreshPreviewIfLive(out);
@@ -614,10 +639,11 @@ async function main() {
           console.log('plan: no previous manifest — this is a first build');
         }
       }
-      build(config, {
+      const built = build(config, {
         ...buildOpts, out, projectDir,
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
+      verifyMotionIfRequested(built, flags);
       if (config.renderer === 'hyperframes') refreshPreviewIfLive(out);
       return;
     }
@@ -641,7 +667,16 @@ async function main() {
         console.log(`no-browser preview -> ${rendered.mp4}`);
         return;
       }
-      const r = composeWithRenderer(config, out);
+      const webglScenes = config.scenes.filter(s => s.three || s._threeModuleContents).length;
+      if (webglScenes > 12 && !flags.scene) {
+        throw new Error(`${webglScenes} WebGL scenes exceed the safe full-preview context budget; use \`narova preview --scene <id>\` or \`narova shots --motion\``);
+      }
+      if (flags.scene && flags.detach) {
+        throw new Error('isolated --scene preview currently runs in the foreground; omit --detach');
+      }
+      const r = flags.scene
+        ? renderer.composeScene(config, out, String(flags.scene))
+        : composeWithRenderer(config, out);
       if (flags.detach) {
         // A live Studio keeps serving the directory compose just replaced, so
         // re-running preview --detach means "show me the new build": stop the

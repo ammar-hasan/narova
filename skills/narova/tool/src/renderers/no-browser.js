@@ -130,7 +130,7 @@ function compose(config, outDir) {
   validateConfig(config);
   ensureDir(outDir);
   const timings = timingsFor(config, outDir);
-  const data = composeData(config, timings);
+  const data = composeData(config, timings, config.captionsEnabled !== false);
   for (const entry of fs.readdirSync(outDir, { withFileTypes: true })) {
     if (entry.isDirectory() && entry.name.startsWith('no-browser-')) {
       fs.rmSync(path.join(outDir, entry.name), { recursive: true, force: true });
@@ -169,6 +169,7 @@ function compose(config, outDir) {
     chrome: config.chrome || {},
     voices: config.voices || {},
     captions: config.captions || {},
+    captionsEnabled: config.captionsEnabled !== false,
     scenes,
     timeline: data,
   };
@@ -583,6 +584,18 @@ function drawNode(ctx, node, frames, localTime, scene, env) {
     if (style.stroke || !style.fill) { ctx.strokeStyle = style.stroke || '#ffffff'; ctx.lineWidth = +style.strokeWidth || 2; ctx.stroke(p); }
     ctx.restore();
   } else if (node.type === 'text') drawText(ctx, node, frame, env);
+  else if (node.type === 'counter') {
+    const duration = Number.isFinite(node.duration) && node.duration > 0 ? node.duration : Math.max(0.001, scene.dur);
+    const progress = Math.max(0, Math.min(1, localTime / duration));
+    const target = Number(node.target) || 0;
+    const decimals = Number.isInteger(node.decimals) && node.decimals >= 0
+      ? node.decimals : (Number.isInteger(target) ? 0 : 1);
+    drawText(ctx, {
+      ...node,
+      type: 'text',
+      text: `${(target * progress).toFixed(decimals)}${node.suffix || ''}`,
+    }, frame, env);
+  }
   else if (node.type === 'image' || node.type === 'svg') {
     const image = imageFrom(env.canvas, node, env.baseDir, env.images);
     fitImage(ctx, image, frame, style.fit || 'cover');
@@ -613,6 +626,7 @@ function transitionState(scene, localTime, index) {
 }
 
 function drawCaptions(ctx, project, time, env) {
+  if (project.captionsEnabled === false || project.timeline.preset === false) return;
   const group = project.timeline.groups.find(g => time >= g.start && time < g.end);
   if (!group || !group.words.length) return;
   const width = project.size.w, height = project.size.h;
@@ -661,21 +675,33 @@ function drawCaptions(ctx, project, time, env) {
       const active = time >= word.t0 && time < word.t1;
       const past = time >= word.t1;
       const voice = project.voices[group.who] || {};
-      ctx.fillStyle = active ? (voice.color || project.theme.accent || '#2ee6d6') : (past ? '#ffffff' : '#9ca8ba');
+      const preset = project.timeline.preset || 'subtitle';
+      const look = captionWordStyle(preset, active, past, voice.color || project.theme.accent || '#2ee6d6');
+      ctx.fillStyle = look.color;
+      ctx.globalAlpha = look.alpha;
       if (font) {
         cursor -= wordWidths[i];
         const lineTop = y + paddingY + lineHeight * lineIndex;
-        const baseline = lineTop + wordRuns[i].bbox.maxY * fontScale;
+        const baseline = lineTop + wordRuns[i].bbox.maxY * fontScale + look.y;
         drawGlyphRun(ctx, wordRuns[i], cursor, baseline, fontScale, env);
         cursor -= gap;
       } else {
         if (canvasRtl) cursor -= wordWidths[i];
-        ctx.fillText(word.w, cursor, y + paddingY + lineHeight * (lineIndex + 0.5));
+        ctx.fillText(word.w, cursor, y + paddingY + lineHeight * (lineIndex + 0.5) + look.y);
         cursor += canvasRtl ? -gap : (wordWidths[i] + gap);
       }
     });
   });
   ctx.restore();
+}
+
+function captionWordStyle(preset, active, past, accent) {
+  if (preset === 'subtitle') return { color: '#ffffff', alpha: 0.92, y: 0 };
+  const color = active ? accent : (past ? '#ffffff' : '#9ca8ba');
+  if (preset === 'pop') return { color, alpha: active || past ? 1 : 0.35, y: active ? -3 : 0 };
+  if (preset === 'rise') return { color, alpha: 1, y: active ? -5 : 0 };
+  if (preset === 'slam') return { color, alpha: 1, y: active ? -7 : 0 };
+  return { color, alpha: 1, y: active ? -2 : 0 }; // karaoke
 }
 
 function drawChrome(ctx, project, time, sceneIndex) {
@@ -699,6 +725,7 @@ function drawChrome(ctx, project, time, sceneIndex) {
 }
 
 function captionSafeInset(project) {
+  if (project.captionsEnabled === false || project.timeline.preset === false) return 0;
   if (!(project.timeline.groups || []).length) return 0;
   return Math.round(Math.min(170, Math.max(84, project.size.h * 0.26)) * 1000) / 1000;
 }
@@ -794,7 +821,7 @@ function renderCanvas(project, projectDir, time, env) {
   drawNode(ctx, current.source.visual, frames, localTime, current.timeline, { ...env, baseDir: projectDir });
   ctx.restore();
   drawChrome(ctx, project, time, current.index);
-  drawCaptions(ctx, project, time, env);
+  if (project.captionsEnabled !== false && project.timeline.preset !== false) drawCaptions(ctx, project, time, env);
   return canvas;
 }
 
@@ -1001,6 +1028,6 @@ module.exports = {
   cache: { mode: 'per-scene' },
   _internals: {
     layoutTree, animatedState, renderCanvas, qualityOptions,
-    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, gradientLine,
+    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, captionWordStyle, gradientLine,
   },
 };

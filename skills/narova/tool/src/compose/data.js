@@ -47,14 +47,14 @@ function composeData(config, timings, captionsEnabled = true) {
       if (!by.has(w.si)) by.set(w.si, []);
       by.get(w.si).push(w);
     }
-    for (const ws of by.values()) {
+    for (const [si, ws] of by.entries()) {
       const who = ws[0].who;
       const label = (config.voices[who] && config.voices[who].label) || who;
       // Chunk long sentences into maxWords-sized caption lines (bilingual content).
       for (let offset = 0; offset < ws.length; offset += maxWords) {
         const chunk = ws.slice(offset, offset + maxWords);
         groups.push({
-          who,
+          who, si,
           label,
           start: r3(sc.start + chunk[0].t0),
           sceneEnd: r3(sc.start + sc.dur),

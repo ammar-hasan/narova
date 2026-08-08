@@ -141,4 +141,4 @@ fi
 say "Done"
 echo "  venv: $VENV"
 [ "$WITH_CHATTERBOX" = "1" ] && echo "  chatterbox venv: $CB_VENV"
-echo "  Verify the toolchain with the narova doctor command."
+echo "  Verify the toolchain with: node $TOOL/bin/narova.js doctor"

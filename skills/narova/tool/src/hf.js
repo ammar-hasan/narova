@@ -56,11 +56,17 @@ function npxSync(args, opts) {
 /* Run a hyperframes CLI command in `cwd` (normally out/hf). Inherits stdio so
  * progress is visible. Throws on non-zero exit. */
 function runHf(args, cwd, opts = {}) {
+  const { quiet = false, ...spawnOpts } = opts;
   const r = npxSync(['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, ...args], {
-    cwd, stdio: 'inherit', ...opts,
+    cwd,
+    ...(quiet ? { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] } : { stdio: 'inherit' }),
+    ...spawnOpts,
   });
   if (r.error) throw r.error;
-  if (r.status !== 0) throw new Error(`hyperframes ${args[0]} exited ${r.status}`);
+  if (r.status !== 0) {
+    const detail = quiet ? String(r.stderr || r.stdout || '').trim().split('\n').pop() : '';
+    throw new Error(`hyperframes ${args[0]} exited ${r.status}${detail ? `: ${detail}` : ''}`);
+  }
   return r;
 }
 

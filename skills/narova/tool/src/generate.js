@@ -19,9 +19,9 @@ const PROVIDERS = {
   },
   runway: {
     name: 'Runway',
-    api: 'https://api.runwayml.com/v1/generations',
-    envKey: 'RUNWAY_API_KEY',
-    description: 'Runway Gen-4.5 — text/image-to-video generation (requires RUNWAY_API_KEY)',
+    api: 'https://api.dev.runwayml.com/v1/text_to_video',
+    envKey: 'RUNWAYML_API_SECRET',
+    description: 'Runway Gen-4.5 — text-to-video generation (requires RUNWAYML_API_SECRET)',
   },
 };
 
@@ -54,41 +54,109 @@ function postJson(url, data, headers = {}) {
   });
 }
 
-function downloadFile(url, dest) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const mod = u.protocol === 'https:' ? https : http;
-    mod.get(url, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        return downloadFile(res.headers.location, dest).then(resolve, reject);
-      }
-      if (res.statusCode !== 200) return reject(new Error(`download failed: ${res.statusCode}`));
-      const file = fs.createWriteStream(dest);
-      res.pipe(file);
-      file.on('finish', () => { file.close(); resolve(dest); });
-      file.on('error', reject);
-    }).on('error', reject);
+function postMultipartFields(url, fields, headers = {}) {
+  const boundary = `narova-${require('crypto').randomBytes(12).toString('hex')}`;
+  const chunks = [];
+  for (const [name, value] of Object.entries(fields)) {
+    if (value == null) continue;
+    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
+  }
+  chunks.push(Buffer.from(`--${boundary}--\r\n`));
+  const body = Buffer.concat(chunks);
+  return requestBuffer('POST', url, body, {
+    'Content-Type': `multipart/form-data; boundary=${boundary}`,
+    'Content-Length': body.length,
+    ...headers,
+  }).then(res => {
+    let parsed;
+    try { parsed = JSON.parse(res.body.toString('utf8')); } catch { parsed = res.body.toString('utf8'); }
+    return { status: res.status, body: parsed };
   });
 }
 
-/* Poll until the generation is complete (Sora pattern — submit, then poll). */
+function requestBuffer(method, url, body = null, headers = {}) {
+  return new Promise((resolve, reject) => {
+    const u = new URL(url);
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request({
+      hostname: u.hostname, port: u.port, path: u.pathname + u.search,
+      method, headers,
+    }, res => {
+      const chunks = [];
+      res.on('data', chunk => chunks.push(chunk));
+      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+    });
+    req.on('error', reject);
+    if (body) req.write(body);
+    req.end();
+  });
+}
+
+async function getJson(url, headers = {}) {
+  const res = await requestBuffer('GET', url, null, headers);
+  let body;
+  try { body = JSON.parse(res.body.toString('utf8')); } catch { body = res.body.toString('utf8'); }
+  if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}: ${JSON.stringify(body)}`);
+  return body;
+}
+
+function downloadFile(url, dest, opts = {}) {
+  const maxBytes = opts.maxBytes || 1024 * 1024 * 1024;
+  const maxRedirects = opts.maxRedirects == null ? 5 : opts.maxRedirects;
+  const headers = opts.headers || {};
+  const temp = `${dest}.part-${process.pid}-${Date.now()}`;
+  function cleanup(error, reject) {
+    try { fs.rmSync(temp, { force: true }); } catch {}
+    reject(error);
+  }
+  function fetch(current, redirects, resolve, reject, requestHeaders) {
+    const u = new URL(current);
+    const mod = u.protocol === 'https:' ? https : http;
+    const req = mod.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers: requestHeaders }, res => {
+      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
+        res.resume();
+        if (redirects >= maxRedirects) return cleanup(new Error(`download exceeded ${maxRedirects} redirects`), reject);
+        const next = new URL(res.headers.location, current);
+        const nextHeaders = next.origin === u.origin
+          ? requestHeaders
+          : Object.fromEntries(Object.entries(requestHeaders).filter(([key]) => !/^(authorization|cookie)$/i.test(key)));
+        return fetch(next.toString(), redirects + 1, resolve, reject, nextHeaders);
+      }
+      if (res.statusCode !== 200) { res.resume(); return cleanup(new Error(`download failed: ${res.statusCode}`), reject); }
+      const contentType = String(res.headers['content-type'] || '').toLowerCase();
+      if (contentType && !/^(video\/|application\/(?:octet-stream|mp4))/.test(contentType)) {
+        res.resume(); return cleanup(new Error(`download returned unexpected content-type: ${contentType}`), reject);
+      }
+      const declared = Number(res.headers['content-length']);
+      if (Number.isFinite(declared) && declared > maxBytes) {
+        res.resume(); return cleanup(new Error(`download exceeds ${maxBytes} byte limit`), reject);
+      }
+      let received = 0;
+      const file = fs.createWriteStream(temp, { flags: 'wx' });
+      res.on('data', chunk => {
+        received += chunk.length;
+        if (received > maxBytes) req.destroy(new Error(`download exceeds ${maxBytes} byte limit`));
+      });
+      res.pipe(file);
+      file.on('finish', () => file.close(error => {
+        if (error) return cleanup(error, reject);
+        try { fs.renameSync(temp, dest); resolve(dest); } catch (renameError) { cleanup(renameError, reject); }
+      }));
+      file.on('error', error => cleanup(error, reject));
+      res.on('error', error => cleanup(error, reject));
+    });
+    req.on('error', error => cleanup(error, reject));
+    req.end();
+  }
+  return new Promise((resolve, reject) => fetch(url, 0, resolve, reject, headers));
+}
+
+/* Poll until the OpenAI video job reaches a terminal state. */
 async function pollSora(jobId, apiKey, timeoutMs = 300000) {
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
-    const res = await new Promise((resolve, reject) => {
-      const u = new URL(`https://api.openai.com/v1/videos/${jobId}`);
-      const req = https.request({
-        hostname: u.hostname, path: u.pathname,
-        headers: { Authorization: `Bearer ${apiKey}` },
-      }, res => {
-        let chunks = '';
-        res.on('data', d => chunks += d);
-        res.on('end', () => { try { resolve(JSON.parse(chunks)); } catch { resolve(chunks); } });
-      });
-      req.on('error', reject);
-      req.end();
-    });
-    if (res.status === 'completed' || res.status === 'succeeded') return res;
+    const res = await getJson(`https://api.openai.com/v1/videos/${encodeURIComponent(jobId)}`, { Authorization: `Bearer ${apiKey}` });
+    if (res.status === 'completed') return res;
     if (res.status === 'failed') throw new Error(`Sora generation failed: ${JSON.stringify(res)}`);
     await new Promise(r => setTimeout(r, 3000));
   }
@@ -96,33 +164,56 @@ async function pollSora(jobId, apiKey, timeoutMs = 300000) {
 }
 
 async function generateSora(prompt, apiKey, params = {}) {
-  const submit = await postJson(
+  const seconds = String(params.seconds || params.duration || 4);
+  if (!['4', '8', '12'].includes(seconds)) throw new Error('Sora duration must be 4, 8, or 12 seconds');
+  const submit = await postMultipartFields(
     'https://api.openai.com/v1/videos',
-    { model: params.model || 'sora-2', prompt, size: params.size || '1280x720', duration: params.duration || 5 },
+    { model: params.model || 'sora-2', prompt, size: params.size || '1280x720', seconds },
     { Authorization: `Bearer ${apiKey}` },
   );
   if (submit.status !== 200 && submit.status !== 201) {
     throw new Error(`Sora API error: ${JSON.stringify(submit.body)}`);
   }
   const jobId = submit.body.id;
-  const result = await pollSora(jobId, apiKey);
-  const videoUrl = result.video_url || (result.output && result.output.video_url);
-  if (!videoUrl) throw new Error('Sora result missing video URL');
-  return videoUrl;
+  await pollSora(jobId, apiKey, params.timeoutMs);
+  return {
+    url: `https://api.openai.com/v1/videos/${encodeURIComponent(jobId)}/content`,
+    headers: { Authorization: `Bearer ${apiKey}` },
+  };
+}
+
+async function pollRunway(taskId, apiKey, timeoutMs = 600000) {
+  const deadline = Date.now() + timeoutMs;
+  while (Date.now() < deadline) {
+    const task = await getJson(`https://api.dev.runwayml.com/v1/tasks/${encodeURIComponent(taskId)}`, {
+      Authorization: `Bearer ${apiKey}`,
+      'X-Runway-Version': '2024-11-06',
+    });
+    if (task.status === 'SUCCEEDED') return task;
+    if (task.status === 'FAILED' || task.status === 'CANCELED') throw new Error(`Runway generation ${task.status.toLowerCase()}: ${JSON.stringify(task)}`);
+    await new Promise(r => setTimeout(r, 5000 + Math.floor(Math.random() * 500)));
+  }
+  throw new Error('Runway generation timed out');
 }
 
 async function generateRunway(prompt, apiKey, params = {}) {
   const res = await postJson(
-    'https://api.runwayml.com/v1/generations',
-    { model: params.model || 'gen4.5', prompt },
+    'https://api.dev.runwayml.com/v1/text_to_video',
+    {
+      model: params.model || 'gen4.5',
+      promptText: prompt,
+      ratio: params.ratio || String(params.size || '1280x720').replace('x', ':'),
+      duration: params.duration || 5,
+    },
     { Authorization: `Bearer ${apiKey}`, 'X-Runway-Version': '2024-11-06' },
   );
   if (res.status !== 200 && res.status !== 201) {
     throw new Error(`Runway API error: ${JSON.stringify(res.body)}`);
   }
-  const videoUrl = res.body.video_url || res.body.output?.video_url;
-  if (!videoUrl) throw new Error('Runway result missing video URL');
-  return videoUrl;
+  if (!res.body || !res.body.id) throw new Error('Runway result missing task id');
+  const task = await pollRunway(res.body.id, apiKey, params.timeoutMs);
+  if (!Array.isArray(task.output) || !task.output[0]) throw new Error('Runway result missing output URL');
+  return { url: task.output[0], headers: {} };
 }
 
 async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = {}) {
@@ -132,25 +223,27 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
   console.log(`Generating video with ${info.name}...`);
   console.log(`Prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
 
-  let videoUrl;
+  let download;
   const params = { ...(opts.params || {}) };
   if (provider === 'sora') {
     // Capture the exact generation parameters so the shot can be regenerated
     // or revised ("make it rainy", "same composition, different seed").
     params.model = params.model || 'sora-2';
     params.size = params.size || '1280x720';
-    params.duration = params.duration || 5;
-    videoUrl = await generateSora(prompt, apiKey, params);
+    params.duration = params.duration || 4;
+    download = await generateSora(prompt, apiKey, params);
   } else if (provider === 'runway') {
     params.model = params.model || 'gen4.5';
-    videoUrl = await generateRunway(prompt, apiKey, params);
+    params.ratio = params.ratio || String(params.size || '1280x720').replace('x', ':');
+    params.duration = params.duration || 5;
+    download = await generateRunway(prompt, apiKey, params);
   } else throw new Error(`Provider ${provider} not yet implemented`);
 
   console.log(`Downloading video...`);
   const destDir = path.dirname(outputPath);
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-  await downloadFile(videoUrl, outputPath);
+  await downloadFile(download.url, outputPath, { headers: download.headers });
   const stats = fs.statSync(outputPath);
   console.log(`Saved: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
 
@@ -159,7 +252,7 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
   // MP4 is cache/output; this spec is the creative source that survives. An
   // author can later say "regenerate this with the same composition but a
   // different mood" and the provider/model/prompt/params are all recoverable.
-  const spec = buildSpec(provider, info, prompt, params, videoUrl, outputPath, stats.size);
+  const spec = buildSpec(provider, info, prompt, params, download.url, outputPath, stats.size);
   const specPath = specPathFor(outputPath);
   fs.writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n');
   console.log(`Spec:   ${specPath}`);
@@ -209,4 +302,8 @@ function readSpec(artifactPath) {
   catch { return null; }
 }
 
-module.exports = { PROVIDERS, providerInfo, generate, buildSpec, readSpec, specPathFor };
+module.exports = {
+  PROVIDERS, providerInfo, generate, buildSpec, readSpec, specPathFor,
+  generateSora, generateRunway, pollSora, pollRunway, downloadFile,
+  _internals: { postJson, postMultipartFields, requestBuffer, getJson },
+};

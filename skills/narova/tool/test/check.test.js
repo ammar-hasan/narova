@@ -722,6 +722,33 @@ test('determinism scan covers the raw Three.js escape hatch (threeModule)', () =
   assert.ok(warns.some(l => l.includes('Date') && l.includes('threeModule')));
 });
 
+test('raw Three modules reject unanchored composition-global timeline positions in release mode', () => {
+  const cfg = base([{ id: 's', vo: [{ who: 'a', text: 'one' }], dur: 6,
+    _threeModuleContents: 'tl.to(camera.position,{x:2,duration:1},0);' }]);
+  const { ok, lines } = run(cfg, { release: true });
+  assert.equal(ok, false);
+  assert.ok(lines.some(l => l.includes('composition-global tl without at()')), lines.join('\n'));
+  const safe = base([{ id: 's', vo: [{ who: 'a', text: 'one' }], dur: 6,
+    _threeModuleContents: 'sceneTl.to(camera.position,{x:2,duration:1},0);' }]);
+  assert.ok(!run(safe).lines.some(l => l.includes('composition-global tl without at()')));
+});
+
+test('check reports WebGL-heavy full previews while isolated build remains supported', () => {
+  const scenes = Array.from({ length: 13 }, (_, i) => ({ id: `s${i}`, vo: [], dur: 1,
+    _threeModuleContents: 'scene.add(new THREE.Group());' }));
+  const lines = run({ ...base(scenes), voices: {} }).lines;
+  assert.ok(lines.some(l => l.includes('safe eager-preview context budget')), lines.join('\n'));
+});
+
+test('critique: cinematic profile detects long tableaux and sparse raw action', () => {
+  const scenes = Array.from({ length: 4 }, (_, i) => ({ id: `s${i}`, dur: 12,
+    vo: [{ who: 'a', text: 'This is a deliberately long spoken sequence with several words and little visual change.' }],
+    _threeModuleContents: 'scene.add(new THREE.Group());' }));
+  const { results } = runCritique(base(scenes), { profile: 'cinematic' });
+  assert.ok(results.some(r => r.includes('average') && r.includes('tableaux')), results.join('\n'));
+  assert.ok(results.some(r => r.includes('fewer than three timeline actions')), results.join('\n'));
+});
+
 test('infinite CSS animation is tagged as a correctness issue, not quality', () => {
   const cfg = base(
     [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'one' }] }],

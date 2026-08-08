@@ -97,17 +97,27 @@ function composeDoc(config, size, data, css) {
   const karaokeCss = karaoke.css; // empty string if no karaoke config
 
   // Build enriched scenes with karaoke overlays injected as trailing HTML.
-  let sceneCursor = 0;
-  const enrichedScenes = config.scenes.map(s => {
-    const dur = s.dur || 0;
-    const overlay = karaoke.overlayForScene ? karaoke.overlayForScene(sceneCursor, dur) : '';
+  const enrichedScenes = config.scenes.map((s, i) => {
+    const measured = data.scenes[i];
+    if (!measured) throw new Error(`composeDoc: no timing data for scene "${s.id}"`);
+    const start = measured.start;
+    const dur = measured.dur;
+    const cueGroups = (data.groups || []).filter(g =>
+      g.start < start + dur && g.end > start,
+    ).map(g => ({
+      ...g,
+      start: Math.max(0, g.start - start),
+      end: Math.min(dur, g.end - start),
+      words: (g.words || []).map(w => ({ ...w, t0: w.t0 - start, t1: w.t1 - start })),
+    }));
+    const sceneData = { ...measured, markers: data.markers || {}, groups: cueGroups };
+    const overlay = karaoke.overlayForScene ? karaoke.overlayForScene(start, dur) : '';
     let body = String(s.body || '');
     if (s._threeModuleContents) {
-      body = threeModuleSceneBody(s, { start: sceneCursor, dur }, size.w, size.h) + (body || '');
+      body = threeModuleSceneBody(s, sceneData, size.w, size.h) + (body || '');
     } else if (s.three) {
-      body = threeSceneBody(s, { start: sceneCursor, dur }, size.w, size.h) + (body || '');
+      body = threeSceneBody(s, sceneData, size.w, size.h) + (body || '');
     }
-    sceneCursor += dur;
     return { ...s, body: body + overlay };
   });
 
@@ -327,7 +337,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   // beyond the isolated project's duration and the canvas would never animate.
   const enrichedScene = { ...scene };
   const s = enrichedScene;
-  const scLocal = { start: 0, dur: sceneDur, turns: sceneTurns };
+  const scLocal = { start: 0, dur: sceneDur, turns: sceneTurns, markers: localMarkers, groups: sceneGroups };
   let body = String(s.body || '');
   if (s._threeModuleContents) {
     body = threeModuleSceneBody(s, scLocal, size.w, size.h) + (body || '');

@@ -12,8 +12,10 @@ const { compile, validate: validateManifest } = require('../src/manifest');
 const { listRenderers, getRenderer } = require('../src/renderers');
 const { validateVisual, visualToHtml, materializeVisualBodies } = require('../src/renderers/visual');
 const { findLatinFont } = require('../src/renderers/system-font');
-const { threeSetupJs, threeSceneBody, threeModuleSetupJs, threeModuleSceneBody, hasThreeScenes, hasThreeModels, hasThreeModules, collectModelAssets, threeHeadScripts, THREE_IMPORT } = require('../src/compose/three');
+const { threeSetupJs, threeSceneBody, threeModuleSetupJs, threeModuleSceneBody, hasThreeScenes, hasThreeModels, hasThreeModules, collectModelAssets, collectTextureAssets, threeHeadScripts, THREE_IMPORT } = require('../src/compose/three');
 const { resolveElementsScene, validateElements, hasElements } = require('../src/compose/elements');
+const { composeDoc } = require('../src/compose/html');
+const { orbitCamera, panCamera } = require('../src/compose/camera-dsl');
 
 const VISUAL = {
   type: 'stack',
@@ -193,6 +195,37 @@ test('no-browser reserves one caption-safe band without shrinking the scene back
   assert.deepEqual(frames.get(child), { x: 0, y: 0, w: 640, h: 266.4 });
 });
 
+test('no-browser honors disabled, subtitle, pop, rise, and slam caption behavior', () => {
+  const noBrowser = getRenderer('no-browser');
+  const { captionSafeInset, captionWordStyle } = noBrowser._internals;
+  const off = { captionsEnabled: false, size: { h: 360 }, timeline: { preset: false, groups: [{ words: [{}] }] } };
+  assert.equal(captionSafeInset(off), 0);
+  assert.deepEqual(captionWordStyle('subtitle', true, false, '#f00'), { color: '#ffffff', alpha: 0.92, y: 0 });
+  assert.equal(captionWordStyle('pop', false, false, '#f00').alpha, 0.35);
+  assert.equal(captionWordStyle('rise', true, false, '#f00').y, -5);
+  assert.equal(captionWordStyle('slam', true, false, '#f00').y, -7);
+});
+
+test('no-browser compose carries captions:false into its project timeline', () => {
+  const temp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'narova-no-cap-'));
+  const out = path.join(temp, 'out');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(out, 'audio', 'full.wav'), 'placeholder');
+  fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify({ one: { dur: 1, turns: [], words: [] } }));
+  try {
+    const composed = getRenderer('no-browser').compose({
+      title: 'No captions', size: { w: 320, h: 180 }, projectDir: temp,
+      captionsEnabled: false, captions: {}, voices: {}, chrome: {},
+      scenes: [{ id: 'one', dur: 1, vo: [], visual: { type: 'rect', style: {} }, transition: 'fade' }],
+    }, out);
+    const project = JSON.parse(fs.readFileSync(path.join(composed.dir, 'project.json'), 'utf8'));
+    assert.equal(project.captionsEnabled, false);
+    assert.equal(project.timeline.preset, false);
+  } finally {
+    fs.rmSync(temp, { recursive: true, force: true });
+  }
+});
+
 test('mixed-script RTL shaping falls back to canvas text instead of throwing', t => {
   try { require.resolve('@napi-rs/canvas'); require.resolve('fontkit'); }
   catch { t.skip('no-browser deps not installed'); return; }
@@ -257,7 +290,7 @@ test('no-browser provider renders a real browserless MP4 with local audio', { ti
 
 // --- canvas3d node type ---
 
-test('canvas3d in visual tree validates cleanly and renders a canvas+script', () => {
+test('legacy canvas3d placeholder is rejected in favor of working scene.three', () => {
   const vis = {
     type: 'canvas3d',
     three: {
@@ -266,18 +299,16 @@ test('canvas3d in visual tree validates cleanly and renders a canvas+script', ()
       objects: [{ type: 'cube', color: '#2ee6d6' }],
     },
   };
-  assert.deepEqual(validateVisual(vis), []);
-  const html = visualToHtml(vis);
-  assert.match(html, /<canvas/);
-  assert.match(html, /narova-three-canvas/);
-  assert.match(html, /data-three=/);
+  assert.match(validateVisual(vis).join(' '), /use scene\.three/);
+  // Direct materialization is deterministic for backwards-compatible tooling.
+  assert.equal(visualToHtml(vis), visualToHtml(vis));
 });
 
 test('canvas3d rejects missing three config', () => {
   const vis = { type: 'canvas3d' };
   const errs = validateVisual(vis);
   assert.ok(errs.length > 0);
-  assert.match(errs[0], /3D scene config required/);
+  assert.match(errs.join(' '), /3D scene config required/);
 });
 
 test('canvas3d validates nested three config', () => {
@@ -368,6 +399,22 @@ test('elements: 2D text only scene compiles to body HTML', () => {
   assert.match(result.body, /Hello World/);
   assert.match(result.body, /class="cue"/);
   assert.match(result.body, /data-cue="0"/);
+});
+
+test('elements: image/video sources and cue classes compile as valid HTML', () => {
+  const result = resolveElementsScene({
+    id: 'media', vo: [], dur: 2,
+    elements: [
+      { type: 'image', src: 'assets/pic.png' },
+      { type: 'video', src: 'assets/clip.mp4' },
+      { type: 'text', content: 'Hello', class: 'hero', actions: [{ type: 'appear', at: { marker: 'hit' } }] },
+    ],
+  }, {});
+  assert.match(result.body, /src="assets\/pic\.png"/);
+  assert.match(result.body, /src="assets\/clip\.mp4"/);
+  assert.doesNotMatch(result.body, /src=""/);
+  assert.match(result.body, /class="hero cue" data-cue="marker:hit"/);
+  assert.equal((result.body.match(/class="hero cue"/g) || []).length, 1);
 });
 
 test('elements: mixed 2D/3D compiles to three + HTML overlay', () => {
@@ -584,13 +631,15 @@ test('threeSetupJs compiles instances to a single InstancedMesh', () => {
   assert.equal((js.match(/new THREE\.Mesh\(/g) || []).length, 0);
 });
 
-test('validateVisual accepts valid instances and rejects malformed ones', () => {
-  assert.deepEqual(validateVisual({
+test('legacy canvas3d still validates nested instance data before migration', () => {
+  const valid = validateVisual({
     type: 'canvas3d',
     three: {
       objects: [{ type: 'sphere', instances: [{ position: [0, 0, 0] }, { position: [1, 0, 0] }] }],
     },
-  }), []);
+  });
+  assert.equal(valid.length, 1);
+  assert.match(valid[0], /use scene\.three/);
   const bad = validateVisual({
     type: 'canvas3d',
     three: { objects: [{ type: 'sphere', instances: [{ position: [0, 0] }] }] },
@@ -633,6 +682,64 @@ test('fix: opacity-animated mesh gets an isolated material, not the shared cache
   // The static mesh still shares the cache.
   assert.match(js, /_m\("#ff0000\|0\|1"/);
   assert.equal((js.match(/_m\("#ff0000\|0\|1"/g) || []).length, 1);
+  assert.match(js, /this\.targets\(\)\[0\]\.t/);
+});
+
+test('full composition drives 3D from measured scene starts, durations, and turns', () => {
+  const config = {
+    title: 'Measured', size: { w: 800, h: 600 }, voices: {}, chrome: {}, captionsEnabled: false,
+    scenes: [
+      { id: 'a', dur: 6, vo: [], three: { objects: [{ type: 'cube' }] } },
+      { id: 'b', dur: 6, vo: [], three: { objects: [{ type: 'sphere', animate: { property: 'scale', from: 0, to: 1, duration: 1, at: { cue: 0 } } }] } },
+    ],
+  };
+  const html = composeDoc(config, config.size, {
+    total: 5, groups: [], preset: false, markers: {},
+    scenes: [
+      { id: 'a', start: 0, dur: 2, turns: [] },
+      { id: 'b', start: 2, dur: 3, turns: [1.4] },
+    ],
+  }, '');
+  assert.match(html, /duration:3,ease:'none',onUpdate:_render\},2\)/);
+  assert.match(html, /duration:1,ease:"power2\.inOut"\},3\.4\)/);
+  assert.doesNotMatch(html, /onUpdate:_render\},6\)/);
+});
+
+test('3D markers, camera helpers, and camera wait offsets resolve deterministically', () => {
+  const cameraAnimate = orbitCamera({ marker: 'orbit' }, 8, { segments: 2 });
+  assert.deepEqual(cameraAnimate.map(a => a.at), Array(4).fill({ marker: 'orbit' }));
+  assert.deepEqual(cameraAnimate.map(a => a.wait), [0, 0, 4, 4]);
+  assert.equal(panCamera(1, { amount: 3 })[0].by, 3);
+  const js = threeSetupJs('cam', {
+    camera: {}, cameraAnimate,
+    objects: [{ type: 'cube', animate: { property: 'scale', from: 0, to: 1, duration: 1, at: { marker: 'reveal', offset: 0.25 } } }],
+  }, 0, 12, 800, 600, [], { orbit: 2, reveal: 5 });
+  assert.match(js, /duration:4,ease:"power2\.inOut"\},2\)/);
+  assert.match(js, /duration:4,ease:"none"\},6\)/);
+  assert.match(js, /duration:1,ease:"power2\.inOut"\},5\.25\)/);
+});
+
+test('texture collection is recursive, includes particles, and material keys isolate maps', () => {
+  const config = { scenes: [{ three: { objects: [
+    { type: 'cube', map: 'a/color.png' },
+    { type: 'group', children: [{ type: 'sphere', normalMap: 'b/normal.png' }] },
+    { type: 'particles', texture: 'p/dot.png' },
+  ] } }] };
+  assert.deepEqual(collectTextureAssets(config).sort(), ['a/color.png', 'b/normal.png', 'p/dot.png']);
+  const js = threeSetupJs('maps', { objects: [
+    { type: 'cube', color: '#fff', map: 'a.png' },
+    { type: 'cube', color: '#fff', map: 'b.png' },
+  ] }, 0, 2, 320, 180);
+  assert.match(js, /map=a\.png/);
+  assert.match(js, /map=b\.png/);
+});
+
+test('HDR environments use the bundled HDRLoader and raw modules escape script ends', () => {
+  const js = threeSetupJs('hdr', { envMap: { src: 'assets/sky.hdr' }, objects: [] }, 0, 2, 320, 180);
+  assert.match(js, /new THREE\.HDRLoader\(\)/);
+  const html = threeModuleSceneBody({ id: 'raw', _threeModuleContents: 'const x="<\/script><img>";' }, { start: 0, dur: 1 }, 320, 180);
+  assert.doesNotMatch(html, /<\/script><img>/);
+  assert.match(html, /<\\\/script><img>/);
 });
 
 test('fix: animationTweens honors authored `from` via fromTo', () => {
@@ -760,8 +867,14 @@ test('threeModuleSetupJs builds the deterministic shell and inlines author code'
   // Context the author relies on.
   assert.match(js, /var size=\{w:1280,h:720\}/);
   assert.match(js, /var duration=6/);
+  assert.match(js, /var start=0/);
+  assert.match(js, /var sceneTl=window\.gsap\.timeline\(\)/);
+  assert.match(js, /tl\.add\(sceneTl,start\)/);
+  assert.match(js, /function at\(t\)/);
   assert.match(js, /function assets\(name\)/);
   assert.match(js, /function onRender\(fn\)/);
+  assert.match(js, /function onBeforeRender\(fn\)/);
+  assert.match(js, /function onAfterRender\(fn\)/);
   assert.match(js, /narova=\{prng:/);
   // The author's body is inlined verbatim.
   assert.match(js, /IcosahedronGeometry/);
@@ -770,6 +883,23 @@ test('threeModuleSetupJs builds the deterministic shell and inlines author code'
   assert.match(js, /tl\.to\(T,/);
   // Default per-frame render paints scene+camera.
   assert.match(js, /renderer\.render\(scene,camera\)/);
+  assert.ok(js.indexOf('_renderFns[i]()') < js.indexOf('renderer.render(scene,camera)'), 'before-render callbacks must run before WebGL paints');
+});
+
+test('raw Three modules expose measured local word, sentence, marker, and turn anchors', () => {
+  const html = threeModuleSceneBody(
+    { id: 'cues', _threeModuleContents: 'sceneTl.set(camera.position,{x:1},narova.cueWord("Yet"));' },
+    { start: 10, dur: 5, turns: [0.2], markers: { reveal: 12.5 }, groups: [
+      { si: 0, start: 0.2, end: 2, words: [{ w: 'Hello', t0: 0.2, t1: 0.8 }] },
+      { si: 1, start: 2.1, end: 5, words: [{ w: 'Yet', t0: 2.1, t1: 2.5 }] },
+    ] }, 320, 180,
+  );
+  assert.match(html, /var _sentences=\[0\.2,2\.1\]/);
+  assert.match(html, /"w":"Yet","t0":2\.1/);
+  assert.match(html, /cueMarker:function\(name\)\{return Number\.isFinite\(_markers\[name\]\)\?_markers\[name\]-start:0/);
+  assert.match(html, /atSentence:function/);
+  assert.match(html, /atWord:function/);
+  assert.match(html, /atMarker:function/);
 });
 
 test('threeModuleSetupJs inlines author code safely (try/catch) and seeds deterministically', () => {
@@ -784,10 +914,16 @@ test('threeModuleSetupJs inlines author code safely (try/catch) and seeds determ
 
 test('threeModuleSetupJs honors declarative camera/shell when scene.three is also present', () => {
   const body = 'scene.add(new THREE.Mesh());';
-  const js = threeModuleSetupJs('mix', { camera: { fov: 70, position: [1, 2, 3] }, fog: { color: '#101010', near: 2, far: 20 } }, body, 0, 3, 800, 600, []);
+  const js = threeModuleSetupJs('mix', {
+    camera: { fov: 70, position: [1, 2, 3] },
+    fog: { color: '#101010', near: 2, far: 20 },
+    envMap: { src: 'studio.hdr', intensity: 1.5 },
+  }, body, 0, 3, 800, 600, []);
   assert.match(js, /PerspectiveCamera\(70,/);
   assert.match(js, /camera\.position\.set\(1,2,3\)/);
   assert.match(js, /THREE\.Fog\("#101010",2,20\)/);
+  assert.match(js, /new THREE\.HDRLoader\(\)/);
+  assert.match(js, /scene\.environmentIntensity=1\.5/);
 });
 
 test('threeModuleSceneBody emits the managed canvas + inlined bootstrap', () => {

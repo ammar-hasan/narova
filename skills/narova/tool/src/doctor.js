@@ -7,6 +7,7 @@
 const fs = require('fs');
 const path = require('path');
 const os = require('os');
+const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const { which } = require('./util');
 const { findPython } = require('./pipeline');
@@ -17,6 +18,17 @@ const { HYPERFRAMES_VERSION, npxSync } = require('./hf');
 const PY_ENV = { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') };
 
 const NAROVA_HOME = process.env.NAROVA_HOME || path.join(os.homedir(), '.narova');
+const TOOL_DIR = path.resolve(__dirname, '..');
+
+function sourceFingerprint(toolDir) {
+  const files = ['bin/narova.js', 'src/compose/three.js', 'src/pipeline.js'];
+  const hash = crypto.createHash('sha256');
+  for (const rel of files) {
+    const file = path.join(toolDir, rel);
+    if (fs.existsSync(file)) hash.update(fs.readFileSync(file));
+  }
+  return hash.digest('hex').slice(0, 12);
+}
 
 function pyOk(py) {
   const r = spawnSync(py, ['-c', 'import sys;print(sys.version.split()[0])'], { encoding: 'utf8' });
@@ -61,6 +73,20 @@ function versionAtLeast(found, required) {
 function doctor(projectDir) {
   const rows = [];
   const add = (name, ok, detail, optional = false) => rows.push({ name, ok, detail, optional });
+
+  const version = require('../package.json').version;
+  const fingerprint = sourceFingerprint(TOOL_DIR);
+  add('narova source', true, `${TOOL_DIR} (${version}+${fingerprint})`);
+  const installedTool = path.join(os.homedir(), '.agents', 'skills', 'narova', 'tool');
+  if (fs.existsSync(installedTool) && path.resolve(installedTool) !== TOOL_DIR) {
+    const installedFingerprint = sourceFingerprint(installedTool);
+    let installedVersion = 'unknown';
+    try { installedVersion = JSON.parse(fs.readFileSync(path.join(installedTool, 'package.json'), 'utf8')).version; } catch {}
+    add('installed skill sync', installedFingerprint === fingerprint,
+      installedFingerprint === fingerprint
+        ? `${installedTool} matches this source`
+        : `${installedTool} is ${installedVersion}+${installedFingerprint}, current source is ${version}+${fingerprint} — reinstall/sync before production work`);
+  }
 
   const ffmpeg = which('ffmpeg');
   add('ffmpeg', !!ffmpeg, ffmpeg || 'not found — install via `brew install ffmpeg`');
@@ -132,4 +158,4 @@ function doctor(projectDir) {
   return allOk;
 }
 
-module.exports = { doctor };
+module.exports = { doctor, sourceFingerprint };

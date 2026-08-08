@@ -32,6 +32,7 @@ function findClaims(config) {
       }
     });
   }
+
   return hits;
 }
 
@@ -430,6 +431,11 @@ function check(config, opts = {}) {
     }
   }
 
+  const webglScenes = config.scenes.filter(s => s.three || s._threeModuleContents).length;
+  if (webglScenes > 12) {
+    warnings.push(`${webglScenes} WebGL scenes exceed the safe eager-preview context budget (12) — build and shots isolate scenes automatically; use motion shots instead of relying on the full Studio preview`);
+  }
+
   const timingsPath = path.join(opts.outDir || path.join(config.projectDir || '.', 'out'), 'timings.json');
   let timings = null;
   if (fs.existsSync(timingsPath)) {
@@ -464,7 +470,7 @@ function check(config, opts = {}) {
   for (const s of config.scenes) {
     if (s._choreographyFileContents) authorJsBlobs.push({ src: `scene "${s.id}" choreographyFile`, code: s._choreographyFileContents });
     if (s._scriptFileContents) authorJsBlobs.push({ src: `scene "${s.id}" scriptFile`, code: s._scriptFileContents });
-    if (s._threeModuleContents) authorJsBlobs.push({ src: `scene "${s.id}" threeModule`, code: s._threeModuleContents });
+    if (s._threeModuleContents) authorJsBlobs.push({ src: `scene "${s.id}" threeModule`, code: s._threeModuleContents, threeModule: true });
   }
   for (const blob of authorJsBlobs) {
     // Frames are rendered by seeking a paused timeline, so anything that reads
@@ -476,6 +482,11 @@ function check(config, opts = {}) {
       if (rule.pattern.test(blob.code)) {
         warnings.push(`${blob.src}: references ${rule.desc} — frames are rendered by seeking a paused timeline, so this will not reproduce`);
       }
+    }
+    if (blob.threeModule && /\btl\.(?:to|from|fromTo|set|call)\s*\(/.test(blob.code)
+        && !/\b(?:sceneTl|timeline)\.(?:to|from|fromTo|set|call)\s*\(/.test(blob.code)
+        && !/\bat\s*\(/.test(blob.code)) {
+      issue(`${blob.src}: schedules on the composition-global tl without at() — use sceneTl with local positions or wrap global positions in at()`, 'correctness');
     }
   }
   const projectChoreoBytes = config.choreography ? Buffer.byteLength(config.choreography, 'utf8') : 0;
@@ -616,6 +627,7 @@ function check(config, opts = {}) {
  *   social-short    — hook, saveable end-card, platform duration
  *   explainer       — structure, pacing, scene-count distribution
  *   presentation    — 3D shadow/PBR quality, visual balance hints
+ *   cinematic       — shot density, camera/action coverage, long tableaux
  *   accessibility   — caption contrast, text readability
  *   all             — every craft check (default when no profile is set)
  *
@@ -703,6 +715,29 @@ function critique(config, opts = {}) {
         o.roughness != null || o.metalness != null || o.roughnessMap || o.metalnessMap);
       if (usesPBR && !s.three.envMap) {
         note(`presentation: scene "${s.id}" — PBR materials (roughness/metalness) used without envMap; surfaces will look flat`);
+      }
+    }
+  }
+
+  // -- cinematic: temporal density and directed action ----------------------
+  if (activeFor('cinematic') || activeFor('all')) {
+    const authoredSeconds = (config.scenes || []).every(s => Number.isFinite(s.dur))
+      ? config.scenes.reduce((n, s) => n + s.dur, 0) : 0;
+    const seconds = Math.max(estimateSeconds(config), authoredSeconds);
+    const scenes = config.scenes || [];
+    const threeScenes = scenes.filter(s => s.three || s._threeModuleContents);
+    if (seconds >= 30 && scenes.length && seconds / scenes.length > 8) {
+      note(`cinematic: ${scenes.length} scenes across ~${Math.round(seconds)}s average ${(seconds / scenes.length).toFixed(1)}s per shot — add visual beats or cuts to avoid long tableaux`);
+    }
+    if (threeScenes.length) {
+      const raw = threeScenes.filter(s => s._threeModuleContents);
+      const cameraDirected = raw.filter(s => /\b(?:camera|cameraMove|cameraTrack|lookAt)\b/.test(s._threeModuleContents)).length;
+      if (raw.length >= 3 && cameraDirected / raw.length < 0.7) {
+        note(`cinematic: only ${cameraDirected}/${raw.length} raw 3D scenes declare camera direction — add framing, tracking, or motivated camera movement`);
+      }
+      const sparse = raw.filter(s => ((s._threeModuleContents.match(/\b(?:sceneTl|timeline|tl)\.(?:to|from|fromTo|set|call)\s*\(/g) || []).length < 3));
+      if (sparse.length) {
+        note(`cinematic: ${sparse.length} raw 3D scene(s) have fewer than three timeline actions — strengthen blocking, prop/environment motion, or shot progression`);
       }
     }
   }

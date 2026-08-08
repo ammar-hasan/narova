@@ -22,6 +22,7 @@ function orbitCamera(at, duration, opts = {}) {
       to: target[0] + Math.cos(angle) * radius,
       duration: duration / segments,
       ease: i === 0 ? 'power2.inOut' : ease,
+      at,
       wait: (duration / segments) * i,
     });
     anims.push({
@@ -29,6 +30,7 @@ function orbitCamera(at, duration, opts = {}) {
       to: target[2] + Math.sin(angle) * radius,
       duration: duration / segments,
       ease: i === 0 ? 'power2.inOut' : ease,
+      at,
       wait: (duration / segments) * i,
     });
   }
@@ -45,7 +47,7 @@ function dollyCamera(at, opts = {}) {
   const to = opts.to || 20;
   const duration = opts.duration || 4;
   const ease = opts.ease || 'power2.inOut';
-  return [{ property: 'fov', from, to, duration, ease }];
+  return [{ property: 'fov', from, to, duration, ease, at }];
 }
 
 /** Lateral pan: move camera position along one axis.
@@ -60,9 +62,10 @@ function panCamera(at, opts = {}) {
   const ease = opts.ease || 'power2.inOut';
   return [{
     property: `position.${axis}`,
-    to: `C.position.${axis}+${amount}`,
+    by: amount,
     duration,
     ease,
+    at,
   }];
 }
 
@@ -76,7 +79,7 @@ function boomCamera(at, opts = {}) {
   const to = opts.to || 5;
   const duration = opts.duration || 4;
   const ease = opts.ease || 'power2.inOut';
-  return [{ property: 'position.y', from, to, duration, ease }];
+  return [{ property: 'position.y', from, to, duration, ease, at }];
 }
 
 /** Look-at pan: shift the focal point across a scene.
@@ -89,7 +92,7 @@ function lookAtPan(at, opts = {}) {
   const amount = opts.amount || 2;
   const duration = opts.duration || 4;
   const ease = opts.ease || 'power2.inOut';
-  return [{ property: `lookAt.${axis}`, to: amount, duration, ease }];
+  return [{ property: `lookAt.${axis}`, to: amount, duration, ease, at }];
 }
 
 module.exports = { orbitCamera, dollyCamera, panCamera, boomCamera, lookAtPan };

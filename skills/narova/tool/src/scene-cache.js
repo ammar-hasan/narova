@@ -10,24 +10,23 @@
  * that captures every input the span's pixels depend on.
 
  * Cache modes are declared per renderer (provider.cache.mode):
- *   - 'per-scene' (no-browser): render only the scenes whose key changed;
- *     composite cached + fresh spans with ffmpeg concat (setsar=1, per
- *     AGENTS.md) and mux the single authoritative full audio track so splice
- *     points can never drift.
- *   - 'whole-video' (hyperframes): HyperFrames renders the full timeline as
- *     one MP4 and exposes no frame-range option, so a single-scene change
- *     still needs a full render. The cache reuses the whole MP4 when NOTHING
- *     changed (the common "iterate audio/text, visuals stable" case) and
- *     stores each successful render for the next build. Declared loudly rather
- *     than silently degrading.
+ *   - 'per-scene' (both bundled renderers): render only scenes whose key
+ *     changed, concatenate concat-safe spans (setsar=1), and mux the single
+ *     authoritative full audio track so splice points cannot drift.
+ *     HyperFrames composes an isolated t=0 project for each dirty scene;
+ *     no-browser renders the corresponding full-project frame span directly.
+ *   - 'whole-video' remains available to external providers that cannot render
+ *     isolated spans: reuse the MP4 only when every visual input is unchanged.
 
  * Determinism contract: a cached span is reused ONLY if reproducing it would
  * yield the same pixels. The cache key is sha256(renderContextHash +
  * sceneHash + sceneTimingsFingerprint) — content, shared render context, and
  * measured word/turn timings. If anything differs, the span is re-rendered. If
  * a cached file is missing, empty, or its probed duration is wrong, it is
- * treated as invalid and re-rendered. Any failure in the cached path falls
- * back to a full renderer.render() so a cache problem can never fail a build. */
+ * treated as invalid and re-rendered. Cache failures normally fall back to a
+ * full renderer.render(). WebGL-heavy HyperFrames films refuse that fallback:
+ * eagerly creating many contexts can silently blank early scenes, so a clear
+ * failure is safer than publishing corrupt pixels. */
 
 const fs = require('fs');
 const path = require('path');
@@ -288,12 +287,21 @@ function fullAudioPath(outDir, config) {
   return path.join(outDir, 'audio', 'full.wav');
 }
 
+function fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, reason) {
+  const webglScenes = (config.scenes || []).filter(s => s.three || s._threeModuleContents).length;
+  if (renderer.name === 'hyperframes' && webglScenes > 12) {
+    throw new Error(`isolated render failed and a full fallback would eagerly create ${webglScenes} WebGL contexts (${reason}); refusing a potentially blank render`);
+  }
+  return fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, log);
+}
+
 /* Render through the cache. Returns the same shape the renderer's render()
  * returns ({ mp4, seconds, dir, project, renderer }) so it is a drop-in.
  *
  * - per-scene renderer: reuse valid spans, render only the rest via
- *   renderer.renderSpans(), assemble with ffmpeg concat, then fall back to a
- *   full renderer.render() on any failure.
+ *   renderer.renderSpans(), assemble with ffmpeg concat, then normally fall
+ *   back to a full renderer.render(). WebGL-heavy films fail clearly instead
+ *   of taking an unsafe eager-context fallback.
  * - whole-video renderer: reuse the whole MP4 if valid, else full render and
  *   store the result.
  * - none: delegate straight to renderer.render(). */
@@ -321,7 +329,7 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
         // safe) and fall through to a full render below.
         log(`scene cache: per-scene render failed (${e.message}) — falling back to full render`);
         for (const s of needRender) { try { fs.rmSync(s.spanFile, { force: true }); } catch {} }
-        return fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, log);
+        return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, e.message);
       }
     }
     // Re-validate after rendering (a freshly written span that came up short
@@ -329,18 +337,18 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     const broken = spans.filter(s => !spanIsValid(s.spanFile, s.expectedSeconds));
     if (broken.length) {
       log(`scene cache: ${broken.length} span(s) invalid after render — falling back to full render`);
-      return fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, log);
+      return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `${broken.length} invalid span(s)`);
     }
     const audio = fullAudioPath(outDir, config);
     if (!fs.existsSync(audio)) {
       log('scene cache: full narration audio missing — falling back to full render');
-      return fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, log);
+      return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, 'full narration audio missing');
     }
     try {
       assembleFromSpans(spans, audio, outMp4, log);
     } catch (e) {
       log(`scene cache: concat failed (${e.message}) — falling back to full render`);
-      return fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, log);
+      return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `concat failed: ${e.message}`);
     }
     pruneCache(cacheDir(outDir), spans.map(s => s.spanFile));
     return { mp4: outMp4, seconds: probe(outMp4), dir: outDir, project: outDir, renderer: renderer.name };

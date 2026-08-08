@@ -161,6 +161,20 @@ test('any bare value-flag errors instead of resolving to true', () => {
   assert.match(r.stderr, /--tempo needs a value/);
 });
 
+test('unknown options are rejected instead of pretending to need a value', () => {
+  const r = run(['check', '--definitely-not-a-flag']);
+  assert.equal(r.status, 1);
+  assert.match(r.stderr, /unknown option --definitely-not-a-flag/);
+});
+
+test('help documents force synthesis and temporal QA flags', () => {
+  const r = run(['help']);
+  assert.equal(r.status, 0);
+  assert.match(r.stdout, /--force\s+synth/);
+  assert.match(r.stdout, /--motion\s+shots/);
+  assert.match(r.stdout, /--verify-motion\s+build/);
+});
+
 /* A scaffold with timings.json already synthed (fake audio, real timings). */
 function projectWithTimings() {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));

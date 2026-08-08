@@ -297,10 +297,10 @@ function build(config, opts = {}) {
   }
 
   // The render goes through the scene-level cache (src/scene-cache.js): for
-  // no-browser, only scenes whose cache key changed are re-rendered and the
-  // rest are reused + concatenated; for hyperframes, the whole MP4 is reused
-  // when nothing changed. Any cache failure falls back to a full render, so
-  // caching can never fail the build.
+  // both bundled renderers, only scenes whose cache key changed are re-rendered
+  // and the rest are reused + concatenated. Cache failures normally fall back to a full render;
+  // WebGL-heavy films intentionally refuse that unsafe fallback because an
+  // eager full document can exceed Chromium's context budget and blank scenes.
   const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, {
     ...opts, name, videoFrameFormat: hasWalkthroughs ? 'png' : null, log,
   });
@@ -436,7 +436,13 @@ function enrichTimeline(outDir) {
 function configFromManifest(manifest, resolvedConfig) {
   if (!manifest) return null;
   const m = manifest;
+  const original = resolvedConfig || {};
   return {
+    // Start from the complete validated authoring surface. The enriched
+    // manifest then wins for canonical/timing-bearing fields below. This keeps
+    // new config features from silently disappearing at the synth -> compose
+    // boundary simply because this compatibility bridge was not updated.
+    ...original,
     title: m.project?.title || 'narova',
     renderer: m.renderer?.provider || m.environment?.renderer || 'hyperframes',
     platform: m.project?.platform || null,
@@ -458,13 +464,22 @@ function configFromManifest(manifest, resolvedConfig) {
     themeCss: m.theme?.css || '',
     choreography: m.choreography || '',
     timing: m.timing || {},
-    scenes: (m.scenes || []).map(s => ({
+    scenes: (m.scenes || []).map((s, i) => ({
+      ...((original.scenes || [])[i] || {}),
       id: s.id, body: s.body || '', visual: s.visual || null, clip: s.clip || null, dur: s.dur || null,
       walkthrough: s.walkthrough || null, three: s.three || null,
       transition: s.transition || 'fade',
       vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}) })),
+      _choreographyFileContents: s._choreographyFileContents || ((original.scenes || [])[i]?._choreographyFileContents) || '',
+      _scriptFileContents: s._scriptFileContents || ((original.scenes || [])[i]?._scriptFileContents) || '',
+      _threeModuleContents: s._threeModuleContents || ((original.scenes || [])[i]?._threeModuleContents) || '',
+      _cssFileContents: s._cssFileContents || ((original.scenes || [])[i]?._cssFileContents) || '',
     })),
     captions: m.captions || {},
+    captionsEnabled: m.captions?.enabled !== false,
+    includePatterns: m.includePatterns !== false,
+    markers: m.markers || original.markers || {},
+    imports: resolvedConfig ? (resolvedConfig.imports || {}) : (m.importSources || {}),
     align: m.align || false,
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
     sfx: (m.audio?.sfx || []).map(s => ({ file: s.file, scene: s.scene, at: s.at, volume: s.volume })),

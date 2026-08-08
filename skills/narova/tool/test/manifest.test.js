@@ -262,6 +262,13 @@ test('validate catches missing voices', () => {
   assert.ok(validate(tl).length > 0);
 });
 
+test('validate accepts an empty voice map for an all-silent project', () => {
+  const tl = compile(resolve(makeRaw()));
+  tl.voices = {};
+  tl.scenes = [{ ...tl.scenes[0], vo: [], dur: 2 }];
+  assert.deepEqual(validate(tl), []);
+});
+
 test('validate catches empty scenes', () => {
   const tl = compile(resolve(makeRaw()));
   tl.scenes = [];
@@ -584,6 +591,43 @@ test('choreography survives the manifest round-trip into a composable config', (
   const round = configFromManifest(JSON.parse(JSON.stringify(tl)), null);
   assert.equal(round.choreography, CHOREO,
     'a build driven from the manifest must not drop choreography');
+});
+
+test('all render-affecting escape hatches survive the manifest bridge', () => {
+  const { configFromManifest } = require('../src/pipeline');
+  const resolved = resolve(makeRaw({
+    captions: false,
+    patterns: false,
+    markers: { beat: 1.25 },
+  }));
+  resolved.imports = { shared: { file: 'shared.js', contents: 'window.shared = true;' } };
+  resolved.scenes[0]._choreographyFileContents = 'tl.to(".x",{x:1});';
+  resolved.scenes[0]._scriptFileContents = 'window.sceneScript=true;';
+  resolved.scenes[0]._threeModuleContents = 'scene.add(new THREE.Group());';
+  resolved.scenes[0]._cssFileContents = '.x{color:red}';
+
+  const tl = compile(resolved);
+  const round = configFromManifest(JSON.parse(JSON.stringify(tl)), resolved);
+  assert.equal(round.captionsEnabled, false);
+  assert.equal(round.includePatterns, false);
+  assert.deepEqual(round.markers, { beat: 1.25 });
+  assert.deepEqual(round.imports, resolved.imports);
+  for (const key of ['_choreographyFileContents', '_scriptFileContents', '_threeModuleContents', '_cssFileContents']) {
+    assert.equal(round.scenes[0][key], resolved.scenes[0][key], `${key} survives`);
+  }
+});
+
+test('manifest is independently composable with modular scene and import contents', () => {
+  const { configFromManifest } = require('../src/pipeline');
+  const resolved = resolve(makeRaw({ captions: false, patterns: false, markers: { hit: 2 } }));
+  resolved.imports = { shared: { file: 'shared.css', contents: '.brand{color:gold}' } };
+  resolved.scenes[0]._threeModuleContents = 'renderer.render(scene,camera);';
+  const round = configFromManifest(JSON.parse(JSON.stringify(compile(resolved))), null);
+  assert.equal(round.captionsEnabled, false);
+  assert.equal(round.includePatterns, false);
+  assert.deepEqual(round.markers, { hit: 2 });
+  assert.deepEqual(round.imports, resolved.imports);
+  assert.equal(round.scenes[0]._threeModuleContents, 'renderer.render(scene,camera);');
 });
 
 test('editing choreography changes the build hashes', () => {

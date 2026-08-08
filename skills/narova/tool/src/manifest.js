@@ -117,6 +117,20 @@ function buildHashes(config, projectDir) {
       const absClip = path.resolve(pd, s.clip);
       h[s.clip] = hashFile(absClip);
     }
+    if (s.three) {
+      const refs = [];
+      const env = typeof s.three.envMap === 'string' ? s.three.envMap : s.three.envMap?.src;
+      if (env) refs.push(env);
+      function visit(obj) {
+        if (obj.type === 'model' && obj.src) refs.push(obj.src);
+        for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'texture']) {
+          if (typeof obj[key] === 'string') refs.push(obj[key]);
+        }
+        for (const child of (obj.children || [])) visit(child);
+      }
+      for (const obj of (s.three.objects || [])) visit(obj);
+      for (const ref of refs) h[`three:${ref}`] = hashFile(path.resolve(pd, ref));
+    }
   });
   return h;
 }
@@ -212,6 +226,15 @@ function compile(config, opts = {}) {
     imports: Object.fromEntries(
       Object.entries(config.imports || {}).map(([n, imp]) => [n, imp && imp.file]),
     ),
+    // Keep the manifest independently composable. `imports` above remains the
+    // stable path-only cache/safety representation; this companion carries the
+    // already validated source bytes needed when no resolved config is present.
+    importSources: Object.fromEntries(
+      Object.entries(config.imports || {}).map(([n, imp]) => [n, imp && {
+        file: imp.file,
+        contents: imp.contents,
+      }]),
+    ),
     environment: {
       narova:    opts.toolVersion || '0.8.0',
       backend:   opts.backend || config.voices && Object.values(config.voices)[0]?.backend || 'piper',
@@ -244,7 +267,20 @@ function collectAssets(config, projectDir) {
   // Explicit pipeline assets (bed, sfx, clip).
   if (config.bed) add('audio', config.bed.file);
   if (config.sfx) config.sfx.forEach(s => add('audio', s.file));
-  config.scenes.forEach(s => { if (s.clip) add('video', s.clip); });
+  config.scenes.forEach(s => {
+    if (s.clip) add('video', s.clip);
+    if (!s.three) return;
+    const env = typeof s.three.envMap === 'string' ? s.three.envMap : s.three.envMap?.src;
+    if (env) add('image', env);
+    function visit(obj) {
+      if (obj.type === 'model' && obj.src) add('model', obj.src);
+      for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'texture']) {
+        if (typeof obj[key] === 'string') add('image', obj[key]);
+      }
+      for (const child of (obj.children || [])) visit(child);
+    }
+    for (const obj of (s.three.objects || [])) visit(obj);
+  });
   // Assets directory — the full project asset tree referenced from scene HTML.
   for (const root of [config.assetsDir, path.join(projectDir, 'assets')].filter(Boolean)) {
     if (!root || !fs.existsSync(root)) continue;
@@ -325,6 +361,12 @@ function compileScenes(scenes) {
     clip: s.clip || null,
     walkthrough: s.walkthrough || null,
     dur:  s.dur || null,   // silent scene fixed duration
+    // Inlined modular author sources are render inputs, not merely hash inputs.
+    // Persist them so manifest -> compose is lossless.
+    _choreographyFileContents: s._choreographyFileContents || '',
+    _scriptFileContents: s._scriptFileContents || '',
+    _threeModuleContents: s._threeModuleContents || '',
+    _cssFileContents: s._cssFileContents || '',
     sfx:  [],              // per-scene SFX anchors (filled by audio.sfx resolution)
     hash: sceneHash(s),    // scene-level content fingerprint for selective rebuild
   }));
@@ -531,8 +573,8 @@ function validate(tl) {
     if (!Number.isFinite(tl.format.width)) errs.push('manifest.format.width: required (number)');
     if (!Number.isFinite(tl.format.height)) errs.push('manifest.format.height: required (number)');
   }
-  if (!tl.voices || typeof tl.voices !== 'object' || Object.keys(tl.voices).length === 0) {
-    errs.push('manifest.voices: at least one voice required');
+  if (!tl.voices || typeof tl.voices !== 'object' || Array.isArray(tl.voices)) {
+    errs.push('manifest.voices: required (object; may be empty for silent projects)');
   }
   if (!Array.isArray(tl.scenes)) errs.push('manifest.scenes: required (array)');
   else if (tl.scenes.length === 0) errs.push('manifest.scenes: at least one scene required');

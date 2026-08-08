@@ -641,6 +641,25 @@ test('scene threeModule rejects a missing file', () => {
   fs.rmSync(dir, { recursive: true, force: true });
 });
 
+test('3D animation markers validate against config.markers', () => {
+  const base = {
+    title: 'Markers', size: '16:9', voices: {}, markers: { reveal: 1.5 },
+    scenes: [{ id: 's', vo: [], dur: 3, three: { objects: [{
+      type: 'cube', animate: { property: 'scale', from: 0, to: 1, duration: 0.5, at: { marker: 'reveal' } },
+    }] } }],
+  };
+  assert.doesNotThrow(() => resolveConfig(base, {}, '.'));
+  assert.throws(() => resolveConfig({ ...base, markers: {} }, {}, '.'), /not found in config\.markers/);
+});
+
+test('custom character parts must be an array', () => {
+  assert.throws(() => resolveConfig({
+    title: 'Character', size: '16:9', voices: {},
+    characters: { bad: { parts: { type: 'cube' } } },
+    scenes: [{ id: 's', vo: [], dur: 1, body: '<p>x</p>' }],
+  }, {}, '.'), /parts: expected an array/);
+});
+
 test('scene cssFile resolves and stores per-scene CSS', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-mod-'));
   fs.writeFileSync(path.join(dir, 'hero.css'), '.hero { font-size: 60px; }');

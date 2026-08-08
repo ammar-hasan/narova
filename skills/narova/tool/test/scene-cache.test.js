@@ -19,6 +19,7 @@ const { resolveConfig } = require('../src/schema');
 const sc = require('../src/scene-cache');
 const { build } = require('../src/pipeline');
 const { getRenderer } = require('../src/renderers');
+const hyperframes = require('../src/renderers/hyperframes');
 
 const HAS_FFMPEG = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status === 0;
 let HAS_CANVAS = false;
@@ -147,6 +148,12 @@ test('formatCacheStatus reports per-scene honestly for both renderers', () => {
   assert.match(sc.formatCacheStatus(perScene), /per-scene/);
   assert.match(sc.formatCacheStatus(hf), /per-scene/);
   assert.equal(sc.formatCacheStatus({ mode: 'none' }), 'cache: not supported for this renderer');
+});
+
+test('HyperFrames span output is relative to the isolated scene project', () => {
+  const project = path.join('/tmp', 'out', 'hf-film', 'spans', 'scene-intro');
+  const output = path.join('/tmp', 'out', 'hf-film', '_span-deadbeef.mp4');
+  assert.equal(hyperframes._internals.spanRenderOutput(project, output), path.join('..', '..', '_span-deadbeef.mp4'));
 });
 
 // ---- integration: real no-browser builds through the cache ------------------

@@ -3,10 +3,16 @@
 const path = require('path');
 const fs = require('fs');
 const { compose, composeSceneProject } = require('../compose');
+const { composeData } = require('../compose/data');
+const { hasThreeScenes } = require('../compose/three');
 const { runHf, HYPERFRAMES_VERSION } = require('../hf');
 const { materializeVisualBodies } = require('./visual');
 const { which, ensureDir, sh } = require('../util');
 const { sha256 } = require('../manifest');
+
+function spanRenderOutput(spanProjectDir, outputFile) {
+  return path.relative(spanProjectDir, outputFile);
+}
 
 const provider = {
   name: 'hyperframes',
@@ -54,6 +60,14 @@ const provider = {
     return compose(materializeVisualBodies(config), outDir);
   },
 
+  composeScene(config, outDir, sceneId) {
+    const renderedConfig = materializeVisualBodies(config);
+    compose(renderedConfig, outDir);
+    const index = renderedConfig.scenes.findIndex(s => s.id === sceneId);
+    if (index < 0) throw new Error(`unknown scene ${JSON.stringify(sceneId)} (${renderedConfig.scenes.map(s => s.id).join('|')})`);
+    return composeSceneProject(renderedConfig, outDir, index);
+  },
+
   render(config, outDir, opts = {}) {
     const composed = this.compose(config, outDir);
     const name = opts.name || 'video.mp4';
@@ -72,18 +86,20 @@ const provider = {
    * (the full audio track is muxed at assembly time). */
   renderSpans(config, outDir, spans, opts = {}) {
     // Ensure the full project is composed first (assets, style.css, etc.)
-    const composed = this.compose(config, outDir);
+    const renderedConfig = materializeVisualBodies(config);
+    const composed = compose(renderedConfig, outDir);
     const fps = Number(opts.fps || 30);
     for (const span of spans) {
       const sceneIdx = span.sceneIndex;
-      const spanProject = composeSceneProject(config, outDir, sceneIdx);
+      const spanProject = composeSceneProject(renderedConfig, outDir, sceneIdx);
       // HF render output goes to a temp file in the composed dir
       const hfOut = path.join(composed.dir, `_span-${span.cacheKey.slice(0, 8)}.mp4`);
-      const args = ['render', '--output', path.join('..', '..', '..', path.relative(composed.dir, hfOut))];
+      const args = ['render', '--output', spanRenderOutput(spanProject.dir, hfOut)];
       if (opts.quality) args.push('--quality', String(opts.quality));
       args.push('--fps', String(fps));
-      runHf(args, spanProject.dir);
+      runHf(args, spanProject.dir, { quiet: true });
       // Re-encode for concat safety: setsar=1, no B-frames, strip audio.
+      ensureDir(path.dirname(span.spanFile));
       const tmp = span.spanFile + '.tmp.mp4';
       sh('ffmpeg', [
         '-y', '-loglevel', 'error',
@@ -124,10 +140,38 @@ const provider = {
   },
 
   shots(config, outDir, times) {
-    const composed = this.compose(config, outDir);
-    runHf(['snapshot', '--at', times.join(','), '-o', 'snapshots/review'], composed.dir);
-    return { dir: path.join(composed.dir, 'snapshots', 'review'), project: composed.dir };
+    const renderedConfig = materializeVisualBodies(config);
+    const composed = compose(renderedConfig, outDir);
+    const reviewDir = path.join(composed.dir, 'snapshots', 'review');
+    if (!hasThreeScenes(renderedConfig)) {
+      runHf(['snapshot', '--at', times.join(','), '-o', 'snapshots/review'], composed.dir);
+      return { dir: reviewDir, project: composed.dir };
+    }
+
+    // A full project can contain more WebGL scenes than Chromium permits
+    // concurrent contexts. Snapshot each requested 3D scene through its
+    // isolated t=0 project, so QA remains reliable for films of any length.
+    const timings = JSON.parse(fs.readFileSync(path.join(outDir, 'timings.json'), 'utf8'));
+    const data = composeData(renderedConfig, timings, renderedConfig.captionsEnabled !== false);
+    fs.rmSync(reviewDir, { recursive: true, force: true });
+    ensureDir(reviewDir);
+    const byScene = new Map();
+    for (const globalTime of times) {
+      const idx = data.scenes.findIndex((s, i) => globalTime >= s.start
+        && (globalTime < s.start + s.dur || (i === data.scenes.length - 1 && globalTime <= s.start + s.dur)));
+      if (idx < 0) throw new Error(`snapshot time ${globalTime}s is outside the ${data.total}s composition`);
+      if (!byScene.has(idx)) byScene.set(idx, []);
+      byScene.get(idx).push(Math.max(0, globalTime - data.scenes[idx].start));
+    }
+    for (const [idx, localTimes] of byScene) {
+      const spanProject = composeSceneProject(renderedConfig, outDir, idx);
+      const sceneReview = path.join(reviewDir, `scene-${renderedConfig.scenes[idx].id}`);
+      runHf(['snapshot', '--at', localTimes.join(','), '-o', path.relative(spanProject.dir, sceneReview)], spanProject.dir);
+    }
+    return { dir: reviewDir, project: composed.dir, isolated: true };
   },
 };
+
+provider._internals = { spanRenderOutput };
 
 module.exports = provider;

@@ -102,7 +102,7 @@ External TTS providers are optional registered companion skills — see
    first, then `references/url-to-source.md`.
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
-   For optional craft advice: `narova critique [social-short|explainer|presentation|accessibility]`.
+   For optional craft advice: `narova critique [social-short|explainer|presentation|cinematic|accessibility]`.
 5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
 6. `compose` — generates the selected renderer project. Run `narova shots` for visual QA.
 7. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
@@ -134,6 +134,14 @@ External TTS providers are optional registered companion skills — see
   duration bands, and 3D quality hints belong to `narova critique`, not
   `narova check`. `check` reports only correctness and reproducibility
   concerns. Run `narova critique` when you want optional craft guidance.
+- **Three.js is a renderer, not an art direction.** Do not infer "cinematic",
+  "detailed", or "premium" from the presence of 3D. For an ambitious 3D film,
+  write a production brief that explicitly covers geometry/prop density,
+  foreground-midground-background layering, material variation, lighting and
+  atmosphere, character blocking, camera language, motion beats, and final
+  compositing. A few low-poly primitives can be technically correct Three.js
+  and still look like a moving diorama. Use `critique cinematic` and
+  `shots --motion`, then judge the rendered frames against the reference.
 
 Read `references/gotchas.md` for the full list.
 
@@ -177,8 +185,8 @@ sentences; untouched scenes are byte-identical). See
 | `references/renderers.md`      | choose HyperFrames/no-browser; portable visual nodes and limits |
 
 For optional craft advice (hook, saveable end-card, platform duration band,
-3D quality hints, accessibility), run `narova critique [profile]`. Profiles:
-`social-short`, `explainer`, `presentation`, `accessibility`, or `all`. This is
+3D quality hints, cinematic shot/action density, accessibility), run `narova critique [profile]`. Profiles:
+`social-short`, `explainer`, `presentation`, `cinematic`, `accessibility`, or `all`. This is
 creative guidance, not a correctness gate — skip it when the work does not need
 social-video grammar.
 

@@ -319,25 +319,28 @@ function compile2dBody(elements, characters) {
 }
 
 /* Compute cue attributes for a 2D element based on its actions. */
-function cueAttrs(el) {
-  if (!el.actions) return '';
-  const appear = el.actions.find(a => a.type === 'appear');
-  if (!appear) return '';
+function cueAttrs(el, authoredClass = '') {
+  const appear = (el.actions || []).find(a => a.type === 'appear');
+  const classes = [authoredClass, appear ? 'cue' : ''].filter(Boolean).join(' ');
+  if (!appear) return classes ? ` class="${escHtml(classes)}"` : '';
   let cue = '';
   let delay = '';
   if (appear.at) {
     if (typeof appear.at === 'object' && appear.at.cue != null) {
       cue = ` data-cue="${appear.at.cue}"`;
       if (appear.at.offset) delay = ` data-delay="${appear.at.offset}"`;
+    } else if (typeof appear.at === 'object' && typeof appear.at.marker === 'string') {
+      cue = ` data-cue="marker:${escHtml(appear.at.marker)}"`;
+      if (appear.at.offset) delay = ` data-delay="${appear.at.offset}"`;
     } else if (typeof appear.at === 'number') {
       delay = ` data-delay="${appear.at}"`;
     }
   }
-  return ` class="cue"${cue}${delay}`;
+  return `${classes ? ` class="${escHtml(classes)}"` : ''}${cue}${delay}`;
 }
 
 function compileText(el, index) {
-  const attrs = cueAttrs(el);
+  const attrs = cueAttrs(el, el.class || '');
   const tag = el.tag || 'p';
   const style = el.style || {};
   let styleStr = '';
@@ -347,8 +350,7 @@ function compileText(el, index) {
   if (style.textAlign) styleStr += `text-align:${style.textAlign};`;
   if (style.letterSpacing) styleStr += `letter-spacing:${style.letterSpacing}em;`;
   if (style.maxWidth) styleStr += `max-width:${style.maxWidth}px;`;
-  const cls = el.class || '';
-  return `<${tag}${attrs}${styleStr ? ` style="${styleStr}"` : ''}${cls ? ` class="${cls}"` : ''}>${escHtml(el.content || '')}</${tag}>`;
+  return `<${tag}${attrs}${styleStr ? ` style="${styleStr}"` : ''}>${escHtml(el.content || '')}</${tag}>`;
 }
 
 function compileShape(el, index) {
@@ -370,7 +372,7 @@ function compileImage(el, index) {
   if (style.width) css += `width:${style.width}px;`;
   if (style.height) css += `height:${style.height}px;`;
   if (style.objectFit) css += `object-fit:${style.objectFit};`;
-  return `<img src="${esc(el.src || '')}"${attrs}${css ? ` style="${css}"` : ''}>`;
+  return `<img src="${escHtml(el.src || '')}"${attrs}${css ? ` style="${css}"` : ''}>`;
 }
 
 function compileVideo(el, index) {
@@ -379,7 +381,7 @@ function compileVideo(el, index) {
   let css = '';
   if (style.width) css += `width:${style.width}px;`;
   if (style.height) css += `height:${style.height}px;`;
-  return `<video src="${esc(el.src || '')}"${attrs}${css ? ` style="${css}"` : ''} muted loop playsinline></video>`;
+  return `<video src="${escHtml(el.src || '')}"${attrs}${css ? ` style="${css}"` : ''} muted loop playsinline></video>`;
 }
 
 /* Resolve scenes with elements config into the internal representation.

@@ -97,14 +97,17 @@ function resolveProjectDir(fromDir) {
  * through the SAME real loader the build uses (config.loadConfigFile, which
  * handles ESM/CJS/JSON) — never a second regex-based pseudo-parser. */
 async function save(manifestPath, name, opts = {}) {
-  const releaseDir = releasePath(name);
-  fs.mkdirSync(releaseDir, { recursive: true });
+  const finalReleaseDir = releasePath(name);
+  const safeName = path.basename(finalReleaseDir);
+  // Build a complete fresh snapshot beside the existing release. Publishing
+  // by rename prevents removed source files from surviving a same-name save.
+  const releaseDir = fs.mkdtempSync(path.join(ensureDir(), `.${safeName}-staging-`));
+  try {
 
   const manifestSrc = fs.readFileSync(manifestPath, 'utf8');
   fs.writeFileSync(path.join(releaseDir, 'manifest.json'), manifestSrc, 'utf8');
 
   const outDir = path.dirname(manifestPath);
-  const safeName = path.basename(releaseDir);
   const saved = ['manifest.json'];
 
   // Save audio fingerprint + timings so --reuse works after restore.
@@ -169,37 +172,71 @@ async function save(manifestPath, name, opts = {}) {
       if (configFile) {
         const { loadConfigFile } = require('./config');
         const raw = await loadConfigFile(configFile);
+        const snapshotRef = ref => {
+          if (typeof ref !== 'string' || !ref.trim() || /^(?:https?:)?\/\//i.test(ref) || path.isAbsolute(ref)) return;
+          const refPath = path.resolve(projectDir, ref);
+          if (!isInside(projectDir, refPath) || !fs.existsSync(refPath) || !fs.statSync(refPath).isFile()) return;
+          const dest = path.join(releaseDir, ref);
+          fs.mkdirSync(path.dirname(dest), { recursive: true });
+          fs.copyFileSync(refPath, dest);
+          if (!saved.includes(ref)) saved.push(ref);
+        };
         const sceneRefKeys = ['bodyFile', 'cssFile', 'choreographyFile', 'scriptFile',
           'threeFile', 'threeModule', 'elementsFile', 'visualFile'];
         if (raw && Array.isArray(raw.scenes)) {
           for (const s of raw.scenes) {
             for (const key of sceneRefKeys) {
               if (typeof s[key] !== 'string' || !s[key].trim()) continue;
-              const refPath = path.resolve(projectDir, s[key]);
-              if (!isInside(projectDir, refPath) || !fs.existsSync(refPath)) continue;
-              const dest = path.join(releaseDir, s[key]);
-              fs.mkdirSync(path.dirname(dest), { recursive: true });
-              fs.copyFileSync(refPath, dest);
-              saved.push(s[key]);
+              snapshotRef(s[key]);
+            }
+            snapshotRef(s.clip);
+            if (s.three) {
+              const env = typeof s.three.envMap === 'string' ? s.three.envMap : s.three.envMap?.src;
+              snapshotRef(env);
+              const visit = obj => {
+                snapshotRef(obj && obj.src);
+                for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'texture']) snapshotRef(obj && obj[key]);
+                for (const child of (obj && obj.children || [])) visit(child);
+              };
+              for (const obj of (s.three.objects || [])) visit(obj);
             }
           }
         }
         if (raw && raw.imports && typeof raw.imports === 'object' && !Array.isArray(raw.imports)) {
           for (const ref of Object.values(raw.imports)) {
             if (typeof ref !== 'string' || !ref.trim()) continue;
-            const refPath = path.resolve(projectDir, ref);
-            if (!isInside(projectDir, refPath) || !fs.existsSync(refPath)) continue;
-            const dest = path.join(releaseDir, ref);
-            fs.mkdirSync(path.dirname(dest), { recursive: true });
-            fs.copyFileSync(refPath, dest);
-            saved.push(ref);
+            snapshotRef(ref);
           }
+        }
+        // Custom asset roots preserve their original project-relative name.
+        if (typeof raw.assets === 'string') {
+          const assetRoot = path.resolve(projectDir, raw.assets);
+          if (isInside(projectDir, assetRoot) && fs.existsSync(assetRoot) && fs.statSync(assetRoot).isDirectory()) {
+            copyDir(assetRoot, path.join(releaseDir, raw.assets));
+            if (!saved.includes(raw.assets + '/')) saved.push(raw.assets + '/');
+          }
+        }
+        const bed = raw.bed || raw.music;
+        snapshotRef(typeof bed === 'string' ? bed : bed && bed.file);
+        for (const fx of (raw.sfx || [])) snapshotRef(typeof fx === 'string' ? fx : fx.file);
+        if (raw.narration && typeof raw.narration === 'object') {
+          snapshotRef(raw.narration.file);
+          snapshotRef(raw.narration.wordTimings);
+        }
+        for (const character of Object.values(raw.characters || {})) {
+          snapshotRef(character && (character.model || character.src));
         }
       }
     } catch { /* best-effort */ }
   }
 
-  return { name: safeName, dir: releaseDir, created: new Date().toISOString(), files: saved };
+  if (fs.existsSync(finalReleaseDir)) rmDir(finalReleaseDir);
+  fs.renameSync(releaseDir, finalReleaseDir);
+  return { name: safeName, dir: finalReleaseDir, created: new Date().toISOString(), files: saved };
+  } catch (error) {
+    try { rmDir(releaseDir); } catch {}
+    throw error;
+  }
 }
 
 /* Save branch metadata alongside a release. Branches extend releases with
@@ -210,13 +247,20 @@ async function save(manifestPath, name, opts = {}) {
  *   { rationale, status, parent, created }
  *   status: exploring | candidate | approved | rejected | archived
  *   parent: optional branch name this was derived from */
+const BRANCH_STATUSES = new Set(['exploring', 'candidate', 'approved', 'rejected', 'archived']);
+
+function validBranchStatus(status) {
+  if (!BRANCH_STATUSES.has(status)) throw new Error(`invalid branch status "${status}" (expected ${[...BRANCH_STATUSES].join('|')})`);
+  return status;
+}
+
 function saveBranch(name, meta = {}) {
   const releaseDir = releasePath(name);
   if (!fs.existsSync(releaseDir)) throw new Error(`release "${name}" not found — save it first`);
   const branch = {
     created: new Date().toISOString(),
     rationale: meta.rationale || '',
-    status: meta.status || 'exploring',
+    status: validBranchStatus(meta.status || 'exploring'),
     ...(meta.parent ? { parent: meta.parent } : {}),
   };
   fs.writeFileSync(path.join(releaseDir, 'branch.json'), JSON.stringify(branch, null, 2));
@@ -242,7 +286,7 @@ function listBranches() {
 function setBranchStatus(name, status) {
   const branch = readBranch(name);
   if (!branch) throw new Error(`branch "${name}" not found`);
-  branch.status = status;
+  branch.status = validBranchStatus(status);
   branch.updated = new Date().toISOString();
   fs.writeFileSync(path.join(releasePath(name), 'branch.json'), JSON.stringify(branch, null, 2));
   return branch;

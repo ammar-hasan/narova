@@ -85,7 +85,8 @@ function geometryKey(type, obj) {
 /* Material cache key: color + wireframe + opacity + PBR props. */
 function materialKey(obj) {
   const extra = obj._cacheKey || '';
-  return `${obj.color || '#ffffff'}|${obj.wireframe ? 1 : 0}|${obj.opacity ?? 1}${extra ? '|' + extra : ''}`;
+  const textures = TEXTURE_MAPS.filter(k => obj[k]).map(k => `${k}=${obj[k]}`).join('|');
+  return `${obj.color || '#ffffff'}|${obj.wireframe ? 1 : 0}|${obj.opacity ?? 1}${extra ? '|' + extra : ''}${textures ? '|' + textures : ''}`;
 }
 
 /* PBR surface properties shared by every material factory. */
@@ -145,7 +146,32 @@ function cachedMaterialJs(obj) {
   return `_m(${esc(materialKey(obj))},function(){return new THREE.MeshStandardMaterial({color:${esc(color)},wireframe:${wf},opacity:${opacity}${transparent}${pbrPart}})})`;
 }
 
-function animationTweens(objVar, obj, sceneStart, turns) {
+function resolveAnimationAt(anim, sceneStart, turns, markers) {
+  let at = sceneStart;
+  if (anim.at != null) {
+    if (typeof anim.at === 'object' && anim.at.cue != null) {
+      const cueIndex = anim.at.cue;
+      if (Array.isArray(turns) && cueIndex >= 0 && cueIndex < turns.length) {
+        at = sceneStart + turns[cueIndex] + (anim.at.offset || 0);
+      } else {
+        at = `(${sceneStart}+${cueIndex}*2+${anim.at.offset || 0})`;
+      }
+    } else if (typeof anim.at === 'object' && typeof anim.at.marker === 'string') {
+      const marker = markers && markers[anim.at.marker];
+      at = Number.isFinite(marker)
+        ? marker + (anim.at.offset || 0)
+        : sceneStart;
+    } else if (typeof anim.at === 'number') {
+      at = `${sceneStart}+${anim.at}`;
+    }
+  }
+  if (anim.wait != null) {
+    at = typeof at === 'number' ? at + anim.wait : `(${at}+${anim.wait})`;
+  }
+  return at;
+}
+
+function animationTweens(objVar, obj, sceneStart, turns, markers) {
   const anims = obj.animate
     ? (Array.isArray(obj.animate) ? obj.animate : [obj.animate])
     : (obj.keyframes || []);
@@ -156,25 +182,7 @@ function animationTweens(objVar, obj, sceneStart, turns) {
     const prop = anim.property;
     const duration = anim.duration || 2;
     const ease = anim.ease || 'power2.inOut';
-    let at = sceneStart;
-    if (anim.at != null) {
-      if (typeof anim.at === 'object' && anim.at.cue != null) {
-        // Resolve cue to the measured turn start time (scene-local seconds).
-        // turns[] is the measured turn start array from timings.json.
-        const cueIndex = anim.at.cue;
-        if (turns && Array.isArray(turns) && cueIndex >= 0 && cueIndex < turns.length) {
-          at = sceneStart + turns[cueIndex] + (anim.at.offset || 0);
-        } else {
-          // Fallback: approximate ~2s per turn for planning/pre-synthesis.
-          at = `(${sceneStart}+${cueIndex}*2+${anim.at.offset || 0})`;
-        }
-      } else if (typeof anim.at === 'number') {
-        at = `${sceneStart}+${anim.at}`;
-      }
-    }
-    if (anim.wait != null) {
-      at = typeof at === 'number' ? at + anim.wait : `(${at}+${anim.wait})`;
-    }
+    const at = resolveAnimationAt(anim, sceneStart, turns, markers);
     const loop = anim.loop ? ',repeat:-1' : '';
     const parts = prop.split('.');
     if (parts.length === 2) {
@@ -197,7 +205,7 @@ function animationTweens(objVar, obj, sceneStart, turns) {
       const to = Number.isFinite(anim.to) ? anim.to : 0;
       js += `function _fade_${ai}(o,v){o.traverse(function(n){if(n.material){n.material.transparent=true;n.material.opacity=v;}});}`;
       js += `_fade_${ai}(${objVar},${from});`;
-      js += `tl.fromTo({t:${from}},{t:${from}},{t:${to},duration:${duration},ease:${esc(ease)}${loop},onUpdate:function(){_fade_${ai}(${objVar},this.targets[0].t);}},${at});`;
+      js += `tl.fromTo({t:${from}},{t:${from}},{t:${to},duration:${duration},ease:${esc(ease)}${loop},onUpdate:function(){_fade_${ai}(${objVar},this.targets()[0].t);}},${at});`;
     }
   });
   return js;
@@ -214,7 +222,7 @@ function textureLoadJs(varName, obj) {
     if (!src || typeof src !== 'string') continue;
     const assetPath = `assets/${path.basename(src)}`;
     code += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(assetPath)},function(_tex){`;
-    code += `_tex.colorSpace=THREE.SRGBColorSpace;`;
+    if (mapType === 'map' || mapType === 'emissiveMap') code += `_tex.colorSpace=THREE.SRGBColorSpace;`;
     code += `${varName}.material.${mapType}=_tex;`;
     code += `${varName}.material.needsUpdate=true;`;
     code += `_res();`;
@@ -226,17 +234,23 @@ function textureLoadJs(varName, obj) {
 }
 
 /* Collect all texture asset paths from a three config for copying. */
-function collectTextureAssets(three) {
-  const paths = [];
-  for (const obj of (three.objects || [])) {
+function collectTextureAssets(input) {
+  const paths = new Set();
+  const threeConfigs = Array.isArray(input && input.scenes)
+    ? input.scenes.map(s => s.three).filter(Boolean)
+    : [input].filter(Boolean);
+  function visit(obj) {
     for (const mapType of TEXTURE_MAPS) {
-      if (typeof obj[mapType] === 'string') paths.push(obj[mapType]);
+      if (typeof obj[mapType] === 'string') paths.add(obj[mapType]);
     }
+    if (obj.type === 'particles' && typeof obj.texture === 'string') paths.add(obj.texture);
+    for (const child of (obj.children || [])) visit(child);
   }
-  return paths;
+  for (const three of threeConfigs) for (const obj of (three.objects || [])) visit(obj);
+  return [...paths];
 }
 
-function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
+function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers) {
   const cam = three.camera || {};
   const fov = cam.fov || 45;
   const near = cam.near || 0.1;
@@ -292,25 +306,21 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
       const prop = anim.property;
       const duration = anim.duration || 2;
       const ease = anim.ease || 'power2.inOut';
-      let at = sceneStart;
-      if (anim.at != null) {
-        if (typeof anim.at === 'object' && anim.at.cue != null) {
-          at = `(${sceneStart}+${anim.at.cue}*2+${anim.at.offset || 0})`;
-        } else if (typeof anim.at === 'number') {
-          at = `${sceneStart}+${anim.at}`;
-        }
-      }
+      const at = resolveAnimationAt(anim, sceneStart, turns, markers);
       if (prop === 'fov') {
         const from = Number.isFinite(anim.from) ? anim.from : fov;
-        js += `tl.fromTo(C,{fov:${from}},{fov:${anim.to},duration:${duration},ease:${esc(ease)},onUpdate:function(){C.updateProjectionMatrix();}},${at});`;
+        const to = Number.isFinite(anim.by) ? `${from}+${anim.by}` : anim.to;
+        js += `tl.fromTo(C,{fov:${from}},{fov:${to},duration:${duration},ease:${esc(ease)},onUpdate:function(){C.updateProjectionMatrix();}},${at});`;
       } else if (prop === 'position.x' || prop === 'position.y' || prop === 'position.z') {
         const axis = prop.split('.')[1];
         const from = Number.isFinite(anim.from) ? anim.from : 'undefined';
-        js += `tl.fromTo(C.position,{${axis}:${from === 'undefined' ? `C.position.${axis}` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+        const to = Number.isFinite(anim.by) ? `C.position.${axis}+${anim.by}` : anim.to;
+        js += `tl.fromTo(C.position,{${axis}:${from === 'undefined' ? `C.position.${axis}` : from}},{${axis}:${to},duration:${duration},ease:${esc(ease)}},${at});`;
       } else if (prop === 'lookAt.x' || prop === 'lookAt.y' || prop === 'lookAt.z') {
         const axis = prop.split('.')[1];
         const from = Number.isFinite(anim.from) ? anim.from : 'undefined';
-        js += `tl.fromTo(_camTarget.position,{${axis}:${from === 'undefined' ? `_camTarget.position.${axis}` : from}},{${axis}:${anim.to},duration:${duration},ease:${esc(ease)}},${at});`;
+        const to = Number.isFinite(anim.by) ? `_camTarget.position.${axis}+${anim.by}` : anim.to;
+        js += `tl.fromTo(_camTarget.position,{${axis}:${from === 'undefined' ? `_camTarget.position.${axis}` : from}},{${axis}:${to},duration:${duration},ease:${esc(ease)}},${at});`;
         js += `C.lookAt(_camTarget.position);`;
       }
     });
@@ -341,8 +351,10 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
     const envCfg = typeof three.envMap === 'string' ? { src: three.envMap } : three.envMap;
     const envSrc = `assets/${path.basename(envCfg.src)}`;
     const envIntensity = envCfg.intensity != null ? envCfg.intensity : 1;
-    js += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(envSrc)},function(_tex){`;
-    js += `_tex.colorSpace=THREE.SRGBColorSpace;_tex.mapping=THREE.EquirectangularReflectionMapping;`;
+    const envLoader = /\.hdr$/i.test(envCfg.src) ? 'HDRLoader' : 'TextureLoader';
+    js += `_pending.push(new Promise(function(_res){new THREE.${envLoader}().load(${esc(envSrc)},function(_tex){`;
+    if (envLoader === 'TextureLoader') js += `_tex.colorSpace=THREE.SRGBColorSpace;`;
+    js += `_tex.mapping=THREE.EquirectangularReflectionMapping;`;
     js += `var _pmrem=new THREE.PMREMGenerator(R);_pmrem.compileEquirectangularShader();`;
     js += `var _envMap=_pmrem.fromEquirectangular(_tex).texture;_pmrem.dispose();`;
     js += `S.environment=_envMap;S.environmentIntensity=${envIntensity};`;
@@ -424,7 +436,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
         js += `${name}Mixer.clipAction(g.animations[0]).play();`;
         js += `_mixers.push({m:${name}Mixer,start:${fmt(sceneStart)}});}`;
       }
-      js += `${animationTweens(name, obj, sceneStart, turns)}`;
+      js += `${animationTweens(name, obj, sceneStart, turns, markers)}`;
       js += `});}).catch(function(e){console.error('narova-three: model load failed',e);` +
         `${name}.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshStandardMaterial({color:${esc(obj.color || '#ff6363')},wireframe:true})));` +
         `}));`;
@@ -450,9 +462,9 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
         if (child.receiveShadow) js += `${cname}.receiveShadow=true;`;
         js += `${name}.add(${cname});`;
         js += textureLoadJs(cname, child);
-        js += animationTweens(cname, child, sceneStart, turns);
+        js += animationTweens(cname, child, sceneStart, turns, markers);
       });
-      js += animationTweens(name, obj, sceneStart, turns);
+      js += animationTweens(name, obj, sceneStart, turns, markers);
     } else if (obj.instances && Array.isArray(obj.instances) && obj.instances.length) {
       // InstancedMesh: N copies of the same primitive share one draw call.
       // Each instance gets its own transform matrix; the whole object can
@@ -470,7 +482,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
       if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
       js += `S.add(${name});`;
       js += textureLoadJs(name, obj);
-      js += animationTweens(name, obj, sceneStart, turns);
+      js += animationTweens(name, obj, sceneStart, turns, markers);
     } else if (obj.type === 'particles') {
       const count = obj.count || 100;
       const spread = obj.spread || [1, 1, 1];
@@ -498,7 +510,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
       if (obj.animated !== false) {
         js += `tl.to(${name}.rotation,{y:Math.PI*2,duration:${obj.rotateDuration || 8},ease:'none',repeat:-1},${fmt(sceneStart)});`;
       }
-      js += animationTweens(name, obj, sceneStart, turns);
+      js += animationTweens(name, obj, sceneStart, turns, markers);
     } else {
       const pos = obj.position || [0, 0, 0];
       const rot = obj.rotation || [0, 0, 0];
@@ -509,7 +521,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
       if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
       js += `S.add(${name});`;
       js += textureLoadJs(name, obj);
-      js += animationTweens(name, obj, sceneStart);
+      js += animationTweens(name, obj, sceneStart, turns, markers);
     }
   });
 
@@ -530,7 +542,8 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns) {
 function threeSceneBody(scene, scData, w, h) {
   const turns = scData.turns || [];
   const canvas = `<canvas id="three-${scene.id}" class="narova-three-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>`;
-  const setup = threeSetupJs(scene.id, scene.three, scData.start, scData.dur, w, h, turns);
+  const setup = threeSetupJs(scene.id, scene.three, scData.start, scData.dur, w, h, turns, scData.markers || {})
+    .replace(/<\/script/gi, '<\\/script');
   return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
 }
 
@@ -545,16 +558,19 @@ function threeSceneBody(scene, scData, w, h) {
  *   scene      the THREE.Scene (add your objects to it)
  *   camera     the THREE.PerspectiveCamera (move it freely)
  *   renderer   the THREE.WebGLRenderer
- *   tl         the paused GSAP timeline — register ALL tweens on it
- *              (frames are rendered by seeking tl; never drive your own rAF)
+ *   sceneTl    scene-local GSAP timeline — position 0 is this scene's start
+ *   tl         the composition-global GSAP timeline (advanced/back-compat)
+ *   start      measured composition-global scene start
+ *   at(t)      convert a scene-local second to a global `tl` position
  *   seed       deterministic integer (project + scene hash) — derive PRNGs from it
  *   size       { w, h } render size in pixels
  *   duration   scene duration in seconds
  *   assets(name)   resolves a project asset filename to "assets/<name>"
  *   pending    array — push Promises for async loads (textures, models);
  *               the resting frame waits for all of them before painting
- *   onRender(fn)   register a per-frame callback (called on every timeline seek)
- *   narova     { prng(seed), cueTurn(i) } helpers
+ *   onRender(fn) / onBeforeRender(fn) register work before WebGL paints
+ *   onAfterRender(fn) register work after WebGL paints
+ *   narova     local cue helpers plus absolute atTurn/atSentence/atWord/atMarker
  *
  * Determinism contract (same as choreography): no Date, Math.random,
  * requestAnimationFrame, setTimeout, or fetch — check.js lints these.
@@ -563,7 +579,7 @@ function threeSceneBody(scene, scData, w, h) {
  * Optional `scene.three` config (camera, toneMapping, fog, background, envMap,
  * lights) is still honored as the shell so authors can mix declarative setup
  * with raw code. If `scene.three` is absent, neutral defaults are used. */
-function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur, w, h, turns) {
+function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur, w, h, turns, markers, cueData) {
   const cfg = three || {};
   const cam = cfg.camera || {};
   const fov = cam.fov || 45;
@@ -589,6 +605,8 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   js += `var renderer=new THREE.WebGLRenderer({canvas:cvs,alpha:true,antialias:true,preserveDrawingBuffer:true,powerPreference:'high-performance'});`;
   js += `renderer.outputColorSpace=THREE.SRGBColorSpace;renderer.toneMapping=${tmExpr};renderer.toneMappingExposure=${exposure};`;
   js += `renderer.setPixelRatio(1);renderer.setSize(${w},${h});`;
+  const moduleHasShadows = (cfg.lights || []).some(l => l.shadow);
+  if (moduleHasShadows) js += `renderer.shadowMap.enabled=true;renderer.shadowMap.type=THREE.PCFSoftShadowMap;`;
   js += `var scene=new THREE.Scene();`;
   js += `var camera=new THREE.PerspectiveCamera(${fov},${w}/${h},${near},${far});`;
   js += `camera.position.set(${camPos[0]},${camPos[1]},${camPos[2]});camera.lookAt(${look[0]},${look[1]},${look[2]});`;
@@ -600,22 +618,57 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   if (cfg.fog) {
     js += `scene.fog=new THREE.Fog(${esc(cfg.fog.color || '#000000')},${cfg.fog.near || 1},${cfg.fog.far || 50});`;
   }
+  (cfg.lights || []).forEach((light, i) => {
+    const color = light.color || '#ffffff';
+    const intensity = light.intensity != null ? light.intensity : 1;
+    if (light.type === 'ambient') {
+      js += `scene.add(new THREE.AmbientLight(${esc(color)},${intensity}));`;
+    } else if (light.type === 'hemisphere') {
+      js += `scene.add(new THREE.HemisphereLight(${esc(color)},${esc(light.groundColor || '#000000')},${intensity}));`;
+    } else {
+      const ctor = light.type === 'point' ? 'PointLight' : light.type === 'spot' ? 'SpotLight' : 'DirectionalLight';
+      const pos = light.position || [5, 5, 5];
+      js += `var _moduleLight${i}=new THREE.${ctor}(${esc(color)},${intensity});`;
+      js += `_moduleLight${i}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
+      if (light.shadow) js += `_moduleLight${i}.castShadow=true;`;
+      js += `scene.add(_moduleLight${i});`;
+    }
+  });
   // Helpers exposed to the module.
   js += `var seed=${seed};`;
   js += `var size={w:${w},h:${h}};`;
   js += `var duration=${fmt(sceneDur)};`;
+  js += `var start=${fmt(sceneStart)};`;
+  js += `function at(t){t=Number(t||0);return start+(Number.isFinite(t)?t:0);}`;
+  js += `var sceneTl=window.gsap.timeline();tl.add(sceneTl,start);var timeline=sceneTl;`;
   js += `var pending=[];`;
   js += `function assets(name){return 'assets/'+name;}`;
+  if (cfg.envMap) {
+    const envCfg = typeof cfg.envMap === 'string' ? { src: cfg.envMap } : cfg.envMap;
+    const envSrc = `assets/${path.basename(envCfg.src)}`;
+    const envIntensity = envCfg.intensity != null ? envCfg.intensity : 1;
+    const envLoader = /\.hdr$/i.test(envCfg.src) ? 'HDRLoader' : 'TextureLoader';
+    js += `pending.push(new Promise(function(_res){new THREE.${envLoader}().load(${esc(envSrc)},function(_tex){`;
+    if (envLoader === 'TextureLoader') js += `_tex.colorSpace=THREE.SRGBColorSpace;`;
+    js += `_tex.mapping=THREE.EquirectangularReflectionMapping;`;
+    js += `var _pmrem=new THREE.PMREMGenerator(renderer);var _env=_pmrem.fromEquirectangular(_tex).texture;_pmrem.dispose();scene.environment=_env;scene.environmentIntensity=${envIntensity};`;
+    if (envCfg.background) js += `scene.background=_env;`;
+    js += `_res();},undefined,function(){console.error('narova-three: envMap load failed');_res();});}));`;
+  }
   // Seeded mulberry32 PRNG factory (matches the declarative particles PRNG).
   js += `function narovaPrng(s){s=(s>>>0)||1;return function(){s=s+0x6D2B79F5|0;var t=Math.imul(s^s>>>15,1|s);t=t+Math.imul(t^t>>>7,61|t)|0;return((t^t>>>14)>>>0)/4294967296;};}`;
   js += `var _turns=${esc(turns || [])};`;
-  js += `var narova={prng:narovaPrng,cueTurn:function(i){return (i>=0&&i<_turns.length)?_turns[i]:0;}};`;
+  js += `var _markers=${esc(markers || {})};`;
+  js += `var _sentences=${esc((cueData && cueData.sentences) || [])};`;
+  js += `var _words=${esc((cueData && cueData.words) || [])};`;
+  js += `function _cueWord(q,n){n=n||0;var seen=0;for(var i=0;i<_words.length;i++){if(typeof q==='number'&&i===q)return _words[i].t0;if(typeof q==='string'&&String(_words[i].w).toLowerCase()===q.toLowerCase()){if(seen++===n)return _words[i].t0;}}return 0;}`;
+  js += `var narova={prng:narovaPrng,cueTurn:function(i){return (i>=0&&i<_turns.length)?_turns[i]:0;},cueSentence:function(i){return (i>=0&&i<_sentences.length)?_sentences[i]:0;},cueWord:_cueWord,cueMarker:function(name){return Number.isFinite(_markers[name])?_markers[name]-start:0;},at:at,atTurn:function(i,o){return at(this.cueTurn(i)+(o||0));},atSentence:function(i,o){return at(this.cueSentence(i)+(o||0));},atWord:function(q,o,n){return at(_cueWord(q,n)+(o||0));},atMarker:function(name,o){return at(this.cueMarker(name)+(o||0));}};`;
   // Per-frame render callbacks: the timeline driver calls _render() on every
   // seek; the default callback paints the scene. Modules may add callbacks
   // (e.g. to advance a procedural simulation) via onRender(fn).
-  js += `var _renderFns=[function(){renderer.render(scene,camera);}];`;
-  js += `function _render(){for(var i=0;i<_renderFns.length;i++){_renderFns[i]();}}`;
-  js += `function onRender(fn){if(typeof fn==='function')_renderFns.push(fn);}`;
+  js += `var _renderFns=[],_afterRenderFns=[];`;
+  js += `function _render(){var i;for(i=0;i<_renderFns.length;i++)_renderFns[i]();renderer.render(scene,camera);for(i=0;i<_afterRenderFns.length;i++)_afterRenderFns[i]();}`;
+  js += `function onBeforeRender(fn){if(typeof fn==='function')_renderFns.push(fn);}function onRender(fn){onBeforeRender(fn);}function onAfterRender(fn){if(typeof fn==='function')_afterRenderFns.push(fn);}`;
   // Author module body. Wrapped so a throw is reported, not swallowed, and
   // never silently produces a blank canvas.
   js += `try{`;
@@ -634,8 +687,18 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
 
 function threeModuleSceneBody(scene, scData, w, h) {
   const turns = scData.turns || [];
+  const groups = scData.groups || [];
+  const seenSentences = new Set();
+  const sentences = [];
+  const words = [];
+  for (const g of groups) {
+    const key = g.si != null ? g.si : sentences.length;
+    if (!seenSentences.has(key)) { seenSentences.add(key); sentences.push(g.start || 0); }
+    for (const word of (g.words || [])) words.push({ w: word.w, t0: word.t0 || 0, t1: word.t1 || 0 });
+  }
   const canvas = `<canvas id="three-${scene.id}" class="narova-three-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>`;
-  const setup = threeModuleSetupJs(scene.id, scene.three, scene._threeModuleContents, scData.start, scData.dur, w, h, turns);
+  const setup = threeModuleSetupJs(scene.id, scene.three, scene._threeModuleContents, scData.start, scData.dur, w, h, turns, scData.markers || {}, { sentences, words })
+    .replace(/<\/script/gi, '<\\/script');
   return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
 }
 
@@ -655,16 +718,16 @@ function hasThreeModels(config) {
 
 /* Collect model asset paths from scene.three configs so compose can copy them. */
 function collectModelAssets(config) {
-  const paths = [];
+  const paths = new Set();
+  function visit(obj) {
+    if (obj.type === 'model' && obj.src && typeof obj.src === 'string') paths.add(obj.src);
+    for (const child of (obj.children || [])) visit(child);
+  }
   for (const s of config.scenes) {
     if (!s.three || !s.three.objects) continue;
-    for (const obj of s.three.objects) {
-      if (obj.type === 'model' && obj.src && typeof obj.src === 'string') {
-        paths.push(obj.src);
-      }
-    }
+    for (const obj of s.three.objects) visit(obj);
   }
-  return paths;
+  return [...paths];
 }
 
 /* Simple string hash for deterministic seed derivation (djb2). */

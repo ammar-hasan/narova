@@ -131,6 +131,41 @@ test('release path resolves inside releases directory', () => {
   }
 });
 
+test('saving the same release name replaces rather than merges stale files', async () => {
+  const td = tempReleasesDir();
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-fresh-'));
+  const out = path.join(project, 'out');
+  fs.mkdirSync(out, { recursive: true });
+  fs.writeFileSync(path.join(project, 'reel.config.mjs'), 'export default { scenes: [] };');
+  fs.writeFileSync(path.join(project, 'theme.css'), '.old{}');
+  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  try {
+    await releases().save(path.join(out, 'manifest.json'), 'same', { projectDir: project });
+    fs.rmSync(path.join(project, 'theme.css'));
+    await releases().save(path.join(out, 'manifest.json'), 'same', { projectDir: project });
+    assert.equal(fs.existsSync(path.join(td, 'same', 'theme.css')), false);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('branch status accepts only the documented lifecycle', async () => {
+  const td = tempReleasesDir();
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-status-'));
+  const mp = path.join(tmp, 'manifest.json');
+  fs.writeFileSync(mp, JSON.stringify({ narova: 'x', project: {} }));
+  try {
+    await releases().save(mp, 'branch');
+    assert.throws(() => releases().saveBranch('branch', { status: 'banana' }), /invalid branch status/);
+    releases().saveBranch('branch', { status: 'candidate' });
+    assert.throws(() => releases().setBranchStatus('branch', 'done'), /invalid branch status/);
+  } finally {
+    fs.rmSync(tmp, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
 test('save -> mutate/delete -> restore round-trips modular source files (bodyFile, cssFile, scriptFile, threeModule, imports)', async () => {
   const td = tempReleasesDir();
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-project-'));

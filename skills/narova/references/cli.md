@@ -29,12 +29,15 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova build` | synth + compose + selected local renderer → `out/video.mp4` (+ captions). Variants and deliverables work with both providers. | synth cost + local render |
 | `narova preview` | HyperFrames: compose and open Studio. No-browser: render `out/preview-no-browser.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
+| `narova preview --scene <id>` | preview one isolated scene; required instead of a full Studio document when a film exceeds the safe WebGL context budget. | Studio until Ctrl-C |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
 | `narova providers add <manifest>` | validate, handshake with, and explicitly register an external TTS worker under `~/.narova/providers/`. | instant; starts the worker for its handshake |
 | `narova providers list` | list explicitly registered external TTS providers. | instant |
 | `narova providers doctor <name>` | verify manifest, executable, required environment, and protocol handshake. | provider startup |
 | `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
 | `narova renderers list` | list the bundled local `hyperframes` and `no-browser` renderer providers. | instant |
+| `narova shots --motion` | capture start/middle/end frames for every scene; WebGL scenes are isolated to avoid browser context limits. | browser snapshot pass |
+| `narova build --verify-motion` | render, then fail when FFmpeg detects a ≥2s frozen or ≥0.5s black segment. | build + verification pass |
 | `narova renderers doctor <name>` | verify provider-local dependencies; no-browser explicitly reports that a browser is unnecessary. | instant |
 | `narova doctor` | check ffmpeg, python, venv, optional agent-browser, and HyperFrames. Exit 1 if a required core tool is missing; missing optional adapters/backends are reported separately. | first run downloads the HyperFrames CLI |
 | `narova release save <name>` | save `out/manifest.json` as a named release in `~/.narova/releases/`. Releases are content-hashed snapshots you can compare, restore, and remove. | instant |

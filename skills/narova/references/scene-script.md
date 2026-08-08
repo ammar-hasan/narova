@@ -302,16 +302,20 @@ scenes: [
 //   scene        the THREE.Scene — add your objects to it
 //   camera       the THREE.PerspectiveCamera — move it freely
 //   renderer     the THREE.WebGLRenderer (sRGB, ACES, pixelRatio 1)
-//   tl           the paused GSAP timeline — register ALL tweens on it
-//                (frames are produced by seeking tl; never drive your own rAF)
+//   sceneTl      scene-local GSAP timeline; position 0 is this scene's start
+//   timeline     alias of sceneTl
+//   tl           composition-global timeline (advanced/backward compatibility)
+//   start        measured global scene start; at(t) converts local -> global
 //   seed         deterministic integer (project + scene hash) — derive PRNGs from it
 //   size         { w, h } render size in pixels
 //   duration     scene duration in seconds
 //   assets(name) resolves a project asset filename to "assets/<name>"
 //   pending      push Promises for async loads (textures, models); the resting
 //                frame waits for all of them before painting
-//   onRender(fn) register a per-frame callback (called on every timeline seek)
-//   narova       { prng(seed), cueTurn(i) } helpers
+//   onRender(fn) / onBeforeRender(fn) run before WebGL paints on every seek
+//   onAfterRender(fn) runs after WebGL paints
+//   narova       cueTurn/cueSentence/cueWord/cueMarker return local seconds;
+//                atTurn/atSentence/atWord/atMarker return global tl positions
 var geo = new THREE.PlaneGeometry(2, 2);
 var mat = new THREE.ShaderMaterial({
   uniforms: { uTime: { value: 0 }, uRes: { value: new THREE.Vector2(size.w, size.h) } },
@@ -322,19 +326,45 @@ var quad = new THREE.Mesh(geo, mat);
 scene.add(quad);
 camera.position.set(0, 0, 1);
 // Drive the uniform from the timeline so the render reproduces exactly.
-tl.to(mat.uniforms.uTime, { value: duration, duration: duration, ease: "none" }, 0);
+sceneTl.to(mat.uniforms.uTime, { value: duration, duration: duration, ease: "none" }, 0);
 ```
 
 Determinism contract (enforced by `check`, same as choreography): no `Date`,
 `Math.random`, `requestAnimationFrame`, `setTimeout`, or `fetch`. Use `seed`
-+ `narova.prng()` for any randomness and register all motion on `tl`. Given
-the same project state + seed + assets, output reproduces exactly.
++ `narova.prng()` for any randomness and register scene motion on `sceneTl`.
+Use `tl` only for deliberately composition-global choreography, with `at()` or
+the `narova.at*()` helpers. Given the same project state + seed + assets,
+output reproduces exactly.
 
 `scene.three` config (camera, toneMapping, fog, background, lights) is still
 honored as the shell when both are present, so you can mix declarative scene
 setup with raw code. `scene.threeModule` and `scene.threeFile` (a JSON
 declarative-config file) are different things: `threeFile` externalizes the
 declarative config; `threeModule` is the raw-JS escape hatch.
+
+### 3D production quality
+
+Using Three.js proves only that the scene is rendered in 3D; it does not make
+the result detailed or cinematic. Before authoring an ambitious film, turn the
+reference and creative direction into an explicit production brief:
+
+- silhouette and geometry density: hero forms, secondary props, and small-scale
+  breakup rather than one primitive per idea;
+- depth staging: foreground occluders, a readable midground, and background
+  landmarks or atmosphere in every important shot;
+- surface and light response: purposeful roughness/metalness/color variation,
+  motivated key/fill/rim light, shadows, fog, particles, or volumetric cues;
+- performance: character blocking, gesture, environmental motion, and at least
+  one meaningful visual change per narration beat;
+- camera and finish: shot-size changes, motivated movement, depth of field or
+  other deliberate post work when appropriate, and typography/compositing that
+  belongs to the same visual world.
+
+Models and textures are optional; production depth is not. Procedural geometry
+can satisfy the brief, but a sparse low-poly scene should be an intentional art
+direction rather than Narova's default. Run `narova critique cinematic` and
+`narova shots --motion`, inspect the actual rendered frames at the beginning,
+middle, and end of every scene, and compare them directly with the reference.
 
 ## What `check` enforces (errors)
 

@@ -46,6 +46,7 @@ test('words group by sentence with speaker + label', () => {
   const d = composeData(config, timings);
   assert.equal(d.groups.length, 3);
   assert.deepEqual(d.groups.map(g => g.who), ['a', 'b', 'a']);
+  assert.deepEqual(d.groups.map(g => g.si), [0, 1, 0]);
   assert.equal(d.groups[0].label, 'host A');
   assert.equal(d.groups[0].words.length, 2);
 });

@@ -51,7 +51,12 @@ function validateThreeConfig(three, at, errors) {
     list.forEach((anim, i) => {
       if (!anim || typeof anim !== 'object') { errors.push(`${ca}[${i}]: expected an object`); return; }
       if (!CAM_PROPS.has(anim.property)) errors.push(`${ca}[${i}].property: expected ${[...CAM_PROPS].join('|')}`);
-      if (anim.to == null) errors.push(`${ca}[${i}].to: required`);
+      if (!Number.isFinite(anim.to) && !Number.isFinite(anim.by)) errors.push(`${ca}[${i}]: finite to or by is required`);
+      if (anim.from != null && !Number.isFinite(anim.from)) errors.push(`${ca}[${i}].from: expected a number`);
+      validateDuration(anim.duration, `${ca}[${i}].duration`, errors);
+      if (anim.ease != null && !EASES.has(anim.ease)) errors.push(`${ca}[${i}].ease: expected a supported GSAP ease`);
+      if (anim.at != null) validateAt(anim.at, `${ca}[${i}].at`, errors);
+      if (anim.wait != null && (!Number.isFinite(anim.wait) || anim.wait < 0)) errors.push(`${ca}[${i}].wait: expected non-negative seconds`);
     });
   }
   if (three.lights != null) {
@@ -236,6 +241,9 @@ function validateVisual(root, at = 'visual') {
     if (node.type === 'model3d' && typeof node.src !== 'string') {
       errors.push(`${where}.src: model source (.glb, .gltf) required`);
     }
+    if (node.type === 'model3d' || node.type === 'canvas3d') {
+      errors.push(`${where}.type: ${node.type} is not part of the portable 2D visual contract; use scene.three or scene.threeModule`);
+    }
     if (node.type === 'canvas3d') {
       if (!node.three || typeof node.three !== 'object') {
         errors.push(`${where}.three: 3D scene config required for canvas3d`);
@@ -293,10 +301,10 @@ function validateVisual(root, at = 'visual') {
 
 function validateAt(value, at, errors) {
   if (value == null || Number.isFinite(value)) return;
-  if (!plainObject(value)
-      || !Number.isInteger(value.cue) || value.cue < 0
-      || (value.offset != null && !Number.isFinite(value.offset))) {
-    errors.push(`${at}: expected seconds or { cue: <0-based turn>, offset? }`);
+  const cue = plainObject(value) && Number.isInteger(value.cue) && value.cue >= 0;
+  const marker = plainObject(value) && typeof value.marker === 'string' && /^[A-Za-z][A-Za-z0-9_-]*$/.test(value.marker);
+  if ((!cue && !marker) || (value.offset != null && !Number.isFinite(value.offset))) {
+    errors.push(`${at}: expected seconds, { cue: <0-based turn>, offset? }, or { marker: <name>, offset? }`);
   }
 }
 
@@ -467,7 +475,11 @@ function visualToHtml(root) {
     }
     if (node.type === 'canvas3d') {
       const threeData = node.three ? esc(JSON.stringify(node.three)) : '{}';
-      const canvasId = `three-${Math.random().toString(36).slice(2, 9)}`;
+      // Direct callers still get deterministic output, although validation
+      // rejects this legacy placeholder in favor of scene.three.
+      let h = 5381;
+      for (const ch of JSON.stringify(node)) h = ((h << 5) + h + ch.charCodeAt(0)) | 0;
+      const canvasId = `three-${(h >>> 0).toString(36)}`;
       return `<canvas id="${canvasId}" class="narova-three-canvas" data-three="${threeData}" data-three-id="${canvasId}"${attrs}></canvas>`;
     }
     return `<div${attrs}>${(node.children || []).map(render).join('')}</div>`;

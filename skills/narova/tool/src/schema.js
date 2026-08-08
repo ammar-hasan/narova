@@ -274,8 +274,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     if (!ID_RE.test(id)) errs.push(`config.characters.${id}: character id must match ${ID_RE}`);
     const c = characters[id];
     if (!c || typeof c !== 'object') { errs.push(`config.characters.${id}: expected an object`); return; }
-    if (!c.parts && !Array.isArray(c.parts) && !c.model && !c.src) {
+    if (!Array.isArray(c.parts) && !c.model && !c.src) {
       errs.push(`config.characters.${id}: needs a model/src file or a parts array`);
+    }
+    if (c.parts != null && !Array.isArray(c.parts)) {
+      errs.push(`config.characters.${id}.parts: expected an array`);
     }
     if (c.model) {
       const mp = path.resolve(baseDir, c.model);
@@ -434,16 +437,27 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         errs.push(`${at}.three: expected an object with 3D scene config`);
       } else {
         validateThreeConfig(s.three, `${at}.three`, errs);
-        if (s.three.objects) {
-          s.three.objects.forEach((obj, oi) => {
-            if (obj.type === 'model' && obj.src) {
-              const modelPath = path.resolve(baseDir, obj.src);
-              if (!fs.existsSync(modelPath) || !fs.statSync(modelPath).isFile()) {
-                errs.push(`${at}.three.objects[${oi}].src: model file not found: ${modelPath}`);
-              }
-            }
-          });
+        function validateThreeAsset(ref, where) {
+          if (typeof ref !== 'string' || !ref) return;
+          if (/^(?:https?:)?\/\//i.test(ref) || path.isAbsolute(ref)) {
+            errs.push(`${where}: expected a project-relative asset path`);
+            return;
+          }
+          const assetPath = path.resolve(baseDir, ref);
+          if (!fs.existsSync(assetPath) || !fs.statSync(assetPath).isFile()) {
+            errs.push(`${where}: file not found: ${assetPath}`);
+          }
         }
+        const env = typeof s.three.envMap === 'string' ? s.three.envMap : s.three.envMap?.src;
+        if (env) validateThreeAsset(env, `${at}.three.envMap.src`);
+        function validateObjectAssets(obj, where) {
+          if (obj.type === 'model' && obj.src) validateThreeAsset(obj.src, `${where}.src`);
+          for (const key of ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'texture']) {
+            if (obj[key]) validateThreeAsset(obj[key], `${where}.${key}`);
+          }
+          (obj.children || []).forEach((child, ci) => validateObjectAssets(child, `${where}.children[${ci}]`));
+        }
+        (s.three.objects || []).forEach((obj, oi) => validateObjectAssets(obj, `${at}.three.objects[${oi}]`));
       }
     }
   });
@@ -926,6 +940,28 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
+  // Marker references are validated after the global marker table is known.
+  // The lower-level visual validator checks the shape of `at`; this pass
+  // catches well-formed references to names that do not exist.
+  function checkAnimationMarkers(anims, at) {
+    const list = anims ? (Array.isArray(anims) ? anims : [anims]) : [];
+    list.forEach((anim, i) => {
+      const name = anim && anim.at && anim.at.marker;
+      if (typeof name === 'string' && !(name in markers)) {
+        errs.push(`${at}[${i}].at.marker: "${name}" not found in config.markers`);
+      }
+    });
+  }
+  function checkObjectMarkers(obj, at) {
+    checkAnimationMarkers(obj && (obj.animate || obj.keyframes), `${at}.animate`);
+    (obj && obj.children || []).forEach((child, i) => checkObjectMarkers(child, `${at}.children[${i}]`));
+  }
+  scenes.forEach((scene, si) => {
+    if (!scene.three) return;
+    checkAnimationMarkers(scene.three.cameraAnimate, `config.scenes[${si}].three.cameraAnimate`);
+    (scene.three.objects || []).forEach((obj, oi) => checkObjectMarkers(obj, `config.scenes[${si}].three.objects[${oi}]`));
+  });
+
   if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
 
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
@@ -944,9 +980,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // loop never stops before an animation finishes. The initial fallback
   // (max(6, vo*5)) knows nothing about 3D timing — it can cut tweens short
   // and freeze the scene mid-playback.
+  let plannedSceneStart = 0;
   for (const s of resolved.scenes) {
-    const minDur = min3dSceneDuration(s);
+    const minDur = min3dSceneDuration(s, markers, plannedSceneStart);
     if (minDur > 0 && minDur > (s.dur || 0)) s.dur = minDur;
+    plannedSceneStart += s.dur || 0;
   }
 
   return resolved;
@@ -965,7 +1003,7 @@ function narration(config) {
 /* Compute the minimum scene duration needed to fit all 3D animations.
  * The initial fallback (max(6, vo*5)) knows nothing about 3D timing.
  * Returns 0 when there are no animations to account for. */
-function min3dSceneDuration(scene) {
+function min3dSceneDuration(scene, markers = {}, sceneStart = 0) {
   if (!scene.three) return 0;
 
   let maxEnd = 0;
@@ -1001,8 +1039,12 @@ function min3dSceneDuration(scene) {
         // animationTweens). This estimate only determines the minimum scene
         // duration needed for the pre-build fallback.
         offset = anim.at.cue * 2 + (anim.at.offset || 0);
+      } else if (typeof anim.at === 'object' && typeof anim.at.marker === 'string'
+          && Number.isFinite(markers[anim.at.marker])) {
+        offset = Math.max(0, markers[anim.at.marker] - sceneStart) + (anim.at.offset || 0);
       }
     }
+    offset += Number.isFinite(anim.wait) ? anim.wait : 0;
 
     const end = offset + duration;
     if (end > maxEnd) maxEnd = end;

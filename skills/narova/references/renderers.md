@@ -81,7 +81,12 @@ ignored by no-browser; put every fallback style in `visual`.
 ## Portable visual contract
 
 Nodes: `group`, `stack`, `rect`, `circle`, `line`, `path`, `text`, `image`,
-`svg`, and `progress`.
+`svg`, `progress`, and `counter`.
+
+3D is intentionally not a portable visual-tree node: use `scene.three` for the
+managed declarative renderer or `scene.threeModule` for raw Three.js. The
+legacy `canvas3d` and `model3d` placeholders are rejected because neither
+portable renderer could faithfully draw them.
 
 - `group` is a relative canvas; children use `style.x/y/width/height`.
 - `stack` lays children in a `row` or `column`; use `padding`, `gap`, fixed
@@ -108,7 +113,7 @@ enter: { type: "pop", at: { cue: 1, offset: 0.1 }, duration: 0.55 }
 
 Keyframes animate `x`, `y`, `scale`, `rotate`, `opacity`, `width`, `height`,
 or `progress`. Each item needs numeric `from`, `to`, `duration`, optional
-`at` (seconds or a 0-based cue anchor), and `ease` (`linear`, `in`, `out`,
+  `at` (seconds, a 0-based cue anchor, or `{ marker: "name" }`), and `ease` (`linear`, `in`, `out`,
 `in-out`, or `back`). Media can use `drift: "in"|"out"|"left"|"right"|"up"`.
 
 ## Outputs and preview

@@ -1,0 +1,13 @@
+**/node_modules/**
+**/out/**
+**/__pycache__/**
+**/*.py[cod]
+**/.DS_Store
+
+# Development-only suites and fixtures. Runtime code, Python workers,
+# references, and vendored browser libraries remain in the package.
+skills/narova/tool/test/**
+skills/narova/tool/evals/**
+skills/narova/tool/py/tests/**
+skills/narova-elevenlabs/tests/**
+skills/narova-openai/tests/**
