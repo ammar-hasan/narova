@@ -89,7 +89,7 @@ exit 0
   assert.equal(fs.existsSync(path.join(installedPackage, 'skills')), false);
 });
 
-test('GitHub installer URL-encodes refs before downloading', t => {
+test('GitHub installer URL-encodes refs without treating them as Node options', t => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-remote-install-test-'));
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   const archiveRoot = path.join(tmp, 'archive-root');
@@ -118,23 +118,30 @@ cp "$NAROVA_TEST_ARCHIVE" "$output"
 `);
   fs.chmodSync(fakeCurl, 0o755);
 
-  const installed = spawnSync('bash', [
-    INSTALLER,
-    '--ref', 'feature/setup#candidate',
-    '--prefix', path.join(tmp, 'prefix'),
-    '--skip-optional',
-  ], {
-    encoding: 'utf8',
-    env: {
-      ...process.env,
-      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
-      npm_config_cache: path.join(tmp, 'npm-cache'),
-      NAROVA_TEST_ARCHIVE: archive,
-      NAROVA_TEST_CURL_LOG: curlLog,
-    },
-  });
-  assert.equal(installed.status, 0, installed.stderr || installed.stdout);
-  const curlArgs = fs.readFileSync(curlLog, 'utf8');
-  assert.match(curlArgs, /tar\.gz\/feature%2Fsetup%23candidate/);
-  assert.doesNotMatch(curlArgs, /tar\.gz\/feature\/setup#candidate/);
+  const installRef = (ref, name) => {
+    const installed = spawnSync('bash', [
+      INSTALLER,
+      '--ref', ref,
+      '--prefix', path.join(tmp, `prefix-${name}`),
+      '--skip-optional',
+    ], {
+      encoding: 'utf8',
+      env: {
+        ...process.env,
+        PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+        npm_config_cache: path.join(tmp, 'npm-cache'),
+        NAROVA_TEST_ARCHIVE: archive,
+        NAROVA_TEST_CURL_LOG: curlLog,
+      },
+    });
+    assert.equal(installed.status, 0, installed.stderr || installed.stdout);
+    return fs.readFileSync(curlLog, 'utf8');
+  };
+
+  const complexRefArgs = installRef('feature/setup#candidate', 'complex');
+  assert.match(complexRefArgs, /tar\.gz\/feature%2Fsetup%23candidate/);
+  assert.doesNotMatch(complexRefArgs, /tar\.gz\/feature\/setup#candidate/);
+
+  const leadingDashArgs = installRef('-candidate', 'leading-dash');
+  assert.match(leadingDashArgs, /tar\.gz\/-candidate/);
 });
