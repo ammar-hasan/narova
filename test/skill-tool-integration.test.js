@@ -27,6 +27,9 @@ test('Narova skill is instructions-only and bootstraps the standalone CLI', t =>
 
   const skill = fs.readFileSync(path.join(SKILL_DIR, 'SKILL.md'), 'utf8');
   assert.match(skill, /command -v narova/);
+  assert.match(skill, /\[ -x "\$HOME\/\.local\/bin\/narova" \]/);
+  assert.match(skill, /set -e/);
+  assert.match(skill, /trap 'rm -f "\$installer"' EXIT/);
   assert.match(skill, /raw\.githubusercontent\.com\/ammar-hasan\/narova\/main\/tool\/install\.sh/);
   assert.match(skill, /narova <command>/);
   assert.doesNotMatch(skill, /<this-skill-dir>\/tool|<skill-dir>\/tool|skills\/narova\/tool/);
@@ -56,6 +59,45 @@ test('Narova skill is instructions-only and bootstraps the standalone CLI', t =>
   });
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), require(path.join(TOOL_DIR, 'package.json')).version);
+});
+
+test('skill bootstrap reuses the default-prefix CLI and preserves install failures', t => {
+  const skill = fs.readFileSync(path.join(SKILL_DIR, 'SKILL.md'), 'utf8');
+  const bootstrap = skill.match(/Before the first Narova command[\s\S]*?```bash\n([\s\S]*?)\n```/);
+  assert.ok(bootstrap, 'SKILL.md must contain an executable bootstrap block');
+
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-skill-bootstrap-'));
+  const fakeBin = path.join(tmp, 'bin');
+  const installHome = path.join(tmp, 'home');
+  const defaultBin = path.join(installHome, '.local', 'bin', 'narova');
+  const curlMarker = path.join(tmp, 'curl-called');
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+  fs.mkdirSync(fakeBin, { recursive: true });
+  fs.mkdirSync(path.dirname(defaultBin), { recursive: true });
+  fs.writeFileSync(defaultBin, '#!/bin/sh\nexit 0\n');
+  fs.chmodSync(defaultBin, 0o755);
+
+  const fakeCurl = path.join(fakeBin, 'curl');
+  fs.writeFileSync(fakeCurl, `#!/bin/sh\ntouch "${curlMarker}"\nexit 37\n`);
+  fs.chmodSync(fakeCurl, 0o755);
+  const env = {
+    ...process.env,
+    HOME: installHome,
+    TMPDIR: path.join(tmp, 'installer-tmp'),
+    PATH: `${fakeBin}${path.delimiter}/usr/bin${path.delimiter}/bin`,
+  };
+  fs.mkdirSync(env.TMPDIR);
+
+  const reused = spawnSync('bash', ['-c', bootstrap[1]], { encoding: 'utf8', env });
+  assert.equal(reused.status, 0, reused.stderr);
+  assert.equal(reused.stdout.trim(), defaultBin);
+  assert.equal(fs.existsSync(curlMarker), false, 'an existing default-prefix CLI must not be reinstalled');
+
+  fs.rmSync(defaultBin);
+  const failed = spawnSync('bash', ['-c', bootstrap[1]], { encoding: 'utf8', env });
+  assert.equal(failed.status, 37, failed.stderr || failed.stdout);
+  assert.ok(fs.existsSync(curlMarker));
+  assert.deepEqual(fs.readdirSync(env.TMPDIR), [], 'failed bootstrap must clean its temporary installer');
 });
 
 test('repository version sources agree with the standalone tool package', () => {

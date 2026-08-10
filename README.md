@@ -51,13 +51,16 @@ instructions-only agent skill. Install the CLI from GitHub into the user-owned
 `~/.local` prefix:
 
 ```bash
-narova_installer="$(mktemp)"
-curl --proto '=https' --tlsv1.2 -fsSL \
-  https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
-  -o "$narova_installer"
-bash "$narova_installer"
-rm -f "$narova_installer"
-narova doctor
+(
+  set -e
+  narova_installer="$(mktemp)"
+  trap 'rm -f "$narova_installer"' EXIT
+  curl --proto '=https' --tlsv1.2 -fsSL \
+    https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
+    -o "$narova_installer"
+  bash "$narova_installer"
+  "$HOME/.local/bin/narova" doctor
+)
 ```
 
 The installer packages only `tool/`; it does not install or modify agent

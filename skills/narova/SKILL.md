@@ -70,23 +70,28 @@ Requires Node.js 18+, Python 3.10+, and FFmpeg. First-time model and
 HyperFrames setup requires internet access. Product walkthrough capture can
 optionally use agent-browser.
 
-Before the first Narova command in a session, detect the standalone CLI:
+Before the first Narova command in a session, detect the standalone CLI on
+`PATH` or at the installer's default user-owned location. If neither exists,
+install only the CLI package. The installer downloads the repository, packs
+only `tool/`, and installs it under `~/.local`; it does not install or modify
+skills:
 
 ```bash
-command -v narova
-```
-
-If it is missing, install only the CLI package. The installer downloads the
-repository, packs only `tool/`, and installs it under the user-owned
-`~/.local` prefix; it does not install or modify skills:
-
-```bash
-installer="$(mktemp "${TMPDIR:-/tmp}/narova-install.XXXXXX")"
-curl --proto '=https' --tlsv1.2 -fsSL \
-  https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
-  -o "$installer"
-bash "$installer"
-rm -f "$installer"
+if command -v narova >/dev/null 2>&1; then
+  command -v narova
+elif [ -x "$HOME/.local/bin/narova" ]; then
+  printf '%s\n' "$HOME/.local/bin/narova"
+else
+  (
+    set -e
+    installer="$(mktemp "${TMPDIR:-/tmp}/narova-install.XXXXXX")"
+    trap 'rm -f "$installer"' EXIT
+    curl --proto '=https' --tlsv1.2 -fsSL \
+      https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
+      -o "$installer"
+    bash "$installer"
+  )
+fi
 ```
 
 Use `narova <command>` for every workflow step. If `~/.local/bin` is not on
