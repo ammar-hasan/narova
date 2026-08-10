@@ -3,9 +3,6 @@
   "version": "0.29.0",
   "description": "Development workspace for the standalone Narova CLI and its separate agent skills.",
   "private": true,
-  "workspaces": [
-    "tool"
-  ],
   "type": "commonjs",
   "scripts": {
     "narova": "node tool/bin/narova.js",

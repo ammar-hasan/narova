@@ -22,7 +22,7 @@ function filesBelow(dir) {
 }
 
 test('Narova skill is instructions-only and bootstraps the standalone CLI', t => {
-  const topLevel = fs.readdirSync(SKILL_DIR).sort();
+  const topLevel = fs.readdirSync(SKILL_DIR).filter(name => name !== '.DS_Store').sort();
   assert.deepEqual(topLevel, ['SKILL.md', 'references']);
 
   const skill = fs.readFileSync(path.join(SKILL_DIR, 'SKILL.md'), 'utf8');

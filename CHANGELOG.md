@@ -30,7 +30,7 @@ versions follow [Semantic Versioning](https://semver.org/).
   reaching into skill-relative files. Optional TTS setup now uses the installed
   `narova-setup` command.
 - **Independent development surface.** The root package is now a private
-  workspace orchestrator. Tool tests and packaging run from `tool/`, while
+  development orchestrator. Tool tests and packaging run from `tool/`, while
   repository scripts, companion skills, specifications, and user docs use the
   new standalone paths.
 
