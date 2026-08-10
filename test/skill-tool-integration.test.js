@@ -117,6 +117,9 @@ test('repository version sources agree with the standalone tool package', () => 
   const badgeMatch = readme.match(/badge\/version-([0-9.]+)-/);
   assert.ok(badgeMatch, 'README.md must have a version badge');
   assert.equal(badgeMatch[1], rootVer, 'README.md badge version must match root');
+  assert.match(readme, /narova_prefix="\$\{NAROVA_PREFIX:-\$HOME\/\.local\}"/);
+  assert.match(readme, /bash "\$narova_installer" --prefix "\$narova_prefix"/);
+  assert.match(readme, /"\$narova_prefix\/bin\/narova" doctor/);
 
   const spec = fs.readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8');
   const specMatch = spec.match(/^## Status: ([0-9.]+) shipped$/m);

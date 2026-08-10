@@ -53,18 +53,20 @@ instructions-only agent skill. Install the CLI from GitHub into the user-owned
 ```bash
 (
   set -e
+  narova_prefix="${NAROVA_PREFIX:-$HOME/.local}"
   narova_installer="$(mktemp)"
   trap 'rm -f "$narova_installer"' EXIT
   curl --proto '=https' --tlsv1.2 -fsSL \
     https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
     -o "$narova_installer"
-  bash "$narova_installer"
-  "$HOME/.local/bin/narova" doctor
+  bash "$narova_installer" --prefix "$narova_prefix"
+  "$narova_prefix/bin/narova" doctor
 )
 ```
 
 The installer packages only `tool/`; it does not install or modify agent
-skills. Use `--prefix <dir>` to choose another destination, or
+skills. Set `NAROVA_PREFIX` before the block (or use `--prefix <dir>` when
+running the installer directly) to choose another destination, or
 `--ref <tag-or-commit>` to pin an immutable source revision. Add
 `~/.local/bin` to `PATH` if the installer asks.
 
