@@ -41,7 +41,7 @@ function findVenvPython(projectDir) {
     process.env.NAROVA_PYTHON,
     projectDir && path.join(projectDir, '.venv', 'bin', 'python'),
     path.join(VENV_HOME, 'bin', 'python'),
-    path.join(TOOL_ROOT, '..', '..', '..', '.venv', 'bin', 'python'),
+    path.join(TOOL_ROOT, '..', '.venv', 'bin', 'python'),
     path.join(TOOL_ROOT, '.venv', 'bin', 'python'),
   ].filter(Boolean);
   for (const c of cands) if (fs.existsSync(c)) return c;

@@ -1,6 +1,6 @@
 # narova_tts — chatterbox backend (Resemble AI Chatterbox TTS; voice cloning).
 # Installed into an ISOLATED venv (~/.narova/venv-chatterbox) via
-# `tool/setup.sh --chatterbox`, NOT the main venv: chatterbox hard-pins
+# `narova-setup --chatterbox`, NOT the main venv: chatterbox hard-pins
 # torch==2.6 / transformers==5.2 / diffusers==0.29, which conflict with the
 # xtts/qwen backends. narova drives it as a subprocess worker.
 #

@@ -36,9 +36,11 @@ strengthening · `[ ]` gap.
 
 ## What narova is
 
-- [x] **A skill, not a tool** — the product is `skills/narova/` (SKILL.md +
-  references + bundled CLI), installed/used however people use skills.
-  See `README.md` ("narova is a skill"), `SPEC.md` §Layout.
+- [x] **A skill plus a standalone tool** — `skills/narova/` contains only the
+  agent-readable direction, while independently installed `tool/` owns all
+  executable code and dependencies. The skill detects and bootstraps the CLI
+  without making executable code part of skill installation. See `README.md`
+  and `SPEC.md` §Layout.
 - [x] **Framework-neutral** — SKILL.md and references/ contain no
   framework-specific assumptions; works for any agent that reads skills
   (Kimi Code, Codex, Claude Code, opencode, agentic SDKs). Verified: only
@@ -54,7 +56,7 @@ strengthening · `[ ]` gap.
   highlighting** — scene script (`reel.config.mjs`) → synth → compose →
   render. Word-by-word karaoke captions per speaker color; `data-cue`
   elements appear exactly when the voice reaches them. `SPEC.md`,
-  `skills/narova/tool/src/compose/`.
+  `tool/src/compose/`.
 - [x] **One or more voices; zero voices for silent** — schema accepts
   any number of voices; the `init` scaffold defaults to a single neutral
   narrator. Zero voices works for silent scenes with explicit durations.

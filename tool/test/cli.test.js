@@ -425,13 +425,13 @@ test('build --variant and --variants together are rejected before any synth', ()
 // --- version consistency ----------------------------------------------------
 
 test('all version sources agree with the canonical root package.json version', () => {
-  const ROOT = path.resolve(__dirname, '..', '..', '..', '..');
+  const ROOT = path.resolve(__dirname, '..', '..');
 
   const rootPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'package.json'), 'utf8'));
   const rootVer = rootPkg.version;
   assert.ok(typeof rootVer === 'string' && rootVer.length > 0, 'root package.json must have a version');
 
-  const toolPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'skills', 'narova', 'tool', 'package.json'), 'utf8'));
+  const toolPkg = JSON.parse(fs.readFileSync(path.join(ROOT, 'tool', 'package.json'), 'utf8'));
   assert.equal(toolPkg.version, rootVer, 'tool/package.json version must match root');
 
   const skillMd = fs.readFileSync(path.join(ROOT, 'skills', 'narova', 'SKILL.md'), 'utf8');
@@ -443,6 +443,18 @@ test('all version sources agree with the canonical root package.json version', (
   const badgeMatch = readme.match(/badge\/version-([0-9.]+)-/);
   assert.ok(badgeMatch, 'README.md must have a version badge');
   assert.equal(badgeMatch[1], rootVer, 'README.md badge version must match root');
+
+  const spec = fs.readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8');
+  const specMatch = spec.match(/^## Status: ([0-9.]+) shipped$/m);
+  assert.ok(specMatch, 'SPEC.md must have a shipped status version');
+  assert.equal(specMatch[1], rootVer, 'SPEC.md status version must match root');
+
+  for (const relative of ['docs/index.html', 'docs/changelog/index.html']) {
+    const html = fs.readFileSync(path.join(ROOT, relative), 'utf8');
+    const currentMatch = html.match(/data-narova-version[^>]*>v?([0-9.]+)/);
+    assert.ok(currentMatch, `${relative} must have a current version marker`);
+    assert.equal(currentMatch[1], rootVer, `${relative} version must match root`);
+  }
 
   // CLI --version prints the canonical version
   const r = run(['--version']);

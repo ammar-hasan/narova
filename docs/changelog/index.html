@@ -51,7 +51,27 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.28.0</span>
+        <span class="rel-version" data-narova-version>0.29.0</span>
+        <span class="rel-date">2026-08-10</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Standalone GitHub installer.</strong> <code>tool/install.sh</code> packs only the CLI and installs <code>narova</code> plus <code>narova-setup</code> into a user-owned prefix.</li>
+          <li><strong>Boundary integration coverage.</strong> Tests exercise an isolated install, both installed commands, package contents, and skill-to-CLI resolution.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>CLI and skill are separate artifacts.</strong> Executable code now lives in top-level <code>tool/</code>; <code>skills/narova/</code> contains instructions and references only.</li>
+          <li><strong>Skill-managed bootstrap.</strong> The skill detects or installs the standalone CLI and invokes <code>narova</code> instead of skill-relative files.</li>
+          <li><strong>Independent development surface.</strong> Tool tests, packaging, versioning, docs, and companion providers now target the standalone package.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.28.0</span>
         <span class="rel-date">2026-08-08</span>
       </div>
       <div class="rel-body">
@@ -253,7 +273,7 @@
           <li><strong>Creative modularity</strong> — 6 file-reference types per scene (bodyFile, cssFile, choreographyFile, threeFile, elementsFile, visualFile). <code>config.imports</code> for reusable project-level modules. All file contents hashed for deterministic build invalidation.</li>
           <li><strong>Expanded variant model</strong> — kind tags (hook, visual, narration, pacing, captions), sceneOverrides, theme/captions/timing overrides per variant. Backward-compatible.</li>
           <li><strong>Concept branching</strong> — SKILL.md encourages sketching 2-3 distinct creative directions before committing to the final project.</li>
-          <li><strong>Creative-diversity eval suite</strong> — 10 radically different briefs, 11 convergence metrics, human review checklist. Run via <code>node skills/narova/tool/evals/creative-diversity-eval.js</code>.</li>
+          <li><strong>Creative-diversity eval suite</strong> — 10 radically different briefs, 11 convergence metrics, human review checklist. Run via <code>node tool/evals/creative-diversity-eval.js</code>.</li>
           <li><strong>476 tests pass</strong> (470 unit + 6 eval) — revision guarantee tests, planner accuracy tests, version consistency CI test.</li>
         </ul>
         <h4><span class="tag changed">Changed</span></h4>

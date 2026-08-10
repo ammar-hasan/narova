@@ -16,9 +16,9 @@ From the two independently located skill directories:
 ```bash
 bash <narova-elevenlabs-skill-dir>/tool/setup.sh
 export ELEVENLABS_API_KEY="..."
-node <narova-skill-dir>/tool/bin/narova.js providers add \
+narova providers add \
   <narova-elevenlabs-skill-dir>/tool/provider.json
-node <narova-skill-dir>/tool/bin/narova.js providers doctor elevenlabs
+narova providers doctor elevenlabs
 ```
 
 Registration resolves the worker path and stores a normalized manifest under
@@ -67,9 +67,9 @@ The optional per-voice `lang`, or a turn's `lang`, is sent as the API
 ## Voice listing and synthesis
 
 ```bash
-node <narova-skill-dir>/tool/bin/narova.js voices list --backend elevenlabs
-node <narova-skill-dir>/tool/bin/narova.js synth --project <project-dir>
-node <narova-skill-dir>/tool/bin/narova.js build --project <project-dir>
+narova voices list --backend elevenlabs
+narova synth --project <project-dir>
+narova build --project <project-dir>
 ```
 
 Voice listing returns `voice-id<TAB>display-name`. It uses the account
@@ -115,8 +115,8 @@ cache identity. After updating this companion skill, unregister and register
 it again:
 
 ```bash
-node <narova-skill-dir>/tool/bin/narova.js providers remove elevenlabs
-node <narova-skill-dir>/tool/bin/narova.js providers add \
+narova providers remove elevenlabs
+narova providers add \
   <narova-elevenlabs-skill-dir>/tool/provider.json
 ```
 

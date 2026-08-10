@@ -27,9 +27,9 @@ From the independently located skill directories:
 ```bash
 bash <narova-openai-skill-dir>/tool/setup.sh
 export OPENAI_API_KEY="..."
-node <narova-skill-dir>/tool/bin/narova.js providers add \
+narova providers add \
   <narova-openai-skill-dir>/tool/provider.json
-node <narova-skill-dir>/tool/bin/narova.js providers doctor openai
+narova providers doctor openai
 ```
 
 Registration resolves the worker path and stores a normalized manifest under
@@ -104,7 +104,7 @@ Current sources, checked 2026-08-03:
 List the 13 built-in voices without making a paid API request:
 
 ```bash
-node <narova-skill-dir>/tool/bin/narova.js voices list --backend openai
+narova voices list --backend openai
 ```
 
 The current built-ins are `alloy`, `ash`, `ballad`, `coral`, `echo`, `fable`,
@@ -120,8 +120,8 @@ limits samples to 30 seconds and 10 MiB, and applies supplemental terms.
 ## Synthesis behavior
 
 ```bash
-node <narova-skill-dir>/tool/bin/narova.js synth --project <project-dir>
-node <narova-skill-dir>/tool/bin/narova.js build --project <project-dir>
+narova synth --project <project-dir>
+narova build --project <project-dir>
 ```
 
 The worker requests WAV directly from `POST /v1/audio/speech`, validates it,
@@ -189,8 +189,8 @@ Provider implementation version is captured at registration for deterministic
 cache identity. After updating this companion, register it again:
 
 ```bash
-node <narova-skill-dir>/tool/bin/narova.js providers remove openai
-node <narova-skill-dir>/tool/bin/narova.js providers add \
+narova providers remove openai
+narova providers add \
   <narova-openai-skill-dir>/tool/provider.json
 ```
 

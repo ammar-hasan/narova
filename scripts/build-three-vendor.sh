@@ -2,14 +2,14 @@
 set -eu
 
 ROOT=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
-ENTRY="$ROOT/skills/narova/tool/vendor/three/three.global.entry.js"
-OUTPUT="$ROOT/skills/narova/tool/vendor/three/three.global.js"
+ENTRY="$ROOT/tool/vendor/three/three.global.entry.js"
+OUTPUT="$ROOT/tool/vendor/three/three.global.js"
 
 npx --yes esbuild "$ENTRY" \
   --bundle \
   --minify \
   --format=iife \
-  --alias:three="$ROOT/skills/narova/tool/vendor/three/three.module.js" \
+  --alias:three="$ROOT/tool/vendor/three/three.module.js" \
   --outfile="$OUTPUT"
 
 # Shader source is stored in JavaScript template literals. Preserve its

@@ -9,7 +9,7 @@
  * Architecture:
  *   1. Fixture-based mode: pre-baked fixture configs in fixtures/llm-bench/
  *      simulate LLM output for deterministic CI runs (no API calls, no cost).
- *      Run: node skills/narova/tool/evals/llm-creativity-bench.js
+ *      Run: node tool/evals/llm-creativity-bench.js
  *   2. LLM mode: substitution mechanism. Replace fixture loader with an LLM
  *      adapter that calls a model. Same metrics, same briefs, but real model.
  *      Run with --llm <adapter-path> to use a live LLM.

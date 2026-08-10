@@ -555,7 +555,7 @@ class ChatterboxBackend:
         if not py.exists():
             raise RuntimeError(
                 f"chatterbox venv not found at {py} — install it once with:\n"
-                f"  bash <skill>/tool/setup.sh --chatterbox")
+                f"  narova-setup --chatterbox")
         worker = Path(__file__).with_name("chatterbox_worker.py")
         print(f"[chatterbox] starting worker: {py} {worker.name}", flush=True)
         # stderr inherits the parent's (worker logs/progress reach the console);
@@ -590,7 +590,7 @@ class ChatterboxBackend:
         if not line:
             raise RuntimeError(
                 "chatterbox worker exited unexpectedly (see its log above) — "
-                "check the chatterbox venv: bash <skill>/tool/setup.sh --chatterbox")
+                "check the chatterbox venv: narova-setup --chatterbox")
         try:
             return json.loads(line)
         except json.JSONDecodeError as e:
@@ -612,7 +612,7 @@ class ChatterboxBackend:
         except (BrokenPipeError, OSError) as e:
             raise RuntimeError(
                 "chatterbox worker exited unexpectedly (see its log above) — "
-                "check the chatterbox venv: bash <skill>/tool/setup.sh --chatterbox") from e
+                "check the chatterbox venv: narova-setup --chatterbox") from e
         resp = self._recv()
         if not resp.get("ok"):
             raise RuntimeError(f"chatterbox synth failed for {who!r}: {resp.get('error')}")

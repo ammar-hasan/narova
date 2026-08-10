@@ -6,6 +6,34 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-08-10
+
+### Added
+
+- **Standalone GitHub installer.** `tool/install.sh` downloads a selected
+  repository ref, packs only the CLI package, and installs `narova` plus
+  `narova-setup` into a user-owned npm prefix. Local-source and optional-dependency
+  flags make the same flow reproducible in tests and development.
+- **Boundary integration coverage.** Tests install the standalone package into
+  a temporary prefix, run both installed commands, audit the packed files, and
+  verify the Narova skill resolves the external CLI without executable files in
+  its own directory.
+
+### Changed
+
+- **CLI and skill are separate artifacts.** All executable Node, Python,
+  renderer, vendor, eval, and test code moved from `skills/narova/tool/` to the
+  top-level `tool/` package. `skills/narova/` now contains only `SKILL.md` and
+  references.
+- **Skill-managed bootstrap.** The Narova skill detects `narova` on `PATH`,
+  installs the standalone tool when missing, and invokes the command instead of
+  reaching into skill-relative files. Optional TTS setup now uses the installed
+  `narova-setup` command.
+- **Independent development surface.** The root package is now a private
+  workspace orchestrator. Tool tests and packaging run from `tool/`, while
+  repository scripts, companion skills, specifications, and user docs use the
+  new standalone paths.
+
 ## [0.28.0] - 2026-08-08
 
 ### Added
@@ -436,7 +464,7 @@ wrong."
   sketching 2-3 distinct creative directions before committing to the final project.
 - **Creative-diversity evaluation suite** — 10 radically different briefs,
   11 convergence metrics, machine-readable similarity checks, human review
-  checklist. Run via `node skills/narova/tool/evals/creative-diversity-eval.js`.
+  checklist. Run via `node tool/evals/creative-diversity-eval.js`.
 - **Revision guarantee tests** — 14 tests verifying audio fingerprint stability
   for visual-only edits, theme changes, caption changes, choreography changes,
   and bed/SFX changes (all safe — no TTS required). Text, voice, and tempo edits
@@ -996,7 +1024,7 @@ wrong."
 
 ### Added
 
-- **Comprehensive export presets** — `skills/narova/tool/src/exports.js` defines
+- **Comprehensive export presets** — `tool/src/exports.js` defines
   platform-specific render + encode profiles: YouTube 1080p/4K, TikTok,
   Instagram Reels, YouTube Shorts, LinkedIn, X, and a narova-standard baseline.
   Each preset carries HyperFrames render flags (`--format`, `--quality`,

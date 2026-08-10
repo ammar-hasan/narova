@@ -15,7 +15,7 @@
  * capacity for diverse video concepts. That is a necessary but insufficient
  * condition for creative freedom.
  *
- * Run: node skills/narova/tool/evals/creative-diversity-eval.js
+ * Run: node tool/evals/creative-diversity-eval.js
  *
  * What it measures (on manually-authored configs):
  *   - Scene-count similarity

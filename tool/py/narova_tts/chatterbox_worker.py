@@ -67,7 +67,7 @@ def _load_multilingual(device: str):
     except TypeError:
         print("[chatterbox] installed chatterbox has no t3_model (v3) support — "
               "using its default multilingual checkpoint (v2). For v3, reinstall "
-              "with: bash <skill>/tool/setup.sh --chatterbox", flush=True)
+              "with: narova-setup --chatterbox", flush=True)
         model = ChatterboxMultilingualTTS.from_pretrained(device=device)
     return model
 

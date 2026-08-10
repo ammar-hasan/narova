@@ -4,12 +4,13 @@
 
 **You write a prompt. narova makes the video.**
 
-A skill your AI agent reads — Claude Code, Codex, Cursor, Kimi Code — that turns
-prompts, scripts, web pages, and real product walkthroughs into narrated,
-captioned video. Rendered on your machine.
+An instructions-only skill your AI agent reads — Claude Code, Codex, Cursor,
+Kimi Code — paired with a standalone CLI that turns prompts, scripts, web
+pages, and real product walkthroughs into narrated, captioned video. Rendered
+on your machine.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.28.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.29.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -45,8 +46,27 @@ captioned video. Rendered on your machine.
 
 ## Install
 
-narova is a **skill** — the whole product lives in `skills/narova/`, and any agent
-that reads skills can use it:
+Narova has two deliberately separate installs: a standalone CLI and an
+instructions-only agent skill. Install the CLI from GitHub into the user-owned
+`~/.local` prefix:
+
+```bash
+narova_installer="$(mktemp)"
+curl --proto '=https' --tlsv1.2 -fsSL \
+  https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
+  -o "$narova_installer"
+bash "$narova_installer"
+rm -f "$narova_installer"
+narova doctor
+```
+
+The installer packages only `tool/`; it does not install or modify agent
+skills. Use `--prefix <dir>` to choose another destination, or
+`--ref <tag-or-commit>` to pin an immutable source revision. Add
+`~/.local/bin` to `PATH` if the installer asks.
+
+Install the skill separately for any agent that reads skills. It detects a
+missing CLI and can invoke the same standalone installer:
 
 [![skills.sh](https://skills.sh/b/ammar-hasan/narova)](https://skills.sh/ammar-hasan/narova)
 
@@ -54,6 +74,10 @@ that reads skills can use it:
 npx skills add ammar-hasan/narova --skill narova -g
 # check for updates: npx skills update narova -g (only when you're ready — upgrading replaces the skill files)
 ```
+
+This boundary keeps executable dependencies and updates out of the instruction
+package: CLI updates cannot overwrite the skill, and skill updates cannot
+replace executable code.
 
 ## Quickstart
 
@@ -99,8 +123,10 @@ project's final release gate.
 The CLI is available when you want to inspect or automate each step yourself:
 
 ```bash
-git clone https://github.com/ammar-hasan/narova.git && cd narova
-npm link            # optional: gives you the `narova` command
+git clone https://github.com/ammar-hasan/narova.git && cd narova/tool
+npm install
+npm link            # optional: gives you `narova` and `narova-setup`
+cd ..
 narova doctor       # core tools + optional agent-browser walkthrough adapter
 
 narova init generated/myreel && cd generated/myreel
@@ -122,11 +148,11 @@ The first default `build` downloads a few things one time: it creates a Python v
 at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.
 This can take a minute. It is not stuck.
 
-For the no-browser renderer, run `npm install` once in this checkout
-(standalone skill installs use `npm install --prefix <skill-dir>/tool`) and
-verify it with `narova renderers doctor no-browser`.
+The GitHub installer installs the optional no-browser dependencies by default.
+In a source checkout, run `npm install --prefix tool` from the repository root,
+then verify with `narova renderers doctor no-browser`.
 
-Without `npm link`, run `node skills/narova/tool/bin/narova.js` instead of `narova`.
+Without `npm link`, run `node tool/bin/narova.js` from the repository root.
 
 ## The scene script
 
@@ -293,9 +319,9 @@ walkthrough-bearing `--variant <id>` before `build --variants`.
 | Backend | Quality | Speed | Setup | Notes |
 |---------|---------|-------|-------|-------|
 | `piper` | good | fast | none (default) | small local voices |
-| `xtts`  | higher | slow | `skills/narova/tool/setup.sh --xtts` | ~1.9GB model, 58 speakers |
-| `qwen`  | high | slow | `skills/narova/tool/setup.sh --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
-| `chatterbox` | voice cloning | slowest | `skills/narova/tool/setup.sh --chatterbox` | `speaker` = absolute path to a 10–20s recording; own venv, ~1GB model |
+| `xtts`  | higher | slow | `narova-setup --xtts` | ~1.9GB model, 58 speakers |
+| `qwen`  | high | slow | `narova-setup --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
+| `chatterbox` | voice cloning | slowest | `narova-setup --chatterbox` | `speaker` = absolute path to a 10–20s recording; own venv, ~1GB model |
 
 Pick voices that sound clearly different. Give each a `color`.
 List voices with `narova voices list --backend <name>`.
@@ -381,7 +407,9 @@ creative direction is ready to scale.
 ## Repo layout
 
 ```
-skills/narova/     the product: SKILL.md + references/ + tool/ (CLI, TTS, tests)
+tool/              standalone CLI package: installer, Node/Python runtime, vendors, tests
+skills/narova/     instructions-only agent skill: SKILL.md + references/
+skills/narova-*/   optional provider companion skills and their isolated workers
 docs/              the marketing site (GitHub Pages) + /changelog
 generated/narova-skill-reel/  flagship sample project (built from a plain-language prompt; more in generated/)
 generated/         agent-created projects; source kept, out/ and build/ ignored
@@ -391,7 +419,8 @@ VISION.md          the product vision, mapped to where each point is implemented
 LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline
 ```
 
-Run the tests: `npm test` (no extra deps).
+Run everything with `npm test`, or test the CLI independently with
+`npm test --prefix tool`.
 
 ## License
 

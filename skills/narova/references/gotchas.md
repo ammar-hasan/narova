@@ -84,10 +84,10 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   --backend piper` downloads any voice from the piper catalog
   (github.com/rhasspy/piper/blob/master/VOICES.md). Enough distinct voices
   for a multi-host panel without the heavy xtts/qwen backends.
-- **xtts extras**: install with `tool/setup.sh --xtts`. If a license prompt
+- **xtts extras**: install with `narova-setup --xtts`. If a license prompt
   appears, set `COQUI_TOS_AGREED=1`.
 - **chatterbox is voice cloning, in its own venv.** Install once with
-  `tool/setup.sh --chatterbox`. It hard-pins torch==2.6 / transformers==5.2,
+  `narova-setup --chatterbox`. It hard-pins torch==2.6 / transformers==5.2,
   which conflict with xtts/qwen, so it gets a SEPARATE venv
   (`~/.narova/venv-chatterbox`, override `$NAROVA_CHATTERBOX_VENV`) and narova
   drives it as a subprocess. Set the voice's `speaker` to an ABSOLUTE path to a
@@ -97,7 +97,7 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   spares unchanged lines.
 - **qwen needs Python ≥ 3.10.** On a machine whose default python3 is 3.9,
   `setup.sh --qwen` fails resolving deps. Install a newer python and rebuild
-  the venv: `NAROVA_SETUP_PYTHON=python3.12 bash tool/setup.sh --qwen`
+  the venv: `NAROVA_SETUP_PYTHON=python3.12 narova-setup --qwen`
   (move `~/.narova/venv` aside first).
 - **Voice-clone sample paths must be absolute.** The synth process does not
   run in the project directory, so a relative `speaker: "voice/me.wav"` can't
@@ -161,9 +161,9 @@ Short version of LEARNINGS.md. Read that file before changing pipeline code.
   outside the authored snapshot namespace and validates it again at release.
   Restore the approved proof before expansion and record its exact
   `proofIdentity` in the brief; proof-time CLI overrides reapply automatically.
-- **Agent shells don't persist variables.** Spell out
-  `node <skill-dir>/tool/bin/narova.js` in every call — a `NAROVA=...`
-  assignment from an earlier call is gone (exit 127).
+- **Agent shells don't persist variables.** Use `narova` in every call, or
+  `$HOME/.local/bin/narova` when that user-owned bin directory is not on
+  `PATH`. A `NAROVA=...` assignment from an earlier call is gone (exit 127).
 - **Balance is on you, not the tool.** `check` gates claims against
   `claims.md`, but a one-sided narrative built from sourced claims passes
   clean. For contested topics, ledger the major perspectives and re-read the

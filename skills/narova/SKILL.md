@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.28.0"
+  version: "0.29.0"
 ---
 # narova — video from scene scripts
 
@@ -26,8 +26,9 @@ karaoke make speech-driven video exceptionally convenient. Named markers are
 another source. Silent projects with explicit durations or marker-driven events
 are first-class. The tool does not assume every project is narration-led.
 
-The full tool ships bundled inside the skill. Nothing to install beyond
-the machine prerequisites.
+The skill and CLI are deliberately separate. This directory contains only
+instructions and references; executable code is installed from the standalone
+top-level `tool/` package when needed.
 
 ## Creative stance: you are the director
 
@@ -63,21 +64,40 @@ first-class and use the same scene/timeline model.
 
 Or bring your own recording with `narration.file` and `narration.wordTimings`.
 
-## The tool ships bundled — nothing to install
+## Standalone CLI boundary and bootstrap
 
 Requires Node.js 18+, Python 3.10+, and FFmpeg. First-time model and
 HyperFrames setup requires internet access. Product walkthrough capture can
 optionally use agent-browser.
 
+Before the first Narova command in a session, detect the standalone CLI:
+
 ```bash
-node <this-skill-dir>/tool/bin/narova.js <command>
+command -v narova
 ```
 
-Agent shells don't persist environment variables between calls, so spell the
-command out every time. No install step. First `synth` or `build` creates
-`~/.narova/venv`. `doctor` checks requirements (Node 18+, ffmpeg, Python 3.10+).
-For richer voices: `bash <this-skill-dir>/tool/setup.sh --xtts` (or `--qwen`,
+If it is missing, install only the CLI package. The installer downloads the
+repository, packs only `tool/`, and installs it under the user-owned
+`~/.local` prefix; it does not install or modify skills:
+
+```bash
+installer="$(mktemp "${TMPDIR:-/tmp}/narova-install.XXXXXX")"
+curl --proto '=https' --tlsv1.2 -fsSL \
+  https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
+  -o "$installer"
+bash "$installer"
+rm -f "$installer"
+```
+
+Use `narova <command>` for every workflow step. If `~/.local/bin` is not on
+`PATH`, spell out `$HOME/.local/bin/narova <command>` instead; agent shells do
+not preserve a one-off `PATH` assignment between calls. First `synth` or
+`build` creates `~/.narova/venv`. `doctor` checks Node 18+, ffmpeg, and Python
+3.10+. For richer voices, run `narova-setup --xtts` (or `--qwen`,
 `--chatterbox` for voice cloning).
+
+Skill updates and CLI updates are independent. Re-run the CLI installer to
+update the tool; re-run the skills installer only to update these instructions.
 
 External TTS providers are optional registered companion skills — see
 `narova-elevenlabs`, `narova-openai`, or `references/cli.md` §providers.

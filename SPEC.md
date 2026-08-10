@@ -10,8 +10,8 @@ by word. Screen elements appear when the voice reaches them.
 
 The work is split in three parts:
 
-- **Python** (`skills/narova/tool/py/narova_tts`): speech and word timings. Nothing else.
-- **Node** (`skills/narova/tool/src`): config validation, optional product
+- **Python** (`tool/py/narova_tts`): speech and word timings. Nothing else.
+- **Node** (`tool/src`): config validation, optional product
   walkthrough orchestration, the provider-neutral manifest, and composition.
 - **Renderer provider** (`narova-renderer-provider/v1`): local HyperFrames for
   unrestricted browser visuals, or local no-browser Skia + FFmpeg when no browser
@@ -33,21 +33,25 @@ The goal: an agent takes a user prompt, writes the scene script, and
 
 ## Layout
 
-narova ships as an agent skill. Installing the skill IS installing narova.
+Narova ships as two independent artifacts: the executable CLI package in
+`tool/`, and the agent-readable instructions in `skills/narova/`. Installing a
+skill never places executable code on the machine; installing the CLI never
+changes agent instructions.
 
 ```
 narova/                          # the repo
-├── skills/narova/               # THE PRODUCT
-│   │                            #   install: npx skills add ammar-hasan/narova
-│   │                            #   (.claude/skills/narova is a symlink here)
-│   ├── SKILL.md  references/    # what an agent reads
-│   └── tool/                    # the CLI
-│       ├── bin/narova.js        # entry point
-│       ├── src/                 # config, schema, check, compose/, hf, pipeline,
-│       │                        #   timeline, exports, doctor, init, ingest, captions, util
-│       ├── py/narova_tts/       # TTS backends + timing
-│       ├── setup.sh             # creates the venv (auto-run by first synth)
-│       └── test/                # test suite (npm test)
+├── tool/                        # standalone CLI package
+│   ├── bin/narova.js            # entry point
+│   ├── src/                     # config, schema, check, compose/, hf, pipeline,
+│   │                            #   timeline, exports, doctor, init, ingest, captions, util
+│   ├── py/narova_tts/           # TTS backends + timing
+│   ├── install.sh               # GitHub installer; packages only this directory
+│   ├── setup.sh                 # narova-setup; creates the TTS venv
+│   └── test/                    # independently runnable test suite
+├── skills/narova/               # instructions-only agent skill
+│   │                            # install: npx skills add ammar-hasan/narova
+│   │                            # (.claude/skills/narova is a symlink here)
+│   └── SKILL.md  references/    # what an agent reads
 ├── skills/narova-elevenlabs/    # optional, separately installable provider
 │   ├── SKILL.md  references/    # ElevenLabs-only setup/configuration
 │   └── tool/                    # provider manifest + isolated HTTP worker
@@ -58,7 +62,7 @@ narova/                          # the repo
 ```
 
 The venv lives at `~/.narova/venv` (override with `$NAROVA_VENV`). It sits
-outside the skill folder so a skill update cannot delete it. The first
+outside the CLI package so a tool or skill update cannot delete it. The first
 `synth` creates it.
 
 ## The pipeline
@@ -329,22 +333,22 @@ render separate projects at each aspect ratio), `--fps`, `--quality draft|standa
 
 - **piper** — default. Fast, small, no setup. Downloads a voice on first use.
 - **xtts** — higher quality, slow. ~1.9GB model, 58 speakers.
-  Setup: `tool/setup.sh --xtts`.
+  Setup: `narova-setup --xtts`.
 - **qwen** — Qwen3-TTS 0.6B, Apache 2.0. High quality, slow. ~1.2GB model,
-  9 speakers, optional per-voice `lang`. Setup: `tool/setup.sh --qwen`.
+  9 speakers, optional per-voice `lang`. Setup: `narova-setup --qwen`.
   Change the model with `$NAROVA_QWEN_MODEL`.
 - **chatterbox** — voice cloning. Set the voice's `speaker` to an ABSOLUTE
   path to a clean 10–20s recording. Slowest backend. Runs in its own venv
   (`~/.narova/venv-chatterbox`, override `$NAROVA_CHATTERBOX_VENV`) because
   its torch/transformers pins conflict with xtts/qwen. ~1GB model, optional
-  per-voice `exaggeration` / `cfg_weight`. Setup: `tool/setup.sh --chatterbox`.
+  per-voice `exaggeration` / `cfg_weight`. Setup: `narova-setup --chatterbox`.
   Pinned to git master for Chatterbox Multilingual v3 (per-voice `lang`;
   outputs carry Resemble's PerTh watermark by default).
 
 The backend interface is
 `synthesize(who, text, out_path, lang=None) -> Path`.
 
-Built-ins are resolved from one in-skill registry. Optional external backends
+Built-ins are resolved from one standalone-tool registry. Optional external backends
 are never imported: the user explicitly registers a manifest under
 `~/.narova/providers/`, then Narova spawns its command as an argument array
 and speaks the versioned `narova-tts-provider/v1` JSON Lines protocol. External
@@ -355,11 +359,12 @@ code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
 
-## Status: 0.28.0 shipped
+## Status: 0.29.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
-compose → preview → build. The tool and tests ship inside the skill.
+compose → preview → build by invoking the separately installed CLI. The tool
+and its tests live in the independent top-level package.
 
 Since 0.6.0: background bed + spot SFX mixing, forced word alignment (optional),
 caption style presets + keyword emphasis, per-scene transitions, `data-mark`

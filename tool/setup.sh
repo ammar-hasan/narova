@@ -1,13 +1,13 @@
 #!/usr/bin/env bash
 # narova setup — bootstrap the Python venv used by the `synth` (TTS) stage.
 #
-#   tool/setup.sh              # piper backend (default, fast, zero-config)
-#   tool/setup.sh --xtts       # also install the xtts backend (~1.9GB model on first synth)
-#   tool/setup.sh --qwen       # also install the Qwen3-TTS backend (~1.2GB model on first synth)
-#   tool/setup.sh --chatterbox # also install the chatterbox backend (voice cloning; SEPARATE venv)
+#   narova-setup              # piper backend (default, fast, zero-config)
+#   narova-setup --xtts       # also install the xtts backend (~1.9GB model on first synth)
+#   narova-setup --qwen       # also install the Qwen3-TTS backend (~1.2GB model on first synth)
+#   narova-setup --chatterbox # also install the chatterbox backend (voice cloning; SEPARATE venv)
 #
-# Venv location: $NAROVA_VENV, else ~/.narova/venv (outside the skill folder,
-# so skill updates never destroy it). The CLI runs this automatically on the
+# Venv location: $NAROVA_VENV, else ~/.narova/venv (outside the tool package,
+# so CLI updates never destroy it). The CLI runs this automatically on the
 # first synth if no venv exists.
 #
 # chatterbox is special: it hard-pins torch==2.6 / transformers==5.2, which
@@ -30,7 +30,7 @@ for arg in "$@"; do
     --qwen) WITH_QWEN=1 ;;
     --chatterbox) WITH_CHATTERBOX=1 ;;
     -h|--help)
-      echo "usage: tool/setup.sh [--xtts] [--qwen] [--chatterbox]"; exit 0 ;;
+      echo "usage: narova-setup [--xtts] [--qwen] [--chatterbox]"; exit 0 ;;
     *) echo "unknown option: $arg (see --help)"; exit 1 ;;
   esac
 done

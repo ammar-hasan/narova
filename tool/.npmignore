@@ -1,0 +1,8 @@
+node_modules/
+out/
+test/
+evals/
+py/tests/
+**/__pycache__/
+**/*.py[cod]
+**/.DS_Store

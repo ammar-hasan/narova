@@ -1,52 +1,26 @@
 {
-  "name": "narova",
-  "version": "0.28.0",
-  "description": "Deterministic scene-scripted video with local voices, word-synced captions, and two free local renderers. Narration is optional.",
-  "bin": {
-    "narova": "skills/narova/tool/bin/narova.js"
-  },
+  "name": "narova-repo",
+  "version": "0.29.0",
+  "description": "Development workspace for the standalone Narova CLI and its separate agent skills.",
+  "private": true,
+  "workspaces": [
+    "tool"
+  ],
   "type": "commonjs",
-  "main": "skills/narova/tool/src/pipeline.js",
   "scripts": {
-    "narova": "node skills/narova/tool/bin/narova.js",
-    "test": "npm run -s test:js && npm run -s test:py && npm run -s test:elevenlabs && npm run -s test:openai",
-    "test:js": "node --test 'skills/narova/tool/test/*.test.js'",
-    "test:py": "PYTHONPATH=skills/narova/tool/py python3 -m unittest discover -s skills/narova/tool/py/tests",
+    "narova": "node tool/bin/narova.js",
+    "test": "npm run -s test:tool && npm run -s test:integration && npm run -s test:elevenlabs && npm run -s test:openai",
+    "test:tool": "npm test --prefix tool",
+    "test:js": "npm run test:js --prefix tool",
+    "test:py": "npm run test:py --prefix tool",
+    "test:install": "npm run test:install --prefix tool",
+    "test:integration": "node --test 'test/*.test.js'",
     "test:elevenlabs": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-elevenlabs/tests",
     "test:openai": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-openai/tests",
     "test:package": "node scripts/check-package.js",
-    "eval:walkthrough": "node skills/narova/tool/evals/walkthrough-eval.js",
-    "eval:no-browser": "node skills/narova/tool/evals/no-browser-complex-eval.js",
+    "eval:walkthrough": "node tool/evals/walkthrough-eval.js",
+    "eval:no-browser": "node tool/evals/no-browser-complex-eval.js",
     "version:sync": "node scripts/sync-version.js",
     "version": "node scripts/sync-version.js"
-  },
-  "files": [
-    "skills/narova/SKILL.md",
-    "skills/narova/references/",
-    "skills/narova/tool/bin/",
-    "skills/narova/tool/src/",
-    "skills/narova/tool/vendor/",
-    "skills/narova/tool/package.json",
-    "skills/narova/tool/setup.sh",
-    "skills/narova/tool/py/*.py",
-    "skills/narova/tool/py/*.txt",
-    "skills/narova/tool/py/narova_tts/*.py",
-    "skills/narova-elevenlabs/SKILL.md",
-    "skills/narova-elevenlabs/references/",
-    "skills/narova-elevenlabs/tool/",
-    "skills/narova-openai/SKILL.md",
-    "skills/narova-openai/references/",
-    "skills/narova-openai/tool/",
-    "SPEC.md",
-    "LEARNINGS.md"
-  ],
-  "engines": {
-    "node": ">=18"
-  },
-  "optionalDependencies": {
-    "@fontsource/noto-sans-arabic": "5.3.0",
-    "@napi-rs/canvas": "1.0.3",
-    "fontkit": "2.0.4"
-  },
-  "license": "MIT"
+  }
 }
