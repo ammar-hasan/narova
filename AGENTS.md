@@ -2,8 +2,8 @@
 
 Prompt-to-video CLI. Turns a scene script (`reel.config.mjs`) into an MP4 with
 local TTS, word-level captions, and speech-timed visuals rendered through
-HyperFrames. The standalone CLI package lives at `tool/`; the agent skill at
-`skills/narova/` contains instructions and references only.
+HyperFrames. CLI code lives in `tool/`; agent instructions and references live
+in `skills/narova/`.
 
 ## Key gotchas
 

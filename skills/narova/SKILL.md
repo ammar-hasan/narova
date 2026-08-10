@@ -26,9 +26,8 @@ karaoke make speech-driven video exceptionally convenient. Named markers are
 another source. Silent projects with explicit durations or marker-driven events
 are first-class. The tool does not assume every project is narration-led.
 
-The skill and CLI are deliberately separate. This directory contains only
-instructions and references; executable code is installed from the standalone
-top-level `tool/` package when needed.
+The skill and CLI are installed separately. This directory contains the
+instructions and references; the CLI is installed from `tool/` when needed.
 
 ## Creative stance: you are the director
 
@@ -64,17 +63,15 @@ first-class and use the same scene/timeline model.
 
 Or bring your own recording with `narration.file` and `narration.wordTimings`.
 
-## Standalone CLI boundary and bootstrap
+## Install the CLI
 
 Requires Node.js 18+, Python 3.10+, and FFmpeg. First-time model and
 HyperFrames setup requires internet access. Product walkthrough capture can
 optionally use agent-browser.
 
-Before the first Narova command in a session, detect the standalone CLI on
-`PATH` or at the installer's default user-owned location. If neither exists,
-install only the CLI package. The installer downloads the repository, packs
-only `tool/`, and installs it under `~/.local`; it does not install or modify
-skills:
+Before the first Narova command in a session, look for `narova` on `PATH` or at
+`~/.local/bin/narova`. If it is not installed, run the CLI installer below.
+The installer does not change skill files.
 
 ```bash
 if command -v narova >/dev/null 2>&1; then
@@ -101,10 +98,9 @@ not preserve a one-off `PATH` assignment between calls. First `synth` or
 3.10+. For richer voices, run `narova-setup --xtts` (or `--qwen`,
 `--chatterbox` for voice cloning).
 
-Skill updates and CLI updates are independent. Re-run the CLI installer to
-upgrade the tool; re-run the skills installer only to update these instructions.
-`narova-uninstall` removes the standalone CLI package and commands, but keeps
-projects, downloaded models, caches, and this separately installed skill.
+Update the CLI by running its installer again. Update the skill with the skills
+installer. `narova-uninstall` removes the CLI and its commands but keeps
+projects, downloaded models, caches, and the skill.
 
 External TTS providers are optional registered companion skills — see
 `narova-elevenlabs`, `narova-openai`, or `references/cli.md` §providers.

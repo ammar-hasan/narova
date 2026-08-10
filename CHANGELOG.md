@@ -10,32 +10,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
-- **Standalone GitHub installer.** `tool/install.sh` downloads a selected
-  repository ref, packs only the CLI package, and installs `narova` plus
-  `narova-setup` and `narova-uninstall` into a user-owned npm prefix. Re-running
-  the installer upgrades in place; the uninstaller removes only the executable
-  package and keeps projects, downloaded models, caches, and skills. Local-source
-  and optional-dependency flags make the same flow reproducible in tests and
-  development.
-- **Boundary integration coverage.** Tests install the standalone package into
-  a temporary prefix, run the installed commands, exercise an in-place upgrade
-  and safe repeated uninstall, audit the packed files, and verify the Narova
-  skill resolves the external CLI without executable files in its own directory.
+- **CLI installer and uninstaller.** `tool/install.sh` installs `narova`,
+  `narova-setup`, and `narova-uninstall` from a selected GitHub ref. Run the
+  installer again to update. The uninstaller removes the CLI but keeps projects,
+  models, caches, and skills.
+- **Install lifecycle tests.** Tests cover installation, update, repeated
+  uninstall, package contents, and skill-to-CLI use from temporary directories.
 
 ### Changed
 
-- **CLI and skill are separate artifacts.** All executable Node, Python,
-  renderer, vendor, eval, and test code moved from `skills/narova/tool/` to the
-  top-level `tool/` package. `skills/narova/` now contains only `SKILL.md` and
-  references.
-- **Skill-managed bootstrap.** The Narova skill detects `narova` on `PATH`,
-  installs the standalone tool when missing, and invokes the command instead of
-  reaching into skill-relative files. Optional TTS setup now uses the installed
-  `narova-setup` command.
-- **Independent development surface.** The root package is now a private
-  development orchestrator. Tool tests and packaging run from `tool/`, while
-  repository scripts, companion skills, specifications, and user docs use the
-  new standalone paths.
+- **Repository layout.** The CLI runtime, renderers, vendors, evals, and tests
+  moved from `skills/narova/tool/` to `tool/`. `skills/narova/` now contains
+  only `SKILL.md` and references.
+- **Skill setup.** The skill finds `narova` on `PATH` or installs it when needed.
+  Optional TTS setup now uses `narova-setup`.
+- **Development commands.** Root scripts, tests, companion skills, specs, and
+  docs now use the top-level `tool/` paths.
 
 ## [0.28.0] - 2026-08-08
 

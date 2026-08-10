@@ -4,10 +4,9 @@
 
 **You write a prompt. narova makes the video.**
 
-An instructions-only skill your AI agent reads — Claude Code, Codex, Cursor,
-Kimi Code — paired with a standalone CLI that turns prompts, scripts, web
-pages, and real product walkthroughs into narrated, captioned video. Rendered
-on your machine.
+Narova combines an agent skill for Claude Code, Codex, Cursor, and Kimi Code
+with a local CLI. Together they turn prompts, scripts, web pages, and product
+walkthroughs into narrated, captioned video.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-0.29.0-4fd9e8.svg)](./package.json)
@@ -46,9 +45,8 @@ on your machine.
 
 ## Install
 
-Narova has two deliberately separate installs: a standalone CLI and an
-instructions-only agent skill. Install the CLI from GitHub into the user-owned
-`~/.local` prefix:
+Narova has two parts: the CLI and the agent skill. Install the CLI first. It
+uses `~/.local` by default:
 
 ```bash
 (
@@ -64,32 +62,28 @@ instructions-only agent skill. Install the CLI from GitHub into the user-owned
 )
 ```
 
-The installer packages only `tool/`; it does not install or modify agent
-skills. Set `NAROVA_PREFIX` before the block (or use `--prefix <dir>` when
-running the installer directly) to choose another destination, or
-`--ref <tag-or-commit>` to pin an immutable source revision. Add
-`~/.local/bin` to `PATH` if the installer asks.
+The CLI installer does not change agent skills. Set `NAROVA_PREFIX` before the
+block, or pass `--prefix <dir>` to the script, to install somewhere else. Use
+`--ref <tag-or-commit>` to install a specific version. Add `~/.local/bin` to
+`PATH` if the installer asks.
 
-### Upgrade or uninstall
+### Update or remove
 
-Re-run the same installer with the same prefix to upgrade the CLI. Use
-`--ref <tag-or-commit>` when you want a specific version. Upgrading replaces
-the executable package in place without removing projects or local voice data.
+Run the installer again with the same prefix to update the CLI. This replaces
+the installed program but keeps your projects and voice data.
 
-Remove the standalone CLI with:
+Remove the CLI with:
 
 ```bash
 narova-uninstall
 ```
 
-The installed command detects custom prefixes automatically; `--prefix <dir>`
-is also available. It removes the `narova`, `narova-setup`, and
-`narova-uninstall` commands and their package only. Projects, downloaded
-models, caches, and the separately installed agent skill are kept. Update or
-remove the skill separately with your skills manager.
+The command detects a custom install prefix automatically. You can also pass
+`--prefix <dir>`. It removes the Narova package and its three commands. It does
+not remove projects, downloaded models, caches, or the agent skill.
 
-Install the skill separately for any agent that reads skills. It detects a
-missing CLI and can invoke the same standalone installer:
+Then install the skill for any agent that supports skills. If the CLI is
+missing, the skill can run the same installer:
 
 [![skills.sh](https://skills.sh/b/ammar-hasan/narova)](https://skills.sh/ammar-hasan/narova)
 
@@ -98,9 +92,7 @@ npx skills add ammar-hasan/narova --skill narova -g
 # check for updates: npx skills update narova -g (only when you're ready — upgrading replaces the skill files)
 ```
 
-This boundary keeps executable dependencies and updates out of the instruction
-package: CLI updates cannot overwrite the skill, and skill updates cannot
-replace executable code.
+The CLI and skill update separately, so updating one does not change the other.
 
 ## Quickstart
 
@@ -148,7 +140,7 @@ The CLI is available when you want to inspect or automate each step yourself:
 ```bash
 git clone https://github.com/ammar-hasan/narova.git && cd narova/tool
 npm install
-npm link            # optional: gives you `narova` and `narova-setup`
+npm link            # optional: installs the three Narova commands
 cd ..
 narova doctor       # core tools + optional agent-browser walkthrough adapter
 
@@ -430,9 +422,9 @@ creative direction is ready to scale.
 ## Repo layout
 
 ```
-tool/              standalone CLI package: installer, Node/Python runtime, vendors, tests
-skills/narova/     instructions-only agent skill: SKILL.md + references/
-skills/narova-*/   optional provider companion skills and their isolated workers
+tool/              CLI package: installer, Node/Python runtime, vendors, tests
+skills/narova/     agent instructions and references
+skills/narova-*/   optional voice-provider skills and workers
 docs/              the marketing site (GitHub Pages) + /changelog
 generated/narova-skill-reel/  flagship sample project (built from a plain-language prompt; more in generated/)
 generated/         agent-created projects; source kept, out/ and build/ ignored

@@ -57,14 +57,14 @@
       <div class="rel-body">
         <h4><span class="tag added">Added</span></h4>
         <ul>
-          <li><strong>Standalone GitHub installer.</strong> <code>tool/install.sh</code> packs only the CLI and installs <code>narova</code>, <code>narova-setup</code>, and <code>narova-uninstall</code> into a user-owned prefix. Re-running it upgrades in place; uninstall keeps projects, models, caches, and skills.</li>
-          <li><strong>Boundary integration coverage.</strong> Tests exercise an isolated install, in-place upgrade, repeated safe uninstall, installed commands, package contents, and skill-to-CLI resolution.</li>
+          <li><strong>CLI installer and uninstaller.</strong> <code>tool/install.sh</code> installs <code>narova</code>, <code>narova-setup</code>, and <code>narova-uninstall</code> from a selected GitHub ref. Run it again to update. Uninstall keeps projects, models, caches, and skills.</li>
+          <li><strong>Install lifecycle tests.</strong> Tests cover installation, update, repeated uninstall, package contents, and skill-to-CLI use from temporary directories.</li>
         </ul>
         <h4><span class="tag changed">Changed</span></h4>
         <ul>
-          <li><strong>CLI and skill are separate artifacts.</strong> Executable code now lives in top-level <code>tool/</code>; <code>skills/narova/</code> contains instructions and references only.</li>
-          <li><strong>Skill-managed bootstrap.</strong> The skill detects or installs the standalone CLI and invokes <code>narova</code> instead of skill-relative files.</li>
-          <li><strong>Independent development surface.</strong> Tool tests, packaging, versioning, docs, and companion providers now target the standalone package.</li>
+          <li><strong>Repository layout.</strong> CLI code now lives in <code>tool/</code>; <code>skills/narova/</code> contains only instructions and references.</li>
+          <li><strong>Skill setup.</strong> The skill finds <code>narova</code> on <code>PATH</code> or installs it when needed.</li>
+          <li><strong>Development commands.</strong> Tests, packaging, versioning, docs, and companion providers now use <code>tool/</code>.</li>
         </ul>
       </div>
     </article>
