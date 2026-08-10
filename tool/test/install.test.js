@@ -9,8 +9,19 @@ const path = require('node:path');
 
 const TOOL = path.resolve(__dirname, '..');
 const INSTALLER = path.join(TOOL, 'install.sh');
+const UNINSTALLER = path.join(TOOL, 'uninstall.sh');
 
-test('standalone installer packages only the CLI and exposes both commands', t => {
+function entryExists(file) {
+  try {
+    fs.lstatSync(file);
+    return true;
+  } catch (error) {
+    if (error.code === 'ENOENT') return false;
+    throw error;
+  }
+}
+
+test('standalone installer packages only the CLI and exposes lifecycle commands', t => {
   const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-install-test-'));
   const prefix = path.join(tmp, 'prefix');
   const cache = path.join(tmp, 'npm-cache');
@@ -30,8 +41,10 @@ test('standalone installer packages only the CLI and exposes both commands', t =
 
   const cli = path.join(prefix, 'bin', 'narova');
   const setup = path.join(prefix, 'bin', 'narova-setup');
+  const uninstall = path.join(prefix, 'bin', 'narova-uninstall');
   assert.ok(fs.existsSync(cli), 'narova executable must be installed');
   assert.ok(fs.existsSync(setup), 'narova-setup executable must be installed');
+  assert.ok(fs.existsSync(uninstall), 'narova-uninstall executable must be installed');
 
   const version = spawnSync(cli, ['--version'], { encoding: 'utf8' });
   assert.equal(version.status, 0, version.stderr);
@@ -40,6 +53,10 @@ test('standalone installer packages only the CLI and exposes both commands', t =
   const setupHelp = spawnSync(setup, ['--help'], { encoding: 'utf8' });
   assert.equal(setupHelp.status, 0, setupHelp.stderr);
   assert.match(setupHelp.stdout, /usage: narova-setup/);
+
+  const uninstallHelp = spawnSync(uninstall, ['--help'], { encoding: 'utf8' });
+  assert.equal(uninstallHelp.status, 0, uninstallHelp.stderr);
+  assert.match(uninstallHelp.stdout, /usage: narova-uninstall/);
 
   const fakeBin = path.join(tmp, 'fake-bin');
   const fakeVenv = path.join(tmp, 'venv');
@@ -87,6 +104,88 @@ exit 0
   assert.equal(fs.existsSync(path.join(installedPackage, 'test')), false);
   assert.equal(fs.existsSync(path.join(installedPackage, 'evals')), false);
   assert.equal(fs.existsSync(path.join(installedPackage, 'skills')), false);
+
+  const home = path.join(tmp, 'home');
+  const userData = path.join(home, '.narova', 'keep-me');
+  const ambientPackage = path.join(tmp, 'ambient-prefix', 'lib', 'node_modules', 'narova');
+  fs.mkdirSync(userData, { recursive: true });
+  fs.writeFileSync(path.join(userData, 'state.json'), '{}\n');
+  fs.mkdirSync(ambientPackage, { recursive: true });
+  fs.writeFileSync(path.join(ambientPackage, 'keep-me'), '{}\n');
+  const removed = spawnSync(uninstall, [], {
+    encoding: 'utf8',
+    env: {
+      ...process.env,
+      HOME: home,
+      NAROVA_PREFIX: path.join(tmp, 'ambient-prefix'),
+      npm_config_cache: cache,
+    },
+  });
+  assert.equal(removed.status, 0, removed.stderr || removed.stdout);
+  assert.match(removed.stdout, /Uninstalled Narova/);
+  assert.equal(fs.existsSync(installedPackage), false);
+  assert.equal(entryExists(cli), false);
+  assert.equal(entryExists(setup), false);
+  assert.equal(entryExists(uninstall), false);
+  assert.ok(fs.existsSync(path.join(userData, 'state.json')), 'uninstall must preserve user data');
+  assert.ok(fs.existsSync(path.join(ambientPackage, 'keep-me')), 'ambient prefix state must not redirect self-uninstall');
+
+  const removedAgain = spawnSync('bash', [UNINSTALLER, '--prefix', prefix], { encoding: 'utf8' });
+  assert.equal(removedAgain.status, 0, removedAgain.stderr || removedAgain.stdout);
+  assert.match(removedAgain.stdout, /nothing to remove/);
+});
+
+test('re-running the installer upgrades the CLI in place and preserves user data', t => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-upgrade-test-'));
+  const prefix = path.join(tmp, 'prefix');
+  const cache = path.join(tmp, 'npm-cache');
+  const home = path.join(tmp, 'home');
+  const oldTool = path.join(tmp, 'old-tool');
+  const marker = path.join(home, '.narova', 'keep-me', 'state.json');
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  fs.cpSync(TOOL, oldTool, {
+    recursive: true,
+    filter: source => !['node_modules', 'out', 'uninstall.sh'].includes(path.basename(source)),
+  });
+  const oldPackageFile = path.join(oldTool, 'package.json');
+  const oldPackage = JSON.parse(fs.readFileSync(oldPackageFile, 'utf8'));
+  oldPackage.version = '0.0.1';
+  delete oldPackage.bin['narova-uninstall'];
+  oldPackage.files = oldPackage.files.filter(file => file !== 'uninstall.sh');
+  oldPackage.files.push('legacy-only.txt');
+  fs.writeFileSync(oldPackageFile, `${JSON.stringify(oldPackage, null, 2)}\n`);
+  fs.writeFileSync(path.join(oldTool, 'legacy-only.txt'), 'legacy package artifact\n');
+  fs.mkdirSync(path.dirname(marker), { recursive: true });
+  fs.writeFileSync(marker, '{}\n');
+
+  const env = { ...process.env, HOME: home, npm_config_cache: cache };
+  const installFrom = source => spawnSync('bash', [
+    INSTALLER,
+    '--source', source,
+    '--prefix', prefix,
+    '--skip-optional',
+  ], { encoding: 'utf8', env });
+  const cli = path.join(prefix, 'bin', 'narova');
+  const uninstall = path.join(prefix, 'bin', 'narova-uninstall');
+  const legacyArtifact = path.join(prefix, 'lib', 'node_modules', 'narova', 'legacy-only.txt');
+
+  const installedOld = installFrom(oldTool);
+  assert.equal(installedOld.status, 0, installedOld.stderr || installedOld.stdout);
+  const oldVersion = spawnSync(cli, ['--version'], { encoding: 'utf8' });
+  assert.equal(oldVersion.status, 0, oldVersion.stderr);
+  assert.equal(oldVersion.stdout.trim(), '0.0.1');
+  assert.equal(entryExists(uninstall), false, 'old fixture must predate narova-uninstall');
+  assert.ok(fs.existsSync(legacyArtifact), 'old fixture must include a legacy-only package file');
+
+  const upgraded = installFrom(TOOL);
+  assert.equal(upgraded.status, 0, upgraded.stderr || upgraded.stdout);
+  const newVersion = spawnSync(cli, ['--version'], { encoding: 'utf8' });
+  assert.equal(newVersion.status, 0, newVersion.stderr);
+  assert.equal(newVersion.stdout.trim(), require('../package.json').version);
+  assert.ok(entryExists(uninstall), 'upgrade must add narova-uninstall');
+  assert.equal(fs.existsSync(legacyArtifact), false, 'upgrade must remove stale package files');
+  assert.ok(fs.existsSync(marker), 'upgrade must preserve user data');
 });
 
 test('GitHub installer URL-encodes refs without treating them as Node options', t => {

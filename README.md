@@ -70,6 +70,24 @@ running the installer directly) to choose another destination, or
 `--ref <tag-or-commit>` to pin an immutable source revision. Add
 `~/.local/bin` to `PATH` if the installer asks.
 
+### Upgrade or uninstall
+
+Re-run the same installer with the same prefix to upgrade the CLI. Use
+`--ref <tag-or-commit>` when you want a specific version. Upgrading replaces
+the executable package in place without removing projects or local voice data.
+
+Remove the standalone CLI with:
+
+```bash
+narova-uninstall
+```
+
+The installed command detects custom prefixes automatically; `--prefix <dir>`
+is also available. It removes the `narova`, `narova-setup`, and
+`narova-uninstall` commands and their package only. Projects, downloaded
+models, caches, and the separately installed agent skill are kept. Update or
+remove the skill separately with your skills manager.
+
 Install the skill separately for any agent that reads skills. It detects a
 missing CLI and can invoke the same standalone installer:
 

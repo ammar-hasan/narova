@@ -6,7 +6,8 @@
   "main": "src/pipeline.js",
   "bin": {
     "narova": "bin/narova.js",
-    "narova-setup": "setup.sh"
+    "narova-setup": "setup.sh",
+    "narova-uninstall": "uninstall.sh"
   },
   "scripts": {
     "test": "npm run -s test:js && npm run -s test:py",
@@ -20,6 +21,7 @@
     "vendor/",
     "install.sh",
     "setup.sh",
+    "uninstall.sh",
     "py/*.py",
     "py/*.txt",
     "py/narova_tts/*.py"

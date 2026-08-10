@@ -13,10 +13,11 @@ usage() {
   cat <<'EOF'
 usage: install.sh [--ref <git-ref>] [--prefix <dir>] [--source <tool-dir>] [--skip-optional]
 
-Installs the standalone Narova CLI and narova-setup command. By default the
-source is downloaded from ammar-hasan/narova at the main branch and installed
-under ~/.local. Use --ref to pin a release tag or commit. --source is intended
-for development and installation tests; it must point directly at tool/.
+Installs the standalone Narova CLI plus narova-setup and narova-uninstall. By
+default the source is downloaded from ammar-hasan/narova at the main branch
+and installed under ~/.local. Re-run the installer to upgrade. Use --ref to
+pin a release tag or commit. --source is intended for development and
+installation tests; it must point directly at tool/.
 EOF
 }
 

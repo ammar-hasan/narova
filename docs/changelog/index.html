@@ -57,8 +57,8 @@
       <div class="rel-body">
         <h4><span class="tag added">Added</span></h4>
         <ul>
-          <li><strong>Standalone GitHub installer.</strong> <code>tool/install.sh</code> packs only the CLI and installs <code>narova</code> plus <code>narova-setup</code> into a user-owned prefix.</li>
-          <li><strong>Boundary integration coverage.</strong> Tests exercise an isolated install, both installed commands, package contents, and skill-to-CLI resolution.</li>
+          <li><strong>Standalone GitHub installer.</strong> <code>tool/install.sh</code> packs only the CLI and installs <code>narova</code>, <code>narova-setup</code>, and <code>narova-uninstall</code> into a user-owned prefix. Re-running it upgrades in place; uninstall keeps projects, models, caches, and skills.</li>
+          <li><strong>Boundary integration coverage.</strong> Tests exercise an isolated install, in-place upgrade, repeated safe uninstall, installed commands, package contents, and skill-to-CLI resolution.</li>
         </ul>
         <h4><span class="tag changed">Changed</span></h4>
         <ul>

@@ -102,7 +102,9 @@ not preserve a one-off `PATH` assignment between calls. First `synth` or
 `--chatterbox` for voice cloning).
 
 Skill updates and CLI updates are independent. Re-run the CLI installer to
-update the tool; re-run the skills installer only to update these instructions.
+upgrade the tool; re-run the skills installer only to update these instructions.
+`narova-uninstall` removes the standalone CLI package and commands, but keeps
+projects, downloaded models, caches, and this separately installed skill.
 
 External TTS providers are optional registered companion skills — see
 `narova-elevenlabs`, `narova-openai`, or `references/cli.md` §providers.

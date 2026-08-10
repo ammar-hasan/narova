@@ -317,7 +317,7 @@
   <!-- QUICKSTART -->
   <section class="quick" id="quickstart">
     <h2 class="sec-title sr-title">Your first video starts<br>with <em>one prompt.</em></h2>
-    <p class="quick-intro">Install the standalone CLI and the agent skill separately. The skill detects and bootstraps a missing CLI, but executable code never ships inside the skill. After that, talk to your agent. Pick a starting point or say it your way.</p>
+    <p class="quick-intro">Install the standalone CLI and the agent skill separately. The skill detects and bootstraps a missing CLI, but executable code never ships inside the skill. Re-run the CLI installer to upgrade, or use <code>narova-uninstall</code> to remove only the tool while keeping projects and voice data. After that, talk to your agent. Pick a starting point or say it your way.</p>
     <div class="prompt-tabs" role="group" aria-label="Example Narova prompts">
       <button class="prompt-tab active" type="button" aria-pressed="true" data-prompt="idea">Idea</button>
       <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="product">Product page</button>
@@ -337,6 +337,7 @@
       <pre id="quickCode"><span class="c"># standalone CLI (separate executable package)</span>
 <span class="p">$</span> curl -fsSLo /tmp/narova-install.sh https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh
 <span class="p">$</span> bash /tmp/narova-install.sh
+<span class="c"># later: re-run to upgrade · narova-uninstall to remove the CLI</span>
 <span class="c"># instructions-only agent skill</span>
 <span class="p">$</span> npx skills add ammar-hasan/narova --skill narova -g
 

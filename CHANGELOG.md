@@ -12,12 +12,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 - **Standalone GitHub installer.** `tool/install.sh` downloads a selected
   repository ref, packs only the CLI package, and installs `narova` plus
-  `narova-setup` into a user-owned npm prefix. Local-source and optional-dependency
-  flags make the same flow reproducible in tests and development.
+  `narova-setup` and `narova-uninstall` into a user-owned npm prefix. Re-running
+  the installer upgrades in place; the uninstaller removes only the executable
+  package and keeps projects, downloaded models, caches, and skills. Local-source
+  and optional-dependency flags make the same flow reproducible in tests and
+  development.
 - **Boundary integration coverage.** Tests install the standalone package into
-  a temporary prefix, run both installed commands, audit the packed files, and
-  verify the Narova skill resolves the external CLI without executable files in
-  its own directory.
+  a temporary prefix, run the installed commands, exercise an in-place upgrade
+  and safe repeated uninstall, audit the packed files, and verify the Narova
+  skill resolves the external CLI without executable files in its own directory.
 
 ### Changed
 

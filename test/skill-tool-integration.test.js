@@ -32,6 +32,7 @@ test('Narova skill is instructions-only and bootstraps the standalone CLI', t =>
   assert.match(skill, /trap 'rm -f "\$installer"' EXIT/);
   assert.match(skill, /raw\.githubusercontent\.com\/ammar-hasan\/narova\/main\/tool\/install\.sh/);
   assert.match(skill, /narova <command>/);
+  assert.match(skill, /narova-uninstall/);
   assert.doesNotMatch(skill, /<this-skill-dir>\/tool|<skill-dir>\/tool|skills\/narova\/tool/);
 
   for (const file of filesBelow(path.join(SKILL_DIR, 'references'))) {

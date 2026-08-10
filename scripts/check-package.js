@@ -29,7 +29,7 @@ if (forbidden.length) {
 if (report.unpackedSize > 10 * 1024 * 1024) {
   throw new Error(`npm package is unexpectedly large: ${report.unpackedSize} unpacked bytes`);
 }
-for (const required of ['LICENSE', 'bin/narova.js', 'install.sh', 'setup.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
+for (const required of ['LICENSE', 'bin/narova.js', 'install.sh', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
   if (!names.includes(required)) throw new Error(`npm package is missing required standalone tool file: ${required}`);
 }
 if (report.name !== 'narova') throw new Error(`unexpected standalone package name: ${report.name}`);
