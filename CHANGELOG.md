@@ -6,6 +6,42 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.30.0] - 2026-08-11
+
+### Added
+
+- **Verified creative-asset lifecycle.** `narova assets
+  import|download|providers|search|acquire|list|untrack|verify|credits` keeps
+  stock photos, clips, audio, 2D/3D assets, provenance, rights, hashes, and
+  attribution in one provider-neutral project registry.
+- **Essential stock pack.** Wikimedia Commons, Openverse, NASA, Internet
+  Archive, Iconify 2D SVG, and Poly Haven 3D adapters work without credentials
+  and keep search separate from acquisition.
+- **Stock extensions companion.** The separate `narova-stock-extensions` skill
+  adds no-key Met, Cleveland Museum, and Library of Congress adapters;
+  optional-key Pexels, Pixabay, and Freesound adapters; and 101 explicit
+  `llm-browser` discovery providers across imagery, video, audio, fonts, 2D,
+  3D, culture, maps, science, and development placeholders.
+
+### Changed
+
+- **Honest provider readiness.** Deterministic adapters are labeled
+  `essential-api` or `extension-api`; loose browser sources remain `explore`
+  and are never presented as tested adapters. Missing optional credentials
+  disable only their provider.
+- **Creative judgment stays with the agent.** Code owns repeatable API,
+  download, verification, and registry mechanics. The skill/LLM owns queries,
+  candidate selection, item-level license review, and lawful browser fallback.
+  Builds continue to consume local assets without searching the web.
+
+### Verified
+
+- Real search, byte download, and registry verification passed for every
+  essential and no-key extension adapter. A live `agent-browser` Mixkit run
+  searched, inspected item-level rights, downloaded a 720p H.264 clip, imported
+  it, and verified it; the selected item's Restricted License correctly
+  remained visible instead of being generalized as commercial-ready.
+
 ## [0.29.0] - 2026-08-10
 
 ### Added

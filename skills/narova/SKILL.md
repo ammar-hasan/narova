@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.29.0"
+  version: "0.30.0"
 ---
 # narova — video from scene scripts
 
@@ -125,9 +125,11 @@ External TTS providers are optional registered companion skills — see
    Creative direction: `references/prompt-to-video.md`. URL sources: `ingest <url>`
    first, then `references/url-to-source.md`. For creative media, use the
    built-in stock adapters for repeatable search/download mechanics, but keep
-   creative query design and result selection here. If the adapters do not
-   surface the right asset, explore another lawful source and finish with
-   `assets download` or `assets import`; see `references/stock-assets.md`.
+   creative query design and result selection here. Use the separate
+   `narova-stock-extensions` skill for optional adapters and its explicit loose
+   browser catalogue. If an adapter does not surface the right asset, explore
+   another lawful source and finish with `assets download` or `assets import`;
+   see `references/stock-assets.md`.
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
    For optional craft advice: `narova critique [creative|social-short|explainer|presentation|cinematic|accessibility]`.
@@ -210,7 +212,7 @@ sentences; untouched scenes are byte-identical). See
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
 | `references/product-walkthroughs.md` | explore, capture, compose, and QA product demos         |
 | `references/choreography.md`   | make something *happen* in a scene beyond the built-in cues   |
-| `references/stock-assets.md`  | source photos, clips, music, SFX, fonts, icons from CLI      |
+| `references/stock-assets.md`  | route essential, extension, and browser-sourced creative assets |
 | `references/audio.md`          | background beds, spot SFX, forced word alignment             |
 | `references/cli.md`            | every command, flag, `out/` file, and rough cost              |
 | `references/gotchas.md`        | avoid the traps (tempo, reuse, sync, models, lint)          |

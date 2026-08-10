@@ -9,7 +9,7 @@ with a local CLI. Together they turn prompts, scripts, web pages, and product
 walkthroughs into narrated, captioned video.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.29.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.30.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -149,9 +149,9 @@ Freesound, and browser-guided long-tail discovery. Its three keys are optional;
 missing credentials never block the no-key providers. Catalogue search is
 explicit and builds stay offline.
 
-Run `narova-stock providers` to see deterministic sources alongside the full
-long-tail catalogue. Loose sources are labeled `llm-browser` and `explore`, not
-misrepresented as tested API adapters.
+Run `narova-stock providers` to see deterministic sources alongside 101
+explicit long-tail providers. Loose sources are labeled `llm-browser` and
+`explore`, not misrepresented as tested API adapters.
 
 Adapters own repeatable API work. The Narova skills still own creative
 search terms, selection, license judgment, and fallback discovery. If an agent

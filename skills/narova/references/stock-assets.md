@@ -82,6 +82,11 @@ Extension downloads also return through `narova assets download`; hashing,
 atomic writes, verification, provenance, and credits therefore stay in one
 shared lifecycle.
 
+`narova-stock providers` emits the six essentials, six extension adapters, and
+101 explicit loose sources. Loose rows are `explore`/`llm-browser`: the list is
+a creative search surface, not a claim that every changing website has passed a
+current automated download.
+
 Optional keys stay in environment variables and are never written to the
 project lock. A missing key disables only that extension provider. Wikimedia's
 current Core API supplies file URLs but not reliable per-file license metadata,
