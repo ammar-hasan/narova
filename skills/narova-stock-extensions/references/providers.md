@@ -33,9 +33,16 @@ download support until a live search-and-download passes.
 ## Browser/agent discovery catalogue
 
 Use this list when the deterministic sources are creatively insufficient. It
-retains the long-tail choices from Narova's stock reference. "Browser" means an
+retains the long-tail choices from Narova's stock reference. The authoritative
+structured list is `tool/browser-providers.js`; `narova-stock providers` emits
+every entry with readiness `explore` and mode `llm-browser`. "Browser" means an
 agent may search and inspect public pages; it does not authorize bypassing
 authentication, anti-bot controls, rate limits, or license restrictions.
+
+These entries are providers, not vague fallbacks. They are deliberately loose:
+the LLM chooses queries and navigation, while the current item page determines
+the downloadable file and rights. Do not mark one ready merely because its home
+page opened.
 
 ### Photography and imagery
 
@@ -48,6 +55,9 @@ authentication, anti-bot controls, rate limits, or license restrictions.
 
 - Pexels website, Mixkit, Coverr, Pixabay Video, NASA Library, Wikimedia
   Commons video, and Internet Archive stock-footage collections.
+- Mixkit items can carry either its Free or Restricted stock-video license.
+  Inspect the selected item: Restricted items are personal-project only and
+  cannot be treated as general-purpose YouTube or commercial footage.
 
 ### Music and sound effects
 
@@ -58,9 +68,9 @@ authentication, anti-bot controls, rate limits, or license restrictions.
 
 ### Fonts
 
-- Google Fonts, Fontsource, Font Squirrel, DaFont, Bootstrap Icons font, Remix
-  Icon font, and Tabler Icons font. Prefer self-hosting or pinning downloaded
-  files so renders do not depend on a live font request.
+- Google Fonts, Bunny Fonts, Fontsource, Font Squirrel, DaFont, Bootstrap Icons
+  font, Remix Icon font, and Tabler Icons font. Prefer self-hosting or pinning
+  downloaded files so renders do not depend on a live font request.
 
 ### Free 2D icons and illustration
 
@@ -123,6 +133,9 @@ authentication, anti-bot controls, rate limits, or license restrictions.
    import` with the same rights fields.
 5. Run `narova assets verify` and review generated credits before building.
 
+A browser smoke test passes only after all five stages succeed. A homepage open,
+search-results page, or metadata-only response is discovery evidence, not a
+verified acquisition.
+
 If rights are unclear, omit license claims and keep the record unknown. Unknown
 does not mean unusable; it means a human/agent must finish the rights review.
-

@@ -2,7 +2,10 @@
 
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { listStockProviders, resolveStock, searchStock, _internals } = require('../tool/stock-providers');
+const { listBrowserProviders } = require('../tool/browser-providers');
 
 function jsonResponse(value, status = 200) {
   return new Response(JSON.stringify(value), { status, headers: { 'content-type': 'application/json' } });
@@ -15,6 +18,25 @@ test('lists every extension and treats absent credentials as optional readiness'
   assert.equal(providers.find(item => item.id === 'pixabay').ready, false);
   assert.ok(providers.filter(item => !item.envKey).every(item => item.ready));
   assert.doesNotMatch(JSON.stringify(providers), /secret/);
+});
+
+test('lists the long-tail catalogue explicitly as unique llm-browser providers', () => {
+  const providers = listBrowserProviders();
+  assert.ok(providers.length >= 100, `expected at least 100 loose providers, got ${providers.length}`);
+  assert.equal(new Set(providers.map(item => item.id)).size, providers.length);
+  for (const id of ['unsplash', 'mixkit-video', 'google-fonts', 'bunny-fonts', 'undraw', 'ambientcg', 'artic', 'openstreetmap', 'where-the-iss', 'jsonplaceholder-photos']) {
+    const provider = providers.find(item => item.id === id);
+    assert.ok(provider, `missing ${id}`);
+    assert.equal(provider.mode, 'llm-browser');
+    assert.equal(provider.ready, false);
+  }
+
+  const cli = path.resolve(__dirname, '../tool/narova-stock.js');
+  const result = spawnSync(process.execPath, [cli, 'providers'], { encoding: 'utf8' });
+  assert.equal(result.status, 0, result.stderr);
+  assert.match(result.stdout, /^wikimedia\timage,video,audio\tready\tessential-api$/m);
+  assert.match(result.stdout, /^met\timage\tready\textension-api$/m);
+  assert.match(result.stdout, /^unsplash\timage\texplore\tllm-browser$/m);
 });
 
 test('Met, Cleveland, and LOC normalize their different rights models', async () => {

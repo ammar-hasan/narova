@@ -149,6 +149,10 @@ Freesound, and browser-guided long-tail discovery. Its three keys are optional;
 missing credentials never block the no-key providers. Catalogue search is
 explicit and builds stay offline.
 
+Run `narova-stock providers` to see deterministic sources alongside the full
+long-tail catalogue. Loose sources are labeled `llm-browser` and `explore`, not
+misrepresented as tested API adapters.
+
 Adapters own repeatable API work. The Narova skills still own creative
 search terms, selection, license judgment, and fallback discovery. If an agent
 finds a better asset through a browser, archive, or new source, it can use

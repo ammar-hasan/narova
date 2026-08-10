@@ -22,10 +22,18 @@ The launcher delegates essential providers to `narova` and handles extension
 provider API translation itself. Missing `PEXELS_API_KEY`, `PIXABAY_API_KEY`, or
 `FREESOUND_API_KEY` disables only that provider.
 
+`narova-stock providers` lists three explicit modes:
+
+- `essential-api`: deterministic no-key core adapters.
+- `extension-api`: deterministic no-key or optional-key companion adapters.
+- `llm-browser`: loose discovery sources that require current browser/LLM
+  inspection and are shown as `explore`, never as verified or ready.
+
 ## Workflow
 
 1. Read [references/providers.md](references/providers.md) when choosing a
-   provider, using 2D/3D sources, or leaving the deterministic list.
+   provider, using 2D/3D sources, or leaving the deterministic list. Run
+   `narova-stock providers` to enumerate every API and loose provider.
 2. Run `narova-stock providers`. Prefer a ready deterministic provider that
    fits the scene and media kind.
 3. Search, inspect the normalized candidates, then acquire the selected ID:
@@ -53,8 +61,9 @@ download and registry verification in the live suite.
 - No-key extensions: The Met, Cleveland Museum of Art, and Library of Congress.
 - Optional-key extensions: Pexels, Pixabay, and Freesound.
 - Browser/LLM extensions: the larger discovery catalogue in the provider
-  reference, including free illustration, 3D, music, SFX, museum, map, and
-  science sources.
+  reference and `tool/browser-providers.js`, including free illustration, 3D,
+  music, SFX, museum, map, and science sources. Treat each as an
+  `llm-browser` provider, not undocumented fallback prose.
 
 The browser path is deliberately loose for creative discovery but strict at the
 boundary: record the exact item page, do not bypass site controls, do not invent
@@ -75,3 +84,9 @@ present and otherwise report a skip:
 ```bash
 npm run test:stock-live:extensions
 ```
+
+Browser/LLM providers are intentionally not a deterministic matrix. Validate a
+representative with the current `agent-browser` core skill: submit a real query,
+open a result item, inspect its current license, download real bytes, import the
+file through `narova assets import`, and pass `narova assets verify`. Opening a
+homepage or seeing search thumbnails is not a passing browser test.

@@ -5,6 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { listStockProviders, resolveStock, searchStock } = require('./stock-providers');
+const { listBrowserProviders } = require('./browser-providers');
 
 const ESSENTIAL = new Set(['wikimedia', 'openverse', 'nasa', 'internet-archive', 'iconify', 'poly-haven']);
 const KIND_EXTENSIONS = Object.freeze({
@@ -88,9 +89,13 @@ async function main() {
     return;
   }
   if (action === 'providers') {
-    process.stdout.write(runCore(['assets', 'providers', '--pack', 'essential'], { capture: true }));
+    const essential = runCore(['assets', 'providers', '--pack', 'essential'], { capture: true }).trimEnd();
+    for (const line of essential.split('\n').filter(Boolean)) console.log(`${line}\tessential-api`);
     for (const provider of listStockProviders(process.env)) {
-      console.log(`${provider.id}\t${provider.kinds.join(',')}\t${provider.ready ? 'ready' : `optional: needs ${provider.envKey}`}`);
+      console.log(`${provider.id}\t${provider.kinds.join(',')}\t${provider.ready ? 'ready' : `optional: needs ${provider.envKey}`}\textension-api`);
+    }
+    for (const provider of listBrowserProviders()) {
+      console.log(`${provider.id}\t${provider.kinds.join(',')}\texplore\tllm-browser`);
     }
     return;
   }
@@ -131,4 +136,3 @@ main().catch(error => {
   console.error(`narova-stock: ${error.message}`);
   process.exit(1);
 });
-
