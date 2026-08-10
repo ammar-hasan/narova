@@ -15,7 +15,7 @@ const { shotsWithRenderer } = require('../src/renderers');
 const { findLatinFont } = require('../src/renderers/system-font');
 const { probe, ensureDir } = require('../src/util');
 
-const ROOT = path.resolve(__dirname, '../../../../');
+const ROOT = path.resolve(__dirname, '../..');
 const PROJECT = path.join(ROOT, 'out', 'no-browser-complex-eval');
 const ASSETS = path.join(PROJECT, 'assets');
 

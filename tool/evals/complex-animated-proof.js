@@ -8,7 +8,7 @@ const { build } = require('../src/pipeline');
 const { ensureDir } = require('../src/util');
 const { getRenderer } = require('../src/renderers');
 
-const ROOT = path.resolve(__dirname, '../../../../');
+const ROOT = path.resolve(__dirname, '../..');
 const PROJECT = path.join(ROOT, 'out', 'complex-animated-test');
 const ASSETS = path.join(PROJECT, 'assets');
 

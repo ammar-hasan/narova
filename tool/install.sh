@@ -63,9 +63,10 @@ else
   ARCHIVE="$WORK_DIR/source.tar.gz"
   EXTRACTED="$WORK_DIR/source"
   mkdir -p "$EXTRACTED"
+  ENCODED_REF="$(node -e 'process.stdout.write(encodeURIComponent(process.argv[1]))' "$REF")"
   echo "Downloading Narova CLI source from ${REPOSITORY}@${REF}..."
   curl --proto '=https' --tlsv1.2 -fsSL \
-    "https://codeload.github.com/${REPOSITORY}/tar.gz/${REF}" \
+    "https://codeload.github.com/${REPOSITORY}/tar.gz/${ENCODED_REF}" \
     -o "$ARCHIVE"
   tar -xzf "$ARCHIVE" -C "$EXTRACTED"
   TOOL_SOURCE="$(find "$EXTRACTED" -mindepth 2 -maxdepth 2 -type d -name tool -print -quit)"

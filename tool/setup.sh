@@ -35,8 +35,18 @@ for arg in "$@"; do
   esac
 done
 
-# Resolve the tool root from this script's location (works from any cwd).
-TOOL="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
+# Resolve the real script location. npm exposes package bins as symlinks, and
+# BASH_SOURCE reports the link under <prefix>/bin rather than the package file.
+SETUP_SOURCE="${BASH_SOURCE[0]}"
+while [ -h "$SETUP_SOURCE" ]; do
+  SETUP_DIR="$(cd -P "$(dirname "$SETUP_SOURCE")" && pwd)"
+  SETUP_SOURCE="$(readlink "$SETUP_SOURCE")"
+  case "$SETUP_SOURCE" in
+    /*) ;;
+    *) SETUP_SOURCE="$SETUP_DIR/$SETUP_SOURCE" ;;
+  esac
+done
+TOOL="$(cd -P "$(dirname "$SETUP_SOURCE")" && pwd)"
 VENV="${NAROVA_VENV:-${NAROVA_HOME:-$HOME/.narova}/venv}"
 REQ="$TOOL/py/requirements.txt"
 REQ_XTTS="$TOOL/py/requirements-xtts.txt"

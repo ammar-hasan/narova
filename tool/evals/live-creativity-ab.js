@@ -18,8 +18,8 @@ function args(argv) {
 const flags = args(process.argv.slice(2));
 const runs = Number(flags.runs || 2);
 const model = flags.model || 'gpt-5.6-sol';
-const root = path.resolve(__dirname, '..', '..', '..', '..');
-const cli = path.join(root, 'skills', 'narova', 'tool', 'bin', 'narova.js');
+const root = path.resolve(__dirname, '..', '..');
+const cli = path.join(root, 'tool', 'bin', 'narova.js');
 const output = path.resolve(flags.out || fs.mkdtempSync(path.join(os.tmpdir(), 'narova-creativity-ab-')));
 fs.mkdirSync(output, { recursive: true });
 

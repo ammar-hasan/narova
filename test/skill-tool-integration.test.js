@@ -57,3 +57,15 @@ test('Narova skill is instructions-only and bootstraps the standalone CLI', t =>
   assert.equal(result.status, 0, result.stderr);
   assert.equal(result.stdout.trim(), require(path.join(TOOL_DIR, 'package.json')).version);
 });
+
+test('repository eval runners resolve the top-level tool layout', () => {
+  for (const name of ['complex-animated-proof.js', 'no-browser-complex-eval.js']) {
+    const source = fs.readFileSync(path.join(TOOL_DIR, 'evals', name), 'utf8');
+    assert.match(source, /path\.resolve\(__dirname, '\.\.\/\.\.'\)/, name);
+    assert.doesNotMatch(source, /skills['"], ['"]narova['"], ['"]tool/, name);
+  }
+
+  const live = fs.readFileSync(path.join(TOOL_DIR, 'evals', 'live-creativity-ab.js'), 'utf8');
+  assert.match(live, /path\.join\(root, 'tool', 'bin', 'narova\.js'\)/);
+  assert.doesNotMatch(live, /skills['"], ['"]narova['"], ['"]tool/);
+});
