@@ -1,11 +1,13 @@
 # CLI reference
 
-`narova` below means the bundled tool, spelled out in full because agent
-shells do not persist variables between calls:
+`narova` below means the independently installed standalone CLI:
 
 ```bash
-node <skill-dir>/tool/bin/narova.js <command>
+narova <command>
 ```
+
+If the installer reports that `~/.local/bin` is not on `PATH`, use the full
+`$HOME/.local/bin/narova` path in each agent shell call.
 
 Commands read the project from the current folder **or any parent folder** —
 the nearest ancestor holding a `reel.config.*` wins, so commands work from
@@ -66,7 +68,7 @@ Renderer providers are different: both are bundled, local, and free. See
 - `--backend <name>` — TTS backend for all voices: a built-in
   (`piper|xtts|qwen|chatterbox`) or an explicitly registered external
   provider. Default piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
-  path to a clean 10–20s recording (install once: `tool/setup.sh --chatterbox`).
+  path to a clean 10–20s recording (install once: `narova-setup --chatterbox`).
 - `--renderer hyperframes|no-browser` — renderer provider. HyperFrames is the
   default; no-browser is browserless and requires `scene.visual` on every scene.
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.

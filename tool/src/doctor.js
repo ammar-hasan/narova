@@ -77,16 +77,6 @@ function doctor(projectDir) {
   const version = require('../package.json').version;
   const fingerprint = sourceFingerprint(TOOL_DIR);
   add('narova source', true, `${TOOL_DIR} (${version}+${fingerprint})`);
-  const installedTool = path.join(os.homedir(), '.agents', 'skills', 'narova', 'tool');
-  if (fs.existsSync(installedTool) && path.resolve(installedTool) !== TOOL_DIR) {
-    const installedFingerprint = sourceFingerprint(installedTool);
-    let installedVersion = 'unknown';
-    try { installedVersion = JSON.parse(fs.readFileSync(path.join(installedTool, 'package.json'), 'utf8')).version; } catch {}
-    add('installed skill sync', installedFingerprint === fingerprint,
-      installedFingerprint === fingerprint
-        ? `${installedTool} matches this source`
-        : `${installedTool} is ${installedVersion}+${installedFingerprint}, current source is ${version}+${fingerprint} — reinstall/sync before production work`);
-  }
 
   const ffmpeg = which('ffmpeg');
   add('ffmpeg', !!ffmpeg, ffmpeg || 'not found — install via `brew install ffmpeg`');
@@ -97,7 +87,7 @@ function doctor(projectDir) {
   add('python', !!ver, ver ? `${py} (${ver})` : `${py} — not runnable`);
   if (ver) {
     const hasMod = pyHasModule(py);
-    add('narova_tts module', hasMod, hasMod ? 'importable' : 'not importable — run <skill>/tool/setup.sh (or just `narova synth` — it self-provisions)');
+    add('narova_tts module', hasMod, hasMod ? 'importable' : 'not importable — run `narova-setup` (or just `narova synth` — it self-provisions)');
 
     // Optional: forced word alignment engines (config.align).
     const fw = pyHasPackage(py, 'faster_whisper');
@@ -117,7 +107,7 @@ function doctor(projectDir) {
     const cbv = chatterboxVersion(cbPy);
     add('chatterbox venv', true, cbv ? `chatterbox-tts ${cbv} (${cbPy})` : cbPy, true);
   } else {
-    add('chatterbox venv', false, 'not installed — only needed for the chatterbox backend: <skill>/tool/setup.sh --chatterbox', true);
+    add('chatterbox venv', false, 'not installed — only needed for the chatterbox backend: `narova-setup --chatterbox`', true);
   }
 
   // Optional: agent-browser is the walkthrough capture adapter. It remains

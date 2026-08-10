@@ -27,7 +27,7 @@ update(['skills/narova/SKILL.md'], (s, ver) =>
 );
 
 // tool package.json — top-level version
-update(['skills/narova/tool/package.json'], (s, ver) =>
+update(['tool/package.json'], (s, ver) =>
   s.replace(/("version"\s*:\s*)"[^"]*"/, `$1"${ver}"`)
 );
 

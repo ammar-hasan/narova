@@ -245,7 +245,7 @@ cameraAnimate: [
 ```
 
 Camera animation DSL helpers are available at
-`narova/tool/src/compose/camera-dsl.js` — `orbitCamera()`, `dollyCamera()`,
+`tool/src/compose/camera-dsl.js` — `orbitCamera()`, `dollyCamera()`,
 `panCamera()`, `boomCamera()`, `lookAtPan()`.
 
 ### Animation chaining

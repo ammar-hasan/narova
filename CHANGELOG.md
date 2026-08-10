@@ -6,6 +6,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.29.0] - 2026-08-10
+
+### Added
+
+- **CLI installer and uninstaller.** `tool/install.sh` installs `narova`,
+  `narova-setup`, and `narova-uninstall` from a selected GitHub ref. Run the
+  installer again to update. The uninstaller removes the CLI but keeps projects,
+  models, caches, and skills.
+- **Install lifecycle tests.** Tests cover installation, update, repeated
+  uninstall, package contents, and skill-to-CLI use from temporary directories.
+
+### Changed
+
+- **Repository layout.** The CLI runtime, renderers, vendors, evals, and tests
+  moved from `skills/narova/tool/` to `tool/`. `skills/narova/` now contains
+  only `SKILL.md` and references.
+- **Skill setup.** The skill finds `narova` on `PATH` or installs it when needed.
+  Optional TTS setup now uses `narova-setup`.
+- **Development commands.** Root scripts, tests, companion skills, specs, and
+  docs now use the top-level `tool/` paths.
+
 ## [0.28.0] - 2026-08-08
 
 ### Added
@@ -436,7 +457,7 @@ wrong."
   sketching 2-3 distinct creative directions before committing to the final project.
 - **Creative-diversity evaluation suite** — 10 radically different briefs,
   11 convergence metrics, machine-readable similarity checks, human review
-  checklist. Run via `node skills/narova/tool/evals/creative-diversity-eval.js`.
+  checklist. Run via `node tool/evals/creative-diversity-eval.js`.
 - **Revision guarantee tests** — 14 tests verifying audio fingerprint stability
   for visual-only edits, theme changes, caption changes, choreography changes,
   and bed/SFX changes (all safe — no TTS required). Text, voice, and tempo edits
@@ -996,7 +1017,7 @@ wrong."
 
 ### Added
 
-- **Comprehensive export presets** — `skills/narova/tool/src/exports.js` defines
+- **Comprehensive export presets** — `tool/src/exports.js` defines
   platform-specific render + encode profiles: YouTube 1080p/4K, TikTok,
   Instagram Reels, YouTube Shorts, LinkedIn, X, and a narova-standard baseline.
   Each preset carries HyperFrames render flags (`--format`, `--quality`,

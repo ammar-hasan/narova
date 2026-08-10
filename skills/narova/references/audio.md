@@ -188,7 +188,7 @@ good enough for karaoke. `align` replaces them with measured ones:
 - narova pins chatterbox to git master in `requirements-chatterbox.txt`:
   Multilingual **v3** (June 2026 — better speaker similarity, fewer
   hallucinations) is selected via `t3_model="v3"`, which the latest PyPI
-  release (0.1.7) does not have. Re-run `tool/setup.sh --chatterbox` to move
+  release (0.1.7) does not have. Re-run `narova-setup --chatterbox` to move
   an existing venv to the pin. `$NAROVA_CHATTERBOX_T3_MODEL=v2` forces the
   legacy checkpoint.
 - Per-voice `lang` (e.g. `"fr"`, `"zh"`; 23 languages) switches that voice to

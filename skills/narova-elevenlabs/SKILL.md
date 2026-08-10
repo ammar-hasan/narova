@@ -9,11 +9,11 @@ description: >
   remains local-first.
 license: MIT
 compatibility: >
-  Requires the narova skill, Python 3.10+, ffmpeg, network access, an
+  Requires the standalone narova CLI, the narova skill, Python 3.10+, ffmpeg, network access, an
   ElevenLabs account, and ELEVENLABS_API_KEY.
 metadata:
   author: ammar-hasan
-  version: "1.0.0"
+  version: "1.0.1"
 ---
 
 # Narova + ElevenLabs
@@ -25,38 +25,36 @@ audio/video stage.
 
 ## Setup
 
-1. Install `narova` and `narova-elevenlabs` as independently selected skills
+1. Install the standalone Narova CLI as described by the `narova` skill, then
+   install `narova` and `narova-elevenlabs` as independently selected skills
    from `ammar-hasan/narova`.
 2. Locate this installed skill from the directory containing this `SKILL.md`;
    call that absolute directory `<narova-elevenlabs-skill-dir>`.
-3. Locate the separately installed main Narova skill from its own `SKILL.md`;
-   call that `<narova-skill-dir>`. Do not assume the two skill directories are
-   adjacent.
-4. Verify this worker:
+3. Verify this worker:
 
    ```bash
    bash <narova-elevenlabs-skill-dir>/tool/setup.sh
    ```
 
-5. Set the key in the environment used to run Narova. Never put it in
+4. Set the key in the environment used to run Narova. Never put it in
    `reel.config.mjs`:
 
    ```bash
    export ELEVENLABS_API_KEY="..."
    ```
 
-6. Explicitly register this installed worker:
+5. Explicitly register this installed worker:
 
    ```bash
-   node <narova-skill-dir>/tool/bin/narova.js providers add \
+   narova providers add \
      <narova-elevenlabs-skill-dir>/tool/provider.json
    ```
 
-7. Verify registration and authentication:
+6. Verify registration and authentication:
 
    ```bash
-   node <narova-skill-dir>/tool/bin/narova.js providers doctor elevenlabs
-   node <narova-skill-dir>/tool/bin/narova.js voices list --backend elevenlabs
+   narova providers doctor elevenlabs
+   narova voices list --backend elevenlabs
    ```
 
 Read [references/configuration.md](references/configuration.md) before writing

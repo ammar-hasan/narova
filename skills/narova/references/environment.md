@@ -1,9 +1,10 @@
 # Environment
 
-The CLI is bundled in this skill: `node <skill-dir>/tool/bin/narova.js`.
-HyperFrames needs no Narova npm install. The optional browserless renderer has
-pinned Skia and text-shaping packages (`npm install --prefix <skill-dir>/tool`). Run
-`doctor` plus `renderers doctor <name>` for the path you selected.
+The CLI is a standalone installation, separate from this instructions-only
+skill. Run `command -v narova`; if it is missing, follow the bootstrap in
+`SKILL.md`. The installer includes the pinned Skia and text-shaping packages
+used by the optional browserless renderer. Run `doctor` plus
+`renderers doctor <name>` for the path you selected.
 
 ## What the machine needs
 
@@ -14,7 +15,7 @@ pinned Skia and text-shaping packages (`npm install --prefix <skill-dir>/tool`).
 | Python 3.10+ | the TTS venv | `brew install python@3.12` (macOS system 3.9 is too old) |
 | TTS venv | speech synthesis | nothing — the first `synth` creates it at `~/.narova/venv` |
 | HyperFrames CLI | preview + render | nothing — `npx` downloads it on first use |
-| no-browser npm packages | Skia frames, OpenType shaping, Urdu/Arabic fallback font | `npm install --prefix <skill-dir>/tool` |
+| no-browser npm packages | Skia frames, OpenType shaping, Urdu/Arabic fallback font | re-run the standalone installer without `--skip-optional` |
 | agent-browser 0.33+ (optional) | explore and capture real product walkthroughs | `npm install -g agent-browser && agent-browser install` |
 
 No-browser rendering needs no Chrome or browser runtime. HyperFrames brings its own
@@ -26,10 +27,11 @@ baseline.
 
 Order: `$NAROVA_PYTHON` → `<project>/.venv` → `$NAROVA_VENV` or
 `~/.narova/venv` → a dev checkout `.venv` → plain `python3`.
-If no venv exists, the first `synth` runs `tool/setup.sh` and creates one.
+If no venv exists, the first `synth` runs the CLI package's `setup.sh` and creates one.
 
-`narova_tts` is not pip-installed. The CLI sets `PYTHONPATH=<skill>/tool/py`
-when calling Python. If doctor says "not importable", run `tool/setup.sh`.
+`narova_tts` is not pip-installed. The CLI sets `PYTHONPATH` to its own
+standalone `py/` directory when calling Python. If doctor says "not
+importable", run `narova-setup`.
 
 HyperFrames is version-pinned in `tool/src/hf.js` and in every generated
 `out/hf/package.json`. All calls go through `npx --yes hyperframes@<pin>`.
@@ -53,9 +55,9 @@ access and uses the existing FFmpeg requirement.
 
 - venv: created by the first `synth`.
 - piper: one small voice file per speaker.
-- xtts: ~1.9GB model (`tool/setup.sh --xtts` first; `COQUI_TOS_AGREED=1` if asked).
-- qwen: ~1.2GB model (`tool/setup.sh --qwen` first).
-- chatterbox: separate venv + ~1GB model (`tool/setup.sh --chatterbox` first).
+- xtts: ~1.9GB model (`narova-setup --xtts` first; `COQUI_TOS_AGREED=1` if asked).
+- qwen: ~1.2GB model (`narova-setup --qwen` first).
+- chatterbox: separate venv + ~1GB model (`narova-setup --chatterbox` first).
 - HyperFrames CLI: fetched by npx on the first doctor / build / preview.
 - agent-browser browser runtime: fetched by `agent-browser install` when a
   project first needs real product capture.

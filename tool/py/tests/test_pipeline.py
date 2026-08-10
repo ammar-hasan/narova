@@ -446,7 +446,7 @@ class TestChatterboxBackend(unittest.TestCase):
 
     def test_missing_venv_raises_with_setup_hint(self):
         with tempfile.NamedTemporaryFile(suffix=".wav") as f:
-            with self.assertRaisesRegex(RuntimeError, "setup.sh --chatterbox"):
+            with self.assertRaisesRegex(RuntimeError, "narova-setup --chatterbox"):
                 ChatterboxBackend({"a": f.name}, venv_python=Path("/nope/python"))
 
     def test_rejects_invalid_delivery_params_before_startup(self):
