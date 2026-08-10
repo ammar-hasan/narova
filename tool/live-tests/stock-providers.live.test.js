@@ -8,8 +8,6 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 
 const CLI = path.resolve(__dirname, '../bin/narova.js');
-const pack = process.env.NAROVA_STOCK_LIVE || 'essential';
-
 const providers = [
   {
     id: 'wikimedia', kind: 'video', query: 'bumblebee lilac',
@@ -24,17 +22,12 @@ const providers = [
     id: 'internet-archive', kind: 'audio', query: 'bird sound effect',
     acquireId: 'GOLD_TAPE_21_Birds', output: 'archive.mp3',
   },
+  { id: 'iconify', kind: 'image', query: 'home', acquireId: 'mdi:home', output: 'iconify.svg' },
+  {
+    id: 'poly-haven', kind: 'model', query: 'wooden crate',
+    acquireId: 'wooden_crate_01', output: 'poly-haven.fbx',
+  },
 ];
-
-if (pack === 'extensions') {
-  providers.push(
-    { id: 'pexels', kind: 'video', query: 'calm ocean', output: 'pexels.mp4', envKey: 'PEXELS_API_KEY' },
-    { id: 'pixabay', kind: 'video', query: 'calm ocean', output: 'pixabay.mp4', envKey: 'PIXABAY_API_KEY' },
-    { id: 'freesound', kind: 'audio', query: 'soft gong', output: 'freesound.mp3', envKey: 'FREESOUND_API_KEY' },
-  );
-} else if (pack !== 'essential') {
-  throw new Error('NAROVA_STOCK_LIVE must be essential or extensions');
-}
 
 function cli(args, options = {}) {
   const result = spawnSync(process.execPath, [CLI, ...args], {
@@ -50,18 +43,15 @@ function cli(args, options = {}) {
   return result.stdout;
 }
 
-test(`live stock ${pack} pack: every provider searches, downloads, and verifies`, { timeout: 15 * 60_000 }, () => {
-  const missing = providers.filter(item => item.envKey && !process.env[item.envKey]).map(item => item.envKey);
-  assert.deepEqual(missing, [], `missing live provider credentials: ${missing.join(', ')}`);
-
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), `narova-stock-${pack}-`));
+test('live stock essentials: every provider searches, downloads, and verifies', { timeout: 15 * 60_000 }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-stock-essential-'));
   const project = path.join(root, 'project');
   cli(['init', project]);
 
   for (const provider of providers) {
     const raw = cli([
       'assets', 'search', provider.query, '--provider', provider.id, '--kind', provider.kind,
-      '--limit', '1', '--pack', pack, '--json',
+      '--limit', '1', '--json',
     ]);
     const results = JSON.parse(raw);
     assert.ok(results.length > 0, `${provider.id} returned no live search results`);
@@ -71,7 +61,7 @@ test(`live stock ${pack} pack: every provider searches, downloads, and verifies`
     const id = provider.acquireId || results[0].id;
     cli([
       'assets', 'acquire', String(id), '--provider', provider.id, '--kind', provider.kind,
-      '--pack', pack, '--output', `assets/${provider.output}`, '--project', project,
+      '--output', `assets/${provider.output}`, '--project', project,
     ]);
     assert.ok(fs.statSync(path.join(project, 'assets', provider.output)).size > 0);
   }

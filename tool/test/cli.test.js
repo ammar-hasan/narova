@@ -34,22 +34,22 @@ test('help shows on no command, help, and -h', () => {
   }
 });
 
-test('assets provider discovery and credential errors do not require a project or expose keys', () => {
+test('essential asset provider discovery needs neither a project nor credentials', () => {
   const env = { ...process.env, PEXELS_API_KEY: 'provider-secret' };
   delete env.PIXABAY_API_KEY;
   delete env.FREESOUND_API_KEY;
   const listed = run(['assets', 'providers'], { env, cwd: os.tmpdir() });
   assert.equal(listed.status, 0, listed.stderr);
   assert.match(listed.stdout, /^wikimedia\timage,video,audio\tready$/m);
-  assert.match(listed.stdout, /^pexels\timage,video\tready$/m);
-  assert.match(listed.stdout, /^pixabay\timage,video\tneeds PIXABAY_API_KEY$/m);
+  assert.match(listed.stdout, /^iconify\timage\tready$/m);
+  assert.match(listed.stdout, /^poly-haven\tmodel\tready$/m);
   assert.doesNotMatch(listed.stdout + listed.stderr, /provider-secret/);
 
-  const missing = run([
+  const extension = run([
     'assets', 'search', 'ocean', '--provider', 'pixabay', '--kind', 'video', '--limit', '1',
   ], { env, cwd: os.tmpdir() });
-  assert.equal(missing.status, 1);
-  assert.match(missing.stderr, /requires PIXABAY_API_KEY/);
+  assert.equal(extension.status, 1);
+  assert.match(extension.stderr, /install narova-stock-extensions|unknown stock provider/);
 });
 
 test('renderers list exposes both bundled local providers', () => {

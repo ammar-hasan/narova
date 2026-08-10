@@ -10,7 +10,7 @@
 // Keep catalogue metadata bounded without treating that observed latency as a failure.
 const API_TIMEOUT_MS = 30_000;
 const API_MAX_BYTES = 8 * 1024 * 1024;
-const KINDS = new Set(['image', 'video', 'audio']);
+const KINDS = new Set(['image', 'video', 'audio', 'model']);
 
 const ESSENTIAL_PROVIDER_INFO = Object.freeze({
   wikimedia: Object.freeze({
@@ -33,31 +33,21 @@ const ESSENTIAL_PROVIDER_INFO = Object.freeze({
     kinds: Object.freeze(['video', 'audio']),
     envKey: null,
   }),
-});
-
-const EXTENSION_PROVIDER_INFO = Object.freeze({
-  ...ESSENTIAL_PROVIDER_INFO,
-  pexels: Object.freeze({
-    name: 'Pexels',
-    kinds: Object.freeze(['image', 'video']),
-    envKey: 'PEXELS_API_KEY',
+  iconify: Object.freeze({
+    name: 'Iconify',
+    kinds: Object.freeze(['image']),
+    envKey: null,
   }),
-  pixabay: Object.freeze({
-    name: 'Pixabay',
-    kinds: Object.freeze(['image', 'video']),
-    envKey: 'PIXABAY_API_KEY',
-  }),
-  freesound: Object.freeze({
-    name: 'Freesound',
-    kinds: Object.freeze(['audio']),
-    envKey: 'FREESOUND_API_KEY',
+  'poly-haven': Object.freeze({
+    name: 'Poly Haven',
+    kinds: Object.freeze(['model']),
+    envKey: null,
   }),
 });
 
-const PROVIDER_INFO = EXTENSION_PROVIDER_INFO;
+const PROVIDER_INFO = ESSENTIAL_PROVIDER_INFO;
 const STOCK_PACKS = Object.freeze({
   essential: Object.freeze(Object.keys(ESSENTIAL_PROVIDER_INFO)),
-  extensions: Object.freeze(Object.keys(EXTENSION_PROVIDER_INFO)),
 });
 
 function cleanText(value) {
@@ -91,14 +81,14 @@ function requireProvider(name, pack) {
   const key = cleanText(name);
   const available = providerInfoForPack(pack);
   const info = key && available[key];
-  if (!info) throw new Error(`unknown stock provider ${JSON.stringify(name)} in ${cleanText(pack) || 'extensions'} pack (${Object.keys(available).join('|')})`);
+  if (!info) throw new Error(`unknown stock provider ${JSON.stringify(name)} in ${cleanText(pack) || 'essential'} pack (${Object.keys(available).join('|')})`);
   return { key, info };
 }
 
-function providerInfoForPack(pack = 'extensions') {
-  const normalized = cleanText(pack) || 'extensions';
+function providerInfoForPack(pack = 'essential') {
+  const normalized = cleanText(pack) || 'essential';
   const ids = STOCK_PACKS[normalized];
-  if (!ids) throw new Error(`unknown stock provider pack ${JSON.stringify(pack)} (essential|extensions)`);
+  if (!ids) throw new Error(`unknown stock provider pack ${JSON.stringify(pack)} (essential); install narova-stock-extensions for more providers`);
   return Object.fromEntries(ids.map(id => [id, PROVIDER_INFO[id]]));
 }
 
@@ -110,14 +100,6 @@ function normalizeOptions(provider, opts = {}) {
   const limit = opts.limit == null ? 5 : Number(opts.limit);
   if (!Number.isInteger(limit) || limit < 1 || limit > 20) throw new Error('--limit must be an integer from 1 to 20');
   return { kind, limit };
-}
-
-function apiKey(provider, env = process.env) {
-  const keyName = PROVIDER_INFO[provider].envKey;
-  if (!keyName) return null;
-  const key = env && cleanText(env[keyName]);
-  if (!key) throw new Error(`${provider} requires ${keyName}`);
-  return key;
 }
 
 async function fetchJson(url, opts = {}, deps = {}) {
@@ -209,167 +191,6 @@ function resultArray(provider, data, field) {
     throw new Error(`${provider} returned an invalid response (expected ${field} array)`);
   }
   return data[field];
-}
-
-function pexelsVideoDownload(files) {
-  const usable = (Array.isArray(files) ? files : [])
-    .map(file => download(file.link, {
-      mime: file.file_type, width: file.width, height: file.height,
-    }))
-    .filter(Boolean);
-  const hd = usable.filter(file => {
-    const longEdge = Math.max(file.width || 0, file.height || 0);
-    const shortEdge = Math.min(file.width || 0, file.height || 0);
-    return longEdge <= 1920 && shortEdge <= 1080;
-  });
-  return (hd.length ? hd : usable).sort((a, b) => (b.width || 0) * (b.height || 0) - (a.width || 0) * (a.height || 0))[0] || null;
-}
-
-function fromPexelsPhoto(item) {
-  const creator = cleanText(item.photographer);
-  return candidate({
-    provider: 'pexels', id: item.id, kind: 'image', title: item.alt || `Pexels photo ${item.id}`,
-    sourcePage: item.url, previewUrl: item.src && (item.src.medium || item.src.small),
-    download: download(item.src && (item.src.original || item.src.large2x || item.src.large), {
-      mime: 'image/jpeg', width: item.width, height: item.height,
-    }),
-    rights: rights({
-      license: 'Pexels License', licenseUrl: 'https://www.pexels.com/license/', creator,
-      attribution: creator ? `Photo by ${creator} on Pexels` : 'Photo from Pexels',
-    }),
-  });
-}
-
-function fromPexelsVideo(item) {
-  const creator = cleanText(item.user && item.user.name);
-  return candidate({
-    provider: 'pexels', id: item.id, kind: 'video', title: `Pexels video ${item.id}`,
-    sourcePage: item.url, previewUrl: item.image, download: pexelsVideoDownload(item.video_files),
-    rights: rights({
-      license: 'Pexels License', licenseUrl: 'https://www.pexels.com/license/', creator,
-      attribution: creator ? `Video by ${creator} on Pexels` : 'Video from Pexels',
-    }),
-  });
-}
-
-async function searchPexels(query, opts, deps) {
-  const key = apiKey('pexels', deps.env);
-  const route = opts.kind === 'video' ? 'videos/search' : 'search';
-  const url = `https://api.pexels.com/v1/${route}?${new URLSearchParams({ query, per_page: String(opts.limit) })}`;
-  const data = await fetchJson(url, { headers: { authorization: key } }, deps);
-  const field = opts.kind === 'video' ? 'videos' : 'photos';
-  return resultArray('pexels', data, field).map(opts.kind === 'video' ? fromPexelsVideo : fromPexelsPhoto);
-}
-
-async function resolvePexels(id, opts, deps) {
-  const key = apiKey('pexels', deps.env);
-  const route = opts.kind === 'video' ? `videos/videos/${encodeURIComponent(id)}` : `photos/${encodeURIComponent(id)}`;
-  const data = await fetchJson(`https://api.pexels.com/v1/${route}`, { headers: { authorization: key } }, deps);
-  return opts.kind === 'video' ? fromPexelsVideo(data) : fromPexelsPhoto(data);
-}
-
-function pixabayVideoDownload(videos) {
-  for (const name of ['medium', 'large', 'small', 'tiny']) {
-    const item = videos && videos[name];
-    const normalized = item && download(item.url, {
-      mime: 'video/mp4', width: item.width, height: item.height, bytes: item.size,
-    });
-    if (normalized) return normalized;
-  }
-  return null;
-}
-
-function fromPixabayImage(item) {
-  const creator = cleanText(item.user);
-  const original = Boolean(item.imageURL);
-  const selectedUrl = item.imageURL || item.fullHDURL || item.largeImageURL || item.webformatURL;
-  const webformat = selectedUrl === item.webformatURL;
-  return candidate({
-    provider: 'pixabay', id: item.id, kind: 'image', title: item.tags || `Pixabay image ${item.id}`,
-    sourcePage: item.pageURL, previewUrl: item.previewURL,
-    download: download(selectedUrl, {
-      mime: 'image/jpeg',
-      width: original ? item.imageWidth : (webformat ? item.webformatWidth : null),
-      height: original ? item.imageHeight : (webformat ? item.webformatHeight : null),
-      bytes: original ? item.imageSize : null,
-    }),
-    rights: rights({
-      license: 'Pixabay Content License', licenseUrl: 'https://pixabay.com/service/license-summary/', creator,
-      attribution: creator ? `${creator} on Pixabay` : 'Media from Pixabay',
-    }),
-  });
-}
-
-function fromPixabayVideo(item) {
-  const creator = cleanText(item.user);
-  const selected = pixabayVideoDownload(item.videos);
-  if (selected && item.duration != null) selected.duration = nonNegativeNumber(item.duration);
-  return candidate({
-    provider: 'pixabay', id: item.id, kind: 'video', title: item.tags || `Pixabay video ${item.id}`,
-    sourcePage: item.pageURL,
-    previewUrl: item.videos && item.videos.medium && item.videos.medium.thumbnail,
-    download: selected,
-    rights: rights({
-      license: 'Pixabay Content License', licenseUrl: 'https://pixabay.com/service/license-summary/', creator,
-      attribution: creator ? `${creator} on Pixabay` : 'Media from Pixabay',
-    }),
-  });
-}
-
-async function pixabayRequest(params, opts, deps) {
-  const key = apiKey('pixabay', deps.env);
-  const base = opts.kind === 'video' ? 'https://pixabay.com/api/videos/' : 'https://pixabay.com/api/';
-  return fetchJson(`${base}?${new URLSearchParams({ key, ...params })}`, {}, deps);
-}
-
-async function searchPixabay(query, opts, deps) {
-  // Pixabay requires at least three results per request even when the caller
-  // wants one; trim after normalization.
-  const data = await pixabayRequest({ q: query, per_page: String(Math.max(3, opts.limit)), safesearch: 'true' }, opts, deps);
-  return resultArray('pixabay', data, 'hits').slice(0, opts.limit).map(opts.kind === 'video' ? fromPixabayVideo : fromPixabayImage);
-}
-
-async function resolvePixabay(id, opts, deps) {
-  const data = await pixabayRequest({ id: String(id) }, opts, deps);
-  if (!Array.isArray(data.hits) || data.hits.length !== 1) throw new Error(`pixabay asset not found: ${id}`);
-  return opts.kind === 'video' ? fromPixabayVideo(data.hits[0]) : fromPixabayImage(data.hits[0]);
-}
-
-function fromFreesound(item) {
-  const preview = item.previews && (
-    item.previews['preview-hq-mp3'] || item.previews['preview-hq-ogg']
-    || item.previews['preview-lq-mp3'] || item.previews['preview-lq-ogg']
-  );
-  const licenseUrl = cleanUrl(item.license);
-  const creator = cleanText(item.username);
-  const selected = download(preview, { mime: preview && preview.includes('.ogg') ? 'audio/ogg' : 'audio/mpeg', duration: item.duration });
-  return candidate({
-    provider: 'freesound', id: item.id, kind: 'audio', title: item.name || `Freesound audio ${item.id}`,
-    sourcePage: item.url || `https://freesound.org/s/${encodeURIComponent(item.id)}/`,
-    previewUrl: preview, download: selected,
-    rights: licenseUrl ? rights({
-      license: licenseId(item.license), licenseUrl, creator,
-      attribution: creator ? `${item.name || `Sound ${item.id}`} by ${creator} on Freesound` : `Sound ${item.id} on Freesound`,
-    }) : rights({ unknown: true }),
-  });
-}
-
-const FREESOUND_FIELDS = 'id,name,url,username,license,previews,duration';
-
-async function freesoundRequest(route, params, deps) {
-  const key = apiKey('freesound', deps.env);
-  const url = `https://freesound.org/apiv2/${route}?${new URLSearchParams(params)}`;
-  return fetchJson(url, { headers: { authorization: `Token ${key}` } }, deps);
-}
-
-async function searchFreesound(query, opts, deps) {
-  const data = await freesoundRequest('search/', { query, page_size: String(opts.limit), fields: FREESOUND_FIELDS }, deps);
-  return resultArray('freesound', data, 'results').map(fromFreesound);
-}
-
-async function resolveFreesound(id, opts, deps) {
-  const data = await freesoundRequest(`sounds/${encodeURIComponent(id)}/`, { fields: FREESOUND_FIELDS }, deps);
-  return fromFreesound(data);
 }
 
 function wikimediaKind(item) {
@@ -629,19 +450,98 @@ async function resolveArchive(id, opts, deps) {
   return fromArchiveDocument({ ...data.metadata, identifier: data.metadata.identifier || id }, opts.kind, selected);
 }
 
+function iconifyRights(collection) {
+  const license = collection && collection.license;
+  return license && license.spdx ? rights({
+    license: license.spdx,
+    licenseUrl: license.url,
+    creator: collection.author && collection.author.name,
+    attribution: `${collection.name || 'Icon set'} via Iconify`,
+  }) : rights({ unknown: true });
+}
+
+function iconifyCandidate(id, collection) {
+  const [prefix, ...nameParts] = String(id).split(':');
+  const name = nameParts.join(':');
+  return candidate({
+    provider: 'iconify', id, kind: 'image', title: `${name} (${collection?.name || prefix})`,
+    sourcePage: `https://icon-sets.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}/`,
+    previewUrl: `https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`,
+    download: download(`https://api.iconify.design/${encodeURIComponent(prefix)}/${encodeURIComponent(name)}.svg`, { mime: 'image/svg+xml' }),
+    rights: iconifyRights(collection),
+  });
+}
+
+async function searchIconify(query, opts, deps) {
+  const data = await fetchJson(`https://api.iconify.design/search?${new URLSearchParams({
+    query, limit: String(Math.max(32, opts.limit)),
+  })}`, {}, deps);
+  const icons = resultArray('iconify', data, 'icons').slice(0, opts.limit);
+  return icons.map(id => iconifyCandidate(id, data.collections && data.collections[String(id).split(':')[0]]));
+}
+
+async function resolveIconify(id, opts, deps) {
+  const [prefix, ...nameParts] = id.split(':');
+  if (!prefix || !nameParts.length) throw new Error('iconify asset id must be prefix:name');
+  const data = await fetchJson(`https://api.iconify.design/collection?${new URLSearchParams({ prefix, info: 'true' })}`, {}, deps);
+  return iconifyCandidate(id, data.info);
+}
+
+const CC0_URL = 'https://creativecommons.org/publicdomain/zero/1.0/';
+
+function polyHavenCandidate(id, item, selected) {
+  const creators = item && item.authors ? Object.keys(item.authors).join(', ') : null;
+  return candidate({
+    provider: 'poly-haven', id, kind: 'model', title: item?.name || id,
+    sourcePage: `https://polyhaven.com/a/${encodeURIComponent(id)}`,
+    previewUrl: item?.thumbnail_url,
+    download: selected && download(selected.url, { mime: 'application/octet-stream', bytes: selected.size }),
+    rights: rights({
+      license: 'CC0-1.0', licenseUrl: CC0_URL, creator: creators,
+      attribution: creators ? `${item?.name || id} by ${creators} / Poly Haven` : `${item?.name || id} / Poly Haven`,
+    }),
+  });
+}
+
+async function polyHavenAssets(deps) {
+  const data = await fetchJson('https://api.polyhaven.com/assets?t=models', {}, deps);
+  if (!data || typeof data !== 'object' || Array.isArray(data)) {
+    throw new Error('poly-haven returned an invalid response (expected assets object)');
+  }
+  return data;
+}
+
+async function searchPolyHaven(query, opts, deps) {
+  const data = await polyHavenAssets(deps);
+  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  return Object.entries(data).filter(([id, item]) => {
+    const haystack = [id, item.name, item.description, ...(item.tags || []), ...(item.categories || [])]
+      .filter(Boolean).join(' ').toLowerCase();
+    return words.every(word => haystack.includes(word));
+  }).slice(0, opts.limit).map(([id, item]) => polyHavenCandidate(id, item));
+}
+
+async function resolvePolyHaven(id, opts, deps) {
+  const [assets, files] = await Promise.all([
+    polyHavenAssets(deps),
+    fetchJson(`https://api.polyhaven.com/files/${encodeURIComponent(id)}`, {}, deps),
+  ]);
+  if (!assets[id]) throw new Error(`poly-haven asset not found: ${id}`);
+  const selected = files && files.fbx && (files.fbx['1k'] || files.fbx['2k'] || files.fbx['4k'])?.fbx;
+  if (!selected || !selected.url) throw new Error(`poly-haven did not return an FBX model for ${id}`);
+  return polyHavenCandidate(id, assets[id], selected);
+}
+
 const ESSENTIAL_ADAPTERS = Object.freeze({
   wikimedia: { search: searchWikimedia, resolve: resolveWikimedia },
   openverse: { search: searchOpenverse, resolve: resolveOpenverse },
   nasa: { search: searchNasa, resolve: resolveNasa },
   'internet-archive': { search: searchArchive, resolve: resolveArchive },
+  iconify: { search: searchIconify, resolve: resolveIconify },
+  'poly-haven': { search: searchPolyHaven, resolve: resolvePolyHaven },
 });
 
-const ADAPTERS = Object.freeze({
-  ...ESSENTIAL_ADAPTERS,
-  pexels: { search: searchPexels, resolve: resolvePexels },
-  pixabay: { search: searchPixabay, resolve: resolvePixabay },
-  freesound: { search: searchFreesound, resolve: resolveFreesound },
-});
+const ADAPTERS = ESSENTIAL_ADAPTERS;
 
 function listStockProviders(env = process.env, opts = {}) {
   const infoForPack = providerInfoForPack(opts.pack);
@@ -672,14 +572,14 @@ async function resolveStock(name, id, opts = {}, deps = {}) {
 }
 
 module.exports = {
-  PROVIDER_INFO, ESSENTIAL_PROVIDER_INFO, EXTENSION_PROVIDER_INFO, STOCK_PACKS,
+  PROVIDER_INFO, ESSENTIAL_PROVIDER_INFO, STOCK_PACKS,
   listStockProviders,
   searchStock,
   resolveStock,
   _internals: {
-    archiveDownload, cleanText, cleanUrl, fetchJson, fromArchiveDocument, fromFreesound,
-    fromNasaItem: nasaItem, fromOpenverse, fromPexelsPhoto, fromPexelsVideo,
-    fromPixabayImage, fromPixabayVideo, fromWikimediaFile, fromWikimediaSearch,
-    licenseId, mimeForUrl, normalizeOptions, resultArray, selectNasaAsset, wikimediaKind,
+    archiveDownload, cleanText, cleanUrl, fetchJson, iconifyCandidate,
+    fromArchiveDocument, fromNasaItem: nasaItem, fromOpenverse,
+    fromWikimediaFile, fromWikimediaSearch, licenseId, mimeForUrl,
+    normalizeOptions, polyHavenCandidate, resultArray, selectNasaAsset, wikimediaKind,
   },
 };

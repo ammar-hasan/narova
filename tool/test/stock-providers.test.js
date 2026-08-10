@@ -13,19 +13,17 @@ function jsonResponse(value, init = {}) {
 }
 
 test('provider listing reports supported media and credential readiness without exposing values', () => {
-  const providers = listStockProviders({ PEXELS_API_KEY: 'secret', FREESOUND_API_KEY: '' });
+  const providers = listStockProviders({ PEXELS_API_KEY: 'secret' });
   assert.deepEqual(providers.map(provider => provider.id), [
-    'wikimedia', 'openverse', 'nasa', 'internet-archive', 'pexels', 'pixabay', 'freesound',
+    'wikimedia', 'openverse', 'nasa', 'internet-archive', 'iconify', 'poly-haven',
   ]);
   assert.deepEqual(providers[0], {
     id: 'wikimedia', name: 'Wikimedia Commons', kinds: ['image', 'video', 'audio'], envKey: null, ready: true,
   });
-  assert.equal(providers.find(provider => provider.id === 'pexels').ready, true);
-  assert.equal(providers.find(provider => provider.id === 'pixabay').ready, false);
   assert.doesNotMatch(JSON.stringify(providers), /secret/);
   assert.deepEqual(
     listStockProviders({}, { pack: 'essential' }).map(provider => provider.id),
-    ['wikimedia', 'openverse', 'nasa', 'internet-archive'],
+    ['wikimedia', 'openverse', 'nasa', 'internet-archive', 'iconify', 'poly-haven'],
   );
 });
 
@@ -148,108 +146,34 @@ test('Wikimedia search and resolve use the API gateway and keep rights unknown',
   assert.match(requests[1].url, /api\.wikimedia\.org\/core\/v1\/commons\/file\/File%3AMeditation%20Gong\.ogg/);
 });
 
-test('Pexels adapters normalize photo/video metadata and select a practical HD video rendition', async () => {
-  const requests = [];
-  const photo = {
-    id: 10, width: 4000, height: 3000, url: 'https://www.pexels.com/photo/10/',
-    photographer: 'Ada', alt: 'Calm ocean',
-    src: { original: 'https://images.pexels.com/photo.jpg', medium: 'https://images.pexels.com/preview.jpg' },
+test('Iconify normalizes SVG results and collection license metadata', async () => {
+  const collection = {
+    name: 'Material Design Icons', author: { name: 'Pictogrammers' },
+    license: { spdx: 'Apache-2.0', url: 'https://example.test/LICENSE' },
   };
-  const video = {
-    id: 20, url: 'https://www.pexels.com/video/20/', image: 'https://images.pexels.com/poster.jpg',
-    user: { name: 'Lin' }, video_files: [
-      { link: 'https://videos.pexels.com/4k.mp4', file_type: 'video/mp4', width: 3840, height: 2160 },
-      { link: 'https://videos.pexels.com/hd.mp4', file_type: 'video/mp4', width: 1920, height: 1080 },
-      { link: 'https://videos.pexels.com/sd.mp4', file_type: 'video/mp4', width: 640, height: 360 },
-    ],
-  };
-  const fetch = async (url, init) => {
-    requests.push({ url: String(url), authorization: init.headers.authorization });
-    if (String(url).includes('/videos/')) return jsonResponse(String(url).includes('/search?') ? { videos: [video] } : video);
-    return jsonResponse(String(url).includes('/search?') ? { photos: [photo] } : photo);
-  };
-  const deps = { fetch, env: { PEXELS_API_KEY: 'pexels-secret' } };
-  const photos = await searchStock('pexels', 'ocean', { kind: 'image', limit: 1 }, deps);
-  assert.equal(photos[0].title, 'Calm ocean');
-  assert.equal(photos[0].rights.license, 'Pexels License');
-  assert.equal(photos[0].rights.attribution, 'Photo by Ada on Pexels');
-  const resolved = await resolveStock('pexels', '20', { kind: 'video' }, deps);
-  assert.equal(resolved.download.url, 'https://videos.pexels.com/hd.mp4');
-  assert.equal(resolved.download.width, 1920);
-  assert.ok(requests.every(request => request.authorization === 'pexels-secret'));
-
-  const portrait = _internals.fromPexelsVideo({
-    id: 21, url: 'https://www.pexels.com/video/21/', video_files: [
-      { link: 'https://videos.pexels.com/portrait-hd.mp4', file_type: 'video/mp4', width: 1080, height: 1920 },
-      { link: 'https://videos.pexels.com/portrait-sd.mp4', file_type: 'video/mp4', width: 360, height: 640 },
-    ],
-  });
-  assert.equal(portrait.download.url, 'https://videos.pexels.com/portrait-hd.mp4');
+  const fetch = async url => jsonResponse(String(url).includes('/search?')
+    ? { icons: ['mdi:home'], collections: { mdi: collection } }
+    : { info: collection });
+  const found = await searchStock('iconify', 'home', { kind: 'image', limit: 1 }, { fetch, env: {} });
+  assert.equal(found[0].download.mime, 'image/svg+xml');
+  assert.equal(found[0].rights.license, 'Apache-2.0');
+  const resolved = await resolveStock('iconify', 'mdi:home', { kind: 'image' }, { fetch, env: {} });
+  assert.match(resolved.download.url, /mdi\/home\.svg$/);
 });
 
-test('Pixabay adapters respect the three-result API minimum and normalize image/video rights', async () => {
-  const requests = [];
-  const image = {
-    id: 31, tags: 'mountain, sunrise', pageURL: 'https://pixabay.com/photos/31/', user: 'Mira',
-    previewURL: 'https://cdn.pixabay.com/preview.jpg', largeImageURL: 'https://cdn.pixabay.com/large.jpg',
-    imageWidth: 2000, imageHeight: 1200, imageSize: 1234,
-  };
-  const video = {
-    id: 32, tags: 'mountain video', pageURL: 'https://pixabay.com/videos/32/', user: 'Omar', duration: 8,
-    videos: { medium: {
-      url: 'https://cdn.pixabay.com/medium.mp4', width: 1920, height: 1080, size: 999,
-      thumbnail: 'https://cdn.pixabay.com/medium.jpg',
-    } },
-  };
-  const fetch = async url => {
-    requests.push(String(url));
-    return jsonResponse({ hits: [String(url).includes('/videos/') ? video : image] });
-  };
-  const deps = { fetch, env: { PIXABAY_API_KEY: 'pixabay-secret' } };
-  const images = await searchStock('pixabay', 'mountain', { kind: 'image', limit: 1 }, deps);
-  assert.equal(images[0].download.bytes, undefined);
-  assert.equal(images[0].download.width, undefined);
-  assert.equal(images[0].rights.license, 'Pixabay Content License');
-  assert.match(requests[0], /per_page=3/);
-  const resolved = await resolveStock('pixabay', '32', { kind: 'video' }, deps);
-  assert.equal(resolved.download.duration, 8);
-  assert.equal(resolved.rights.creator, 'Omar');
+test('Poly Haven selects a small standalone FBX and declares CC0', async () => {
+  const asset = { name: 'Wooden Crate', authors: { Amina: 'All' }, tags: ['crate'] };
+  const fetch = async url => jsonResponse(String(url).includes('/files/') ? {
+    fbx: { '1k': { fbx: { url: 'https://dl.polyhaven.org/crate.fbx', size: 1234 } } },
+  } : { wooden_crate_01: asset });
+  const found = await searchStock('poly-haven', 'crate', { kind: 'model', limit: 1 }, { fetch, env: {} });
+  assert.equal(found[0].id, 'wooden_crate_01');
+  const resolved = await resolveStock('poly-haven', found[0].id, { kind: 'model' }, { fetch, env: {} });
+  assert.equal(resolved.download.url, 'https://dl.polyhaven.org/crate.fbx');
+  assert.equal(resolved.rights.license, 'CC0-1.0');
 });
 
-test('Freesound uses token headers, preview downloads, and SPDX-like Creative Commons ids', async () => {
-  let request;
-  const sound = {
-    id: 77, name: 'Soft gong.wav', username: 'Sam', duration: 3.4,
-    url: 'https://freesound.org/s/77/', license: 'https://creativecommons.org/licenses/by/4.0/',
-    previews: { 'preview-hq-mp3': 'https://cdn.freesound.org/previews/77.mp3' },
-  };
-  const fetch = async (url, init) => {
-    request = { url: String(url), authorization: init.headers.authorization };
-    return jsonResponse(String(url).includes('/search/') ? { results: [sound] } : sound);
-  };
-  const deps = { fetch, env: { FREESOUND_API_KEY: 'freesound-secret' } };
-  const found = await searchStock('freesound', 'gong', { kind: 'audio', limit: 2 }, deps);
-  assert.equal(found[0].rights.license, 'CC-BY-4.0');
-  assert.equal(found[0].download.mime, 'audio/mpeg');
-  assert.equal(request.authorization, 'Token freesound-secret');
-  const resolved = await resolveStock('freesound', '77', { kind: 'audio' }, deps);
-  assert.equal(resolved.download.duration, 3.4);
-  assert.deepEqual(_internals.fromFreesound({
-    id: 78, name: 'Unlicensed.mp3', username: 'Sam', url: 'https://freesound.org/s/78/',
-    previews: { 'preview-hq-mp3': 'https://cdn.freesound.org/previews/78.mp3' },
-  }).rights, { status: 'unknown' });
-});
-
-test('provider validation rejects unsupported kinds, missing keys, oversized queries, and secret-bearing URLs', async () => {
-  await assert.rejects(searchStock('freesound', 'gong', { kind: 'video' }, { env: {} }), /does not support kind/);
-  await assert.rejects(searchStock('pexels', 'ocean', { kind: 'image' }, { env: {} }), /requires PEXELS_API_KEY/);
-  await assert.rejects(searchStock('pixabay', 'ocean', { kind: 'image' }, {
-    env: { PIXABAY_API_KEY: 'do-not-print' },
-    fetch: async () => new Response('no', { status: 401 }),
-  }), error => {
-    assert.doesNotMatch(error.message, /do-not-print/);
-    return /HTTP 401/.test(error.message);
-  });
+test('provider validation rejects unsupported kinds, oversized queries, and secret-bearing URLs', async () => {
   await assert.rejects(searchStock('wikimedia', 'x'.repeat(201), { kind: 'image' }, { env: {} }), /at most 200/);
   assert.equal(_internals.cleanUrl('https://user:pass@example.com/x'), null);
 
@@ -258,9 +182,7 @@ test('provider validation rejects unsupported kinds, missing keys, oversized que
     ['openverse', 'image', {}],
     ['nasa', 'image', {}],
     ['internet-archive', 'audio', {}],
-    ['pexels', 'image', { PEXELS_API_KEY: 'x' }],
-    ['pixabay', 'image', { PIXABAY_API_KEY: 'x' }],
-    ['freesound', 'audio', { FREESOUND_API_KEY: 'x' }],
+    ['iconify', 'image', {}],
   ]) {
     await assert.rejects(
       searchStock(provider, 'test', { kind }, { env, fetch: async () => jsonResponse({}) }),
@@ -268,8 +190,5 @@ test('provider validation rejects unsupported kinds, missing keys, oversized que
     );
   }
   assert.throws(() => listStockProviders({}, { pack: 'everything' }), /unknown stock provider pack/);
-  await assert.rejects(
-    searchStock('pexels', 'ocean', { kind: 'image', pack: 'essential' }, { env: { PEXELS_API_KEY: 'x' } }),
-    /unknown stock provider .* essential pack/,
-  );
+  await assert.rejects(searchStock('pexels', 'ocean', { kind: 'image' }, { env: {} }), /unknown stock provider/);
 });

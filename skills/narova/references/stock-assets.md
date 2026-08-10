@@ -12,7 +12,7 @@ for the current scene.
 ## Table of contents
 
 1. [Acquisition priority](#acquisition-priority)
-2. [Built-in catalogue adapters](#built-in-catalogue-adapters)
+2. [Essential catalogue adapters](#essential-catalogue-adapters)
 3. [Photos & images](#photos--images)
 4. [Video clips](#video-clips)
 5. [Music & background beds](#music--background-beds)
@@ -46,23 +46,21 @@ Follow this order so the highest-quality, most reliable sources are used first:
 
 ---
 
-## Built-in catalogue adapters
+## Essential catalogue adapters
 
 Use adapters for provider API mechanics; use judgment for relevance, rights,
 model/property releases, and sensitive contexts.
 
 ```bash
-# Extensions is the default and contains the entire essential pack.
+# Core is deliberately small: all essential providers are anonymous and tested.
 narova assets providers
-narova assets providers --pack essential
 
 # Search without downloading. Add --json when another program will select.
-narova assets search "calm ocean" --provider pexels --kind video --limit 5
 narova assets search "meditation gong" --provider wikimedia --kind audio --json
+narova assets search "home" --provider iconify --kind image --json
+narova assets search "wooden crate" --provider poly-haven --kind model --json
 
 # Resolve the selected item again, download it atomically, and register it.
-narova assets acquire 2499611 --provider pexels --kind video \
-  --output assets/ocean.mp4
 narova assets acquire "File:Meditation Gong.ogg" --provider wikimedia \
   --kind audio --output assets/gong.ogg
 ```
@@ -73,19 +71,19 @@ narova assets acquire "File:Meditation Gong.ogg" --provider wikimedia \
 | essential | `openverse` | image, audio | none |
 | essential | `nasa` | image, video, audio | none |
 | essential | `internet-archive` | video, audio | none |
-| extensions | `pexels` | image, video | `PEXELS_API_KEY` |
-| extensions | `pixabay` | image, video | `PIXABAY_API_KEY` |
-| extensions | `freesound` | audio previews | `FREESOUND_API_KEY` |
+| essential | `iconify` | 2D SVG icons | none |
+| essential | `poly-haven` | 3D FBX models | none |
 
-`extensions` literally includes the essential adapter map and adds the last
-three providers; it is not a competing implementation. An adapter is only the
-small piece of code that translates a provider's search/result/download shape
-into Narova's common asset record. Hashing, atomic writes, verification, and
-credits remain one shared lifecycle.
+Install and invoke the separate `narova-stock-extensions` skill for The Met,
+Cleveland Museum of Art, Library of Congress, Pexels, Pixabay, Freesound, and
+browser-guided long-tail sources. Its `narova-stock` command delegates every
+essential provider back to core, so it extends this pack instead of copying it.
+Extension downloads also return through `narova assets download`; hashing,
+atomic writes, verification, provenance, and credits therefore stay in one
+shared lifecycle.
 
-Keys stay in environment variables and are never written to the project lock.
-Pexels and Pixabay results carry their provider-wide license declaration;
-Freesound carries each sound's returned Creative Commons license. Wikimedia's
+Optional keys stay in environment variables and are never written to the
+project lock. A missing key disables only that extension provider. Wikimedia's
 current Core API supplies file URLs but not reliable per-file license metadata,
 so acquisitions stay `rights.status: "unknown"` until the item page has been
 reviewed and the license is supplied explicitly:
@@ -102,11 +100,11 @@ may still use a browser, web research, or a long-tail source below when that
 produces a better creative choice. Finish that path with `assets download` or
 `assets import` so it receives the same provenance and verification treatment.
 
-Run live API and byte-download checks explicitly from `tool/`:
+Run live API and byte-download checks explicitly from the repository root:
 
 ```bash
 npm run test:stock-live
-# Requires PEXELS_API_KEY, PIXABAY_API_KEY, and FREESOUND_API_KEY:
+# Runs essential + no-key extensions; key-backed providers run when configured:
 npm run test:stock-live:extensions
 ```
 

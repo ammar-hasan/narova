@@ -1,0 +1,4 @@
+interface:
+  display_name: "Narova Stock Extensions"
+  short_description: "Optional stock and cultural media providers"
+  default_prompt: "Use $narova-stock-extensions to find and acquire suitable licensed media for this Narova video."

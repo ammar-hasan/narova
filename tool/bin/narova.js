@@ -351,8 +351,8 @@ Options:
   --origin <mode> --provider <name> --item-id <id> --source-page <url>
   --license <id> --license-url <url> --creator <name> --attribution <text>
   Stock catalogue flags (assets search/acquire):
-  --pack essential|extensions (default: extensions)
-  --provider <name> --kind image|video|audio --limit <1..20> --json
+  --pack essential (default: essential; use narova-stock-extensions for more)
+  --provider <name> --kind image|video|audio|model --limit <1..20> --json
 `;
 
 async function main() {
@@ -558,11 +558,11 @@ async function main() {
         let record;
         try {
           const downloaded = await downloadAsset(url, staged);
-          if (stock) {
-            const responseKind = String(downloaded.contentType || '').split('/')[0].toLowerCase();
-            if (['image', 'video', 'audio'].includes(responseKind) && responseKind !== stock.kind) {
-              throw new Error(`${stock.provider} returned ${responseKind} content for a ${stock.kind} asset`);
-            }
+          const responseKind = String(downloaded.contentType || '').split('/')[0].toLowerCase();
+          const expectedKind = stock ? stock.kind : inferKind(destination.relative);
+          if (['image', 'video', 'audio'].includes(responseKind) && responseKind !== expectedKind) {
+            const sourceName = stock ? stock.provider : 'download URL';
+            throw new Error(`${sourceName} returned ${responseKind} content for a ${expectedKind} asset`);
           }
           record = withAssetMutation(projectDir, () => {
             try {

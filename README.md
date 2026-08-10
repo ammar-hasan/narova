@@ -130,10 +130,9 @@ For assets acquired another way, the small asset lifecycle stays explicit:
 
 ```bash
 narova assets providers
-narova assets providers --pack essential
-narova assets search "calm ocean" --provider pexels --kind video --limit 5
-narova assets acquire 2499611 --provider pexels --kind video \
-  --output assets/ocean.mp4
+narova assets search "home" --provider iconify --kind image --limit 5
+narova assets acquire mdi:home --provider iconify --kind image \
+  --output assets/home.svg
 narova assets download "https://cdn.example/clip.mp4" --output assets/clip.mp4 \
   --origin stock --provider example --source-page "https://example/items/clip" \
   --license CC-BY-4.0 --attribution "Creator / Example"
@@ -142,13 +141,15 @@ narova assets verify
 narova assets credits
 ```
 
-The `essential` pack is Wikimedia, Openverse, NASA, and Internet Archive. The
-default `extensions` pack includes that entire set and adds Pexels, Pixabay,
-and Freesound. Those three read
-`PEXELS_API_KEY`, `PIXABAY_API_KEY`, and `FREESOUND_API_KEY` respectively; key
-values are never persisted. Catalogue search is explicit and builds stay offline.
+Core's `essential` pack is Wikimedia, Openverse, NASA, Internet Archive,
+Iconify (free 2D SVG), and Poly Haven (free CC0 3D models), all without keys.
+The separate `narova-stock-extensions` skill delegates those essentials back to
+core and adds The Met, Cleveland Museum, Library of Congress, Pexels, Pixabay,
+Freesound, and browser-guided long-tail discovery. Its three keys are optional;
+missing credentials never block the no-key providers. Catalogue search is
+explicit and builds stay offline.
 
-The adapters own repeatable API work. The Narova skill still owns creative
+Adapters own repeatable API work. The Narova skills still own creative
 search terms, selection, license judgment, and fallback discovery. If an agent
 finds a better asset through a browser, archive, or new source, it can use
 `assets download` or `assets import` and preserve the same provenance record;

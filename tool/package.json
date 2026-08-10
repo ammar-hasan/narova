@@ -14,8 +14,7 @@
     "test:js": "node --test 'test/*.test.js'",
     "test:py": "PYTHONPATH=py python3 -m unittest discover -s py/tests",
     "test:install": "node --test test/install.test.js",
-    "test:stock-live": "NAROVA_STOCK_LIVE=essential node --test live-tests/stock-providers.live.test.js",
-    "test:stock-live:extensions": "NAROVA_STOCK_LIVE=extensions node --test live-tests/stock-providers.live.test.js"
+    "test:stock-live": "node --test live-tests/stock-providers.live.test.js"
   },
   "files": [
     "bin/",
