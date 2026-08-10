@@ -5,6 +5,7 @@ const path = require('path');
 const fs = require('fs');
 const os = require('os');
 const { spawnSync } = require('child_process');
+const { registerAsset, verifyAssets, withAssetMutation } = require('../src/asset-registry');
 
 function tempReleasesDir() {
   const dir = path.join(os.tmpdir(), `narova-releases-${Date.now()}`);
@@ -81,6 +82,271 @@ test('restore writes manifest to destination', async () => {
   } finally {
     fs.rmSync(tmp, { recursive: true, force: true });
     fs.rmSync(destDir, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('release snapshots and restores creative asset provenance', async () => {
+  const td = tempReleasesDir();
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-assets-'));
+  const restored = path.join(os.tmpdir(), `narova-rel-assets-restored-${Date.now()}`);
+  const out = path.join(project, 'out');
+  fs.mkdirSync(out, { recursive: true });
+  fs.writeFileSync(path.join(project, 'reel.config.json'), JSON.stringify({
+    title: 'Asset release', voices: {}, scenes: [{ id: 'one', dur: 1, vo: [], body: '<p>one</p>' }],
+  }));
+  fs.mkdirSync(path.join(project, 'media'));
+  fs.mkdirSync(path.join(project, 'recipes'));
+  fs.writeFileSync(path.join(project, 'media', 'reusable.jpg'), 'reusable asset');
+  fs.writeFileSync(path.join(project, 'recipes', 'reusable.json'), '{"source":"editable"}');
+  registerAsset(project, {
+    file: 'media/reusable.jpg',
+    recipe: 'recipes/reusable.json',
+    origin: { mode: 'stock', provider: 'example' },
+    rights: {},
+  });
+  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ narova: 'x', project: { title: 'Asset release' } }));
+  try {
+    const api = releases();
+    const saved = await api.save(path.join(out, 'manifest.json'), 'asset-provenance', { projectDir: project });
+    assert.ok(fs.existsSync(path.join(saved.dir, 'assets.lock.json')));
+    assert.ok(fs.existsSync(path.join(saved.dir, 'media', 'reusable.jpg')));
+    assert.ok(fs.existsSync(path.join(saved.dir, 'recipes', 'reusable.json')));
+    const result = api.restore('asset-provenance', path.join(restored, 'out'), { newProject: restored });
+    assert.ok(result.restored.includes('assets.lock.json'));
+    assert.equal(verifyAssets(restored).ok, true);
+    assert.equal(fs.readFileSync(path.join(restored, 'recipes', 'reusable.json'), 'utf8'), '{"source":"editable"}');
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(restored, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('restore installs a lock only with a consistent tracked file set', async () => {
+  const td = tempReleasesDir();
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-unit-'));
+  const mergeTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-merge-'));
+  const conflictTarget = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-conflict-'));
+  const out = path.join(project, 'out');
+  fs.mkdirSync(path.join(project, 'assets'), { recursive: true });
+  fs.mkdirSync(out);
+  fs.writeFileSync(path.join(project, 'assets', 'clip.mp4'), 'release-video');
+  registerAsset(project, { file: 'assets/clip.mp4', origin: { mode: 'stock' } });
+  fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  fs.mkdirSync(path.join(mergeTarget, 'assets'));
+  fs.mkdirSync(path.join(conflictTarget, 'assets'));
+  fs.writeFileSync(path.join(conflictTarget, 'assets', 'clip.mp4'), 'local-video');
+  try {
+    const api = releases();
+    await api.save(path.join(out, 'manifest.json'), 'unit-restore', { projectDir: project });
+
+    const merged = api.restore('unit-restore', path.join(mergeTarget, 'out'), { projectDir: mergeTarget });
+    assert.ok(merged.restored.includes('assets.lock.json'));
+    assert.equal(fs.readFileSync(path.join(mergeTarget, 'assets', 'clip.mp4'), 'utf8'), 'release-video');
+    assert.equal(verifyAssets(mergeTarget).ok, true);
+
+    const conflicted = api.restore('unit-restore', path.join(conflictTarget, 'out'), { projectDir: conflictTarget });
+    assert.ok(conflicted.skipped.includes('assets.lock.json'));
+    assert.equal(fs.existsSync(path.join(conflictTarget, 'assets.lock.json')), false);
+    assert.equal(fs.readFileSync(path.join(conflictTarget, 'assets', 'clip.mp4'), 'utf8'), 'local-video');
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(mergeTarget, { recursive: true, force: true });
+    fs.rmSync(conflictTarget, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('restore rejects tampered release assets before destination writes', async () => {
+  const td = tempReleasesDir();
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-tampered-'));
+  const restored = path.join(os.tmpdir(), `narova-rel-tampered-dest-${Date.now()}`);
+  fs.mkdirSync(path.join(project, 'assets'));
+  fs.mkdirSync(path.join(project, 'out'));
+  fs.writeFileSync(path.join(project, 'assets', 'clip.mp4'), 'good');
+  registerAsset(project, { file: 'assets/clip.mp4' });
+  fs.writeFileSync(path.join(project, 'out', 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  try {
+    const api = releases();
+    const saved = await api.save(path.join(project, 'out', 'manifest.json'), 'tampered', { projectDir: project });
+    fs.writeFileSync(path.join(saved.dir, 'assets', 'clip.mp4'), 'tampered');
+    assert.throws(
+      () => api.restore('tampered', path.join(restored, 'out'), { newProject: restored }),
+      /release asset provenance is stale/,
+    );
+    assert.equal(fs.existsSync(restored), false);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+    fs.rmSync(restored, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('restore rolls back tracked files when lock publication fails', async () => {
+  const td = tempReleasesDir();
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-source-'));
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-destination-'));
+  for (const project of [source, destination]) {
+    fs.mkdirSync(path.join(project, 'assets'));
+    fs.mkdirSync(path.join(project, 'out'));
+    fs.writeFileSync(path.join(project, 'out', 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  }
+  fs.writeFileSync(path.join(source, 'assets', 'clip.mp4'), 'new-video');
+  fs.writeFileSync(path.join(destination, 'assets', 'clip.mp4'), 'old-video');
+  registerAsset(source, { file: 'assets/clip.mp4' });
+  registerAsset(destination, { file: 'assets/clip.mp4' });
+  try {
+    const api = releases();
+    await api.save(path.join(source, 'out', 'manifest.json'), 'rollback', { projectDir: source });
+    assert.throws(() => api.restore('rollback', path.join(destination, 'out'), {
+      projectDir: destination,
+      overwrite: true,
+      copyTrackedFile: (from, to) => {
+        if (from.endsWith('assets.lock.json')) throw new Error('simulated lock copy failure');
+        fs.copyFileSync(from, to);
+      },
+    }), /simulated lock copy failure/);
+    assert.equal(fs.readFileSync(path.join(destination, 'assets', 'clip.mp4'), 'utf8'), 'old-video');
+    assert.equal(verifyAssets(destination).ok, true);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+    fs.rmSync(destination, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('restore rollback preserves files tracked only by the destination lock', async () => {
+  const td = tempReleasesDir();
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-source-only-'));
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-destination-only-'));
+  for (const project of [source, destination]) {
+    fs.mkdirSync(path.join(project, 'assets'));
+    fs.mkdirSync(path.join(project, 'out'));
+    fs.writeFileSync(path.join(project, 'out', 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  }
+  fs.writeFileSync(path.join(source, 'assets', 'new.mp4'), 'release-video');
+  fs.writeFileSync(path.join(destination, 'assets', 'old.mp4'), 'destination-video');
+  registerAsset(source, { file: 'assets/new.mp4' });
+  registerAsset(destination, { file: 'assets/old.mp4' });
+  try {
+    const api = releases();
+    await api.save(path.join(source, 'out', 'manifest.json'), 'destination-only-rollback', { projectDir: source });
+    assert.throws(() => api.restore('destination-only-rollback', path.join(destination, 'out'), {
+      projectDir: destination,
+      overwrite: true,
+      copyTrackedFile: (from, to) => {
+        if (from.endsWith('assets.lock.json')) throw new Error('simulated lock copy failure');
+        fs.copyFileSync(from, to);
+      },
+    }), /simulated lock copy failure/);
+    assert.equal(fs.readFileSync(path.join(destination, 'assets', 'old.mp4'), 'utf8'), 'destination-video');
+    assert.equal(fs.existsSync(path.join(destination, 'assets', 'new.mp4')), false);
+    assert.equal(verifyAssets(destination).ok, true);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+    fs.rmSync(destination, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('restore rejects lock and tracked-file symlinks that escape the destination', async t => {
+  if (process.platform === 'win32') return t.skip('symlink permissions vary on Windows');
+  const td = tempReleasesDir();
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-symlink-source-'));
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-symlink-destination-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-symlink-outside-'));
+  fs.mkdirSync(path.join(source, 'assets'));
+  fs.mkdirSync(path.join(source, 'out'));
+  fs.mkdirSync(path.join(destination, 'assets'));
+  fs.mkdirSync(path.join(destination, 'out'));
+  fs.writeFileSync(path.join(source, 'assets', 'clip.mp4'), 'same-video');
+  fs.writeFileSync(path.join(source, 'out', 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  registerAsset(source, { file: 'assets/clip.mp4' });
+  try {
+    const api = releases();
+    await api.save(path.join(source, 'out', 'manifest.json'), 'symlink-restore', { projectDir: source });
+
+    const outsideMedia = path.join(outside, 'clip.mp4');
+    fs.writeFileSync(outsideMedia, 'same-video');
+    fs.symlinkSync(outsideMedia, path.join(destination, 'assets', 'clip.mp4'));
+    assert.throws(
+      () => api.restore('symlink-restore', path.join(destination, 'out'), { projectDir: destination, overwrite: true }),
+      /resolves outside the project/,
+    );
+    assert.equal(fs.readFileSync(outsideMedia, 'utf8'), 'same-video');
+
+    fs.rmSync(path.join(destination, 'assets', 'clip.mp4'));
+    const outsideLock = path.join(outside, 'assets.lock.json');
+    fs.writeFileSync(outsideLock, 'outside lock');
+    fs.symlinkSync(outsideLock, path.join(destination, 'assets.lock.json'));
+    assert.throws(
+      () => api.restore('symlink-restore', path.join(destination, 'out'), { projectDir: destination, overwrite: true }),
+      /expected a regular file/,
+    );
+    assert.equal(fs.readFileSync(outsideLock, 'utf8'), 'outside lock');
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+    fs.rmSync(destination, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('restore publication participates in the project asset mutation lock', async () => {
+  const td = tempReleasesDir();
+  const source = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-locked-source-'));
+  const destination = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-locked-destination-'));
+  fs.mkdirSync(path.join(source, 'assets'));
+  fs.mkdirSync(path.join(source, 'out'));
+  fs.mkdirSync(path.join(destination, 'out'));
+  fs.writeFileSync(path.join(source, 'assets', 'clip.mp4'), 'video');
+  fs.writeFileSync(path.join(source, 'out', 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  registerAsset(source, { file: 'assets/clip.mp4' });
+  try {
+    const api = releases();
+    await api.save(path.join(source, 'out', 'manifest.json'), 'locked-restore', { projectDir: source });
+    withAssetMutation(destination, () => {
+      assert.throws(
+        () => api.restore('locked-restore', path.join(destination, 'out'), { projectDir: destination, overwrite: true }),
+        /being changed by another process/,
+      );
+    });
+    assert.equal(fs.existsSync(path.join(destination, 'out', 'manifest.json')), false);
+    assert.equal(fs.existsSync(path.join(destination, 'assets.lock.json')), false);
+  } finally {
+    fs.rmSync(source, { recursive: true, force: true });
+    fs.rmSync(destination, { recursive: true, force: true });
+    cleanup(td);
+  }
+});
+
+test('save rejects a staged release that mixes asset revisions', async () => {
+  const td = tempReleasesDir();
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-rel-mixed-assets-'));
+  fs.mkdirSync(path.join(project, 'assets'));
+  fs.mkdirSync(path.join(project, 'out'));
+  const artifact = path.join(project, 'assets', 'clip.mp4');
+  fs.writeFileSync(artifact, 'old-video');
+  registerAsset(project, { file: 'assets/clip.mp4' });
+  fs.writeFileSync(path.join(project, 'out', 'manifest.json'), JSON.stringify({ narova: 'x', project: {} }));
+  const registryModule = require.resolve('../src/asset-registry');
+  fs.writeFileSync(path.join(project, 'reel.config.mjs'), [
+    "import fs from 'node:fs';",
+    "import { createRequire } from 'node:module';",
+    'const require = createRequire(import.meta.url);',
+    `fs.writeFileSync(${JSON.stringify(artifact)}, 'new-video');`,
+    `require(${JSON.stringify(registryModule)}).registerAsset(${JSON.stringify(project)}, { file: 'assets/clip.mp4' });`,
+    "export default { scenes: [{ id: 'one', clip: 'assets/clip.mp4' }] };",
+  ].join('\n'));
+  try {
+    await assert.rejects(
+      releases().save(path.join(project, 'out', 'manifest.json'), 'mixed-assets', { projectDir: project }),
+      /mixed asset provenance/,
+    );
+    assert.equal(fs.existsSync(path.join(td, 'mixed-assets')), false);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
     cleanup(td);
   }
 });

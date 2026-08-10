@@ -9,6 +9,9 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { ensureDir, which } = require('./util');
+const {
+  readAssetLock, registerAssets, resolveProjectFile, withAssetMutation,
+} = require('./asset-registry');
 
 const FETCH_TIMEOUT_MS = 20000;
 const SHOT_TIMEOUT_MS = 30000;
@@ -126,7 +129,7 @@ function collectImages(html, finalUrl, { ogImage } = {}) {
 /* Download the best images into dir. og:image comes first in `images`.
  * Content-type checked (image/* only), size-capped, extension from
  * content-type, collision-safe `<slug>-<n>.<ext>` names. */
-async function downloadImages(images, { dir, slug, fetch: fetchImpl = globalThis.fetch, cap = MAX_IMAGES, maxBytes = MAX_IMAGE_BYTES, log = () => {} } = {}) {
+async function downloadImages(images, { dir, slug, fetch: fetchImpl = globalThis.fetch, cap = MAX_IMAGES, maxBytes = MAX_IMAGE_BYTES, log = () => {}, onSaved = () => {} } = {}) {
   ensureDir(dir);
   const saved = [];
   for (const src of images) {
@@ -144,7 +147,9 @@ async function downloadImages(images, { dir, slug, fetch: fetchImpl = globalThis
       let name = `${slug}-${saved.length + 1}.${ext}`;
       for (let n = 2; fs.existsSync(path.join(dir, name)); n++) name = `${slug}-${saved.length + 1}-${n}.${ext}`;
       fs.writeFileSync(path.join(dir, name), buf);
-      saved.push(path.join(dir, name));
+      const file = path.join(dir, name);
+      saved.push(file);
+      onSaved({ file, sourceUrl: src, contentType: type, bytes: buf.length });
       log(`  saved ${path.join(path.basename(dir), name)} (${(buf.length / 1024).toFixed(0)}KB)`);
     } catch (e) {
       log(`  skip  ${src} (${e.message})`);
@@ -253,43 +258,140 @@ key claims — sourcing is checkable; balance is not.
 async function ingest(url, opts = {}) {
   const { projectDir = '.', log = console.log, fetch: fetchImpl } = opts;
   const dir = path.resolve(projectDir);
-  const assetsDir = ensureDir(path.join(dir, 'assets'));
+  // Fail before network/file mutations when an existing registry is malformed.
+  readAssetLock(dir);
+  const boundary = resolveProjectFile(dir, path.join('assets', '.narova-ingest-boundary'), { mustExist: false });
+  const assetsDir = ensureDir(path.dirname(boundary.absolute));
+  const stagingDir = fs.mkdtempSync(path.join(assetsDir, '.ingest-'));
+  const publications = [];
+  let committed = false;
 
-  log(`narova ingest ${url}\n`);
-  const page = await fetchPage(url, { fetch: fetchImpl });
-  const meta = parsePage(page.html, page.finalUrl);
-  const slug = slugify(page.finalUrl, meta.title);
-  if (page.finalUrl !== url) log(`  redirected → ${page.finalUrl}`);
+  try {
+    log(`narova ingest ${url}\n`);
+    const page = await fetchPage(url, { fetch: fetchImpl });
+    const meta = parsePage(page.html, page.finalUrl);
+    const slug = slugify(page.finalUrl, meta.title);
+    if (page.finalUrl !== url) log(`  redirected → ${page.finalUrl}`);
 
-  log('downloading images:');
-  const images = collectImages(page.html, page.finalUrl, { ogImage: meta.og.image });
-  const saved = await downloadImages(images, { dir: assetsDir, slug, fetch: fetchImpl, log });
-  if (!saved.length) log('  (none found)');
+    log('downloading images:');
+    const images = collectImages(page.html, page.finalUrl, { ogImage: meta.og.image });
+    const acquired = [];
+    const stagedImages = await downloadImages(images, {
+      dir: stagingDir, slug, fetch: fetchImpl, log,
+      onSaved: item => acquired.push(item),
+    });
+    if (!stagedImages.length) log('  (none found)');
 
-  const chrome = opts.chrome !== undefined ? opts.chrome : findChrome();
-  const shot = screenshotPage(page.finalUrl, path.join(assetsDir, `${slug}-page.png`),
-    { chrome, spawnSyncImpl: opts.spawnSync });
+    const chrome = opts.chrome !== undefined ? opts.chrome : findChrome();
+    const stagedShot = screenshotPage(page.finalUrl, path.join(stagingDir, `${slug}-page.png`),
+      { chrome, spawnSyncImpl: opts.spawnSync });
 
-  const suggestions = themeSuggestions(meta);
-  const files = [...saved, ...(shot.ok ? [shot.path] : [])].map((f) => path.relative(dir, f));
-  writeSources(dir, { url: page.finalUrl, title: meta.title, fetchedAt: page.fetchedAt, durationMs: page.durationMs, files });
-  const claimsCreated = ensureClaimsSkeleton(dir, page.finalUrl);
+    const publish = (staged, destination, { collisionSafe = false } = {}) => {
+      let finalPath = destination;
+      if (collisionSafe) {
+        const ext = path.extname(destination);
+        const stem = destination.slice(0, -ext.length);
+        for (let n = 2; fs.existsSync(finalPath); n++) finalPath = `${stem}-${n}${ext}`;
+      }
+      if (fs.existsSync(finalPath) && !fs.statSync(finalPath).isFile()) {
+        throw new Error(`ingest destination is not a file: ${path.relative(dir, finalPath)}`);
+      }
+      const backup = fs.existsSync(finalPath)
+        ? path.join(assetsDir, `.${path.basename(finalPath)}.previous-${process.pid}-${Date.now()}-${publications.length}`)
+        : null;
+      if (backup) fs.renameSync(finalPath, backup);
+      try { fs.renameSync(staged, finalPath); }
+      catch (error) {
+        if (backup && fs.existsSync(backup)) fs.renameSync(backup, finalPath);
+        throw error;
+      }
+      publications.push({ finalPath, backup });
+      return finalPath;
+    };
 
-  log('\n— ingest summary —');
-  log(`title:      ${meta.title || '(none)'}`);
-  if (meta.description) log(`description:${meta.description.length > 100 ? '' : ' '}${meta.description}`);
-  log(`downloaded: ${files.length ? files.join(', ') : 'nothing'}`);
-  log(`screenshot: ${shot.ok ? path.relative(dir, shot.path) : `skipped — ${shot.reason}`}`);
-  if (suggestions.length) {
-    log('theme hints (suggestions only — decide in reel.config.mjs yourself):');
-    for (const s of suggestions) log(`  --accent: ${s.color};  /* from meta ${s.from} */`);
+    let saved;
+    let shot;
+    withAssetMutation(dir, () => {
+      try {
+        readAssetLock(dir);
+        resolveProjectFile(dir, path.join('assets', '.narova-ingest-boundary'), { mustExist: false });
+        saved = [];
+        const finalAcquired = [];
+        for (let i = 0; i < stagedImages.length; i++) {
+          const finalPath = publish(stagedImages[i], path.join(assetsDir, path.basename(stagedImages[i])), { collisionSafe: true });
+          saved.push(finalPath);
+          finalAcquired.push({ ...acquired[i], file: finalPath });
+        }
+        shot = stagedShot.ok
+          ? { ...stagedShot, path: publish(stagedShot.path, path.join(assetsDir, `${slug}-page.png`)) }
+          : stagedShot;
+
+        (opts.registerAssets || registerAssets)(dir, [
+          ...finalAcquired.map(item => ({
+            file: path.relative(dir, item.file),
+            contentType: item.contentType,
+            origin: { mode: 'source-page', sourcePage: page.finalUrl, sourceUrl: item.sourceUrl },
+            acquiredAt: page.fetchedAt,
+          })),
+          ...(shot.ok ? [{
+            file: path.relative(dir, shot.path),
+            contentType: 'image/png',
+            origin: { mode: 'source-page', sourcePage: page.finalUrl },
+            acquiredAt: page.fetchedAt,
+          }] : []),
+        ], { lockHeld: true });
+        committed = true;
+        for (const item of publications) {
+          if (item.backup) {
+            try { fs.rmSync(item.backup, { force: true }); } catch { /* committed files win */ }
+          }
+        }
+      } catch (error) {
+        for (const item of publications.reverse()) {
+          fs.rmSync(item.finalPath, { force: true });
+          if (item.backup && fs.existsSync(item.backup)) fs.renameSync(item.backup, item.finalPath);
+        }
+        publications.length = 0;
+        throw error;
+      }
+    });
+
+    const suggestions = themeSuggestions(meta);
+    const files = [...saved, ...(shot.ok ? [shot.path] : [])].map((f) => path.relative(dir, f));
+    writeSources(dir, { url: page.finalUrl, title: meta.title, fetchedAt: page.fetchedAt, durationMs: page.durationMs, files });
+    const claimsCreated = ensureClaimsSkeleton(dir, page.finalUrl);
+
+    log('\n— ingest summary —');
+    log(`title:      ${meta.title || '(none)'}`);
+    if (meta.description) log(`description:${meta.description.length > 100 ? '' : ' '}${meta.description}`);
+    log(`downloaded: ${files.length ? files.join(', ') : 'nothing'}`);
+    log(`screenshot: ${shot.ok ? path.relative(dir, shot.path) : `skipped — ${shot.reason}`}`);
+    if (suggestions.length) {
+      log('theme hints (suggestions only — decide in reel.config.mjs yourself):');
+      for (const s of suggestions) log(`  --accent: ${s.color};  /* from meta ${s.from} */`);
+    }
+    log(`sources.md: entry appended`);
+    log(`claims.md:  ${claimsCreated ? 'skeleton created — fill it before synth' : 'exists — left untouched'}`);
+    log('\nnext: classify the source (brand / article / paper / docs) and fill claims.md');
+    log('      per references/url-to-source.md before scripting.');
+
+    return { finalUrl: page.finalUrl, slug, meta, images: saved, screenshot: shot, suggestions, claimsCreated, files, projectDir: dir };
+  } catch (error) {
+    if (!committed) {
+      for (const item of publications.reverse()) {
+        try {
+          fs.rmSync(item.finalPath, { force: true });
+          if (item.backup && fs.existsSync(item.backup)) fs.renameSync(item.backup, item.finalPath);
+        } catch (rollbackError) {
+          error.message += `; ingest rollback failed: ${rollbackError.message}`;
+          break;
+        }
+      }
+    }
+    throw error;
+  } finally {
+    fs.rmSync(stagingDir, { recursive: true, force: true });
   }
-  log(`sources.md: entry appended`);
-  log(`claims.md:  ${claimsCreated ? 'skeleton created — fill it before synth' : 'exists — left untouched'}`);
-  log('\nnext: classify the source (brand / article / paper / docs) and fill claims.md');
-  log('      per references/url-to-source.md before scripting.');
-
-  return { finalUrl: page.finalUrl, slug, meta, images: saved, screenshot: shot, suggestions, claimsCreated, files, projectDir: dir };
 }
 
 module.exports = {

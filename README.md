@@ -123,7 +123,39 @@ source, classifies it, extracts evidence, and writes the scene script. Narova's
 `ingest` command handles the mechanical pass — fetching the HTML page, extracting
 up to five images, and optionally capturing a browser screenshot — but
 interpretation, repository analysis, PDF reading, and content selection remain
-the agent's responsibility.
+the agent's responsibility. Acquired images are recorded in `assets.lock.json`
+with their source URL, byte size, and SHA-256 hash.
+
+For assets acquired another way, the small asset lifecycle stays explicit:
+
+```bash
+narova assets providers
+narova assets providers --pack essential
+narova assets search "calm ocean" --provider pexels --kind video --limit 5
+narova assets acquire 2499611 --provider pexels --kind video \
+  --output assets/ocean.mp4
+narova assets download "https://cdn.example/clip.mp4" --output assets/clip.mp4 \
+  --origin stock --provider example --source-page "https://example/items/clip" \
+  --license CC-BY-4.0 --attribution "Creator / Example"
+narova assets import assets/logo.svg --origin original
+narova assets verify
+narova assets credits
+```
+
+The `essential` pack is Wikimedia, Openverse, NASA, and Internet Archive. The
+default `extensions` pack includes that entire set and adds Pexels, Pixabay,
+and Freesound. Those three read
+`PEXELS_API_KEY`, `PIXABAY_API_KEY`, and `FREESOUND_API_KEY` respectively; key
+values are never persisted. Catalogue search is explicit and builds stay offline.
+
+The adapters own repeatable API work. The Narova skill still owns creative
+search terms, selection, license judgment, and fallback discovery. If an agent
+finds a better asset through a browser, archive, or new source, it can use
+`assets download` or `assets import` and preserve the same provenance record;
+creative sourcing is not limited to the built-in catalogues.
+
+`ingest`, AI `generate`, and walkthrough capture register their outputs
+automatically. Builds still consume local files only; they never acquire media.
 
 For ambitious work, your agent turns medium-neutral creative intent into 2–3
 small proof branches, renders their decisive states, records why each might work,

@@ -19,6 +19,7 @@ const { timingsFingerprint } = require('./audio-fingerprint');
 const { hashFile } = require('./manifest');
 const { verifyProofBundle } = require('./proof-receipt');
 const { projectIdentity } = require('./releases');
+const { lockPath: assetLockPath, verifyAssets } = require('./asset-registry');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -158,6 +159,18 @@ function needsCreativeBrief(config, opts = {}) {
 function releaseChecks(config, errors, opts = {}) {
   const requiresBrief = needsCreativeBrief(config, opts);
   const brief = creativeBriefStatus(config, opts);
+
+  const projectDir = config.projectDir || '.';
+  if (fs.existsSync(assetLockPath(projectDir))) {
+    try {
+      const report = verifyAssets(projectDir);
+      for (const result of report.results.filter(item => !item.ok)) {
+        errors.push(`asset provenance: ${result.file} — ${result.issues.join('; ')}`);
+      }
+    } catch (error) {
+      errors.push(`asset provenance: ${error.message}`);
+    }
+  }
   if (requiresBrief || brief.ambitious) {
     if (requiresBrief && !brief.exists) {
       errors.push('creative: non-trivial release needs creative-brief.md with an approved pilot and observable rejection criteria');

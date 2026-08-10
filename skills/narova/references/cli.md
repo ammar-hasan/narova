@@ -18,6 +18,20 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | Command | Does | Cost |
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
+| `narova ingest <url>` | fetch page metadata, save up to five useful images and a screenshot, update `sources.md`/`claims.md`, and register acquired files in `assets.lock.json`. | network + optional browser screenshot |
+| `narova assets import <file>` | register an existing project-local file with its content hash and optional origin/license/attribution metadata. | instant |
+| `narova assets download <url> --output assets/<file>` | bounded atomic HTTP(S) download into the configured asset directory, followed by provenance registration. Existing bytes survive failed downloads. | network |
+| `narova assets providers [--pack essential\|extensions]` | list stock catalogues, supported media kinds, and credential readiness without printing credential values. Extensions is the default and includes all essential providers. | instant |
+| `narova assets search <query> --provider <name> --kind <kind>` | search a built-in provider and print normalized candidates; `--pack essential\|extensions`, `--limit 1..20`, and `--json` are supported. | provider API request |
+| `narova assets acquire <id> --provider <name> --kind <kind> --output assets/<file>` | resolve a selected catalogue item, then use the same bounded download, atomic publication, and provenance registration as `assets download`. | provider API + media download |
+| `narova assets list\|verify\|credits` | list tracked assets, detect missing/modified bytes, or print deduplicated attribution text from `assets.lock.json`. Release checks also verify tracked bytes. | instant |
+| `narova assets untrack <file>` | remove a provenance record without deleting the local file. | instant |
+
+Stock packs stay intentionally small. `essential` is Wikimedia, Openverse,
+NASA, and Internet Archive (no keys). `extensions` contains every essential
+adapter plus Pexels, Pixabay, and Freesound. Run the real network suites with
+`npm run test:stock-live` or, with all three provider keys set,
+`npm run test:stock-live:extensions` from `tool/`.
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, stale walkthrough captures, and missing/draft creative approval for non-trivial work. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
@@ -119,6 +133,12 @@ Renderer providers are different: both are bundled, local, and free. See
   ignores this flag).
 
 ## What lands in `out/` (never edit — regenerated every run)
+
+Project source stays outside `out/`. In particular, `assets.lock.json` is the
+machine-managed creative-asset provenance ledger; it is saved with releases but
+is not copied into the renderer's public `assets/` directory. `claims.md`
+remains the narration claims ledger, while `sources.md` is the content-source
+bibliography.
 
 ```
 out/

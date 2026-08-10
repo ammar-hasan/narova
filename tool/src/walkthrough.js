@@ -16,6 +16,10 @@ const crypto = require('crypto');
 const { spawnSync } = require('child_process');
 const { ensureDir, probe, which } = require('./util');
 const { audioFingerprint } = require('./audio-fingerprint');
+const {
+  normalizeRegistrationMetadata, readAssetLock, registerAsset, resolveProjectFile,
+  withAssetMutation,
+} = require('./asset-registry');
 
 const WALKTHROUGH_SCHEMA_VERSION = '1.0';
 const CURSOR_RENDERER_VERSION = '2';
@@ -1067,7 +1071,7 @@ function agentBrowserGlobalArgs(config, id, flow, initScript = null) {
   return { session, args };
 }
 
-function replaceDir(source, destination) {
+function replaceDir(source, destination, { deferCommit = false } = {}) {
   const parent = path.dirname(destination);
   ensureDir(parent);
   const staged = path.join(parent, `.${path.basename(destination)}-${process.pid}-${Date.now()}`);
@@ -1078,16 +1082,31 @@ function replaceDir(source, destination) {
   const backup = fs.existsSync(destination)
     ? path.join(parent, `.${path.basename(destination)}-previous-${process.pid}-${Date.now()}`)
     : null;
-  try {
-    if (backup) fs.renameSync(destination, backup);
-    fs.renameSync(staged, destination);
-    if (backup) fs.rmSync(backup, { recursive: true, force: true });
-  } catch (error) {
-    if (backup && fs.existsSync(backup)) {
-      if (fs.existsSync(destination)) fs.rmSync(destination, { recursive: true, force: true });
-      fs.renameSync(backup, destination);
-    }
+  let settled = false;
+  let backedUp = false;
+  let published = false;
+  const rollback = () => {
+    if (settled) return;
+    if (published && fs.existsSync(destination)) fs.rmSync(destination, { recursive: true, force: true });
+    if (backedUp && backup && fs.existsSync(backup)) fs.renameSync(backup, destination);
     if (fs.existsSync(staged)) fs.rmSync(staged, { recursive: true, force: true });
+    settled = true;
+  };
+  const commit = () => {
+    if (settled) return;
+    settled = true;
+    if (backup) {
+      try { fs.rmSync(backup, { recursive: true, force: true }); } catch { /* committed capture wins */ }
+    }
+  };
+  try {
+    if (backup) { fs.renameSync(destination, backup); backedUp = true; }
+    fs.renameSync(staged, destination);
+    published = true;
+    if (!deferCommit) commit();
+    return { commit, rollback };
+  } catch (error) {
+    rollback();
     throw error;
   }
 }
@@ -1097,6 +1116,23 @@ function replaceDir(source, destination) {
 function captureWalkthrough(config, id, timings, opts = {}) {
   const flow = config.walkthroughs && config.walkthroughs[id];
   if (!flow) throw new Error(`unknown walkthrough "${id}"`);
+  const sourceUrl = new URL(flow.url);
+  sourceUrl.username = '';
+  sourceUrl.password = '';
+  sourceUrl.search = '';
+  sourceUrl.hash = '';
+  const captureMetadata = normalizeRegistrationMetadata({
+    origin: {
+      mode: 'capture',
+      provider: DRIVER,
+      itemId: id,
+      ...(['http:', 'https:'].includes(sourceUrl.protocol) ? { sourcePage: sourceUrl.toString() } : {}),
+    },
+  });
+  readAssetLock(config.projectDir);
+  const preflightPaths = capturePaths(config, id);
+  resolveProjectFile(config.projectDir, path.relative(config.projectDir, preflightPaths.recording), { mustExist: false });
+  resolveProjectFile(config.projectDir, path.relative(config.projectDir, preflightPaths.manifest), { mustExist: false });
   const synthesis = synthesisStatus(config, opts.outDir);
   if (!synthesis.ok) {
     throw new Error(`${synthesis.reason} — run \`narova synth\` before walkthrough capture`);
@@ -1286,11 +1322,6 @@ function captureWalkthrough(config, id, timings, opts = {}) {
         `${requiredDuration.toFixed(2)}s before post-roll`,
       );
     }
-    const sourceUrl = new URL(flow.url);
-    sourceUrl.username = '';
-    sourceUrl.password = '';
-    sourceUrl.search = '';
-    sourceUrl.hash = '';
     const timeline = {
       preRoll: flow.preRoll,
       readyLead: Math.round(readyLead * 1000) / 1000,
@@ -1323,9 +1354,27 @@ function captureWalkthrough(config, id, timings, opts = {}) {
     };
     fs.writeFileSync(path.join(takeDir, 'capture.json'), JSON.stringify(manifest, null, 2) + '\n');
     const destination = capturePaths(config, id).dir;
-    replaceDir(takeDir, destination);
+    const finalPaths = capturePaths(config, id);
+    withAssetMutation(config.projectDir, () => {
+      readAssetLock(config.projectDir);
+      resolveProjectFile(config.projectDir, path.relative(config.projectDir, finalPaths.recording), { mustExist: false });
+      resolveProjectFile(config.projectDir, path.relative(config.projectDir, finalPaths.manifest), { mustExist: false });
+      const publication = replaceDir(takeDir, destination, { deferCommit: true });
+      try {
+        (opts.registerAsset || registerAsset)(config.projectDir, {
+          file: path.relative(config.projectDir, finalPaths.recording),
+          ...captureMetadata,
+          recipe: path.relative(config.projectDir, finalPaths.manifest),
+          acquiredAt: manifest.capturedAt,
+        }, { lockHeld: true });
+        publication.commit();
+      } catch (error) {
+        publication.rollback();
+        throw error;
+      }
+    });
     if (!opts.keepScratch) fs.rmSync(scratchRoot, { recursive: true, force: true });
-    return { id, dir: destination, manifest, recording: capturePaths(config, id).recording };
+    return { id, dir: destination, manifest, recording: finalPaths.recording };
   } catch (error) {
     if (recordingStarted) {
       try { run(['record', 'stop']); } catch { /* retain the original failure */ }

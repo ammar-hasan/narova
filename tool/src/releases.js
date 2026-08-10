@@ -8,6 +8,7 @@
  *   assets/           — project asset tree (if present)
  *   claims.md         — claims ledger (if present)
  *   sources.md        — source reference (if present)
+ *   assets.lock.json  — creative-asset provenance (if present)
 
  * Restore writes everything back to the project directory. Policies:
  *   --overwrite  replace existing files (default: skip)
@@ -20,6 +21,10 @@ const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
 const { spawnSync } = require('child_process');
+const {
+  lockPath: assetLockPath, readAssetLock, resolveProjectFile, sha256File,
+  verifyAssets, withAssetMutation,
+} = require('./asset-registry');
 
 const RELEASES_DIR = process.env.NAROVA_RELEASES_DIR
   || path.join(process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'), 'releases');
@@ -285,6 +290,16 @@ async function save(manifestPath, name, opts = {}) {
     : resolveProjectDir(path.resolve(path.dirname(manifestPath), '..'));
 
   if (projectDir && fs.existsSync(projectDir)) {
+    let assetLock = null;
+    if (fs.existsSync(assetLockPath(projectDir))) {
+      assetLock = readAssetLock(projectDir, { missingOk: false });
+      const report = verifyAssets(projectDir);
+      const failures = report.results.filter(result => !result.ok);
+      if (failures.length) {
+        throw new Error(`cannot save release with stale asset provenance: ${failures
+          .map(result => `${result.file} (${result.issues.join('; ')})`).join(', ')}`);
+      }
+    }
     // Preserve original config filename.
     for (const fname of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
       const cf = path.join(projectDir, fname);
@@ -307,11 +322,27 @@ async function save(manifestPath, name, opts = {}) {
       saved.push('assets/');
     }
     // ledgers
-    for (const ledger of ['claims.md', 'sources.md']) {
+    for (const ledger of ['claims.md', 'sources.md', 'assets.lock.json']) {
       const lf = path.join(projectDir, ledger);
       if (fs.existsSync(lf)) {
         fs.copyFileSync(lf, path.join(releaseDir, ledger));
         saved.push(ledger);
+      }
+    }
+    // The registry may intentionally track reusable files outside the renderer
+    // asset root. Snapshot every artifact and recipe at its original path so a
+    // restored lock never points at files that the release omitted.
+    if (assetLock) {
+      const snapshotTrackedFile = ref => {
+        const resolved = resolveProjectFile(projectDir, ref);
+        const dest = path.join(releaseDir, resolved.relative);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(resolved.absolute, dest);
+        if (!saved.includes(resolved.relative)) saved.push(resolved.relative);
+      };
+      for (const asset of assetLock.assets) {
+        snapshotTrackedFile(asset.file);
+        if (asset.recipe) snapshotTrackedFile(asset.recipe);
       }
     }
 
@@ -387,6 +418,24 @@ async function save(manifestPath, name, opts = {}) {
         }
       }
     } catch { /* best-effort */ }
+  }
+
+  // The source registry may have changed while the snapshot was assembled.
+  // Validate the staged bytes against the staged lock immediately before
+  // publication; this accepts any internally consistent revision and rejects
+  // a mixed lock/file snapshot without holding a project lock across config IO.
+  if (fs.existsSync(assetLockPath(releaseDir))) {
+    const stagedLock = readAssetLock(releaseDir, { missingOk: false });
+    const stagedReport = verifyAssets(releaseDir);
+    const failures = stagedReport.results.filter(result => !result.ok);
+    if (failures.length) {
+      throw new Error(`cannot save release with mixed asset provenance: ${failures
+        .map(result => `${result.file} (${result.issues.join('; ')})`).join(', ')}`);
+    }
+    for (const asset of stagedLock.assets) {
+      resolveProjectFile(releaseDir, asset.file);
+      if (asset.recipe) resolveProjectFile(releaseDir, asset.recipe);
+    }
   }
 
   const releaseLock = acquireBranchLock(name);
@@ -688,21 +737,124 @@ function restore(name, destDir, opts = {}) {
       ? resolveProjectDir(opts.projectDir)
       : resolveProjectDir(path.resolve(destDir, '..'));
 
+  // Validate the release's provenance unit before writing even the restored
+  // manifest. A corrupt snapshot must never be published with its old lock.
+  const releaseHasAssetLock = fs.existsSync(path.join(srcDir, 'assets.lock.json'));
+  const releaseAssetLock = releaseHasAssetLock ? readAssetLock(srcDir, { missingOk: false }) : null;
+  const releaseRefs = releaseAssetLock
+    ? [...new Set(releaseAssetLock.assets.flatMap(asset => [asset.file, asset.recipe].filter(Boolean)))]
+    : [];
+  if (releaseAssetLock) {
+    const report = verifyAssets(srcDir);
+    const failures = report.results.filter(result => !result.ok);
+    if (failures.length) {
+      throw new Error(`release asset provenance is stale: ${failures
+        .map(result => `${result.file} (${result.issues.join('; ')})`).join(', ')}`);
+    }
+    for (const ref of releaseRefs) resolveProjectFile(srcDir, ref);
+  }
+
   // For new-project restore, put the manifest in the new project's out/.
   const manifestDestDir = opts.newProject ? path.join(projectDir, 'out') : destDir;
   if (!dryRun) fs.mkdirSync(manifestDestDir, { recursive: true });
   const manifestDest = path.join(manifestDestDir, 'manifest.json');
-  if (!dryRun) {
-    fs.copyFileSync(manifestSrc, manifestDest);
-    const manifestSha256 = crypto.createHash('sha256').update(fs.readFileSync(manifestDest)).digest('hex');
-    fs.writeFileSync(path.join(manifestDestDir, RESTORE_MARKER), JSON.stringify({ manifestSha256 }, null, 2));
-  }
 
   // Ensure the project directory exists before copying source files.
   if (!dryRun && !fs.existsSync(projectDir)) fs.mkdirSync(projectDir, { recursive: true });
 
+  const restoreProject = () => {
+  const lockDest = path.join(projectDir, 'assets.lock.json');
+  let lockStat = null;
+  try { lockStat = fs.lstatSync(lockDest); }
+  catch (error) { if (error.code !== 'ENOENT') throw error; }
+  if (lockStat && !lockStat.isFile()) {
+    throw new Error(`${lockDest}: expected a regular file, not a symlink or directory`);
+  }
+  const destinationHasAssetLock = !!lockStat;
+  const destinationAssetLock = destinationHasAssetLock
+    ? readAssetLock(projectDir, { missingOk: false })
+    : null;
+  if (!releaseAssetLock && destinationAssetLock && overwrite) {
+    throw new Error('cannot overwrite a project with tracked assets from a release that has no assets.lock.json');
+  }
+
+  if (!dryRun) {
+    fs.copyFileSync(manifestSrc, manifestDest);
+    const manifestSha256 = sha256File(manifestDest);
+    fs.writeFileSync(path.join(manifestDestDir, RESTORE_MARKER), JSON.stringify({ manifestSha256 }, null, 2));
+  }
+
   const results = { manifest: manifestDest, restored: [], skipped: [], conflicts: [] };
 
+  const trackedPlan = [];
+  let trackedConflict = false;
+  if (releaseAssetLock && (!destinationHasAssetLock || overwrite)) {
+    for (const ref of releaseRefs) {
+      const source = resolveProjectFile(srcDir, ref);
+      const destination = fs.existsSync(projectDir)
+        ? resolveProjectFile(projectDir, ref, { mustExist: false })
+        : { absolute: path.join(projectDir, source.relative), relative: source.relative };
+      let destinationStat = null;
+      try { destinationStat = fs.lstatSync(destination.absolute); }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      let same = false;
+      if (destinationStat && (destinationStat.isFile() || destinationStat.isSymbolicLink())) {
+        // mustExist performs the realpath boundary check before an existing
+        // symlink can be accepted as an equal tracked destination.
+        const existing = resolveProjectFile(projectDir, ref);
+        same = sha256File(source.absolute) === sha256File(existing.absolute);
+      }
+      const conflict = !!destinationStat && !same;
+      if (conflict && !overwrite) trackedConflict = true;
+      trackedPlan.push({ ref, source, destination, same, conflict });
+    }
+  }
+
+  const publishAssetUnit = releaseAssetLock
+    && (!destinationHasAssetLock || overwrite)
+    && !trackedConflict;
+  const restoreBackupDir = !dryRun && publishAssetUnit
+    ? fs.mkdtempSync(path.join(os.tmpdir(), 'narova-restore-assets-'))
+    : null;
+  const restoreBackups = [];
+  if (restoreBackupDir) {
+    const destinationRefs = destinationAssetLock
+      ? destinationAssetLock.assets.flatMap(asset => [asset.file, asset.recipe].filter(Boolean))
+      : [];
+    const targets = [...new Set([
+      ...trackedPlan.map(item => item.destination.absolute),
+      ...destinationRefs.map(ref => resolveProjectFile(projectDir, ref, { mustExist: false }).absolute),
+      lockDest,
+    ])];
+    for (let i = 0; i < targets.length; i++) {
+      const target = targets[i];
+      const backup = path.join(restoreBackupDir, String(i));
+      let existed = false;
+      try { fs.lstatSync(target); existed = true; }
+      catch (error) { if (error.code !== 'ENOENT') throw error; }
+      if (existed) fs.cpSync(target, backup, { recursive: true, dereference: false, verbatimSymlinks: true });
+      restoreBackups.push({ target, backup, existed });
+    }
+  }
+  const rollbackAssetUnit = () => {
+    if (!restoreBackupDir) return;
+    for (const item of restoreBackups.reverse()) {
+      fs.rmSync(item.target, { recursive: true, force: true });
+      if (item.existed) {
+        fs.mkdirSync(path.dirname(item.target), { recursive: true });
+        fs.cpSync(item.backup, item.target, { recursive: true, dereference: false, verbatimSymlinks: true });
+      }
+    }
+    fs.rmSync(restoreBackupDir, { recursive: true, force: true });
+  };
+  const commitAssetUnit = () => {
+    if (restoreBackupDir) {
+      try { fs.rmSync(restoreBackupDir, { recursive: true, force: true }); } catch { /* restored unit is committed */ }
+    }
+  };
+  const copyTrackedFile = opts.copyTrackedFile || fs.copyFileSync;
+
+  try {
   // Restore fingerprints and timings to the output directory (not project root).
   for (const fname of ['.audio-fingerprint', '.timings-fingerprint', 'timings.json']) {
     const src = path.join(srcDir, fname);
@@ -726,6 +878,7 @@ function restore(name, destDir, opts = {}) {
 
   for (const entry of fs.readdirSync(srcDir, { withFileTypes: true })) {
     if (entry.name === 'manifest.json') continue;
+    if (entry.name === 'assets.lock.json') continue;
     if (['.audio-fingerprint', '.timings-fingerprint', 'timings.json', RESTORE_OVERRIDES].includes(entry.name)) continue;
     const src = path.join(srcDir, entry.name);
     const dest = path.join(projectDir, entry.name);
@@ -749,6 +902,40 @@ function restore(name, destDir, opts = {}) {
     results.restored.push(entry.name);
   }
 
+  if (releaseAssetLock) {
+    if (destinationHasAssetLock && !overwrite) {
+      results.conflicts.push('assets.lock.json');
+      results.skipped.push('assets.lock.json');
+    } else if (trackedConflict) {
+      for (const item of trackedPlan.filter(item => item.conflict)) results.conflicts.push(item.ref);
+      results.conflicts.push('assets.lock.json');
+      results.skipped.push('assets.lock.json');
+    } else {
+      for (const item of trackedPlan) {
+        if (item.same) continue;
+        if (!dryRun) {
+          if (fs.existsSync(item.destination.absolute)) fs.rmSync(item.destination.absolute, { recursive: true, force: true });
+          fs.mkdirSync(path.dirname(item.destination.absolute), { recursive: true });
+          copyTrackedFile(item.source.absolute, item.destination.absolute);
+        }
+        if (!results.restored.includes(item.ref)) results.restored.push(item.ref);
+      }
+      if (!dryRun) {
+        // Never let copyFileSync follow a destination symlink. The preflight
+        // rejects one, and removal makes publication replace-only.
+        fs.rmSync(lockDest, { force: true });
+        copyTrackedFile(path.join(srcDir, 'assets.lock.json'), lockDest);
+      }
+      results.restored.push('assets.lock.json');
+    }
+  }
+  commitAssetUnit();
+  } catch (error) {
+    try { rollbackAssetUnit(); }
+    catch (rollbackError) { error.message += `; asset restore rollback failed: ${rollbackError.message}`; }
+    throw error;
+  }
+
   if (dryRun) {
     log(`dry-run: would restore ${results.restored.length} file(s) to ${projectDir}`);
     if (results.conflicts.length) log(`  conflicts (skipped without --overwrite): ${results.conflicts.join(', ')}`);
@@ -757,6 +944,10 @@ function restore(name, destDir, opts = {}) {
   }
 
   return results;
+  };
+
+  const shouldSerializeAssets = !dryRun && (releaseAssetLock || fs.existsSync(assetLockPath(projectDir)));
+  return shouldSerializeAssets ? withAssetMutation(projectDir, restoreProject) : restoreProject();
 }
 
 function remove(name) {

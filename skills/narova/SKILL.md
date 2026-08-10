@@ -123,7 +123,11 @@ External TTS providers are optional registered companion skills — see
 2. `doctor` — check the machine. Fix with `references/environment.md`.
 2. `init generated/<slug>` + write `reel.config.mjs`. Format: `references/scene-script.md`.
    Creative direction: `references/prompt-to-video.md`. URL sources: `ingest <url>`
-   first, then `references/url-to-source.md`.
+   first, then `references/url-to-source.md`. For creative media, use the
+   built-in stock adapters for repeatable search/download mechanics, but keep
+   creative query design and result selection here. If the adapters do not
+   surface the right asset, explore another lawful source and finish with
+   `assets download` or `assets import`; see `references/stock-assets.md`.
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
    For optional craft advice: `narova critique [creative|social-short|explainer|presentation|cinematic|accessibility]`.

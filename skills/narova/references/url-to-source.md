@@ -10,8 +10,10 @@ direction so the right evidence drives the video.
 the page, pulls metadata (title, description, og tags, theme color, canonical
 URL), saves the best content images (og:image first, up to 5) and a
 best-effort headless-Chrome screenshot into the project's `assets/`, appends a
-dated entry to `sources.md`, seeds a `claims.md` skeleton if none exists, and
-prints theme-color hints as suggestions (it never edits `reel.config.mjs`).
+dated entry to `sources.md`, records every saved image/screenshot with a hash
+and source URL in `assets.lock.json`, seeds a `claims.md` skeleton if none
+exists, and prints theme-color hints as suggestions (it never edits
+`reel.config.mjs`).
 
 It does not replace this document. The agent still does the judgment work:
 classify the source (§1), inspect the authoritative material beyond what a

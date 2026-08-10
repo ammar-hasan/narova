@@ -21,6 +21,12 @@ const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBund
 const { hashFile } = require('../src/manifest');
 const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
 const { ingest } = require('../src/ingest');
+const {
+  creditLines, downloadAsset, inferKind, readAssetLock, registerAsset,
+  normalizeRegistrationMetadata, resolveProjectFile, unregisterAsset, verifyAssets,
+  withAssetMutation,
+} = require('../src/asset-registry');
+const { listStockProviders, resolveStock, searchStock } = require('../src/stock-providers');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
@@ -39,9 +45,9 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique']);
-const VALUE_FLAGS = new Set(['at', 'backend', 'config', 'duration', 'engine', 'fps', 'max-words', 'model', 'new-project', 'out', 'output', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -90,6 +96,26 @@ function overridesFrom(flags) {
   if (flags['voice-a']) o.voiceA = flags['voice-a'];
   if (flags['voice-b']) o.voiceB = flags['voice-b'];
   return o;
+}
+
+function assetRegistrationFromFlags(flags, defaults = {}) {
+  const origin = {
+    ...((flags.origin || defaults.mode) ? { mode: flags.origin || defaults.mode } : {}),
+    ...(flags.provider ? { provider: flags.provider } : {}),
+    ...(flags['item-id'] ? { itemId: flags['item-id'] } : {}),
+    ...(flags['source-page'] ? { sourcePage: flags['source-page'] } : {}),
+    ...(defaults.sourceUrl ? { sourceUrl: defaults.sourceUrl } : {}),
+  };
+  const rights = {
+    ...(flags.license ? { license: flags.license } : {}),
+    ...(flags['license-url'] ? { licenseUrl: flags['license-url'] } : {}),
+    ...(flags.creator ? { creator: flags.creator } : {}),
+    ...(flags.attribution ? { attribution: flags.attribution } : {}),
+  };
+  return {
+    ...(Object.keys(origin).length ? { origin } : {}),
+    ...(Object.keys(rights).length ? { rights } : {}),
+  };
 }
 
 async function loadResolved(flags) {
@@ -211,6 +237,15 @@ Commands:
   ingest <url>          fetch a source page: download images into assets/,
                            screenshot it (if Chrome), append sources.md,
                            seed claims.md — the mechanical pass of url-to-source
+  assets import <file>  register an existing project-local creative asset
+  assets download <url> download atomically with --output <project-relative path>
+  assets providers      list built-in stock catalogues and credential readiness
+  assets search <query> search --provider <name> --kind image|video|audio
+  assets acquire <id>   resolve/download a provider result with --output <path>
+  assets list           list files tracked in assets.lock.json
+  assets untrack <file> remove a provenance record without deleting the file
+  assets verify         verify tracked file hashes, sizes, and media kinds
+  assets credits        print deduplicated attribution lines
   compile               compile reel.config -> out/manifest.json
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
@@ -312,6 +347,12 @@ Options:
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
   --voice-a <s> --voice-b <s>   override the first two voices (add more in config)
+  Asset metadata flags (assets import/download):
+  --origin <mode> --provider <name> --item-id <id> --source-page <url>
+  --license <id> --license-url <url> --creator <name> --attribution <text>
+  Stock catalogue flags (assets search/acquire):
+  --pack essential|extensions (default: extensions)
+  --provider <name> --kind image|video|audio --limit <1..20> --json
 `;
 
 async function main() {
@@ -332,7 +373,249 @@ async function main() {
     case 'ingest': {
       const url = positionals[1];
       if (!url) { console.error('usage: narova ingest <url> [--project <dir>]'); process.exit(1); }
-      await ingest(url, { projectDir: path.resolve(flags.project || '.') });
+      const { dir: projectDir } = await loadProjectConfig(flags.project || '.', flags.config);
+      await ingest(url, { projectDir });
+      return;
+    }
+
+    case 'assets': {
+      const action = positionals[1];
+      if (!['import', 'download', 'providers', 'search', 'acquire', 'list', 'untrack', 'verify', 'credits'].includes(action)) {
+        console.error('usage: narova assets import <file> [metadata options]');
+        console.error('       narova assets download <url> --output <project-relative path> [metadata options]');
+        console.error('       narova assets providers');
+        console.error('       narova assets search <query> --provider <name> --kind <kind> [--limit N] [--json]');
+        console.error('       narova assets acquire <id> --provider <name> --kind <kind> --output <path>');
+        console.error('       narova assets list|untrack <file>|verify|credits');
+        process.exit(1);
+      }
+      let projectDir;
+      let rawConfig;
+      try {
+        if (action === 'providers') {
+          for (const provider of listStockProviders(process.env, { pack: flags.pack })) {
+            const readiness = provider.ready ? 'ready' : `needs ${provider.envKey}`;
+            console.log(`${provider.id}\t${provider.kinds.join(',')}\t${readiness}`);
+          }
+          return;
+        }
+        if (action === 'search') {
+          const query = positionals.slice(2).join(' ');
+          if (!query || !flags.provider) {
+            throw new Error('usage: narova assets search <query> --provider <name> --kind image|video|audio [--limit N] [--json]');
+          }
+          const results = await searchStock(flags.provider, query, {
+            kind: flags.kind, limit: flags.limit, pack: flags.pack,
+          });
+          if (flags.json) {
+            console.log(JSON.stringify(results, null, 2));
+          } else if (!results.length) {
+            console.log('no stock assets found');
+          } else {
+            for (const result of results) {
+              const license = result.rights?.license || result.rights?.status || 'unknown';
+              const dimensions = result.download?.width && result.download?.height
+                ? ` ${result.download.width}x${result.download.height}` : '';
+              console.log(`${result.provider}\t${result.id}\t${result.kind}${dimensions}\t${license}\t${result.title}`);
+              console.log(`  ${result.sourcePage}`);
+            }
+          }
+          return;
+        }
+        ({ dir: projectDir, raw: rawConfig } = await loadProjectConfig(flags.project || '.', flags.config));
+        if (action === 'list') {
+          const lock = readAssetLock(projectDir);
+          if (!lock.assets.length) console.log('no tracked creative assets');
+          for (const asset of lock.assets) {
+            console.log(`${asset.file}\t${asset.kind}\t${asset.origin?.mode || 'unknown'}\t${asset.rights?.status || 'unknown'}`);
+          }
+          return;
+        }
+        if (action === 'verify') {
+          const report = verifyAssets(projectDir);
+          if (!report.count) console.log('ok: no tracked creative assets');
+          for (const result of report.results) {
+            console.log(`${result.ok ? 'ok' : 'fail'}: ${result.file}${result.ok ? '' : ` — ${result.issues.join('; ')}`}`);
+          }
+          if (!report.ok) process.exitCode = 1;
+          return;
+        }
+        if (action === 'credits') {
+          const lines = creditLines(projectDir);
+          if (!lines.length) console.log('no tracked attribution text');
+          else for (const line of lines) console.log(`- ${line}`);
+          return;
+        }
+        if (action === 'untrack') {
+          const file = positionals[2];
+          if (!file) throw new Error('usage: narova assets untrack <project-relative file>');
+          const removed = unregisterAsset(projectDir, file);
+          console.log(`untracked: ${removed} (file kept)`);
+          return;
+        }
+        if (action === 'import') {
+          const file = positionals[2];
+          if (!file) throw new Error('usage: narova assets import <project-relative file> [metadata options]');
+          const resolved = resolveProjectFile(projectDir, file);
+          const record = withAssetMutation(projectDir, () => {
+            const previous = readAssetLock(projectDir).assets.find(asset => asset.file === resolved.relative);
+            const metadata = assetRegistrationFromFlags(flags);
+            if (previous && metadata.origin) {
+              metadata.origin = { ...previous.origin, ...metadata.origin };
+              // A URL digest describes the exact raw URL supplied with that
+              // value. Never carry it across to a replacement URL.
+              if (Object.hasOwn(flags, 'source-page')) delete metadata.origin.sourcePageHash;
+            }
+            if (previous && metadata.rights) metadata.rights = { ...previous.rights, ...metadata.rights, status: 'declared' };
+            return registerAsset(projectDir, {
+              file: resolved.relative,
+              ...metadata,
+            }, { lockHeld: true });
+          });
+          console.log(`tracked: ${record.file} (${record.kind}, ${record.bytes} bytes)`);
+          console.log(`lock:    ${path.join(projectDir, 'assets.lock.json')}`);
+          return;
+        }
+        const requestedId = positionals.slice(2).join(' ');
+        if (!requestedId || !flags.output) {
+          throw new Error(action === 'acquire'
+            ? 'usage: narova assets acquire <id> --provider <name> --kind <kind> --output <project-relative path>'
+            : 'usage: narova assets download <url> --output <project-relative path> [metadata options]');
+        }
+        if (action === 'acquire' && !flags.provider) {
+          throw new Error('assets acquire requires --provider');
+        }
+        if (action === 'acquire') {
+          const forbidden = ['origin', 'item-id', 'source-page'].filter(flag => Object.hasOwn(flags, flag));
+          if (forbidden.length) {
+            throw new Error(`assets acquire derives stock provenance; do not pass ${forbidden.map(flag => `--${flag}`).join(', ')}`);
+          }
+        }
+        // Validate the existing registry and destination before mutating bytes.
+        readAssetLock(projectDir);
+        const destination = resolveProjectFile(projectDir, flags.output, { mustExist: false });
+        const assetRootRef = rawConfig && rawConfig.assets != null ? rawConfig.assets : 'assets';
+        if (typeof assetRootRef !== 'string' || !assetRootRef.trim() || path.isAbsolute(assetRootRef)) {
+          throw new Error('config.assets must be a project-relative directory before downloading assets');
+        }
+        const assetRoot = path.resolve(projectDir, assetRootRef);
+        const assetRootRelative = path.relative(projectDir, assetRoot);
+        if (!assetRootRelative || assetRootRelative === '..' || assetRootRelative.startsWith(`..${path.sep}`)) {
+          throw new Error('config.assets must be a directory inside the project, not the project itself');
+        }
+        if (!fs.existsSync(assetRoot) || !fs.statSync(assetRoot).isDirectory()) {
+          throw new Error(`config.assets directory not found: ${assetRoot}`);
+        }
+        const withinAssetRoot = path.relative(assetRoot, destination.absolute);
+        if (!withinAssetRoot || withinAssetRoot === '..' || withinAssetRoot.startsWith(`..${path.sep}`) || path.isAbsolute(withinAssetRoot)) {
+          throw new Error(`--output must be inside the configured asset directory (${assetRootRef})`);
+        }
+        if (fs.existsSync(destination.absolute) && !fs.lstatSync(destination.absolute).isFile()) {
+          throw new Error(`asset destination is not a file: ${destination.relative}`);
+        }
+        // Reject malformed user overrides before any catalogue lookup.
+        normalizeRegistrationMetadata(assetRegistrationFromFlags(flags));
+        let stock = null;
+        let url = requestedId;
+        if (action === 'acquire') {
+          stock = await resolveStock(flags.provider, requestedId, { kind: flags.kind, pack: flags.pack });
+          url = stock.download.url;
+          const outputKind = inferKind(destination.relative);
+          if (outputKind !== stock.kind) {
+            throw new Error(`--output extension identifies ${outputKind}, but ${stock.provider} item is ${stock.kind}`);
+          }
+        }
+        const registrationFor = sourceUrl => {
+          const authored = assetRegistrationFromFlags(flags, {
+            mode: stock ? 'stock' : 'download', sourceUrl,
+          });
+          if (!stock) return authored;
+          const rightsOverride = authored.rights || null;
+          const rightsDeclared = stock.rights?.status === 'declared'
+            || Boolean(flags.license || flags['license-url']);
+          return {
+            origin: {
+              mode: 'stock', provider: stock.provider, itemId: stock.id,
+              sourcePage: stock.sourcePage, sourceUrl,
+            },
+            rights: {
+              ...(stock.rights || { status: 'unknown' }),
+              ...(rightsOverride || {}),
+              status: rightsDeclared ? 'declared' : 'unknown',
+            },
+          };
+        };
+        // Validate normalized catalogue metadata before downloading media. The
+        // downloaded bytes and lock update then commit as one recoverable unit.
+        normalizeRegistrationMetadata(registrationFor(url));
+        const extension = path.extname(destination.absolute);
+        const stem = path.basename(destination.absolute, extension);
+        const token = `${process.pid}-${Date.now()}`;
+        const staged = path.join(path.dirname(destination.absolute), `.${stem}.download-${token}${extension}`);
+        const backup = path.join(path.dirname(destination.absolute), `.${stem}.previous-${token}${extension}`);
+        let published = false;
+        let backedUp = false;
+        let record;
+        try {
+          const downloaded = await downloadAsset(url, staged);
+          if (stock) {
+            const responseKind = String(downloaded.contentType || '').split('/')[0].toLowerCase();
+            if (['image', 'video', 'audio'].includes(responseKind) && responseKind !== stock.kind) {
+              throw new Error(`${stock.provider} returned ${responseKind} content for a ${stock.kind} asset`);
+            }
+          }
+          record = withAssetMutation(projectDir, () => {
+            try {
+              const latest = readAssetLock(projectDir).assets.find(asset => asset.file === destination.relative);
+              resolveProjectFile(projectDir, destination.relative, { mustExist: false });
+              if (fs.existsSync(destination.absolute) && !fs.lstatSync(destination.absolute).isFile()) {
+                throw new Error(`asset destination is not a regular file: ${destination.relative}`);
+              }
+              const metadata = normalizeRegistrationMetadata(registrationFor(downloaded.finalUrl || url));
+              if (latest && !stock) {
+                metadata.origin = { ...latest.origin, ...metadata.origin };
+                if (!flags.origin) metadata.origin.mode = latest.origin.mode;
+                if (metadata.rights) metadata.rights = { ...latest.rights, ...metadata.rights, status: 'declared' };
+              }
+              if (fs.existsSync(destination.absolute)) {
+                fs.renameSync(destination.absolute, backup);
+                backedUp = true;
+              }
+              fs.renameSync(staged, destination.absolute);
+              published = true;
+              return registerAsset(projectDir, {
+                file: destination.relative,
+                contentType: downloaded.contentType,
+                ...metadata,
+                acquiredAt: new Date().toISOString(),
+              }, { lockHeld: true });
+            } catch (error) {
+              if (published) fs.rmSync(destination.absolute, { force: true });
+              if (backedUp && fs.existsSync(backup)) fs.renameSync(backup, destination.absolute);
+              published = false;
+              backedUp = false;
+              throw error;
+            }
+          });
+          if (backedUp) {
+            try { fs.rmSync(backup, { recursive: true, force: true }); } catch { /* committed asset wins */ }
+          }
+        } catch (error) {
+          let rollbackError = null;
+          try {
+            fs.rmSync(staged, { force: true });
+            if (published) fs.rmSync(destination.absolute, { force: true });
+            if (backedUp && fs.existsSync(backup)) fs.renameSync(backup, destination.absolute);
+          } catch (failure) { rollbackError = failure; }
+          if (rollbackError) error.message += `; asset rollback failed: ${rollbackError.message}`;
+          throw error;
+        }
+        console.log(`${stock ? 'acquired' : 'downloaded'}: ${record.file} (${record.kind}, ${record.bytes} bytes)`);
+        console.log(`lock:       ${path.join(projectDir, 'assets.lock.json')}`);
+      } catch (error) {
+        console.error(`assets ${action} failed: ${error.message}`);
+        process.exit(1);
+      }
       return;
     }
 
@@ -1092,7 +1375,8 @@ async function main() {
         process.exit(1);
       }
       try {
-        const projectDir = flags.project ? path.resolve(flags.project) : process.cwd();
+        const { dir: projectDir } = await loadProjectConfig(flags.project || '.', flags.config);
+        readAssetLock(projectDir);
         const assetsDir = path.join(projectDir, 'assets');
         if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
 
@@ -1152,7 +1436,7 @@ async function main() {
             ? path.resolve(path.dirname(flags.regenerate
                 ? path.resolve(projectDir, flags.regenerate) : projectDir), baseSpec.artifact)
             : path.join(assetsDir, `gen-${provider}-${slug}.mp4`));
-        await generate(provider, prompt, apiKey, output, assetsDir, { params });
+        await generate(provider, prompt, apiKey, output, assetsDir, { params, projectDir });
         console.log(`Add to reel.config.mjs:  clip: "assets/${path.basename(output)}"`);
         if (readSpec(output)) {
           console.log(`Generative spec:        assets/${path.basename(output).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json (edit/regenerate from here)`);
