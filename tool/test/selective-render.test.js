@@ -72,8 +72,9 @@ function setupProject(outDir, extra = {}) {
 function readHtml(dir) { return fs.readFileSync(path.join(dir, 'index.html'), 'utf8'); }
 function firstMatch(html, re) { const m = html.match(re); return m ? m[1] : null; }
 
-test('isolated scene project rebases named markers to scene-local time', () => {
-  if (!HAS_FFMPEG) { test.skip('ffmpeg required'); return; }
+test('isolated scene project rebases named markers to scene-local time', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required',
+}, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sr-'));
   try {
     const cfg = setupProject(out);
@@ -89,8 +90,9 @@ test('isolated scene project rebases named markers to scene-local time', () => {
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
 });
 
-test('isolated Three.js schedules its render driver + animations at local t=0', () => {
-  if (!HAS_FFMPEG) { test.skip('ffmpeg required'); return; }
+test('isolated Three.js schedules its render driver + animations at local t=0', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required',
+}, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sr-'));
   try {
     const cfg = setupProject(out);
@@ -110,8 +112,9 @@ test('isolated Three.js schedules its render driver + animations at local t=0', 
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
 });
 
-test('isolated scene-local turns are NOT re-rebased (they are already local)', () => {
-  if (!HAS_FFMPEG) { test.skip('ffmpeg required'); return; }
+test('isolated scene-local turns are NOT re-rebased (they are already local)', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required',
+}, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sr-'));
   try {
     const cfg = setupProject(out);
@@ -126,8 +129,9 @@ test('isolated scene-local turns are NOT re-rebased (they are already local)', (
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
 });
 
-test('isolated external karaoke overlays are rebased to scene-local data-start', () => {
-  if (!HAS_FFMPEG) { test.skip('ffmpeg required'); return; }
+test('isolated external karaoke overlays are rebased to scene-local data-start', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required',
+}, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sr-'));
   // External narration: a project-relative audio file + a wordTimings JSON file.
   // Transcript must match the scene vo text ("one two three four").
@@ -168,8 +172,9 @@ test('isolated external karaoke overlays are rebased to scene-local data-start',
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
 });
 
-test('isolated scene-script _scStart is 0 (local anchor), not the global start', () => {
-  if (!HAS_FFMPEG) { test.skip('ffmpeg required'); return; }
+test('isolated scene-script _scStart is 0 (local anchor), not the global start', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required',
+}, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sr-'));
   fs.writeFileSync(path.join(out, 'scene2.js'), 'tl.to("#x",{duration:1},_scStart+0.5);');
   fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
@@ -197,8 +202,9 @@ test('isolated scene-script _scStart is 0 (local anchor), not the global start',
   } finally { fs.rmSync(out, { recursive: true, force: true }); }
 });
 
-test('scene.cssFile is applied to composed output (full + isolated) and hashed', () => {
-  if (!HAS_FFMPEG) { test.skip('ffmpeg required'); return; }
+test('scene.cssFile is applied to composed output (full + isolated) and hashed', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required',
+}, () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-sr-'));
   const cssFile = path.join(out, 'scene2.css');
   fs.writeFileSync(cssFile, '#scene-s2 .marker{color:#ff00aa}');
