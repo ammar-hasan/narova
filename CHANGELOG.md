@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **npm-only installation lifecycle.** Removed the superseded
+  `tool/install.sh` GitHub installer. The packaged uninstaller now targets only
+  `@narova/narova`; it no longer detects or removes the old unscoped layout.
+
 ## [0.31.0] - 2026-08-11
 
 ### Added

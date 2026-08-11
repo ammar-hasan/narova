@@ -15,7 +15,7 @@ used by the optional browserless renderer. Run `doctor` plus
 | Python 3.10+ | the TTS venv | `brew install python@3.12` (macOS system 3.9 is too old) |
 | TTS venv | speech synthesis | nothing — the first `synth` creates it at `~/.narova/venv` |
 | HyperFrames CLI | preview + render | nothing — `npx` downloads it on first use |
-| no-browser npm packages | Skia frames, OpenType shaping, Urdu/Arabic fallback font | re-run the standalone installer without `--skip-optional` |
+| no-browser npm packages | Skia frames, OpenType shaping, Urdu/Arabic fallback font | reinstall `@narova/narova` without `--omit=optional` |
 | agent-browser 0.33+ (optional) | explore and capture real product walkthroughs | `npm install -g agent-browser && agent-browser install` |
 
 No-browser rendering needs no Chrome or browser runtime. HyperFrames brings its own

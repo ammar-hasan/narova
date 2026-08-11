@@ -33,7 +33,7 @@ if (report.unpackedSize > 10 * 1024 * 1024) {
 for (const required of ['LICENSE', 'README.md', 'bin/narova.js', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
   if (!names.includes(required)) throw new Error(`npm package is missing required standalone tool file: ${required}`);
 }
-if (names.includes('install.sh')) throw new Error('npm package must not contain the legacy GitHub installer');
+if (names.includes('install.sh')) throw new Error('npm package must not reintroduce a remote shell installer');
 if (report.name !== '@narova/narova') throw new Error(`unexpected standalone package name: ${report.name}`);
 
 const rootPackage = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));

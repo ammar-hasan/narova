@@ -21,7 +21,7 @@ function filesBelow(dir) {
   return found;
 }
 
-test('Narova skill is instructions-only and bootstraps the standalone CLI', t => {
+test('Narova skill is instructions-only and bootstraps the standalone CLI', () => {
   const topLevel = fs.readdirSync(SKILL_DIR).filter(name => name !== '.DS_Store').sort();
   assert.deepEqual(topLevel, ['SKILL.md', 'references']);
 
@@ -39,26 +39,12 @@ test('Narova skill is instructions-only and bootstraps the standalone CLI', t =>
     assert.doesNotMatch(source, /<skill-dir>\/tool|<narova-skill-dir>\/tool|skills\/narova\/tool/, file);
   }
 
-  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-skill-integration-'));
-  const prefix = path.join(tmp, 'prefix');
-  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
-  const installed = spawnSync('bash', [
-    path.join(TOOL_DIR, 'install.sh'),
-    '--source', TOOL_DIR,
-    '--prefix', prefix,
-    '--skip-optional',
-  ], {
+  assert.equal(fs.existsSync(path.join(TOOL_DIR, 'install.sh')), false);
+  const smoke = spawnSync(process.execPath, [path.join(ROOT, 'scripts', 'test-packed-package.js')], {
     encoding: 'utf8',
-    env: { ...process.env, npm_config_cache: path.join(tmp, 'npm-cache') },
   });
-  assert.equal(installed.status, 0, installed.stderr || installed.stdout);
-
-  const result = spawnSync('narova', ['--version'], {
-    encoding: 'utf8',
-    env: { ...process.env, PATH: `${path.join(prefix, 'bin')}${path.delimiter}${process.env.PATH || ''}` },
-  });
-  assert.equal(result.status, 0, result.stderr);
-  assert.equal(result.stdout.trim(), require(path.join(TOOL_DIR, 'package.json')).version);
+  assert.equal(smoke.status, 0, smoke.stderr || smoke.stdout);
+  assert.match(smoke.stdout, /packed package smoke test ok: @narova\/narova@/);
 });
 
 test('skill bootstrap reuses the default-prefix CLI and preserves install failures', t => {

@@ -45,7 +45,6 @@ narova/                          # the repo
 │   ├── src/                     # config, schema, check, compose/, hf, pipeline,
 │   │                            #   timeline, exports, doctor, init, ingest, captions, util
 │   ├── py/narova_tts/           # TTS backends + timing
-│   ├── install.sh               # legacy GitHub installer; excluded from npm
 │   ├── setup.sh                 # narova-setup; creates the TTS venv
 │   └── test/                    # independently runnable test suite
 ├── skills/narova/               # instructions-only agent skill
