@@ -125,11 +125,11 @@ External TTS providers are optional registered companion skills — see
    Creative direction: `references/prompt-to-video.md`. URL sources: `ingest <url>`
    first, then `references/url-to-source.md`. For creative media, use the
    built-in stock adapters for repeatable search/download mechanics, but keep
-   creative query design and result selection here. Use the separate
-   `narova-stock-extensions` skill for optional adapters and its explicit loose
-   browser catalogue. If an adapter does not surface the right asset, explore
-   another lawful source and finish with `assets download` or `assets import`;
-   see `references/stock-assets.md`.
+   creative query design and result selection here. If core does not surface
+   the right asset, use the separate `narova-stock-extensions` skill for
+   LLM-led discovery with the available web search, HTTP, or browser capability.
+   Finish with `assets download` or `assets import`; see
+   `references/stock-assets.md`.
 3. Write `claims.md` — every factual claim must trace to a source.
 4. `check` — fast validation (no TTS). Run after every config edit.
    For optional craft advice: `narova critique [creative|social-short|explainer|presentation|cinematic|accessibility]`.

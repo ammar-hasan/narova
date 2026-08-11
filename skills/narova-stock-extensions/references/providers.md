@@ -1,28 +1,28 @@
 # Provider catalogue and routing
 
 This is a discovery catalogue, not a promise that every website has a stable
-API. Provider pages, terms, and remote availability change. A provider is
-"verified" only when its automated live test searches and downloads bytes in
-the current run.
+API. Provider pages, terms, and remote availability change. Mechanical support
+belongs in Narova core and is verified only when a live test searches,
+downloads, registers, and verifies bytes.
 
 ## Deterministic providers
 
 | Layer | Provider | Media | Credential | Rights behavior |
 |---|---|---|---|---|
-| essential/core | Wikimedia Commons | image, video, audio | none | per-item review; currently recorded unknown |
-| essential/core | Openverse | image, audio | none | returned per-item CC metadata |
-| essential/core | NASA Library | image, video, audio | none | per-item review; recorded unknown |
-| essential/core | Internet Archive | video, audio | none | declared only when item returns a license |
-| essential/core | Iconify | 2D SVG icons | none | icon-set SPDX metadata |
-| essential/core | Poly Haven | 3D FBX models | none | CC0; API usage should identify Poly Haven |
-| extension | The Metropolitan Museum of Art | images | none | adapter restricts search to public-domain image records; CC0 |
-| extension | Cleveland Museum of Art | images | none | adapter restricts search to CC0 records |
-| extension | Library of Congress | images | none | heterogeneous; recorded unknown pending item review |
-| extension | Pexels | image, video | `PEXELS_API_KEY` | Pexels License |
-| extension | Pixabay | image, video | `PIXABAY_API_KEY` | Pixabay Content License |
-| extension | Freesound | audio previews | `FREESOUND_API_KEY` | returned per-sound CC license |
+| core | Wikimedia Commons | image, video, audio | none | per-item review; currently recorded unknown |
+| core | Openverse | image, audio | none | returned per-item CC metadata |
+| core | NASA Library | image, video, audio | none | per-item review; recorded unknown |
+| core | Internet Archive | video, audio | none | declared only when item returns a license |
+| core | Iconify | 2D SVG icons | none | icon-set SPDX metadata |
+| core | Poly Haven | 3D FBX models | none | CC0; API usage should identify Poly Haven |
+| core | The Metropolitan Museum of Art | images | none | adapter restricts search to public-domain image records; CC0 |
+| core | Cleveland Museum of Art | images | none | adapter restricts search to CC0 records |
+| core | Library of Congress | images | none | heterogeneous; recorded unknown pending item review |
+| core | Pexels | image, video | `PEXELS_API_KEY` | Pexels License |
+| core | Pixabay | image, video | `PIXABAY_API_KEY` | Pixabay Content License |
+| core | Freesound | audio previews | `FREESOUND_API_KEY` | returned per-sound CC license |
 
-Credentialed rows are optional. `narova-stock providers` reports them as not
+Credentialed rows are optional. `narova assets providers` reports them as not
 ready when a key is absent; it does not block any other provider.
 
 ARTIC is intentionally not a deterministic adapter: API search succeeded in
@@ -30,19 +30,18 @@ the August 2026 verification, but its IIIF download returned HTTP 403 from the
 test environment. Use the item page/browser workflow and do not claim automated
 download support until a live search-and-download passes.
 
-## Browser/agent discovery catalogue
+## LLM discovery catalogue
 
 Use this list when the deterministic sources are creatively insufficient. It
-retains the long-tail choices from Narova's stock reference. The authoritative
-structured list is `tool/browser-providers.js`; `narova-stock providers` emits
-every entry with readiness `explore` and mode `llm-browser`. "Browser" means an
-agent may search and inspect public pages; it does not authorize bypassing
+retains the long-tail choices from Narova's stock reference. The LLM chooses a
+few relevant sources and uses web search, direct HTTP, or an interactive browser
+according to the current page. No capability authorizes bypassing
 authentication, anti-bot controls, rate limits, or license restrictions.
 
-These entries are providers, not vague fallbacks. They are deliberately loose:
-the LLM chooses queries and navigation, while the current item page determines
-the downloadable file and rights. Do not mark one ready merely because its home
-page opened.
+These entries are deliberately loose: the LLM chooses queries and navigation,
+while the current item page determines the downloadable file and rights. Do not
+mark one ready merely because its home page opened. Without web access, use this
+catalogue to propose a sourcing plan, not to claim that sources were checked.
 
 ### Photography and imagery
 
@@ -111,10 +110,10 @@ page opened.
 - Space/data: ISS position services, The Space Devs launch data, NASA EONET,
   NASA NEO/APOD, and JPL Small-Body Database.
 
-## Flexible browser workflow
+## Flexible LLM workflow
 
-1. Search the smallest relevant category above with the available browser
-   capability (for example `agent-browser` or the in-app browser skill).
+1. Search the smallest relevant category above with the available web search,
+   HTTP, or browser capability.
 2. Inspect the actual item page, download affordance, dimensions/duration, and
    item-level license. Do not infer rights from a search thumbnail.
 3. Prefer an official direct download. If the site blocks automation, leave it

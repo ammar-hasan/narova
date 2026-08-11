@@ -27,6 +27,12 @@ const providers = [
     id: 'poly-haven', kind: 'model', query: 'wooden crate',
     acquireId: 'wooden_crate_01', output: 'poly-haven.fbx',
   },
+  { id: 'met', kind: 'image', query: 'our lady', acquireId: '764091', output: 'met.jpg' },
+  { id: 'cleveland-museum', kind: 'image', query: 'landscape', acquireId: '147016', output: 'cleveland.jpg' },
+  { id: 'loc', kind: 'image', query: 'landscape', acquireId: '2004662055', output: 'loc.jpg' },
+  { id: 'pexels', kind: 'video', query: 'calm ocean', output: 'pexels.mp4', envKey: 'PEXELS_API_KEY' },
+  { id: 'pixabay', kind: 'video', query: 'calm ocean', output: 'pixabay.mp4', envKey: 'PIXABAY_API_KEY' },
+  { id: 'freesound', kind: 'audio', query: 'soft gong', output: 'freesound.mp3', envKey: 'FREESOUND_API_KEY' },
 ];
 
 function cli(args, options = {}) {
@@ -43,12 +49,15 @@ function cli(args, options = {}) {
   return result.stdout;
 }
 
-test('live stock essentials: every provider searches, downloads, and verifies', { timeout: 15 * 60_000 }, () => {
-  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-stock-essential-'));
+test('live core stock: every available adapter searches, downloads, and verifies', { timeout: 20 * 60_000 }, t => {
+  const missing = providers.filter(item => item.envKey && !process.env[item.envKey]);
+  if (missing.length) t.diagnostic(`optional credentialed providers skipped: ${missing.map(item => item.envKey).join(', ')}`);
+  const available = providers.filter(item => !item.envKey || process.env[item.envKey]);
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-stock-core-'));
   const project = path.join(root, 'project');
   cli(['init', project]);
 
-  for (const provider of providers) {
+  for (const provider of available) {
     const raw = cli([
       'assets', 'search', provider.query, '--provider', provider.id, '--kind', provider.kind,
       '--limit', '1', '--json',
@@ -67,5 +76,5 @@ test('live stock essentials: every provider searches, downloads, and verifies', 
   }
 
   const verified = cli(['assets', 'verify', '--project', project]);
-  assert.equal((verified.match(/^ok:/gm) || []).length, providers.length, verified);
+  assert.equal((verified.match(/^ok:/gm) || []).length, available.length, verified);
 });

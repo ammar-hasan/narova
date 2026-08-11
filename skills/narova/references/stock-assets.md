@@ -46,13 +46,13 @@ Follow this order so the highest-quality, most reliable sources are used first:
 
 ---
 
-## Essential catalogue adapters
+## Core catalogue adapters
 
 Use adapters for provider API mechanics; use judgment for relevance, rights,
 model/property releases, and sensitive contexts.
 
 ```bash
-# Core is deliberately small: all essential providers are anonymous and tested.
+# List all deterministic adapters and optional credential readiness.
 narova assets providers
 
 # Search without downloading. Add --json when another program will select.
@@ -73,22 +73,22 @@ narova assets acquire "File:Meditation Gong.ogg" --provider wikimedia \
 | essential | `internet-archive` | video, audio | none |
 | essential | `iconify` | 2D SVG icons | none |
 | essential | `poly-haven` | 3D FBX models | none |
+| core | `met` | image | none |
+| core | `cleveland-museum` | image | none |
+| core | `loc` | image | none |
+| core | `pexels` | image, video | `PEXELS_API_KEY` |
+| core | `pixabay` | image, video | `PIXABAY_API_KEY` |
+| core | `freesound` | audio | `FREESOUND_API_KEY` |
 
-Install and invoke the separate `narova-stock-extensions` skill for The Met,
-Cleveland Museum of Art, Library of Congress, Pexels, Pixabay, Freesound, and
-browser-guided long-tail sources. Its `narova-stock` command delegates every
-essential provider back to core, so it extends this pack instead of copying it.
-Extension downloads also return through `narova assets download`; hashing,
-atomic writes, verification, provenance, and credits therefore stay in one
-shared lifecycle.
-
-`narova-stock providers` emits the six essentials, six extension adapters, and
-101 explicit loose sources. Loose rows are `explore`/`llm-browser`: the list is
-a creative search surface, not a claim that every changing website has passed a
-current automated download.
+The separate `narova-stock-extensions` skill contains no adapters or launcher.
+It is an LLM-led catalogue of 101 loose sources for creative discovery with web
+search, direct HTTP, or a browser. Those sources are not mechanically ready by
+definition. Finish every selected loose item through `narova assets download`
+or `narova assets import` so hashing, verification, provenance, and credits stay
+in the core lifecycle.
 
 Optional keys stay in environment variables and are never written to the
-project lock. A missing key disables only that extension provider. Wikimedia's
+project lock. A missing key disables only that core provider. Wikimedia's
 current Core API supplies file URLs but not reliable per-file license metadata,
 so acquisitions stay `rights.status: "unknown"` until the item page has been
 reviewed and the license is supplied explicitly:
@@ -109,8 +109,7 @@ Run live API and byte-download checks explicitly from the repository root:
 
 ```bash
 npm run test:stock-live
-# Runs essential + no-key extensions; key-backed providers run when configured:
-npm run test:stock-live:extensions
+# Runs every no-key adapter; key-backed providers run when configured.
 ```
 
 These are intentionally outside the ordinary deterministic unit suite.

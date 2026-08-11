@@ -240,7 +240,7 @@ Commands:
   assets import <file>  register an existing project-local creative asset
   assets download <url> download atomically with --output <project-relative path>
   assets providers      list built-in stock catalogues and credential readiness
-  assets search <query> search --provider <name> --kind image|video|audio
+  assets search <query> search --provider <name> --kind image|video|audio|model
   assets acquire <id>   resolve/download a provider result with --output <path>
   assets list           list files tracked in assets.lock.json
   assets untrack <file> remove a provenance record without deleting the file
@@ -351,7 +351,7 @@ Options:
   --origin <mode> --provider <name> --item-id <id> --source-page <url>
   --license <id> --license-url <url> --creator <name> --attribution <text>
   Stock catalogue flags (assets search/acquire):
-  --pack essential (default: essential; use narova-stock-extensions for more)
+  --pack core|essential (default: core)
   --provider <name> --kind image|video|audio|model --limit <1..20> --json
 `;
 
@@ -394,7 +394,7 @@ async function main() {
       try {
         if (action === 'providers') {
           for (const provider of listStockProviders(process.env, { pack: flags.pack })) {
-            const readiness = provider.ready ? 'ready' : `needs ${provider.envKey}`;
+            const readiness = provider.ready ? 'ready' : `optional: needs ${provider.envKey}`;
             console.log(`${provider.id}\t${provider.kinds.join(',')}\t${readiness}`);
           }
           return;
@@ -402,7 +402,7 @@ async function main() {
         if (action === 'search') {
           const query = positionals.slice(2).join(' ');
           if (!query || !flags.provider) {
-            throw new Error('usage: narova assets search <query> --provider <name> --kind image|video|audio [--limit N] [--json]');
+            throw new Error('usage: narova assets search <query> --provider <name> --kind image|video|audio|model [--limit N] [--json]');
           }
           const results = await searchStock(flags.provider, query, {
             kind: flags.kind, limit: flags.limit, pack: flags.pack,

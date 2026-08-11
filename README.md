@@ -141,17 +141,18 @@ narova assets verify
 narova assets credits
 ```
 
-Core's `essential` pack is Wikimedia, Openverse, NASA, Internet Archive,
-Iconify (free 2D SVG), and Poly Haven (free CC0 3D models), all without keys.
-The separate `narova-stock-extensions` skill delegates those essentials back to
-core and adds The Met, Cleveland Museum, Library of Congress, Pexels, Pixabay,
-Freesound, and browser-guided long-tail discovery. Its three keys are optional;
-missing credentials never block the no-key providers. Catalogue search is
-explicit and builds stay offline.
+Core owns every deterministic adapter: Wikimedia, Openverse, NASA, Internet
+Archive, Iconify, Poly Haven, The Met, Cleveland Museum, Library of Congress,
+Pexels, Pixabay, and Freesound. The first nine need no key. The other three are
+optional and appear unavailable until their environment key is present; they
+never block the rest. `--pack essential` remains available as the original
+six-provider no-key subset. Catalogue search is explicit and builds stay
+offline.
 
-Run `narova-stock providers` to see deterministic sources alongside 101
-explicit long-tail providers. Loose sources are labeled `llm-browser` and
-`explore`, not misrepresented as tested API adapters.
+The separate `narova-stock-extensions` skill is now purely LLM-led discovery.
+Its 101-source long-tail catalogue helps an agent explore changing sites with
+web search, direct HTTP, or a browser, then return selected bytes through
+`narova assets download` or `narova assets import`.
 
 Adapters own repeatable API work. The Narova skills still own creative
 search terms, selection, license judgment, and fallback discovery. If an agent
