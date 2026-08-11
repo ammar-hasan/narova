@@ -64,6 +64,7 @@
 .tag.added   { color: var(--bg); background: var(--lime); }
 .tag.changed { color: var(--bg); background: var(--cyan); }
 .tag.fixed   { color: var(--bg); background: var(--pink); }
+.tag.verified { color: var(--bg); background: linear-gradient(92deg, var(--lime), var(--cyan)); }
 .tag.removed { color: var(--text); background: rgba(169,156,196,0.3); }
 
 .rel-body ul { list-style: none; }

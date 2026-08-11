@@ -4,6 +4,7 @@
 const { test } = require('node:test');
 const assert = require('node:assert');
 const { spawnSync } = require('node:child_process');
+const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
@@ -28,7 +29,30 @@ test('help shows on no command, help, and -h', () => {
     assert.match(r.stdout, /walkthrough explore/);
     assert.match(r.stdout, /walkthrough capture/);
     assert.match(r.stdout, /critique \[profiles\]/);
+    assert.match(r.stdout, /assets import/);
+    assert.match(r.stdout, /assets search/);
   }
+});
+
+test('core asset provider discovery reports optional credentials without exposing values', () => {
+  const env = { ...process.env, PEXELS_API_KEY: 'provider-secret' };
+  delete env.PIXABAY_API_KEY;
+  delete env.FREESOUND_API_KEY;
+  const listed = run(['assets', 'providers'], { env, cwd: os.tmpdir() });
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^wikimedia\timage,video,audio\tready$/m);
+  assert.match(listed.stdout, /^iconify\timage\tready$/m);
+  assert.match(listed.stdout, /^poly-haven\tmodel\tready$/m);
+  assert.match(listed.stdout, /^met\timage\tready$/m);
+  assert.match(listed.stdout, /^pexels\timage,video\tready$/m);
+  assert.match(listed.stdout, /^pixabay\timage,video\toptional: needs PIXABAY_API_KEY$/m);
+  assert.doesNotMatch(listed.stdout + listed.stderr, /provider-secret/);
+
+  const unavailable = run([
+    'assets', 'search', 'ocean', '--provider', 'pixabay', '--kind', 'video', '--limit', '1',
+  ], { env, cwd: os.tmpdir() });
+  assert.equal(unavailable.status, 1);
+  assert.match(unavailable.stderr, /pixabay requires PIXABAY_API_KEY/);
 });
 
 test('renderers list exposes both bundled local providers', () => {
@@ -91,6 +115,102 @@ test('init scaffolds a project that passes check; init never overwrites', () => 
   const brief = fs.readFileSync(path.join(proj, 'creative-brief.md'), 'utf8');
   assert.match(brief, /^Status: draft$/m);
   assert.match(brief, /## Pilot gate/);
+});
+
+test('assets import, list, verify, and credits use the project asset lock', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-assets-'));
+  const proj = path.join(dir, 'p');
+  assert.equal(run(['init', proj]).status, 0);
+  fs.writeFileSync(path.join(proj, 'assets', 'hero.jpg'), 'hero');
+
+  const imported = run([
+    'assets', 'import', 'assets/hero.jpg', '--project', proj,
+    '--origin', 'stock', '--provider', 'example', '--item-id', 'hero-1',
+    '--source-page', 'https://example.test/hero', '--license', 'CC-BY-4.0',
+    '--attribution', 'Example Artist',
+  ]);
+  assert.equal(imported.status, 0, imported.stderr);
+  assert.match(imported.stdout, /tracked: assets\/hero\.jpg/);
+
+  const listed = run(['assets', 'list', '--project', proj]);
+  assert.equal(listed.status, 0, listed.stderr);
+  assert.match(listed.stdout, /^assets\/hero\.jpg\timage\tstock\tdeclared$/m);
+
+  const verified = run(['assets', 'verify', '--project', proj]);
+  assert.equal(verified.status, 0, verified.stderr);
+  assert.match(verified.stdout, /^ok: assets\/hero\.jpg$/m);
+
+  const credits = run(['assets', 'credits', '--project', proj]);
+  assert.equal(credits.status, 0, credits.stderr);
+  assert.match(credits.stdout, /Example Artist \(CC-BY-4\.0\).*example\.test\/hero/);
+
+  fs.writeFileSync(path.join(proj, 'assets', 'hero.jpg'), 'refreshed');
+  const refreshed = run(['assets', 'import', 'assets/hero.jpg', '--project', proj]);
+  assert.equal(refreshed.status, 0, refreshed.stderr);
+  const refreshedRecord = JSON.parse(fs.readFileSync(path.join(proj, 'assets.lock.json'), 'utf8')).assets[0];
+  assert.equal(refreshedRecord.origin.provider, 'example');
+  assert.equal(refreshedRecord.rights.license, 'CC-BY-4.0');
+  assert.equal(refreshedRecord.rights.attribution, 'Example Artist');
+
+  const changedPage = 'https://example.test/hero-revised?edition=2';
+  const changed = run([
+    'assets', 'import', 'assets/hero.jpg', '--project', proj,
+    '--source-page', changedPage,
+  ]);
+  assert.equal(changed.status, 0, changed.stderr);
+  const changedRecord = JSON.parse(fs.readFileSync(path.join(proj, 'assets.lock.json'), 'utf8')).assets[0];
+  assert.equal(changedRecord.origin.sourcePage, 'https://example.test/hero-revised');
+  assert.equal(
+    changedRecord.origin.sourcePageHash,
+    crypto.createHash('sha256').update(changedPage).digest('hex'),
+  );
+
+  const kept = path.join(proj, 'assets', 'kept.bin');
+  fs.writeFileSync(kept, 'previous bytes');
+  const invalidMetadata = run([
+    'assets', 'download', 'https://127.0.0.1:1/unreachable', '--output', 'assets/kept.bin',
+    '--source-page', 'file:///not-a-provider-page', '--project', proj,
+  ]);
+  assert.equal(invalidMetadata.status, 1);
+  assert.match(invalidMetadata.stderr, /source URL must use http\(s\)/);
+  assert.equal(fs.readFileSync(kept, 'utf8'), 'previous bytes');
+
+  const unsafeOutput = run([
+    'assets', 'download', 'https://example.test/asset', '--output', 'reel.config.mjs', '--project', proj,
+  ]);
+  assert.equal(unsafeOutput.status, 1);
+  assert.match(unsafeOutput.stderr, /must be inside the configured asset directory/);
+
+  const forgedStockOrigin = run([
+    'assets', 'acquire', 'File:Example.jpg', '--provider', 'wikimedia', '--kind', 'image',
+    '--output', 'assets/example.jpg', '--origin', 'manual', '--item-id', 'different-id', '--project', proj,
+  ]);
+  assert.equal(forgedStockOrigin.status, 1);
+  assert.match(forgedStockOrigin.stderr, /derives stock provenance.*--origin.*--item-id/);
+  assert.doesNotMatch(forgedStockOrigin.stderr, /stock provider request/);
+
+  fs.writeFileSync(path.join(proj, 'reel.config.json'), JSON.stringify({
+    title: 'Unsafe assets root', assets: '.', voices: {},
+    scenes: [{ id: 'one', dur: 1, vo: [], body: '<p>one</p>' }],
+  }));
+  const collapsedRoot = run([
+    'assets', 'download', 'https://127.0.0.1:1/unreachable',
+    '--output', 'source.jpg', '--project', proj, '--config', path.join(proj, 'reel.config.json'),
+  ]);
+  assert.equal(collapsedRoot.status, 1);
+  assert.match(collapsedRoot.stderr, /not the project itself/);
+  assert.doesNotMatch(collapsedRoot.stderr, /fetch failed/);
+
+  fs.writeFileSync(path.join(proj, 'assets', 'hero.jpg'), 'tampered');
+  const stale = run(['assets', 'verify', '--project', proj]);
+  assert.equal(stale.status, 1);
+  assert.match(stale.stdout, /^fail: assets\/hero\.jpg — content hash changed/m);
+
+  const untracked = run(['assets', 'untrack', 'assets/hero.jpg', '--project', proj]);
+  assert.equal(untracked.status, 0, untracked.stderr);
+  assert.match(untracked.stdout, /untracked: assets\/hero\.jpg \(file kept\)/);
+  assert.ok(fs.existsSync(path.join(proj, 'assets', 'hero.jpg')));
+  assert.match(run(['assets', 'list', '--project', proj]).stdout, /no tracked creative assets/);
 });
 
 test('branch save snapshots a small proof with mandatory rationale', () => {
@@ -224,6 +344,35 @@ test('commands work from a subdirectory (config discovered by walking up)', () =
   const r = run(['check'], { cwd: nested });
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /^ok: /m);
+});
+
+test('ingest and generate validate the ancestor project asset lock before network or provider work', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-assets-root-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const nested = path.join(proj, 'out', 'hf');
+  fs.mkdirSync(nested, { recursive: true });
+  fs.writeFileSync(path.join(proj, 'assets.lock.json'), '{malformed');
+  const env = { ...process.env };
+  delete env.OPENAI_API_KEY;
+
+  const generated = run(['generate', 'test clip', '--provider', 'sora'], { cwd: nested, env });
+  assert.equal(generated.status, 1);
+  assert.match(generated.stderr, /assets\.lock\.json: invalid JSON/);
+  assert.doesNotMatch(generated.stderr, /OPENAI_API_KEY/);
+
+  const ingested = run(['ingest', 'https://127.0.0.1:1/unreachable'], { cwd: nested, env });
+  assert.equal(ingested.status, 1);
+  assert.match(ingested.stderr, /assets\.lock\.json: invalid JSON/);
+  assert.doesNotMatch(ingested.stderr, /fetch failed/);
+
+  const acquired = run([
+    'assets', 'acquire', '123', '--provider', 'pexels', '--kind', 'video',
+    '--output', 'assets/clip.mp4',
+  ], { cwd: nested, env });
+  assert.equal(acquired.status, 1);
+  assert.match(acquired.stderr, /assets\.lock\.json: invalid JSON/);
+  assert.doesNotMatch(acquired.stderr, /PEXELS_API_KEY/);
 });
 
 test('compose prints the scene start table for QA', () => {

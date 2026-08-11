@@ -9,6 +9,10 @@ const fs = require('fs');
 const path = require('path');
 const https = require('https');
 const http = require('http');
+const {
+  downloadAsset, readAssetLock, registerAsset, resolveProjectFile,
+  sanitizeUrl, sha256, withAssetMutation,
+} = require('./asset-registry');
 
 const PROVIDERS = {
   sora: {
@@ -101,54 +105,16 @@ async function getJson(url, headers = {}) {
 }
 
 function downloadFile(url, dest, opts = {}) {
-  const maxBytes = opts.maxBytes || 1024 * 1024 * 1024;
-  const maxRedirects = opts.maxRedirects == null ? 5 : opts.maxRedirects;
-  const headers = opts.headers || {};
-  const temp = `${dest}.part-${process.pid}-${Date.now()}`;
-  function cleanup(error, reject) {
-    try { fs.rmSync(temp, { force: true }); } catch {}
-    reject(error);
-  }
-  function fetch(current, redirects, resolve, reject, requestHeaders) {
-    const u = new URL(current);
-    const mod = u.protocol === 'https:' ? https : http;
-    const req = mod.request({ hostname: u.hostname, port: u.port, path: u.pathname + u.search, headers: requestHeaders }, res => {
-      if (res.statusCode >= 300 && res.statusCode < 400 && res.headers.location) {
-        res.resume();
-        if (redirects >= maxRedirects) return cleanup(new Error(`download exceeded ${maxRedirects} redirects`), reject);
-        const next = new URL(res.headers.location, current);
-        const nextHeaders = next.origin === u.origin
-          ? requestHeaders
-          : Object.fromEntries(Object.entries(requestHeaders).filter(([key]) => !/^(authorization|cookie)$/i.test(key)));
-        return fetch(next.toString(), redirects + 1, resolve, reject, nextHeaders);
-      }
-      if (res.statusCode !== 200) { res.resume(); return cleanup(new Error(`download failed: ${res.statusCode}`), reject); }
-      const contentType = String(res.headers['content-type'] || '').toLowerCase();
+  return downloadAsset(url, dest, {
+    headers: opts.headers || {},
+    maxBytes: opts.maxBytes,
+    timeoutMs: opts.timeoutMs,
+    validateContentType(contentType) {
       if (contentType && !/^(video\/|application\/(?:octet-stream|mp4))/.test(contentType)) {
-        res.resume(); return cleanup(new Error(`download returned unexpected content-type: ${contentType}`), reject);
+        throw new Error(`download returned unexpected content-type: ${contentType}`);
       }
-      const declared = Number(res.headers['content-length']);
-      if (Number.isFinite(declared) && declared > maxBytes) {
-        res.resume(); return cleanup(new Error(`download exceeds ${maxBytes} byte limit`), reject);
-      }
-      let received = 0;
-      const file = fs.createWriteStream(temp, { flags: 'wx' });
-      res.on('data', chunk => {
-        received += chunk.length;
-        if (received > maxBytes) req.destroy(new Error(`download exceeds ${maxBytes} byte limit`));
-      });
-      res.pipe(file);
-      file.on('finish', () => file.close(error => {
-        if (error) return cleanup(error, reject);
-        try { fs.renameSync(temp, dest); resolve(dest); } catch (renameError) { cleanup(renameError, reject); }
-      }));
-      file.on('error', error => cleanup(error, reject));
-      res.on('error', error => cleanup(error, reject));
-    });
-    req.on('error', error => cleanup(error, reject));
-    req.end();
-  }
-  return new Promise((resolve, reject) => fetch(url, 0, resolve, reject, headers));
+    },
+  }).then(() => dest);
 }
 
 /* Poll until the OpenAI video job reaches a terminal state. */
@@ -220,6 +186,30 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
   const info = PROVIDERS[provider];
   if (!info) throw new Error(`Unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
 
+  const specPath = specPathFor(outputPath);
+  for (const [label, target] of [['generation output', outputPath], ['generation recipe', specPath]]) {
+    if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) {
+      throw new Error(`${label} is not a regular file: ${target}`);
+    }
+    const parent = path.dirname(target);
+    if (fs.existsSync(parent) && !fs.statSync(parent).isDirectory()) {
+      throw new Error(`${label} parent is not a directory: ${parent}`);
+    }
+  }
+  let projectPaths = null;
+  if (opts.projectDir) {
+    const file = path.relative(opts.projectDir, outputPath);
+    const insideProject = file && file !== '..' && !file.startsWith(`..${path.sep}`) && !path.isAbsolute(file);
+    if (insideProject) {
+      // Validate the lock and both publication paths before consuming paid
+      // provider work or writing through an escaping symlink.
+      readAssetLock(opts.projectDir);
+      const artifact = resolveProjectFile(opts.projectDir, file, { mustExist: false });
+      const recipe = resolveProjectFile(opts.projectDir, path.relative(opts.projectDir, specPath), { mustExist: false });
+      projectPaths = { artifact, recipe };
+    }
+  }
+
   console.log(`Generating video with ${info.name}...`);
   console.log(`Prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
 
@@ -231,31 +221,113 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
     params.model = params.model || 'sora-2';
     params.size = params.size || '1280x720';
     params.duration = params.duration || 4;
-    download = await generateSora(prompt, apiKey, params);
+    download = await (opts.generateSora || generateSora)(prompt, apiKey, params);
   } else if (provider === 'runway') {
     params.model = params.model || 'gen4.5';
     params.ratio = params.ratio || String(params.size || '1280x720').replace('x', ':');
     params.duration = params.duration || 5;
-    download = await generateRunway(prompt, apiKey, params);
+    download = await (opts.generateRunway || generateRunway)(prompt, apiKey, params);
   } else throw new Error(`Provider ${provider} not yet implemented`);
 
+  // Validate provider URLs before replacing an existing artifact. buildSpec
+  // also strips signed queries before persisting the recipe.
+  sanitizeUrl(download.url);
   console.log(`Downloading video...`);
   const destDir = path.dirname(outputPath);
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
 
-  await downloadFile(download.url, outputPath, { headers: download.headers });
-  const stats = fs.statSync(outputPath);
-  console.log(`Saved: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
+  const token = `${process.pid}-${Date.now()}`;
+  const outputExt = path.extname(outputPath);
+  const outputStem = path.basename(outputPath, outputExt);
+  const stagedOutput = path.join(destDir, `.${outputStem}.generate-${token}${outputExt}`);
+  const stagedSpec = path.join(path.dirname(specPath), `.${path.basename(specPath)}.generate-${token}`);
+  const outputBackup = path.join(destDir, `.${outputStem}.previous-${token}${outputExt}`);
+  const specBackup = path.join(path.dirname(specPath), `.${path.basename(specPath)}.previous-${token}`);
+  let outputBackedUp = false;
+  let specBackedUp = false;
+  let outputPublished = false;
+  let specPublished = false;
+  let committed = false;
+  const rollback = error => {
+    if (committed) return;
+    let rollbackError = null;
+    try {
+      fs.rmSync(stagedOutput, { force: true });
+      fs.rmSync(stagedSpec, { force: true });
+      if (specPublished) fs.rmSync(specPath, { force: true });
+      if (specBackedUp && fs.existsSync(specBackup)) fs.renameSync(specBackup, specPath);
+      if (outputPublished) fs.rmSync(outputPath, { force: true });
+      if (outputBackedUp && fs.existsSync(outputBackup)) fs.renameSync(outputBackup, outputPath);
+      specPublished = false;
+      specBackedUp = false;
+      outputPublished = false;
+      outputBackedUp = false;
+    } catch (failure) { rollbackError = failure; }
+    if (rollbackError && error) error.message += `; generated asset rollback failed: ${rollbackError.message}`;
+  };
+  try {
+    await (opts.downloadFile || downloadFile)(download.url, stagedOutput, { headers: download.headers });
+    const stats = fs.statSync(stagedOutput);
+    const publish = () => {
+      try {
+        if (projectPaths) {
+          readAssetLock(opts.projectDir);
+          projectPaths = {
+            artifact: resolveProjectFile(opts.projectDir, projectPaths.artifact.relative, { mustExist: false }),
+            recipe: resolveProjectFile(opts.projectDir, projectPaths.recipe.relative, { mustExist: false }),
+          };
+        }
+        for (const [label, target] of [['generation output', outputPath], ['generation recipe', specPath]]) {
+          if (fs.existsSync(target) && !fs.lstatSync(target).isFile()) {
+            throw new Error(`${label} is not a regular file: ${target}`);
+          }
+        }
+        if (fs.existsSync(outputPath)) { fs.renameSync(outputPath, outputBackup); outputBackedUp = true; }
+        fs.renameSync(stagedOutput, outputPath);
+        outputPublished = true;
+        console.log(`Saved: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
 
-  // Persist the generative specification as a sidecar so an AI clip remains a
-  // living, editable creative source — not just a downloaded artifact. The
-  // MP4 is cache/output; this spec is the creative source that survives. An
-  // author can later say "regenerate this with the same composition but a
-  // different mood" and the provider/model/prompt/params are all recoverable.
-  const spec = buildSpec(provider, info, prompt, params, download.url, outputPath, stats.size);
-  const specPath = specPathFor(outputPath);
-  fs.writeFileSync(specPath, JSON.stringify(spec, null, 2) + '\n');
-  console.log(`Spec:   ${specPath}`);
+        // Persist the editable generation recipe without retaining signed query
+        // strings. A digest still pins the exact provider URL used at acquisition.
+        const spec = buildSpec(provider, info, prompt, params, download.url, outputPath, stats.size);
+        fs.mkdirSync(path.dirname(specPath), { recursive: true });
+        fs.writeFileSync(stagedSpec, JSON.stringify(spec, null, 2) + '\n', { flag: 'wx' });
+        if (fs.existsSync(specPath)) { fs.renameSync(specPath, specBackup); specBackedUp = true; }
+        fs.renameSync(stagedSpec, specPath);
+        specPublished = true;
+        console.log(`Spec:   ${specPath}`);
+
+        if (projectPaths) {
+          (opts.registerAsset || registerAsset)(opts.projectDir, {
+            file: projectPaths.artifact.relative,
+            origin: {
+              mode: 'generated',
+              provider,
+              model: params.model || null,
+              sourceUrl: download.url,
+            },
+            recipe: projectPaths.recipe.relative,
+            acquiredAt: spec.generatedAt,
+          }, { lockHeld: true });
+          console.log(`Asset:  ${path.join(opts.projectDir, 'assets.lock.json')}`);
+        } else if (opts.projectDir) {
+          console.log('note: generated clip is outside the project and was not added to assets.lock.json');
+        }
+        committed = true;
+        for (const backup of [outputBackup, specBackup]) {
+          try { fs.rmSync(backup, { force: true }); } catch { /* committed files win */ }
+        }
+      } catch (error) {
+        rollback(error);
+        throw error;
+      }
+    };
+    if (projectPaths) withAssetMutation(opts.projectDir, publish);
+    else publish();
+  } catch (error) {
+    rollback(error);
+    throw error;
+  }
 
   return outputPath;
 }
@@ -264,6 +336,7 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
  * can be tested without network access. The artifact hash pins the bytes; the
  * prompt/model/params carry the creative intent that survives regeneration. */
 function buildSpec(provider, info, prompt, params, sourceVideoUrl, outputPath, artifactBytes) {
+  const cleanSourceUrl = sanitizeUrl(sourceVideoUrl, { stripQuery: true });
   return {
     kind: 'narova-generate-spec',
     version: 1,
@@ -272,7 +345,8 @@ function buildSpec(provider, info, prompt, params, sourceVideoUrl, outputPath, a
     model: params.model || null,
     prompt,
     params,
-    sourceVideoUrl,
+    sourceVideoUrl: cleanSourceUrl,
+    sourceVideoUrlHash: sha256(sourceVideoUrl),
     artifact: path.basename(outputPath),
     artifactBytes,
     artifactSha256: sha256File(outputPath),

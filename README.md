@@ -9,7 +9,7 @@ with a local CLI. Together they turn prompts, scripts, web pages, and product
 walkthroughs into narrated, captioned video.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.29.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.30.0-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -123,7 +123,45 @@ source, classifies it, extracts evidence, and writes the scene script. Narova's
 `ingest` command handles the mechanical pass — fetching the HTML page, extracting
 up to five images, and optionally capturing a browser screenshot — but
 interpretation, repository analysis, PDF reading, and content selection remain
-the agent's responsibility.
+the agent's responsibility. Acquired images are recorded in `assets.lock.json`
+with their source URL, byte size, and SHA-256 hash.
+
+For assets acquired another way, the small asset lifecycle stays explicit:
+
+```bash
+narova assets providers
+narova assets search "home" --provider iconify --kind image --limit 5
+narova assets acquire mdi:home --provider iconify --kind image \
+  --output assets/home.svg
+narova assets download "https://cdn.example/clip.mp4" --output assets/clip.mp4 \
+  --origin stock --provider example --source-page "https://example/items/clip" \
+  --license CC-BY-4.0 --attribution "Creator / Example"
+narova assets import assets/logo.svg --origin original
+narova assets verify
+narova assets credits
+```
+
+Core owns every deterministic adapter: Wikimedia, Openverse, NASA, Internet
+Archive, Iconify, Poly Haven, The Met, Cleveland Museum, Library of Congress,
+Pexels, Pixabay, and Freesound. The first nine need no key. The other three are
+optional and appear unavailable until their environment key is present; they
+never block the rest. `--pack essential` remains available as the original
+six-provider no-key subset. Catalogue search is explicit and builds stay
+offline.
+
+The separate `narova-stock-extensions` skill is now purely LLM-led discovery.
+Its 101-source long-tail catalogue helps an agent explore changing sites with
+web search, direct HTTP, or a browser, then return selected bytes through
+`narova assets download` or `narova assets import`.
+
+Adapters own repeatable API work. The Narova skills still own creative
+search terms, selection, license judgment, and fallback discovery. If an agent
+finds a better asset through a browser, archive, or new source, it can use
+`assets download` or `assets import` and preserve the same provenance record;
+creative sourcing is not limited to the built-in catalogues.
+
+`ingest`, AI `generate`, and walkthrough capture register their outputs
+automatically. Builds still consume local files only; they never acquire media.
 
 For ambitious work, your agent turns medium-neutral creative intent into 2–3
 small proof branches, renders their decisive states, records why each might work,

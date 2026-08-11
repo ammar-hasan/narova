@@ -8,7 +8,8 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
-const { buildSpec, readSpec, specPathFor, providerInfo, downloadFile, _internals } = require('../src/generate');
+const { buildSpec, generate, readSpec, specPathFor, providerInfo, downloadFile, _internals } = require('../src/generate');
+const { readAssetLock, registerAsset } = require('../src/asset-registry');
 
 test('specPathFor maps an artifact to its sidecar path', () => {
   assert.equal(specPathFor('assets/gen-sora-foo.mp4'), 'assets/gen-sora-foo.gen.json');
@@ -64,10 +65,96 @@ test('buildSpec captures null model when params omit it (regeneration still work
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-'));
   const artifact = path.join(dir, 'g.mp4');
   fs.writeFileSync(artifact, 'x');
-  const spec = buildSpec('sora', info, 'p', {}, 'u', artifact, 1);
+  const spec = buildSpec('sora', info, 'p', {}, 'https://x.example/video?token=secret#part', artifact, 1);
   assert.equal(spec.model, null);
   assert.deepEqual(spec.params, {});
+  assert.equal(spec.sourceVideoUrl, 'https://x.example/video');
+  assert.match(spec.sourceVideoUrlHash, /^[a-f0-9]{64}$/);
   fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('generation restores the previous artifact and recipe when registration fails', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-transaction-'));
+  const assets = path.join(dir, 'assets');
+  const artifact = path.join(assets, 'clip.mp4');
+  fs.mkdirSync(assets);
+  fs.writeFileSync(artifact, 'old-video');
+  fs.writeFileSync(specPathFor(artifact), 'old-spec');
+  try {
+    await assert.rejects(generate('sora', 'paper boat', 'test-key', artifact, assets, {
+      projectDir: dir,
+      generateSora: async () => ({ url: 'https://cdn.example/video?signature=secret', headers: {} }),
+      downloadFile: async (_url, destination) => { fs.writeFileSync(destination, 'new-video'); },
+      registerAsset: () => { throw new Error('lock unavailable'); },
+    }), /lock unavailable/);
+    assert.equal(fs.readFileSync(artifact, 'utf8'), 'old-video');
+    assert.equal(fs.readFileSync(specPathFor(artifact), 'utf8'), 'old-spec');
+    assert.deepEqual(fs.readdirSync(assets).sort(), ['clip.gen.json', 'clip.mp4']);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('generation rejects an escaping output parent before provider work', async () => {
+  if (process.platform === 'win32') return;
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-boundary-'));
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-outside-'));
+  fs.symlinkSync(outside, path.join(dir, 'assets'));
+  let providerCalls = 0;
+  try {
+    await assert.rejects(generate('sora', 'paper boat', 'test-key', path.join(dir, 'assets', 'clip.mp4'), path.join(dir, 'assets'), {
+      projectDir: dir,
+      generateSora: async () => { providerCalls++; return { url: 'https://cdn.example/video', headers: {} }; },
+    }), /resolves outside the project/);
+    assert.equal(providerCalls, 0);
+    assert.deepEqual(fs.readdirSync(outside), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('generation rejects a directory target before provider work', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-directory-'));
+  const target = path.join(dir, 'assets', 'clip.mp4');
+  fs.mkdirSync(target, { recursive: true });
+  let providerCalls = 0;
+  try {
+    await assert.rejects(generate('sora', 'paper boat', 'test-key', target, path.dirname(target), {
+      projectDir: dir,
+      generateSora: async () => { providerCalls++; return { url: 'https://cdn.example/video', headers: {} }; },
+    }), /not a regular file/);
+    assert.equal(providerCalls, 0);
+    assert.ok(fs.statSync(target).isDirectory());
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('automatic generation refresh preserves omitted rights metadata', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-rights-'));
+  const assets = path.join(dir, 'assets');
+  const artifact = path.join(assets, 'clip.mp4');
+  fs.mkdirSync(assets);
+  fs.writeFileSync(artifact, 'old');
+  registerAsset(dir, {
+    file: 'assets/clip.mp4',
+    rights: { license: 'CC-BY-4.0', creator: 'Example Artist', attribution: 'Example Artist' },
+  });
+  try {
+    await generate('sora', 'paper boat', 'test-key', artifact, assets, {
+      projectDir: dir,
+      generateSora: async () => ({ url: 'https://cdn.example/video?signature=secret', headers: {} }),
+      downloadFile: async (_url, destination) => { fs.writeFileSync(destination, 'new'); },
+    });
+    const record = readAssetLock(dir).assets[0];
+    assert.equal(record.origin.mode, 'generated');
+    assert.equal(record.rights.license, 'CC-BY-4.0');
+    assert.equal(record.rights.creator, 'Example Artist');
+    assert.equal(record.rights.attribution, 'Example Artist');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('provider metadata matches current OpenAI and Runway API contracts', () => {

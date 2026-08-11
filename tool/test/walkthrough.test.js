@@ -5,6 +5,7 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { pathToFileURL } = require('node:url');
 const vm = require('node:vm');
 
 const { resolveConfig } = require('../src/schema');
@@ -101,6 +102,70 @@ function makeProject(raw = rawProject()) {
   fs.mkdirSync(path.join(dir, 'assets'), { recursive: true });
   return { dir, config: resolveConfig(raw, {}, dir) };
 }
+
+test('walkthrough publication can roll back a replacement until registry commit', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-walkthrough-publish-'));
+  const previous = path.join(dir, 'capture');
+  const next = path.join(dir, 'next');
+  fs.mkdirSync(previous);
+  fs.mkdirSync(next);
+  fs.writeFileSync(path.join(previous, 'recording.webm'), 'old');
+  fs.writeFileSync(path.join(next, 'recording.webm'), 'new');
+  try {
+    const publication = replaceDir(next, previous, { deferCommit: true });
+    assert.equal(fs.readFileSync(path.join(previous, 'recording.webm'), 'utf8'), 'new');
+    publication.rollback();
+    assert.equal(fs.readFileSync(path.join(previous, 'recording.webm'), 'utf8'), 'old');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('walkthrough publication keeps the committed capture when backup cleanup fails', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-walkthrough-commit-'));
+  const previous = path.join(dir, 'capture');
+  const next = path.join(dir, 'next');
+  fs.mkdirSync(previous);
+  fs.mkdirSync(next);
+  fs.writeFileSync(path.join(previous, 'recording.webm'), 'old');
+  fs.writeFileSync(path.join(next, 'recording.webm'), 'new');
+  const publication = replaceDir(next, previous, { deferCommit: true });
+  const originalRmSync = fs.rmSync;
+  try {
+    fs.rmSync = (target, options) => {
+      if (String(target).includes('-previous-')) throw new Error('simulated cleanup failure');
+      return originalRmSync(target, options);
+    };
+    assert.doesNotThrow(() => publication.commit());
+    assert.equal(fs.readFileSync(path.join(previous, 'recording.webm'), 'utf8'), 'new');
+    publication.rollback();
+    assert.equal(fs.readFileSync(path.join(previous, 'recording.webm'), 'utf8'), 'new');
+  } finally {
+    fs.rmSync = originalRmSync;
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('walkthrough capture rejects an escaping asset root before driver work', () => {
+  if (process.platform === 'win32') return;
+  const { dir, config } = makeProject();
+  const outside = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-walkthrough-outside-'));
+  fs.rmSync(path.join(dir, 'assets'), { recursive: true });
+  fs.symlinkSync(outside, path.join(dir, 'assets'));
+  let driverCalls = 0;
+  try {
+    assert.throws(() => captureWalkthrough(config, 'demo', timings(), {
+      agentBrowser: '/fake/agent-browser',
+      which: () => '/fake/tool',
+      spawn: () => { driverCalls++; return { status: 0, stdout: '0.33.0' }; },
+    }), /resolves outside the project/);
+    assert.equal(driverCalls, 0);
+    assert.deepEqual(fs.readdirSync(outside), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
 
 const timings = () => ({
   intro: {
@@ -447,6 +512,9 @@ test('explore opens the declared source and leaves a named session available', (
 test('capture runs timed actions, writes an auditable take, and detects staleness', () => {
   const raw = rawProject();
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-walkthrough-policy-capture-'));
+  fs.writeFileSync(path.join(dir, 'demo.html'), '<p>local demo</p>');
+  const localUrl = pathToFileURL(path.join(dir, 'demo.html')).href;
+  raw.walkthroughs.demo.url = localUrl;
   fs.mkdirSync(path.join(dir, 'assets'));
   fs.writeFileSync(
     path.join(dir, 'walkthrough-policy.json'),
@@ -504,8 +572,15 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
   assert.equal(result.manifest.steps.length, 3);
   assert.equal(result.manifest.cursorRenderer, CURSOR_RENDERER_VERSION);
   assert.ok(result.manifest.steps.every(step => Math.abs(step.driftMs) <= 30));
-  assert.equal(result.manifest.url, 'https://example.com/app');
+  assert.equal(result.manifest.url, raw.walkthroughs.demo.url);
   assert.ok(result.manifest.urlHash);
+  const assetLock = JSON.parse(fs.readFileSync(path.join(dir, 'assets.lock.json'), 'utf8'));
+  const captureAsset = assetLock.assets.find(asset => asset.file === 'assets/walkthroughs/demo/recording.webm');
+  assert.equal(captureAsset.origin.mode, 'capture');
+  assert.equal(captureAsset.origin.provider, 'agent-browser');
+  assert.equal(captureAsset.origin.sourcePage, undefined);
+  assert.equal(captureAsset.recipe, 'assets/walkthroughs/demo/capture.json');
+  assert.match(captureAsset.sha256, /^[a-f0-9]{64}$/);
   const manifestText = fs.readFileSync(capturePaths(config, 'demo').manifest, 'utf8');
   assert.ok(!manifestText.includes('Secret demo value'));
   assert.ok(!manifestText.includes('do-not-persist'));
@@ -577,6 +652,7 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
   fs.writeFileSync(capturePaths(config, 'demo').manifest, manifestText);
 
   const changedRaw = rawProject();
+  changedRaw.walkthroughs.demo.url = localUrl;
   changedRaw.walkthroughs.demo.steps[1].value = 'a different input';
   const changedConfig = resolveConfig(changedRaw, {}, dir);
   assert.equal(captureStatus(changedConfig, 'demo', timings()).reason, 'walkthrough recipe changed');
@@ -586,6 +662,7 @@ test('capture runs timed actions, writes an auditable take, and detects stalenes
   assert.equal(captureStatus(config, 'demo', changedTiming).reason, 'narration timings changed');
 
   const changedNarrationRaw = rawProject();
+  changedNarrationRaw.walkthroughs.demo.url = localUrl;
   changedNarrationRaw.scenes[0].vo[0].text = 'Narration changed after the last successful synth.';
   changedNarrationRaw.walkthroughs.demo.actionPolicy = 'walkthrough-policy.json';
   const changedNarration = resolveConfig(changedNarrationRaw, {}, dir);

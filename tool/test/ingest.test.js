@@ -153,6 +153,13 @@ test('ingest end-to-end (offline): assets, screenshot skip, sources.md, claims.m
   assert.match(sources, /## \d{4}-\d{2}-\d{2} — Acme & Co — Widgets that work/);
   assert.match(sources, /url: https:\/\/acme\.example\/blog\/post/);
 
+  const assetsLock = JSON.parse(fs.readFileSync(path.join(dir, 'assets.lock.json'), 'utf8'));
+  assert.equal(assetsLock.version, 1);
+  assert.equal(assetsLock.assets.length, 4);
+  assert.ok(assetsLock.assets.every(asset => asset.origin.mode === 'source-page'));
+  assert.ok(assetsLock.assets.every(asset => asset.origin.sourcePage === pageUrl));
+  assert.ok(assetsLock.assets.every(asset => /^[a-f0-9]{64}$/.test(asset.sha256)));
+
   const claimsPath = path.join(dir, 'claims.md');
   assert.ok(r.claimsCreated);
   const claims = fs.readFileSync(claimsPath, 'utf8');
@@ -171,4 +178,54 @@ test('ingest end-to-end (offline): assets, screenshot skip, sources.md, claims.m
   assert.equal(fs.readFileSync(claimsPath, 'utf8'), claims);
   const entries = fs.readFileSync(path.join(dir, 'sources.md'), 'utf8').match(/^## /gm);
   assert.equal(entries.length, 2);
+});
+
+test('ingest rejects an escaping asset root before fetching', async () => {
+  if (process.platform === 'win32') return;
+  const dir = tmp();
+  const outside = tmp();
+  fs.symlinkSync(outside, path.join(dir, 'assets'));
+  let fetches = 0;
+  try {
+    await assert.rejects(ingest('https://acme.example/post', {
+      projectDir: dir,
+      fetch: async () => { fetches++; return htmlRes('<title>x</title>'); },
+      chrome: null,
+    }), /resolves outside the project/);
+    assert.equal(fetches, 0);
+    assert.deepEqual(fs.readdirSync(outside), []);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+    fs.rmSync(outside, { recursive: true, force: true });
+  }
+});
+
+test('ingest restores published files when registry commit fails', async () => {
+  const dir = tmp();
+  const assets = path.join(dir, 'assets');
+  fs.mkdirSync(assets);
+  const pageUrl = 'https://acme.example/post';
+  const oldShot = path.join(assets, 'acme-example-post-page.png');
+  fs.writeFileSync(oldShot, 'old-shot');
+  const html = '<title>Post</title><meta property="og:image" content="/hero.png">';
+  const fetch = async u => u === pageUrl ? htmlRes(html) : imgRes([1, 2, 3]);
+  try {
+    await assert.rejects(ingest(pageUrl, {
+      projectDir: dir,
+      log: () => {},
+      fetch,
+      chrome: '/fake/chrome',
+      spawnSync: (_bin, args) => {
+        const output = args.find(arg => arg.startsWith('--screenshot=')).slice('--screenshot='.length);
+        fs.writeFileSync(output, 'new-shot');
+        return { status: 0 };
+      },
+      registerAssets: () => { throw new Error('lock unavailable'); },
+    }), /lock unavailable/);
+    assert.equal(fs.readFileSync(oldShot, 'utf8'), 'old-shot');
+    assert.deepEqual(fs.readdirSync(assets), ['acme-example-post-page.png']);
+    assert.equal(fs.existsSync(path.join(dir, 'assets.lock.json')), false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });

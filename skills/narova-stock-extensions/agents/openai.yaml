@@ -1,0 +1,4 @@
+interface:
+  display_name: "Narova Stock Extensions"
+  short_description: "LLM-led creative asset discovery"
+  default_prompt: "Use $narova-stock-extensions to find, inspect, and import suitable licensed media beyond Narova core providers."

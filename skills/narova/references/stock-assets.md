@@ -1,8 +1,10 @@
 # Stock Assets for Narova
 
-How to source every asset a narova project needs — all from the terminal. Every
-source listed here is verified working **July 2026** against the actual endpoint
-(`curl -sI` returned HTTP 200). No login, no API key, no browser for Tier 1.
+How to source every asset a narova project needs. Remote availability changes;
+never treat an old HTTP check as proof that a provider works today. Prefer the
+built-in adapters below because they exercise the current API and normalize its
+result. The longer source catalogue remains a discovery reference and may need
+a browser or a fresh endpoint check.
 
 Sources are organized by category so an agent can jump straight to what it needs
 for the current scene.
@@ -10,36 +12,107 @@ for the current scene.
 ## Table of contents
 
 1. [Acquisition priority](#acquisition-priority)
-2. [Photos & images](#photos--images)
-3. [Video clips](#video-clips)
-4. [Music & background beds](#music--background-beds)
-5. [Sound effects](#sound-effects)
-6. [Fonts](#fonts)
-7. [Icons](#icons)
-8. [Illustrations & vector art](#illustrations--vector-art)
-9. [3D models, HDRIs, textures](#3d-models-hdris-textures)
-10. [Museum, archive & cultural collections](#museum-archive--cultural-collections)
-11. [Maps & geography](#maps--geography)
-12. [Science, space & nature data](#science-space--nature-data)
-13. [Scene-by-scene search terms](#scene-by-scene-search-terms)
-14. [DO NOT USE](#do-not-use)
-15. [Licensing manifest](#licensing-manifest)
-16. [Where to put assets](#where-to-put-assets)
-17. [Attribution rules](#attribution-rules)
+2. [Essential catalogue adapters](#essential-catalogue-adapters)
+3. [Photos & images](#photos--images)
+4. [Video clips](#video-clips)
+5. [Music & background beds](#music--background-beds)
+6. [Sound effects](#sound-effects)
+7. [Fonts](#fonts)
+8. [Icons](#icons)
+9. [Illustrations & vector art](#illustrations--vector-art)
+10. [3D models, HDRIs, textures](#3d-models-hdris-textures)
+11. [Museum, archive & cultural collections](#museum-archive--cultural-collections)
+12. [Maps & geography](#maps--geography)
+13. [Science, space & nature data](#science-space--nature-data)
+14. [Scene-by-scene search terms](#scene-by-scene-search-terms)
+15. [DO NOT USE](#do-not-use)
+16. [Licensing manifest](#licensing-manifest)
+17. [Where to put assets](#where-to-put-assets)
+18. [Attribution rules](#attribution-rules)
 
 ---
 
 ## Acquisition priority
 
-Follow this order so the highest-qaulity, most reliable sources are used first:
+Follow this order so the highest-quality, most reliable sources are used first:
 
-1. **NASA API** — galaxies, Earth, scientific visuals (public domain)
+1. **NASA API** — galaxies, Earth, scientific visuals (review each item's rights)
 2. **Wikimedia Commons API** — diagrams, artwork, encyclopedic imagery
 3. **Unsplash / Pixabay (website)** — contemporary photography (agent-browser)
 4. **Mixkit / Coverr** — cinematic video clips (CLI, no key)
 5. **Museum APIs** (Smithsonian, The Met, Cleveland, Wellcome, ARTIC) — art, culture
 6. **Mixkit Music / Pixabay Music / Incompetech** — background score
 7. **Google Fonts** — typography
+
+---
+
+## Core catalogue adapters
+
+Use adapters for provider API mechanics; use judgment for relevance, rights,
+model/property releases, and sensitive contexts.
+
+```bash
+# List all deterministic adapters and optional credential readiness.
+narova assets providers
+
+# Search without downloading. Add --json when another program will select.
+narova assets search "meditation gong" --provider wikimedia --kind audio --json
+narova assets search "home" --provider iconify --kind image --json
+narova assets search "wooden crate" --provider poly-haven --kind model --json
+
+# Resolve the selected item again, download it atomically, and register it.
+narova assets acquire "File:Meditation Gong.ogg" --provider wikimedia \
+  --kind audio --output assets/gong.ogg
+```
+
+| Pack | Provider | Kinds | Credential |
+|---|---|---|---|
+| essential | `wikimedia` | image, video, audio | none |
+| essential | `openverse` | image, audio | none |
+| essential | `nasa` | image, video, audio | none |
+| essential | `internet-archive` | video, audio | none |
+| essential | `iconify` | 2D SVG icons | none |
+| essential | `poly-haven` | 3D FBX models | none |
+| core | `met` | image | none |
+| core | `cleveland-museum` | image | none |
+| core | `loc` | image | none |
+| core | `pexels` | image, video | `PEXELS_API_KEY` |
+| core | `pixabay` | image, video | `PIXABAY_API_KEY` |
+| core | `freesound` | audio | `FREESOUND_API_KEY` |
+
+The separate `narova-stock-extensions` skill contains no adapters or launcher.
+It is an LLM-led catalogue of 101 loose sources for creative discovery with web
+search, direct HTTP, or a browser. Those sources are not mechanically ready by
+definition. Finish every selected loose item through `narova assets download`
+or `narova assets import` so hashing, verification, provenance, and credits stay
+in the core lifecycle.
+
+Optional keys stay in environment variables and are never written to the
+project lock. A missing key disables only that core provider. Wikimedia's
+current Core API supplies file URLs but not reliable per-file license metadata,
+so acquisitions stay `rights.status: "unknown"` until the item page has been
+reviewed and the license is supplied explicitly:
+
+```bash
+narova assets import assets/gong.ogg --license CC0-1.0 \
+  --license-url https://creativecommons.org/publicdomain/zero/1.0/ \
+  --creator "Example creator" --attribution "Example creator / Wikimedia Commons"
+```
+
+`search` and `acquire` are intentionally separate: an author or agent must
+select a suitable result. Builds never search or download anything. The skill
+may still use a browser, web research, or a long-tail source below when that
+produces a better creative choice. Finish that path with `assets download` or
+`assets import` so it receives the same provenance and verification treatment.
+
+Run live API and byte-download checks explicitly from the repository root:
+
+```bash
+npm run test:stock-live
+# Runs every no-key adapter; key-backed providers run when configured.
+```
+
+These are intentionally outside the ordinary deterministic unit suite.
 
 ---
 
@@ -156,7 +229,7 @@ agent-browser --session pb open "https://pixabay.com/images/search/nature/"
 ### Pexels Videos (API key required)
 
 ```
-curl -H "Authorization: YOUR_API_KEY" -s "https://api.pexels.com/videos/search?query=ocean&per_page=5"
+curl -H "Authorization: YOUR_API_KEY" -s "https://api.pexels.com/v1/videos/search?query=ocean&per_page=5"
 ```
 
 - **API key required** — same 200 req/hr as photos. Unauthenticated requests
@@ -357,7 +430,8 @@ agent-browser --session pb open "https://pixabay.com/sound-effects/search/whoosh
 ### Freesound API
 
 ```
-curl -s "https://freesound.org/apiv2/search/text/?query=nature&token=YOUR_FREE_TOKEN"
+curl -H "Authorization: Token YOUR_FREE_TOKEN" -s \
+  "https://freesound.org/apiv2/search/?query=nature&fields=id,name,url,username,license,previews,duration"
 ```
 
 - Free token via registration. Massive CC-licensed sound library.
@@ -967,27 +1041,56 @@ wellcome: philosophy, anatomy, creation
 
 ## Licensing manifest
 
-For every downloaded asset, save a record. Narova's `claims.md` is the natural
-home. Minimum viable record:
+Use Narova's asset commands for the mechanical download and provenance record:
+
+```bash
+narova assets download "https://cdn.example/earth.jpg" \
+  --output assets/earth.jpg \
+  --origin stock \
+  --provider nasa \
+  --item-id PIA00342 \
+  --source-page "https://images.nasa.gov/details/PIA00342"
+```
+
+When a browser or provider-specific tool already downloaded the file, register
+it afterward with the same metadata flags:
+
+```bash
+narova assets import assets/earth.jpg --origin stock --provider nasa \
+  --item-id PIA00342
+```
+
+Both commands update the project-root `assets.lock.json`. `narova ingest`,
+`narova generate`, and `narova walkthrough capture` register their own outputs
+automatically. `narova assets verify` detects missing or modified bytes, and
+`narova assets credits` prints deduplicated attribution lines. Release checks
+verify tracked bytes. If an asset leaves the project intentionally, use
+`narova assets untrack <file>`; it removes only the record, never the file.
+
+The record shape is intentionally provider-neutral:
 
 ```json
 {
-  "asset_id": "scene03_nasa_001",
-  "scene": "universe beginning",
-  "source_name": "NASA Image and Video Library",
-  "source_page": "https://images.nasa.gov/details/PIA00342",
-  "download_url": "https://images-assets.nasa.gov/image/PIA00342/PIA00342~orig.jpg",
-  "title": "The Earth & Moon",
-  "creator": "NASA/JPL",
-  "license": "public domain",
-  "license_url": "https://www.nasa.gov/nasa-brand-center/images-and-media/",
-  "attribution_text": "NASA/JPL",
-  "commercial_use": true,
-  "modification_allowed": true,
-  "editorial_only": false,
-  "downloaded_at": "2026-07-28T00:00:00Z"
+  "file": "assets/earth.jpg",
+  "kind": "image",
+  "sha256": "...",
+  "bytes": 1234567,
+  "origin": {
+    "mode": "stock",
+    "provider": "nasa",
+    "itemId": "PIA00342",
+    "sourcePage": "https://images.nasa.gov/details/PIA00342"
+  },
+  "rights": {
+    "status": "unknown"
+  },
+  "acquiredAt": "2026-08-10T00:00:00Z"
 }
 ```
+
+Keep `claims.md` exclusively for factual assertions in the narration. Asset
+rights and attribution belong in `assets.lock.json`; content-source bibliography
+belongs in `sources.md`.
 
 ### Auto-reject when
 
@@ -1041,5 +1144,6 @@ Reference in scene HTML: `src="assets/galaxy.mp4"`, `url("assets/fonts/brand.wof
 - **Incompetech / ccMixter:** Attribution required (CC BY).
 - **BBC Sound Effects:** Personal/educational only — **not** for commercial video.
 
-For narova projects, add attribution text to the end card or scene body.
-Keep source URLs and license records in `claims.md`.
+For narova projects, add required attribution text to the end card or scene
+body. Keep source URLs and license records in `assets.lock.json`; use
+`narova assets credits` to produce the deduplicated text.

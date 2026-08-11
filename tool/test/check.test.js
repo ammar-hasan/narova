@@ -10,6 +10,7 @@ const { timingsFingerprint } = require('../src/audio-fingerprint');
 const { hashFile, buildHashes } = require('../src/manifest');
 const { writeProofReceipt, verifyProofReceipt, writeProofBundle } = require('../src/proof-receipt');
 const { projectIdentity } = require('../src/releases');
+const { registerAsset } = require('../src/asset-registry');
 
 /* check() prints via console.log; capture it. */
 function run(config, opts = {}) {
@@ -774,6 +775,27 @@ test('release: infinite animation still fails (determinism)', () => {
   const { ok, lines } = run(config, { release: true });
   assert.equal(ok, false, 'infinite animation should fail release: ' + lines.join('\n'));
   assert.ok(lines.some(l => l.includes('infinite') && l.startsWith('fail:')), lines.join('\n'));
+});
+
+test('release: tracked asset tampering fails the build gate', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-assets-'));
+  try {
+    fs.mkdirSync(path.join(dir, 'assets'));
+    fs.writeFileSync(path.join(dir, 'assets', 'hero.jpg'), 'original');
+    registerAsset(dir, { file: 'assets/hero.jpg', origin: { mode: 'user' } });
+    const config = {
+      title: 'Asset gate', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+      assetsDir: path.join(dir, 'assets'), voices: {},
+      scenes: [{ id: 's', body: '<img src="assets/hero.jpg">', vo: [], dur: 2 }],
+    };
+    assert.equal(run(config, { release: true }).ok, true);
+    fs.writeFileSync(path.join(dir, 'assets', 'hero.jpg'), 'tampered');
+    const stale = run(config, { release: true });
+    assert.equal(stale.ok, false);
+    assert.ok(stale.lines.some(line => line.includes('asset provenance: assets/hero.jpg') && line.includes('hash changed')), stale.lines.join('\n'));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
 });
 
 test('strict: unledgered claims warn when claims.md exists', () => {

@@ -1,6 +1,6 @@
 {
   "name": "narova",
-  "version": "0.29.0",
+  "version": "0.30.0",
   "description": "Deterministic scene-scripted video CLI with local voices, word-synced captions, and local renderers.",
   "type": "commonjs",
   "main": "src/pipeline.js",
@@ -13,7 +13,8 @@
     "test": "npm run -s test:js && npm run -s test:py",
     "test:js": "node --test 'test/*.test.js'",
     "test:py": "PYTHONPATH=py python3 -m unittest discover -s py/tests",
-    "test:install": "node --test test/install.test.js"
+    "test:install": "node --test test/install.test.js",
+    "test:stock-live": "node --test live-tests/stock-providers.live.test.js"
   },
   "files": [
     "bin/",
