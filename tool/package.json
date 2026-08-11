@@ -1,6 +1,6 @@
 {
   "name": "@narova/narova",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "description": "Deterministic scene-scripted video CLI with local voices, word-synced captions, and local renderers.",
   "keywords": [
     "video",
@@ -29,7 +29,7 @@
   },
   "scripts": {
     "test": "npm run -s test:js && npm run -s test:py",
-    "test:js": "node --test 'test/*.test.js'",
+    "test:js": "node --test test/*.test.js",
     "test:py": "PYTHONPATH=py python3 -m unittest discover -s py/tests",
     "test:install": "node --test test/install.test.js",
     "test:stock-live": "node --test live-tests/stock-providers.live.test.js",

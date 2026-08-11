@@ -1,6 +1,6 @@
 {
   "name": "narova-repo",
-  "version": "0.31.0",
+  "version": "0.31.1",
   "description": "Development workspace for the standalone Narova CLI and its separate agent skills.",
   "private": true,
   "type": "commonjs",
@@ -11,7 +11,7 @@
     "test:js": "npm run test:js --prefix tool",
     "test:py": "npm run test:py --prefix tool",
     "test:install": "npm run test:install --prefix tool",
-    "test:integration": "node --test 'test/*.test.js'",
+    "test:integration": "node --test test/*.test.js",
     "test:elevenlabs": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-elevenlabs/tests",
     "test:openai": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-openai/tests",
     "test:stock-live": "npm run test:stock-live --prefix tool",

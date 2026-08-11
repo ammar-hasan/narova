@@ -3,6 +3,68 @@
 const fs = require('node:fs');
 const path = require('node:path');
 
+function isStepRunBlock(lines, index, runIndent, directStep) {
+  let stepIndex = index;
+  let stepIndent = runIndent;
+
+  if (!directStep) {
+    for (let cursor = index - 1; cursor >= 0; cursor -= 1) {
+      if (!lines[cursor].trim() || /^\s*#/.test(lines[cursor])) continue;
+      const indent = lines[cursor].match(/^\s*/)[0].length;
+      if (indent >= runIndent) continue;
+      if (!/^\s*-\s+/.test(lines[cursor])) return false;
+      stepIndex = cursor;
+      stepIndent = indent;
+      break;
+    }
+  }
+
+  for (let cursor = stepIndex - 1; cursor >= 0; cursor -= 1) {
+    if (!lines[cursor].trim() || /^\s*#/.test(lines[cursor])) continue;
+    const indent = lines[cursor].match(/^\s*/)[0].length;
+    if (indent >= stepIndent) continue;
+    return /^\s*steps:\s*(?:#.*)?$/.test(lines[cursor]);
+  }
+  return false;
+}
+
+function hasMainAncestryGuard(source) {
+  const lines = source.split(/\r?\n/);
+  const runScripts = [];
+
+  for (let index = 0; index < lines.length; index += 1) {
+    const block = lines[index].match(
+      /^(\s*)(?:-\s+)?([A-Za-z0-9_-]+):\s*[|>](?:[+-]?[1-9]?|[1-9][+-]?)\s*(?:#.*)?$/,
+    );
+    if (!block) continue;
+
+    const blockIndent = block[1].length;
+    const directStep = lines[index].slice(blockIndent).startsWith('- ');
+    const executableRun = block[2] === 'run'
+      && isStepRunBlock(lines, index, blockIndent, directStep);
+    const contents = [];
+    for (index += 1; index < lines.length; index += 1) {
+      const line = lines[index];
+      if (!line.trim()) {
+        contents.push('');
+        continue;
+      }
+      const indent = line.match(/^\s*/)[0].length;
+      if (indent <= blockIndent) {
+        index -= 1;
+        break;
+      }
+      contents.push(line.trim());
+    }
+    if (executableRun) runScripts.push(contents);
+  }
+
+  return runScripts.some(script => script.some(line => (
+    /^if\s+!\s+git\s+merge-base\s+--is-ancestor\s+"\$tag_commit"\s+origin\/main;\s*then$/.test(line)
+  )));
+}
+
+function checkRelease() {
 const root = path.resolve(__dirname, '..');
 const readJson = file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
 const repositoryPackage = readJson('package.json');
@@ -36,6 +98,23 @@ if (!new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{
   throw new Error(`CHANGELOG.md has no dated ${version} release entry`);
 }
 
+const publishWorkflow = fs.readFileSync(path.join(root, '.github/workflows/publish.yml'), 'utf8');
+for (const required of [
+  'id-token: write',
+  'fetch-depth: 0',
+  'npm publish --access public --provenance',
+]) {
+  if (!publishWorkflow.includes(required)) {
+    throw new Error(`publish workflow is missing required release control: ${required}`);
+  }
+}
+if (!hasMainAncestryGuard(publishWorkflow)) {
+  throw new Error('publish workflow must require $tag_commit to be an ancestor of origin/main');
+}
+if (/NPM_TOKEN|NODE_AUTH_TOKEN/.test(publishWorkflow)) {
+  throw new Error('publish workflow must use npm Trusted Publishing without a token fallback');
+}
+
 if (process.env.GITHUB_REF_TYPE === 'tag') {
   const expectedTag = `v${version}`;
   if (process.env.GITHUB_REF_NAME !== expectedTag) {
@@ -44,3 +123,8 @@ if (process.env.GITHUB_REF_TYPE === 'tag') {
 }
 
 process.stdout.write(`release metadata ok: @narova/narova@${version}\n`);
+}
+
+if (require.main === module) checkRelease();
+
+module.exports = { checkRelease, hasMainAncestryGuard };

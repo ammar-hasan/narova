@@ -10,6 +10,7 @@ const tool = path.join(root, 'tool');
 const expectedVersion = require(path.join(tool, 'package.json')).version;
 const scratch = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-packed-package-'));
 const prefix = path.join(scratch, 'prefix');
+const npmEnv = { npm_config_cache: path.join(scratch, 'npm-cache') };
 
 function run(command, args, options = {}) {
   const result = spawnSync(command, args, {
@@ -28,7 +29,7 @@ function run(command, args, options = {}) {
 try {
   const packed = run('npm', [
     'pack', '--json', '--ignore-scripts', '--dry-run=false', '--pack-destination', scratch,
-  ], { cwd: tool });
+  ], { cwd: tool, env: npmEnv });
   const report = JSON.parse(packed.stdout)[0];
   const archive = path.join(scratch, report.filename);
   if (!fs.existsSync(archive)) throw new Error(`npm pack did not create ${archive}`);
@@ -36,7 +37,7 @@ try {
   run('npm', [
     'install', '--global', '--prefix', prefix, '--omit=optional', '--ignore-scripts',
     '--no-audit', '--no-fund', '--dry-run=false', archive,
-  ]);
+  ], { env: npmEnv });
 
   const bin = name => path.join(prefix, 'bin', name);
   const version = run(bin('narova'), ['--version']).stdout.trim();

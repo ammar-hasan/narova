@@ -9,7 +9,7 @@ with a local CLI. Together they turn prompts, scripts, web pages, and product
 walkthroughs into narrated, captioned video.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.31.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.31.1-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -53,9 +53,10 @@ npm install --global @narova/narova
 narova doctor
 ```
 
-The npm package does not change agent skills. Published releases include npm
-provenance linking the package to this public repository and its release
-workflow.
+The npm package does not change agent skills. Releases from `0.31.1` onward
+publish through npm Trusted Publishing with provenance linking the package to
+this public repository and its release workflow. The manually bootstrapped
+`0.31.0` release has an npm registry signature but no provenance attestation.
 
 ### Update or remove
 

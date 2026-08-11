@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.31.0"
+  version: "0.31.1"
 ---
 # narova — video from scene scripts
 
@@ -80,7 +80,7 @@ if command -v narova >/dev/null 2>&1; then
 elif [ -x "$HOME/.local/bin/narova" ]; then
   printf '%s\n' "$HOME/.local/bin/narova"
 else
-  npm install --global @narova/narova@0.31.0
+  npm install --global @narova/narova@0.31.1
 fi
 ```
 

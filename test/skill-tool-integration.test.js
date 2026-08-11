@@ -6,6 +6,7 @@ const { spawnSync } = require('node:child_process');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { syncVersion } = require('../scripts/sync-version');
 
 const ROOT = path.resolve(__dirname, '..');
 const SKILL_DIR = path.join(ROOT, 'skills', 'narova');
@@ -121,6 +122,51 @@ test('repository version sources agree with the standalone tool package', () => 
     assert.ok(currentMatch, `${relative} must have a current version marker`);
     assert.equal(currentMatch[1], rootVer, `${relative} version must match root`);
   }
+});
+
+test('version sync updates skill metadata and its exact npm bootstrap pin', t => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-version-sync-'));
+  t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
+
+  const write = (relative, source) => {
+    const file = path.join(tmp, relative);
+    fs.mkdirSync(path.dirname(file), { recursive: true });
+    fs.writeFileSync(file, source);
+  };
+
+  write('package.json', '{"version":"9.8.7"}\n');
+  write('tool/package.json', '{"name":"@narova/narova","version":"0.0.1"}\n');
+  write('tool/package-lock.json', `${JSON.stringify({
+    name: '@narova/narova',
+    version: '0.0.1',
+    packages: { '': { name: '@narova/narova', version: '0.0.1' } },
+  }, null, 2)}\n`);
+  write('skills/narova/SKILL.md', [
+    '---',
+    'metadata:',
+    '  version: "0.0.1"',
+    '---',
+    'npm install --global @narova/narova@0.0.1',
+    '',
+  ].join('\n'));
+  write('README.md', 'https://img.shields.io/badge/version-0.0.1-blue.svg\n');
+  write('SPEC.md', '## Status: 0.0.1 shipped\n');
+  write('docs/index.html', '<span data-narova-version>v0.0.1</span>\n');
+  write('docs/changelog/index.html', '<span data-narova-version>0.0.1</span>\n');
+
+  syncVersion(tmp, { log() {}, warn() {} });
+
+  const skill = fs.readFileSync(path.join(tmp, 'skills/narova/SKILL.md'), 'utf8');
+  assert.match(skill, /version: "9\.8\.7"/);
+  assert.match(skill, /@narova\/narova@9\.8\.7/);
+  assert.equal(JSON.parse(fs.readFileSync(path.join(tmp, 'tool/package.json'))).version, '9.8.7');
+  const lock = JSON.parse(fs.readFileSync(path.join(tmp, 'tool/package-lock.json')));
+  assert.equal(lock.version, '9.8.7');
+  assert.equal(lock.packages[''].version, '9.8.7');
+  assert.match(fs.readFileSync(path.join(tmp, 'README.md'), 'utf8'), /version-9\.8\.7-/);
+  assert.match(fs.readFileSync(path.join(tmp, 'SPEC.md'), 'utf8'), /Status: 9\.8\.7 shipped/);
+  assert.match(fs.readFileSync(path.join(tmp, 'docs/index.html'), 'utf8'), />v9\.8\.7</);
+  assert.match(fs.readFileSync(path.join(tmp, 'docs/changelog/index.html'), 'utf8'), />9\.8\.7</);
 });
 
 test('repository eval runners resolve the top-level tool layout', () => {

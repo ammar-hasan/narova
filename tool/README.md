@@ -64,6 +64,7 @@ npm install --global @narova/narova@latest
 npm uninstall --global @narova/narova
 ```
 
-Published releases include npm provenance linking the package to its public
-GitHub source and publishing workflow. Narova is available under the MIT
-license.
+Releases from `0.31.1` onward use npm Trusted Publishing and include provenance
+linking the package to its public GitHub source and publishing workflow. The
+manually bootstrapped `0.31.0` release has no provenance attestation. Narova is
+available under the MIT license.
