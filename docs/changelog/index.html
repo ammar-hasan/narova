@@ -51,7 +51,26 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.30.0</span>
+        <span class="rel-version" data-narova-version>0.31.0</span>
+        <span class="rel-date">2026-08-11</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Provenance-backed npm distribution.</strong> The standalone CLI publishes as public <code>@narova/narova</code> through a tag-bound GitHub Actions workflow.</li>
+          <li><strong>Packed-artifact gate.</strong> CI installs the exact tarball into a fresh prefix, exercises all commands, scaffolds a project, and requires a clean check.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Verifiable bootstrap.</strong> The skill pins its matching npm release instead of executing a mutable remote shell installer.</li>
+          <li><strong>Lean artifact.</strong> Runtime code and docs ship; legacy installation and development files do not.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.30.0</span>
         <span class="rel-date">2026-08-11</span>
       </div>
       <div class="rel-body">

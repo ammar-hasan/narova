@@ -81,7 +81,7 @@ fi
 mkdir -p "$PREFIX"
 PACK_DIR="$WORK_DIR/packed"
 mkdir -p "$PACK_DIR"
-PACK_NAME="$(npm pack "$TOOL_SOURCE" --pack-destination "$PACK_DIR" --silent | tail -n 1)"
+PACK_NAME="$(npm pack "$TOOL_SOURCE" --pack-destination "$PACK_DIR" --dry-run=false --silent | tail -n 1)"
 PACK_ARCHIVE="$PACK_DIR/$PACK_NAME"
 if [ ! -f "$PACK_ARCHIVE" ]; then
   echo "npm did not produce the expected package archive" >&2
@@ -104,10 +104,10 @@ if [ "$SKIP_OPTIONAL" = "1" ]; then
     delete pkg.optionalDependencies;
     fs.writeFileSync(file, JSON.stringify(pkg, null, 2) + "\n");
   ' "$STRIPPED_DIR/package/package.json"
-  STRIPPED_NAME="$(npm pack "$STRIPPED_DIR/package" --pack-destination "$STRIPPED_PACK_DIR" --silent | tail -n 1)"
+  STRIPPED_NAME="$(npm pack "$STRIPPED_DIR/package" --pack-destination "$STRIPPED_PACK_DIR" --dry-run=false --silent | tail -n 1)"
   PACK_ARCHIVE="$STRIPPED_PACK_DIR/$STRIPPED_NAME"
 fi
-npm install "${NPM_ARGS[@]}" "$PACK_ARCHIVE"
+npm install "${NPM_ARGS[@]}" --dry-run=false "$PACK_ARCHIVE"
 
 CLI="$PREFIX/bin/narova"
 if [ ! -x "$CLI" ]; then

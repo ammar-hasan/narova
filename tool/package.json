@@ -1,7 +1,25 @@
 {
-  "name": "narova",
-  "version": "0.30.0",
+  "name": "@narova/narova",
+  "version": "0.31.0",
   "description": "Deterministic scene-scripted video CLI with local voices, word-synced captions, and local renderers.",
+  "keywords": [
+    "video",
+    "cli",
+    "text-to-speech",
+    "captions",
+    "motion-graphics",
+    "agent-skill"
+  ],
+  "homepage": "https://ammar-hasan.github.io/narova/",
+  "bugs": {
+    "url": "https://github.com/ammar-hasan/narova/issues"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/ammar-hasan/narova.git",
+    "directory": "tool"
+  },
+  "author": "Ammar Hasan",
   "type": "commonjs",
   "main": "src/pipeline.js",
   "bin": {
@@ -14,13 +32,13 @@
     "test:js": "node --test 'test/*.test.js'",
     "test:py": "PYTHONPATH=py python3 -m unittest discover -s py/tests",
     "test:install": "node --test test/install.test.js",
-    "test:stock-live": "node --test live-tests/stock-providers.live.test.js"
+    "test:stock-live": "node --test live-tests/stock-providers.live.test.js",
+    "prepublishOnly": "npm test && node ../scripts/check-package.js && node ../scripts/test-packed-package.js"
   },
   "files": [
     "bin/",
     "src/",
     "vendor/",
-    "install.sh",
     "setup.sh",
     "uninstall.sh",
     "py/*.py",
@@ -29,6 +47,15 @@
   ],
   "engines": {
     "node": ">=18"
+  },
+  "os": [
+    "darwin",
+    "linux"
+  ],
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
   },
   "optionalDependencies": {
     "@fontsource/noto-sans-arabic": "5.3.0",

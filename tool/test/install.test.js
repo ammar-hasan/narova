@@ -99,7 +99,7 @@ exit 0
   assert.equal(setupCheck.status, 0, setupCheck.stderr || setupCheck.stdout);
   assert.match(setupCheck.stdout, /piper deps installed/);
 
-  const installedPackage = path.join(prefix, 'lib', 'node_modules', 'narova');
+  const installedPackage = path.join(prefix, 'lib', 'node_modules', '@narova', 'narova');
   assert.ok(fs.existsSync(path.join(installedPackage, 'src', 'pipeline.js')));
   assert.equal(fs.existsSync(path.join(installedPackage, 'test')), false);
   assert.equal(fs.existsSync(path.join(installedPackage, 'evals')), false);
@@ -168,7 +168,7 @@ test('re-running the installer upgrades the CLI in place and preserves user data
   ], { encoding: 'utf8', env });
   const cli = path.join(prefix, 'bin', 'narova');
   const uninstall = path.join(prefix, 'bin', 'narova-uninstall');
-  const legacyArtifact = path.join(prefix, 'lib', 'node_modules', 'narova', 'legacy-only.txt');
+  const legacyArtifact = path.join(prefix, 'lib', 'node_modules', '@narova', 'narova', 'legacy-only.txt');
 
   const installedOld = installFrom(oldTool);
   assert.equal(installedOld.status, 0, installedOld.stderr || installedOld.stdout);

@@ -53,8 +53,8 @@
         <div class="hero-text">
           <p class="kicker reveal-line">The creative-confidence video skill</p>
           <a class="release-pill reveal-line" href="#features" data-hover>
-            <span class="release-version" data-narova-version>v0.30.0</span>
-            <span>Verified stock sourcing · 2D/3D assets · honest provider readiness</span>
+            <span class="release-version" data-narova-version>v0.31.0</span>
+            <span>Provenance-backed npm package · exact skill/CLI versions · packed-artifact release gate</span>
             <span aria-hidden="true">→</span>
           </a>
           <h1 class="hero-title" id="heroTitle">
@@ -317,7 +317,7 @@
   <!-- QUICKSTART -->
   <section class="quick" id="quickstart">
     <h2 class="sec-title sr-title">Your first video starts<br>with <em>one prompt.</em></h2>
-    <p class="quick-intro">Install the CLI, then install the agent skill. If the CLI is missing, the skill can install it automatically. After that, pick a starting point or tell your agent what you need.</p>
+    <p class="quick-intro">Install the provenance-backed CLI package, then install the agent skill. If the CLI is missing, the skill can install its exact matching npm release. After that, pick a starting point or tell your agent what you need.</p>
     <div class="prompt-tabs" role="group" aria-label="Example Narova prompts">
       <button class="prompt-tab active" type="button" aria-pressed="true" data-prompt="idea">Idea</button>
       <button class="prompt-tab" type="button" aria-pressed="false" data-prompt="product">Product page</button>
@@ -335,11 +335,10 @@
         <button class="term-copy magnetic" id="copyQuick" data-hover>copy prompt</button>
       </div>
       <pre id="quickCode"><span class="c"># install the CLI</span>
-<span class="p">$</span> curl -fsSLo /tmp/narova-install.sh https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh
-<span class="p">$</span> bash /tmp/narova-install.sh
+<span class="p">$</span> npm install --global @narova/narova
 <span class="c"># install the agent skill</span>
 <span class="p">$</span> npx skills add ammar-hasan/narova --skill narova -g
-<span class="c"># update: run the CLI installer again · remove: narova-uninstall</span>
+<span class="c"># update: npm i -g @narova/narova@latest · remove: npm uninstall -g @narova/narova</span>
 
 <span class="c" id="promptMode"># idea → video</span>
 <span class="you">you →</span> <span id="quickPromptText">Make a 45-second vertical explainer about why starting

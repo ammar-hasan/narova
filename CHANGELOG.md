@@ -6,6 +6,31 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.0] - 2026-08-11
+
+### Added
+
+- **Provenance-backed npm distribution.** The standalone CLI publishes as the
+  public `@narova/narova` package through a tag-bound GitHub Actions workflow,
+  with npm provenance and a protected release environment.
+- **Packed-artifact release gate.** CI packs the exact npm tarball, installs it
+  into a fresh prefix, exercises all three commands, scaffolds a project, and
+  requires that project to pass `narova check`.
+
+### Changed
+
+- **Verifiable skill bootstrap.** The Narova skill installs an exact npm
+  version instead of downloading and executing a mutable GitHub shell script.
+- **Lean public artifact.** The npm tarball includes runtime code, local
+  renderers, voice workers, setup, uninstall, license, and package docs while
+  excluding the legacy GitHub installer and all development/generated files.
+
+### Security
+
+- The package declares its exact public repository and `tool/` source
+  directory, requires provenance on publish, has no npm install lifecycle
+  scripts, and uses OIDC trusted publishing after the one-time bootstrap.
+
 ## [0.30.0] - 2026-08-11
 
 ### Added

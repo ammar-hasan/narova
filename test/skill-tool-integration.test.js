@@ -28,9 +28,8 @@ test('Narova skill is instructions-only and bootstraps the standalone CLI', t =>
   const skill = fs.readFileSync(path.join(SKILL_DIR, 'SKILL.md'), 'utf8');
   assert.match(skill, /command -v narova/);
   assert.match(skill, /\[ -x "\$HOME\/\.local\/bin\/narova" \]/);
-  assert.match(skill, /set -e/);
-  assert.match(skill, /trap 'rm -f "\$installer"' EXIT/);
-  assert.match(skill, /raw\.githubusercontent\.com\/ammar-hasan\/narova\/main\/tool\/install\.sh/);
+  assert.match(skill, /npm install --global @narova\/narova@\d+\.\d+\.\d+/);
+  assert.doesNotMatch(skill, /raw\.githubusercontent\.com\/ammar-hasan\/narova\/main\/tool\/install\.sh/);
   assert.match(skill, /narova <command>/);
   assert.match(skill, /narova-uninstall/);
   assert.doesNotMatch(skill, /<this-skill-dir>\/tool|<skill-dir>\/tool|skills\/narova\/tool/);
@@ -71,16 +70,16 @@ test('skill bootstrap reuses the default-prefix CLI and preserves install failur
   const fakeBin = path.join(tmp, 'bin');
   const installHome = path.join(tmp, 'home');
   const defaultBin = path.join(installHome, '.local', 'bin', 'narova');
-  const curlMarker = path.join(tmp, 'curl-called');
+  const npmMarker = path.join(tmp, 'npm-called');
   t.after(() => fs.rmSync(tmp, { recursive: true, force: true }));
   fs.mkdirSync(fakeBin, { recursive: true });
   fs.mkdirSync(path.dirname(defaultBin), { recursive: true });
   fs.writeFileSync(defaultBin, '#!/bin/sh\nexit 0\n');
   fs.chmodSync(defaultBin, 0o755);
 
-  const fakeCurl = path.join(fakeBin, 'curl');
-  fs.writeFileSync(fakeCurl, `#!/bin/sh\ntouch "${curlMarker}"\nexit 37\n`);
-  fs.chmodSync(fakeCurl, 0o755);
+  const fakeNpm = path.join(fakeBin, 'npm');
+  fs.writeFileSync(fakeNpm, `#!/bin/sh\nprintf '%s\\n' "$*" > "${npmMarker}"\nexit 37\n`);
+  fs.chmodSync(fakeNpm, 0o755);
   const env = {
     ...process.env,
     HOME: installHome,
@@ -92,13 +91,15 @@ test('skill bootstrap reuses the default-prefix CLI and preserves install failur
   const reused = spawnSync('bash', ['-c', bootstrap[1]], { encoding: 'utf8', env });
   assert.equal(reused.status, 0, reused.stderr);
   assert.equal(reused.stdout.trim(), defaultBin);
-  assert.equal(fs.existsSync(curlMarker), false, 'an existing default-prefix CLI must not be reinstalled');
+  assert.equal(fs.existsSync(npmMarker), false, 'an existing default-prefix CLI must not be reinstalled');
 
   fs.rmSync(defaultBin);
   const failed = spawnSync('bash', ['-c', bootstrap[1]], { encoding: 'utf8', env });
   assert.equal(failed.status, 37, failed.stderr || failed.stdout);
-  assert.ok(fs.existsSync(curlMarker));
-  assert.deepEqual(fs.readdirSync(env.TMPDIR), [], 'failed bootstrap must clean its temporary installer');
+  assert.equal(
+    fs.readFileSync(npmMarker, 'utf8').trim(),
+    `install --global @narova/narova@${require(path.join(TOOL_DIR, 'package.json')).version}`,
+  );
 });
 
 test('repository version sources agree with the standalone tool package', () => {
@@ -118,9 +119,10 @@ test('repository version sources agree with the standalone tool package', () => 
   const badgeMatch = readme.match(/badge\/version-([0-9.]+)-/);
   assert.ok(badgeMatch, 'README.md must have a version badge');
   assert.equal(badgeMatch[1], rootVer, 'README.md badge version must match root');
-  assert.match(readme, /narova_prefix="\$\{NAROVA_PREFIX:-\$HOME\/\.local\}"/);
-  assert.match(readme, /bash "\$narova_installer" --prefix "\$narova_prefix"/);
-  assert.match(readme, /"\$narova_prefix\/bin\/narova" doctor/);
+  assert.match(readme, /npm install --global @narova\/narova/);
+  assert.match(readme, /narova doctor/);
+  assert.doesNotMatch(readme, /raw\.githubusercontent\.com\/ammar-hasan\/narova\/main\/tool\/install\.sh/);
+  assert.match(skillMd, new RegExp(`npm install --global @narova/narova@${rootVer.replace(/\\./g, '\\\\.')}\\b`));
 
   const spec = fs.readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8');
   const specMatch = spec.match(/^## Status: ([0-9.]+) shipped$/m);

@@ -31,6 +31,14 @@ update(['tool/package.json'], (s, ver) =>
   s.replace(/("version"\s*:\s*)"[^"]*"/, `$1"${ver}"`)
 );
 
+// tool/package-lock.json — root package and lock metadata versions
+update(['tool/package-lock.json'], (s, ver) => {
+  const lock = JSON.parse(s);
+  lock.version = ver;
+  if (lock.packages && lock.packages['']) lock.packages[''].version = ver;
+  return `${JSON.stringify(lock, null, 2)}\n`;
+});
+
 // README.md — badge URL
 update(['README.md'], (s, ver) =>
   s.replace(/(badge\/version-)[0-9.]+(-)/, `$1${ver}$2`)

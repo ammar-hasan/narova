@@ -45,7 +45,7 @@ narova/                          # the repo
 │   ├── src/                     # config, schema, check, compose/, hf, pipeline,
 │   │                            #   timeline, exports, doctor, init, ingest, captions, util
 │   ├── py/narova_tts/           # TTS backends + timing
-│   ├── install.sh               # GitHub installer; packages only this directory
+│   ├── install.sh               # legacy GitHub installer; excluded from npm
 │   ├── setup.sh                 # narova-setup; creates the TTS venv
 │   └── test/                    # independently runnable test suite
 ├── skills/narova/               # instructions-only agent skill
@@ -359,7 +359,7 @@ code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
 
-## Status: 0.30.0 shipped
+## Status: 0.31.0 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
