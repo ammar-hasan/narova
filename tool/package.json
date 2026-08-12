@@ -1,14 +1,23 @@
 {
   "name": "@narova/narova",
-  "version": "0.31.2",
-  "description": "Deterministic scene-scripted video CLI with local voices, word-synced captions, and local renderers.",
+  "version": "0.31.3",
+  "description": "Local-first prompt-to-video CLI for AI agents, with deterministic scene scripts, TTS, word-synced captions, product walkthroughs, and 2D/3D rendering.",
   "keywords": [
     "video",
-    "cli",
-    "text-to-speech",
-    "captions",
+    "video-generation",
+    "prompt-to-video",
+    "text-to-video",
+    "programmatic-video",
+    "video-cli",
+    "agent-skills",
     "motion-graphics",
-    "agent-skill"
+    "text-to-speech",
+    "tts",
+    "captions",
+    "subtitles",
+    "ffmpeg",
+    "threejs",
+    "local-first"
   ],
   "homepage": "https://ammar-hasan.github.io/narova/",
   "bugs": {

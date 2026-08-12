@@ -45,6 +45,32 @@ if (toolPackage.repository?.url !== 'git+https://github.com/ammar-hasan/narova.g
     || toolPackage.repository?.directory !== 'tool') {
   throw new Error('npm repository metadata must identify ammar-hasan/narova and the tool/ package directory');
 }
+const expectedDescription = 'Local-first prompt-to-video CLI for AI agents, with deterministic scene scripts, TTS, word-synced captions, product walkthroughs, and 2D/3D rendering.';
+if (toolPackage.description !== expectedDescription) {
+  throw new Error('npm description must preserve Narova\'s clear prompt-to-video positioning');
+}
+const expectedKeywords = [
+  'video',
+  'video-generation',
+  'prompt-to-video',
+  'text-to-video',
+  'programmatic-video',
+  'video-cli',
+  'agent-skills',
+  'motion-graphics',
+  'text-to-speech',
+  'tts',
+  'captions',
+  'subtitles',
+  'ffmpeg',
+  'threejs',
+  'local-first',
+];
+const keywords = toolPackage.keywords || [];
+if (keywords.length !== expectedKeywords.length
+    || keywords.some((keyword, index) => keyword !== expectedKeywords[index])) {
+  throw new Error(`npm keywords must equal the focused approved list: ${expectedKeywords.join(', ')}`);
+}
 if (toolPackage.publishConfig?.access !== 'public'
     || toolPackage.publishConfig?.registry !== 'https://registry.npmjs.org/'
     || toolPackage.publishConfig?.provenance !== true) {
