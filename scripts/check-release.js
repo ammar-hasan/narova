@@ -89,8 +89,20 @@ const skillVersion = skill.match(/^\s{2}version:\s*"([^"]+)"\s*$/m)?.[1];
 if (skillVersion !== version) {
   throw new Error(`skill metadata is ${skillVersion || 'missing'}; expected ${version}`);
 }
-if (!skill.includes(`@narova/narova@${version}`)) {
-  throw new Error(`skill installer must pin @narova/narova@${version}`);
+const skillPins = [...skill.matchAll(/@narova\/narova@(\d+\.\d+\.\d+(?:-[0-9A-Za-z.-]+)?)/g)]
+  .map(match => match[1]);
+if (skillPins.length !== 1 || skillPins[0] !== version) {
+  throw new Error(`skill must contain exactly one @narova/narova@${version} compatibility pin`);
+}
+for (const required of [
+  `narova_required="@narova/narova@${version}"`,
+  'narova_version="${narova_required##*@}"',
+  'npm install --global "$narova_required"',
+  '"$narova_candidate" --version',
+]) {
+  if (!skill.includes(required)) {
+    throw new Error(`skill bootstrap is missing version reconciliation control: ${required}`);
+  }
 }
 
 const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');

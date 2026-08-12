@@ -8,6 +8,10 @@ The CLI and the Narova agent skill are separate artifacts. Installing this npm
 package adds the `narova`, `narova-setup`, and `narova-uninstall` commands; it
 does not install or modify agent instructions.
 
+The skill pins one compatible CLI release. After the skill is updated, its next
+session checks `narova --version` and reconciles this global package to that
+exact version before use.
+
 ## Install
 
 Narova supports macOS and Linux. Windows users should run it through WSL.
@@ -63,6 +67,10 @@ live under `~/.narova` by default and are retained across CLI upgrades.
 npm install --global @narova/narova@latest
 npm uninstall --global @narova/narova
 ```
+
+Updating the npm package alone does not update agent instructions. Update the
+skill with `npx skills update narova -g`; its next session enforces the matching
+CLI version.
 
 Releases from `0.31.1` onward use npm Trusted Publishing and include provenance
 linking the package to its public GitHub source and publishing workflow. The

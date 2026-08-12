@@ -1,6 +1,6 @@
 {
   "name": "@narova/narova",
-  "version": "0.31.1",
+  "version": "0.31.2",
   "description": "Deterministic scene-scripted video CLI with local voices, word-synced captions, and local renderers.",
   "keywords": [
     "video",

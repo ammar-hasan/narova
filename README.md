@@ -9,7 +9,7 @@ with a local CLI. Together they turn prompts, scripts, web pages, and product
 walkthroughs into narrated, captioned video.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.31.1-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.31.2-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -78,7 +78,8 @@ The command detects a custom install prefix automatically. You can also pass
 not remove projects, downloaded models, caches, or the agent skill.
 
 Then install the skill for any agent that supports skills. If the CLI is
-missing, the skill installs its matching published npm version:
+missing or its version differs, the skill installs its exact matching published
+npm version before use:
 
 [![skills.sh](https://skills.sh/b/ammar-hasan/narova)](https://skills.sh/ammar-hasan/narova)
 
@@ -87,7 +88,11 @@ npx skills add ammar-hasan/narova --skill narova -g
 # check for updates: npx skills update narova -g (only when you're ready — upgrading replaces the skill files)
 ```
 
-The CLI and skill update separately, so updating one does not change the other.
+The CLI and skill are distributed separately, but the skill is authoritative
+for compatibility: after a skill update, its next session verifies
+`narova --version` and reconciles the global CLI to the exact pinned release.
+Installing another CLI version manually does not change the skill; the next
+skill session restores the skill's pinned version.
 
 ## Quickstart
 
@@ -469,6 +474,21 @@ LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline
 
 Run everything with `npm test`, or test the CLI independently with
 `npm test --prefix tool`.
+
+## Release version contract
+
+The root `package.json` is the only canonical Narova version. Prepare a release
+on a branch with `npm version patch|minor|major --no-git-tag-version`; the npm
+version lifecycle runs `version:sync` and propagates that value to the CLI
+package, lockfile, skill metadata, exact npm compatibility pin, badge, spec,
+and website markers. Add the dated changelog entry, then require
+`npm run release:check` and CI before merging.
+
+After the release PR lands on `main`, tag that merge as `v<version>`. The tag
+workflow rejects version drift and off-main tags, then publishes the matching
+npm package through Trusted Publishing. skills.sh reads the skill from GitHub;
+users receive it with `npx skills update narova -g`, and the updated skill
+reconciles the CLI to its exact pinned npm release before use.
 
 ## License
 
