@@ -358,7 +358,7 @@ code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
 
-## Status: 0.31.2 shipped
+## Status: 0.31.3 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

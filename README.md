@@ -1,22 +1,24 @@
 <div align="center">
 
-# narova
+# Narova — prompt-to-video CLI and agent skill
 
-**You write a prompt. narova makes the video.**
+**Local-first, deterministic video generation for AI agents.**
 
 Narova combines an agent skill for Claude Code, Codex, Cursor, and Kimi Code
-with a local CLI. Together they turn prompts, scripts, web pages, and product
-walkthroughs into narrated, captioned video.
+with a programmatic video CLI. Together they turn prompts, scene scripts,
+source material, and real product walkthroughs into narrated or silent 2D/3D
+video with local TTS, word-synced captions, and deterministic rendering.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.31.2-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.31.3-4fd9e8.svg)](./package.json)
+[![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
   <img src="assets/narova-demo.gif" alt="narova demo — prompt, voice, motion" width="100%">
 </a>
 
-*This 30-second reel was made by narova, about narova. [Watch it with sound](assets/narova-skill-reel.mp4) · [Live site](https://ammar-hasan.github.io/narova/)*
+*This 30-second reel was made by Narova, about Narova. [Watch it with sound](assets/narova-skill-reel.mp4) · [Install from npm](https://www.npmjs.com/package/@narova/narova) · [View on skills.sh](https://skills.sh/ammar-hasan/narova) · [Live site](https://ammar-hasan.github.io/narova/)*
 
 </div>
 

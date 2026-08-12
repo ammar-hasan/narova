@@ -6,6 +6,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.3] - 2026-08-12
+
+### Changed
+
+- **Clear prompt-to-video positioning.** npm metadata and both READMEs now lead
+  with Narova's product category, local-first workflow, agent audience, and
+  concrete 2D/3D, TTS, caption, and walkthrough capabilities.
+- **Website discoverability.** The site now has descriptive titles and headings,
+  self-canonical URLs, complete Open Graph and X cards, a crawlable favicon,
+  an XML sitemap, and evergreen `WebPage` plus `SoftwareApplication` JSON-LD.
+- **Direct distribution links.** Website visitors can reach the npm CLI,
+  skills.sh agent skill, GitHub repository, and issue tracker from descriptive
+  links.
+
+### Verified
+
+- Integration checks require focused npm keywords, canonical/social metadata,
+  valid structured data, and absolute canonical sitemap entries without ignored
+  `priority` or `changefreq` hints.
+
 ## [0.31.2] - 2026-08-12
 
 ### Changed

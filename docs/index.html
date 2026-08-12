@@ -3,15 +3,60 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>narova — Prompt in. Directed video out.</title>
-<meta name="description" content="narova is the deterministic video-production skill for AI agents: compare creative directions, source verified media, prove a pilot, then turn prompts, sources, and real product walkthroughs into locally rendered 2D or 3D video.">
-<meta property="og:title" content="narova — Prompt in. Directed video out.">
-<meta property="og:description" content="A creative-confidence video framework for AI agents: verified stock sourcing, visual contracts, pilot gates, beat-level QA, local-first voices, and local rendering.">
+<title>Narova — Open-source prompt-to-video CLI for AI agents</title>
+<meta name="description" content="Create deterministic, narrated videos from prompts, scripts, source material, and real product walkthroughs with Narova's open-source local CLI.">
+<link rel="canonical" href="https://ammar-hasan.github.io/narova/">
+<meta name="theme-color" content="#12061d">
+<meta property="og:title" content="Narova — Open-source prompt-to-video CLI for AI agents">
+<meta property="og:description" content="Create deterministic, narrated videos locally from prompts, sources, and real product walkthroughs.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="https://ammar-hasan.github.io/narova/">
 <meta property="og:image" content="https://ammar-hasan.github.io/narova/assets/poster.jpg">
+<meta property="og:image:type" content="image/jpeg">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="Narova prompt-to-video workflow preview">
+<meta property="og:site_name" content="Narova">
+<meta property="og:locale" content="en_US">
 <meta name="twitter:card" content="summary_large_image">
-<link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 64 64'%3E%3Crect width='64' height='64' rx='14' fill='%2312061d'/%3E%3Cpath d='M24 18l22 14-22 14z' fill='%23d6f94c'/%3E%3C/svg%3E">
+<meta name="twitter:title" content="Narova — Open-source prompt-to-video CLI for AI agents">
+<meta name="twitter:description" content="Create deterministic, narrated videos locally from prompts, sources, and real product walkthroughs.">
+<meta name="twitter:image" content="https://ammar-hasan.github.io/narova/assets/poster.jpg">
+<meta name="twitter:image:alt" content="Narova prompt-to-video workflow preview">
+<link rel="icon" href="assets/favicon.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@graph": [
+    {
+      "@type": "WebPage",
+      "@id": "https://ammar-hasan.github.io/narova/#webpage",
+      "url": "https://ammar-hasan.github.io/narova/",
+      "name": "Narova — Open-source prompt-to-video CLI for AI agents",
+      "description": "Create deterministic, narrated videos from prompts, scripts, source material, and real product walkthroughs with Narova's open-source local CLI.",
+      "mainEntity": { "@id": "https://ammar-hasan.github.io/narova/#software" }
+    },
+    {
+      "@type": "SoftwareApplication",
+      "@id": "https://ammar-hasan.github.io/narova/#software",
+      "name": "Narova",
+      "url": "https://ammar-hasan.github.io/narova/",
+      "description": "Local-first prompt-to-video CLI and agent skill for deterministic 2D/3D video, TTS narration, word-synced captions, and product walkthroughs.",
+      "applicationCategory": "DeveloperApplication",
+      "operatingSystem": "macOS, Linux",
+      "softwareRequirements": "Node.js 18 or newer, Python 3.10 or newer, FFmpeg and FFprobe",
+      "downloadUrl": "https://www.npmjs.com/package/@narova/narova",
+      "codeRepository": "https://github.com/ammar-hasan/narova",
+      "license": "https://github.com/ammar-hasan/narova/blob/main/LICENSE",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      }
+    }
+  ]
+}
+</script>
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -51,15 +96,15 @@
     <div class="hero-inner">
       <div class="hero-layout">
         <div class="hero-text">
-          <p class="kicker reveal-line">The creative-confidence video skill</p>
+          <p class="kicker reveal-line">Prompt in. Directed video out.</p>
           <a class="release-pill reveal-line" href="#features" data-hover>
-            <span class="release-version" data-narova-version>v0.31.2</span>
+            <span class="release-version" data-narova-version>v0.31.3</span>
             <span>Exact skill/CLI compatibility · trusted npm publishing · Node 18–24 gates</span>
             <span aria-hidden="true">→</span>
           </a>
           <h1 class="hero-title" id="heroTitle">
-            <span class="ht-line">Prompt in.</span>
-            <span class="ht-line grad">Directed video out.</span>
+            <span class="ht-line">Open-source prompt-to-video</span>
+            <span class="ht-line grad">for AI agents.</span>
           </h1>
           <p class="hero-sub reveal-line">Narova combines an agent skill for Claude Code, Codex, Cursor, and Kimi Code with a local CLI. Together they turn
             prompts, scripts, agent-readable sources, and real product flows into narrated, captioned video. The skill guides the work; the CLI handles local speech and rendering across 2D HTML/CSS, 3D Three.js/WebGL, and SVG.</p>
@@ -68,6 +113,7 @@
               <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova --skill narova -g</code>
               <span class="copy-label" id="copyLabel" aria-live="polite">copy</span>
             </button>
+            <a class="btn-ghost magnetic" href="https://www.npmjs.com/package/@narova/narova" data-hover>Install CLI on npm</a>
             <a class="btn-ghost magnetic" href="https://github.com/ammar-hasan/narova" data-hover>★ Star on GitHub</a>
           </div>
         </div>
@@ -360,6 +406,7 @@ and show you the vertical preview first.</span></pre>
         <span class="prompt-sign">$</span> <code>npx skills add ammar-hasan/narova --skill narova -g</code>
         <span class="copy-label" aria-live="polite">copy</span>
       </button>
+      <a class="btn-ghost magnetic" href="https://www.npmjs.com/package/@narova/narova" data-hover>Install CLI on npm</a>
       <a class="btn-ghost magnetic" href="https://github.com/ammar-hasan/narova" data-hover>★ Star on GitHub</a>
     </div>
   </section>
@@ -368,7 +415,7 @@ and show you the vertical preview first.</span></pre>
 
 <footer class="footer">
   <span>MIT · local-first · extensible by explicit registration</span>
-  <a href="https://github.com/ammar-hasan/narova" data-hover>github.com/ammar-hasan/narova</a>
+  <span><a href="https://www.npmjs.com/package/@narova/narova" data-hover>npm package</a> · <a href="https://skills.sh/ammar-hasan/narova" data-hover>agent skill</a> · <a href="https://github.com/ammar-hasan/narova" data-hover>GitHub</a></span>
 </footer>
 
 <script src="vendor/gsap.min.js"></script>

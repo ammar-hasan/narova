@@ -1,8 +1,8 @@
-# @narova/narova
+# Narova — local-first prompt-to-video CLI
 
-The standalone CLI for [Narova](https://github.com/ammar-hasan/narova), a
-deterministic scene-scripted video system with local speech, word-synced
-captions, and local renderers.
+Narova is a deterministic, programmatic video CLI for AI agents. It turns
+prompts and scene scripts into narrated or silent 2D/3D video with local TTS,
+word-synced captions, speech-timed visuals, and product walkthrough capture.
 
 The CLI and the Narova agent skill are separate artifacts. Installing this npm
 package adds the `narova`, `narova-setup`, and `narova-uninstall` commands; it
@@ -11,6 +11,12 @@ does not install or modify agent instructions.
 The skill pins one compatible CLI release. After the skill is updated, its next
 session checks `narova --version` and reconciles this global package to that
 exact version before use.
+
+[Website](https://ammar-hasan.github.io/narova/) ·
+[npm package](https://www.npmjs.com/package/@narova/narova) ·
+[GitHub](https://github.com/ammar-hasan/narova) ·
+[Agent skill](https://skills.sh/ammar-hasan/narova) ·
+[Issues](https://github.com/ammar-hasan/narova/issues)
 
 ## Install
 
@@ -40,6 +46,14 @@ cd my-video
 narova check
 narova build --release
 ```
+
+## What it makes
+
+- Prompt-to-video and script-to-video explainers
+- Narrated dialogue with local TTS and word-synced captions
+- Deterministic 2D HTML/CSS/SVG and Three.js/WebGL scenes
+- Real product walkthrough videos with timed browser actions
+- Local MP4, SRT, and VTT deliverables without a render service
 
 See the [project README](https://github.com/ammar-hasan/narova#readme) for the
 scene-script format, renderer choices, product walkthroughs, source grounding,
