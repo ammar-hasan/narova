@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.31.1"
+  version: "0.31.2"
 ---
 # narova — video from scene scripts
 
@@ -70,31 +70,78 @@ Requires Node.js 18+, Python 3.10+, and FFmpeg. First-time model and
 HyperFrames setup requires internet access. Product walkthrough capture can
 optionally use agent-browser.
 
-Before the first Narova command in a session, look for `narova` on `PATH` or at
-`~/.local/bin/narova`. If it is not installed, install the exact CLI release
-that matches this skill. The npm package does not change skill files.
+Before the first Narova command in a session, require the exact CLI release
+that matches this skill. Reuse a matching `narova` on `PATH` or at
+`~/.local/bin/narova`; install the pinned npm release when the CLI is missing,
+older, or newer. The npm package does not change skill files.
 
 ```bash
-if command -v narova >/dev/null 2>&1; then
-  command -v narova
-elif [ -x "$HOME/.local/bin/narova" ]; then
-  printf '%s\n' "$HOME/.local/bin/narova"
-else
-  npm install --global @narova/narova@0.31.1
+narova_required="@narova/narova@0.31.2"
+narova_version="${narova_required##*@}"
+narova_bin=""
+
+narova_path_candidate() {
+  local candidate candidate_dir
+  candidate="$(command -v narova 2>/dev/null)" || return 1
+  case "$candidate" in
+    /*) ;;
+    *)
+      candidate_dir="$(cd -P "$(dirname "$candidate")" 2>/dev/null && pwd)" || return 1
+      candidate="$candidate_dir/$(basename "$candidate")"
+      ;;
+  esac
+  [ -x "$candidate" ] || return 1
+  printf '%s\n' "$candidate"
+}
+
+if narova_candidate="$(narova_path_candidate)"; then
+  if [ "$("$narova_candidate" --version 2>/dev/null)" = "$narova_version" ]; then
+    narova_bin="$narova_candidate"
+  fi
 fi
+if [ -z "$narova_bin" ] && [ -x "$HOME/.local/bin/narova" ] && \
+   [ "$("$HOME/.local/bin/narova" --version 2>/dev/null)" = "$narova_version" ]; then
+  narova_bin="$HOME/.local/bin/narova"
+fi
+
+if [ -z "$narova_bin" ]; then
+  npm install --global "$narova_required" || exit $?
+  if narova_candidate="$(narova_path_candidate)"; then
+    if [ "$("$narova_candidate" --version 2>/dev/null)" = "$narova_version" ]; then
+      narova_bin="$narova_candidate"
+    fi
+  fi
+  if [ -z "$narova_bin" ] && [ -x "$HOME/.local/bin/narova" ] && \
+     [ "$("$HOME/.local/bin/narova" --version 2>/dev/null)" = "$narova_version" ]; then
+    narova_bin="$HOME/.local/bin/narova"
+  fi
+fi
+
+if [ -z "$narova_bin" ]; then
+  printf 'narova: installed %s but no matching CLI is available\n' "$narova_required" >&2
+  exit 1
+fi
+printf '%s\n' "$narova_bin"
 ```
 
-Use `narova <command>` for every workflow step. If `~/.local/bin` is not on
-`PATH`, spell out `$HOME/.local/bin/narova <command>` instead; agent shells do
-not preserve a one-off `PATH` assignment between calls. First `synth` or
-`build` creates `~/.narova/venv`. `doctor` checks Node 18+, ffmpeg, and Python
-3.10+. For richer voices, run `narova-setup --xtts` (or `--qwen`,
-`--chatterbox` for voice cloning).
+The final printed line is the authoritative executable for this session. Record
+that absolute path as `<narova-bin>` and its parent directory as
+`<narova-bin-dir>`. The `narova <command>` shorthand below means `<narova-bin>
+<command>`; do not invoke a shadowing bare `narova` when the printed path differs
+from `command -v narova`. The `narova-setup` and `narova-uninstall` shorthands
+anywhere in this skill or its references likewise mean the sibling executables
+`<narova-bin-dir>/narova-setup` and `<narova-bin-dir>/narova-uninstall`. Agent
+shells do not preserve a one-off `PATH` assignment between calls. First `synth`
+or `build` creates `~/.narova/venv`. `doctor` checks Node 18+, ffmpeg, and Python
+3.10+. For richer voices, run `<narova-bin-dir>/narova-setup --xtts` (or
+`--qwen`, `--chatterbox` for voice cloning).
 
-Update the CLI with `npm install --global @narova/narova@<version>`. Update the
-skill with the skills installer. `npm uninstall --global @narova/narova` (or
-`narova-uninstall`) removes the CLI and its commands but keeps projects,
-downloaded models, caches, and the skill.
+Update the skill with the skills installer; its next session reconciles the CLI
+to the exact matching npm release. You can also install a CLI version directly
+with `npm install --global @narova/narova@<version>`, but the skill bootstrap
+restores its pinned version before use. `npm uninstall --global @narova/narova`
+(or `<narova-bin-dir>/narova-uninstall`) removes the CLI and its commands but
+keeps projects, downloaded models, caches, and the skill.
 
 External TTS providers are optional registered companion skills — see
 `narova-elevenlabs`, `narova-openai`, or `references/cli.md` §providers.

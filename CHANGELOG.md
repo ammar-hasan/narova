@@ -6,6 +6,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.2] - 2026-08-12
+
+### Changed
+
+- **Lockstep skill and CLI compatibility.** The skill now checks
+  `narova --version` before use, reuses only the exact matching release, and
+  installs its pinned npm package when the CLI is missing, older, or newer.
+- **One compatibility pin.** The skill derives its expected runtime version
+  from a single exact npm spec instead of maintaining a second shell version.
+
+### Fixed
+
+- npm installation failures retain their original exit status, and a
+  successful install that still resolves to a stale CLI fails explicitly.
+
+### Verified
+
+- Release checks require exactly one canonical npm pin plus the runtime version
+  reconciliation controls. Integration tests cover exact reuse, stale upgrades,
+  PATH conflicts, npm failures, and unresolved post-install mismatches.
+
 ## [0.31.1] - 2026-08-11
 
 ### Changed
