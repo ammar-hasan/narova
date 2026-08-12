@@ -9,7 +9,7 @@ with a local CLI. Together they turn prompts, scripts, web pages, and product
 walkthroughs into narrated, captioned video.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.30.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.31.1-4fd9e8.svg)](./package.json)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
 <a href="assets/narova-skill-reel.mp4">
@@ -45,32 +45,27 @@ walkthroughs into narrated, captioned video.
 
 ## Install
 
-Narova has two parts: the CLI and the agent skill. Install the CLI first. It
-uses `~/.local` by default:
+Narova has two parts: the CLI and the agent skill. Install the CLI first from
+the public npm package:
 
 ```bash
-(
-  set -e
-  narova_prefix="${NAROVA_PREFIX:-$HOME/.local}"
-  narova_installer="$(mktemp)"
-  trap 'rm -f "$narova_installer"' EXIT
-  curl --proto '=https' --tlsv1.2 -fsSL \
-    https://raw.githubusercontent.com/ammar-hasan/narova/main/tool/install.sh \
-    -o "$narova_installer"
-  bash "$narova_installer" --prefix "$narova_prefix"
-  "$narova_prefix/bin/narova" doctor
-)
+npm install --global @narova/narova
+narova doctor
 ```
 
-The CLI installer does not change agent skills. Set `NAROVA_PREFIX` before the
-block, or pass `--prefix <dir>` to the script, to install somewhere else. Use
-`--ref <tag-or-commit>` to install a specific version. Add `~/.local/bin` to
-`PATH` if the installer asks.
+The npm package does not change agent skills. Releases from `0.31.1` onward
+publish through npm Trusted Publishing with provenance linking the package to
+this public repository and its release workflow. The manually bootstrapped
+`0.31.0` release has an npm registry signature but no provenance attestation.
 
 ### Update or remove
 
-Run the installer again with the same prefix to update the CLI. This replaces
-the installed program but keeps your projects and voice data.
+Update the package normally. This replaces the installed program but keeps your
+projects and voice data:
+
+```bash
+npm install --global @narova/narova@latest
+```
 
 Remove the CLI with:
 
@@ -83,7 +78,7 @@ The command detects a custom install prefix automatically. You can also pass
 not remove projects, downloaded models, caches, or the agent skill.
 
 Then install the skill for any agent that supports skills. If the CLI is
-missing, the skill can run the same installer:
+missing, the skill installs its matching published npm version:
 
 [![skills.sh](https://skills.sh/b/ammar-hasan/narova)](https://skills.sh/ammar-hasan/narova)
 
@@ -201,9 +196,9 @@ The first default `build` downloads a few things one time: it creates a Python v
 at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.
 This can take a minute. It is not stuck.
 
-The GitHub installer installs the optional no-browser dependencies by default.
-In a source checkout, run `npm install --prefix tool` from the repository root,
-then verify with `narova renderers doctor no-browser`.
+The published npm package includes the optional no-browser dependencies by
+default. In a source checkout, run `npm install --prefix tool` from the
+repository root, then verify with `narova renderers doctor no-browser`.
 
 Without `npm link`, run `node tool/bin/narova.js` from the repository root.
 

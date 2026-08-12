@@ -2,6 +2,7 @@
 
 const { spawnSync } = require('node:child_process');
 const path = require('node:path');
+const fs = require('node:fs');
 
 const root = path.resolve(__dirname, '..');
 const tool = path.join(root, 'tool');
@@ -29,8 +30,29 @@ if (forbidden.length) {
 if (report.unpackedSize > 10 * 1024 * 1024) {
   throw new Error(`npm package is unexpectedly large: ${report.unpackedSize} unpacked bytes`);
 }
-for (const required of ['LICENSE', 'bin/narova.js', 'install.sh', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
+for (const required of ['LICENSE', 'README.md', 'bin/narova.js', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
   if (!names.includes(required)) throw new Error(`npm package is missing required standalone tool file: ${required}`);
 }
-if (report.name !== 'narova') throw new Error(`unexpected standalone package name: ${report.name}`);
+if (names.includes('install.sh')) throw new Error('npm package must not reintroduce a remote shell installer');
+if (report.name !== '@narova/narova') throw new Error(`unexpected standalone package name: ${report.name}`);
+
+const rootPackage = JSON.parse(fs.readFileSync(path.join(root, 'package.json'), 'utf8'));
+const toolPackage = JSON.parse(fs.readFileSync(path.join(tool, 'package.json'), 'utf8'));
+if (toolPackage.version !== rootPackage.version) {
+  throw new Error(`package version ${toolPackage.version} does not match repository version ${rootPackage.version}`);
+}
+if (toolPackage.repository?.url !== 'git+https://github.com/ammar-hasan/narova.git'
+    || toolPackage.repository?.directory !== 'tool') {
+  throw new Error('npm repository metadata must identify ammar-hasan/narova and the tool/ package directory');
+}
+if (toolPackage.publishConfig?.access !== 'public'
+    || toolPackage.publishConfig?.registry !== 'https://registry.npmjs.org/'
+    || toolPackage.publishConfig?.provenance !== true) {
+  throw new Error('npm publishConfig must require the public npm registry with provenance');
+}
+for (const lifecycle of ['preinstall', 'install', 'postinstall']) {
+  if (toolPackage.scripts?.[lifecycle]) {
+    throw new Error(`npm package must not execute a ${lifecycle} lifecycle script`);
+  }
+}
 process.stdout.write(`package audit ok: ${report.entryCount} files, ${report.size} compressed bytes, ${report.unpackedSize} unpacked bytes\n`);

@@ -6,6 +6,52 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.1] - 2026-08-11
+
+### Changed
+
+- **npm-only installation lifecycle.** Removed the superseded
+  `tool/install.sh` GitHub installer. The packaged uninstaller now targets only
+  `@narova/narova`; it no longer detects or removes the old unscoped layout.
+- **Reliable version synchronization.** `version:sync` now updates both Narova
+  skill metadata and its exact `@narova/narova` bootstrap pin.
+
+### Fixed
+
+- Node 18 now expands the JavaScript test files through the shell instead of
+  receiving an unsupported quoted glob.
+
+### Security
+
+- npm publishing uses Trusted Publishing only, with no long-lived token
+  fallback, and refuses tags whose commit is not reachable from `main`.
+
+## [0.31.0] - 2026-08-11
+
+### Added
+
+- **Public npm distribution bootstrap.** The standalone CLI is available as
+  the public `@narova/narova` package. This one-time release was published
+  manually before Trusted Publishing was configured.
+- **Packed-artifact release gate.** CI packs the exact npm tarball, installs it
+  into a fresh prefix, exercises all three commands, scaffolds a project, and
+  requires that project to pass `narova check`.
+
+### Changed
+
+- **Verifiable skill bootstrap.** The Narova skill installs an exact npm
+  version instead of downloading and executing a mutable GitHub shell script.
+- **Lean public artifact.** The npm tarball includes runtime code, local
+  renderers, voice workers, setup, uninstall, license, and package docs while
+  excluding the legacy GitHub installer and all development/generated files.
+
+### Security
+
+- The package declares its exact public repository and `tool/` source
+  directory and has no npm install lifecycle scripts. The manually published
+  bootstrap has a registry signature but no provenance attestation; later
+  releases require OIDC Trusted Publishing and provenance.
+
 ## [0.30.0] - 2026-08-11
 
 ### Added

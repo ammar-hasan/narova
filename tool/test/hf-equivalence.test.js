@@ -111,8 +111,10 @@ async function pixelStats(aPng, bPng) {
   return { meanDiff: sum / px, mismatchRatio: mismatches / px };
 }
 
-test('HyperFrames: isolated scene-2 frame matches full render at the same relative time', { timeout: 300000 }, async () => {
-  if (!HAS_HF) { test.skip('HyperFrames + ffmpeg + @napi-rs/canvas required'); return; }
+test('HyperFrames: isolated scene-2 frame matches full render at the same relative time', {
+  timeout: 300000,
+  skip: HAS_HF ? false : 'HyperFrames + ffmpeg + @napi-rs/canvas required',
+}, async () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-hfeq-'));
   try {
     const cfg = buildProject(out);

@@ -1,0 +1,43 @@
+name: Publish npm package
+
+on:
+  push:
+    tags:
+      - "v*"
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: npm-publish-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    environment: npm
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+        with:
+          fetch-depth: 0
+          persist-credentials: false
+      - uses: actions/setup-node@249970729cb0ef3589644e2896645e5dc5ba9c38 # v6
+        with:
+          node-version: 24
+          registry-url: https://registry.npmjs.org
+          package-manager-cache: false
+      - name: Require the tagged commit to be on main
+        run: |
+          tag_commit="$(git rev-list -n 1 "$GITHUB_REF")"
+          if ! git merge-base --is-ancestor "$tag_commit" origin/main; then
+            echo "Refusing to publish: $tag_commit is not reachable from origin/main" >&2
+            exit 1
+          fi
+      - run: npm ci --prefix tool
+      - run: npm run version:sync
+      - run: git diff --exit-code
+      - run: npm run release:check
+      - name: Publish @narova/narova
+        run: npm publish --access public --provenance
+        working-directory: tool
