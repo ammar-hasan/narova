@@ -1,6 +1,7 @@
 # Gotchas
 
-Short version of LEARNINGS.md. Read that file before changing pipeline code.
+Short version of the public implementation-maintainer notes in `LEARNINGS.md`.
+Read those notes before changing pipeline code; they are not product authority.
 
 ## Writing
 

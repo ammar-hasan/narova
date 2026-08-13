@@ -245,10 +245,23 @@ test('repository version sources agree with the standalone tool package', () => 
   assert.match(skillMd, /npm install --global "\$narova_required"/);
   assert.match(skillMd, /narova_candidate.*--version/);
 
-  const spec = fs.readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8');
-  const specMatch = spec.match(/^## Status: ([0-9.]+) shipped$/m);
+  const publicGuide = fs.readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8');
+  const specMatch = publicGuide.match(/^## Status: ([0-9.]+) shipped$/m);
   assert.ok(specMatch, 'SPEC.md must have a shipped status version');
   assert.equal(specMatch[1], rootVer, 'SPEC.md status version must match root');
+  assert.match(publicGuide, /<!-- narova-document-role: shipped-interface-guide; authority: non-normative -->/);
+  const prohibitedGuideHeading = /^#{1,6} .*\b(?:future work|product roadmap|research store|product strategy|project memory|agent (?:instructions|guidance|context|memory))\b/im;
+  assert.doesNotMatch(publicGuide, prohibitedGuideHeading);
+  assert.match('### Future work', prohibitedGuideHeading);
+  assert.doesNotMatch('## Memory requirements', prohibitedGuideHeading);
+  assert.doesNotMatch(publicGuide, /docs\/experiments\//);
+
+  const maintainerNotes = fs.readFileSync(path.join(ROOT, 'LEARNINGS.md'), 'utf8');
+  assert.match(maintainerNotes, /<!-- narova-document-role: implementation-maintainer-notes; authority: non-normative -->/);
+  const prohibitedMaintainerHeading = /^#{1,6} .*\b(?:product (?:vision|roadmap|strategy)|research store|strategic memory|future work|creative (?:confidence|divergence|strategy)|scene model|agent (?:instructions|guidance|context|memory))\b/im;
+  assert.doesNotMatch(maintainerNotes, prohibitedMaintainerHeading);
+  assert.match('## Agent instructions', prohibitedMaintainerHeading);
+  assert.doesNotMatch('## Agent-browser capture failures', prohibitedMaintainerHeading);
 
   for (const relative of ['docs/index.html', 'docs/changelog/index.html']) {
     const html = fs.readFileSync(path.join(ROOT, relative), 'utf8');

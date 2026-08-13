@@ -1,7 +1,15 @@
-# Hard-won learnings (read before touching the pipeline)
+# Public implementation-maintainer notes
 
-These are real bugs we hit and fixed. Every one cost time.
-Keep the fixes in the code so they never come back.
+<!-- narova-document-role: implementation-maintainer-notes; authority: non-normative -->
+
+These are concrete implementation failures and maintenance constraints from the
+public Narova codebase. Keep the fixes in the code so they do not return.
+
+This file is non-normative: it is not the product specification, roadmap,
+research store, strategic memory, or agent context ledger. Product requirements
+and future decisions are governed outside this public implementation repository.
+Another implementation should keep notes for its own technology instead of
+copying these mechanics as product requirements.
 
 ## Audio / timing
 
@@ -162,11 +170,6 @@ Keep the fixes in the code so they never come back.
 35. **The piper starter list read as "3 voices".** Any piper catalog voice
     works via `voices get`; the list now shows a spread of 9 (gender/accent)
     so multi-host casts don't reach for the heavy backends by default.
-36. **Sourcing was gated, framing was not.** A one-sided narrative of sourced
-    claims passed every check. Fix is procedural, not code: `claims.md` must
-    cover the major perspectives on contested topics, and the script gets a
-    "whose framing is this?" read before synth (url-to-source.md §3).
-
 ## Motion on the timeline (0.7.0)
 
 37. **A `fromTo` caption tween parks upcoming words at the from-state.** The
@@ -178,18 +181,6 @@ Keep the fixes in the code so they never come back.
     stays the natural scale 1. Same trap as #27/#28: on a seeked timeline,
     every tween's off-window state is part of the design, not an afterthought.
     (`pop` is exempt on purpose: small/dim IS the designed resting state.)
-
-## The scene model that worked
-
-- Big word-synced captions + a richer voiceover. Do not put the transcript
-  on screen.
-- Reactive reveals: elements with `data-cue="k"` appear when turn `k` starts.
-  Everything else appears at scene start.
-- Two hosts trading lines, with questions and banter, read far better than
-  one narrator for explainers and dialogue formats. A single narrator works
-  well for brand promos, teaching, or documentary. Zero voices with silent
-  scenes works for music visualizers and motion graphics. Match the cast to
-  the   concept, not to a default.
 
 ## 3D, choreography, and variants (0.19 — 0.20)
 
@@ -234,66 +225,16 @@ Keep the fixes in the code so they never come back.
   was scene-1 only. `sceneOverrides`, `theme`/`captions`/`timing` overrides, and
   kind tags (visual/narration/pacing/captions) expand the model without making
   variants opaque full-project forks.
-- **The scaffold sets the creative default.** A teal/pink/two-host scaffold
-  trained agents to produce one visual style. A neutral single-narrator scaffold
-  with "replace everything" comments encourages original visual languages.
-- **Creative diversity needs measurement.** 10 radically different briefs, with
-  automated convergence checks (palette topology, caption presets, chrome usage,
-  css/choreo/3D footprint, scene-count distributions, hook/CTA patterns), makes
-  creative sameness visible before it ships.
-
-## Creative confidence before production scale (0.27.0)
-
-- **Motion QA is not ambition QA.** A sparse low-poly film can have valid motion,
-  no blank frames, and no freezes while still missing the requested density,
-  atmosphere, character acting, spatial continuity, and cinematic detail. The
-  old Karpathy/Hobbiton cut passed mechanical checks and still needed a rebuild.
-- **More cuts do not repair an underbuilt world.** Splitting thin production
-  design into additional scenes changes pacing, not richness. Establish the
-  world, material language, character system, environmental layers, and
-  foreground/midground/background behavior in an explicit visual contract.
-- **Prove the expensive assumptions early.** Before producing a non-trivial
-  film, render an establishing shot, a close shot, and an action/reveal from the
-  intended final system. Reject or revise the direction at pilot scale; only mark
-  `creative-brief.md` approved when all three demonstrate the contract.
-- **Review promises at their actual beats.** Start/middle/end snapshots can miss
-  a weak reveal between samples. `shots --beats` captures both arrival and
-  resolved narration states, both sides of markers, and silent-scene coverage.
-- **Persistent worlds have internal editorial structure.** Top-level scene count
-  is not shot count. Cinematic critique must count directed camera helpers,
-  timeline operations, and callback cuts inside raw Three.js films without
-  double-counting their implementations.
 - **Release gates must run before render writes.** `build --release` preflights
-  the base plus selected/all variants before production begins. Because actual
-  speech duration is unknowable until synthesis, it records a scene-topology-aware
-  timing fingerprint and rechecks measured duration before compose/render.
-
-## Creative divergence needs evidence, not encouragement (0.28.0)
-
-- **Capability awareness is not conceptual diversity.** In an eight-pilot,
-  same-model A/B, both conditions used raw `threeModule` successfully, but all
-  music runs converged on violet/cyan tidal fields and all shader runs on a
-  central event horizon. Narova improved explicit caption compliance, not
-  imagination. A platform must operationalize divergence instead of merely
-  telling the model to be creative.
-- **Branch risky ideas, not finished productions.** Two or three 8–12 second
-  proofs expose the decisive representation/behavior question cheaply. Saving
-  each with rationale preserves rejected possibilities; expanding only the
-  winner prevents “exploration” from tripling production cost.
-- **Cinematic fields can anchor the answer.** Requiring camera, depth, and light
-  before the medium is chosen quietly tells the model that unusual means
-  cinematic 3D. Start with intended effect, evidence, representation, temporal
-  behavior, and medium; ask for camera or light only when they carry the idea.
-- **A successful render can still prove nothing.** Three of eight pilot contact
-  sheets were effectively near-black despite clean config, synth, compose, and
-  snapshot stages. A proof gate needs actual rendered-frame evidence.
-- **Proof identity includes source bytes and the absence of extras.** Hashing a
-  config is insufficient when mutable assets live outside it. Rehash source
-  assets when a proof is saved, bind the complete restorable snapshot, and
-  require the durable proof directory to match an exact file inventory.
-- **Raw means no invisible composition.** Removing pattern CSS is insufficient
-  if the wrapper still centers, constrains, gutters, and reserves captions.
-  Layout help is valuable only when its use is explicit.
+  the base plus selected/all variants before production begins. Because speech
+  duration is unknown until synthesis, retain a scene-topology-aware timing
+  fingerprint and recheck measured duration before compose/render.
+- **Proof identity must bind the complete restorable input.** Hashing only a
+  config misses mutable assets and added files. Rehash source assets when a proof
+  is saved, bind the complete snapshot, and require an exact file inventory.
+- **Raw layout must not hide composition policy.** A raw frame must not silently
+  center, constrain, gutter, or reserve caption space; layout assistance remains
+  an explicit opt-in.
 
 ## Render-path CSS compatibility (0.8.3)
 

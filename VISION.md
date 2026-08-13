@@ -29,7 +29,7 @@ practical. They are not the vision itself.
 
 ## Implementation checklist
 
-The currently specified product capabilities, mapped to where they are
+The currently shipped product capabilities, mapped to where they are
 implemented.
 Status legend: `[x]` implemented and verified · `[~]` implemented, needs
 strengthening · `[ ]` gap.
@@ -40,7 +40,7 @@ strengthening · `[ ]` gap.
   agent-readable direction, while independently installed `tool/` owns all
   executable code and dependencies. The skill detects and bootstraps the CLI
   without making executable code part of skill installation. See `README.md`
-  and `SPEC.md` §Layout.
+  and the public interface guide in `SPEC.md` §Layout.
 - [x] **Framework-neutral** — SKILL.md and references/ contain no
   framework-specific assumptions; works for any agent that reads skills
   (Kimi Code, Codex, Claude Code, opencode, agentic SDKs). Verified: only
@@ -55,7 +55,8 @@ strengthening · `[ ]` gap.
 - [x] **Prompt → engaging video with voiceover + word-synced text
   highlighting** — scene script (`reel.config.mjs`) → synth → compose →
   render. Word-by-word karaoke captions per speaker color; `data-cue`
-  elements appear exactly when the voice reaches them. `SPEC.md`,
+  elements appear exactly when the voice reaches them. Public interface guide
+  `SPEC.md`,
   `tool/src/compose/`.
 - [x] **One or more voices; zero voices for silent** — schema accepts
   any number of voices; the `init` scaffold defaults to a single neutral

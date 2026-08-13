@@ -1,4 +1,13 @@
-# narova — the contract
+# narova — public interface guide
+
+<!-- narova-document-role: shipped-interface-guide; authority: non-normative -->
+
+> **Role:** This is an informative guide to the interface shipped by the public
+> Narova repository. It helps users and maintainers navigate current commands,
+> authoring inputs, outputs, and compatibility boundaries. It is not the
+> normative product specification, roadmap, research store, or project memory;
+> product requirements and future decisions are governed outside this public
+> implementation repository.
 
 > Working name: **narova**.
 > One line: narova writes the words and the voice. A free local renderer draws the pictures.
@@ -20,7 +29,7 @@ The work is split in three parts:
 The goal: an agent takes a user prompt, writes the scene script, and
 `narova build` makes the video.
 
-## Rules that must never break
+## Shipped invariants
 
 - Caption timings must equal the real audio length. Python rescales them
   after loudnorm (see LEARNINGS #1).
@@ -84,7 +93,7 @@ out/video.mp4
 synth caches every processed sentence (`~/.narova/cache/sentences/`, keyed by
 backend + speaker + text + tempo) so a revision re-synthesizes only the
 changed sentences — untouched scenes keep byte-identical audio. This is the
-iteration-consistency contract.
+iteration-consistency behavior.
 
 `out/`, `out/hf-*`, and `out/no-browser-*` are build folders. Every run regenerates them. The config
 plus project `assets/` are source of truth. Walkthrough WebM, capture manifest,
@@ -194,14 +203,15 @@ Rules:
   Exploration/capture are explicit; compose/build only consume fresh,
   hash-verified assets. Base and hook-variant takes use separate paths, so
   every walkthrough-bearing variant is synthesized and captured explicitly
-  before `build --variants`. Full contract:
+  before `build --variants`. Full public reference:
   `skills/narova/references/product-walkthroughs.md`.
 - Old fields `caption` and `dur` are accepted and ignored.
 
 Each scene must provide an HTML `body`, a portable `visual` tree, or both.
 HyperFrames prefers `body` and compiles visual-only scenes to HTML. No-browser
 requires `visual` and never parses or approximates HTML/CSS. This failure
-boundary is contractual: changing renderer must not silently lower a scene.
+boundary is intentional shipped behavior: changing renderer must not silently
+lower a scene.
 The portable node/motion contract and exact provider capability matrix live in
 `skills/narova/references/renderers.md`.
 
@@ -210,7 +220,7 @@ that every detected claim actually appears in `claims.md`. `narova check
 --release` adds a build gate: remote dependencies, unresolved assets, missing
 claims, unsupported HTML, black frames, and stale walkthroughs fail the check.
 
-## The generated page (out/hf contract)
+## The generated page (`out/hf` interface)
 
 `index.html` is a standard HyperFrames composition:
 
@@ -254,7 +264,7 @@ Also in out/hf: the copied project `assets/`, `assets/narration.wav` (a copy
 of `out/audio/mix.wav` when a bed/SFX mix was made, else
 `out/audio/full.wav`), and `package.json` (pins the HyperFrames version).
 
-## The Python contract (frozen)
+## The Python runtime interface
 
 In: `narration.json` + `config.resolved.json`.
 Out: `audio/NN.wav`, `audio/NN.mp3`, `audio/full.wav`, `timings.json`, and
@@ -438,9 +448,7 @@ relabelled foreign evidence cannot satisfy divergence. The final brief records
 the selected branch's exact stable proof identity as expansion lineage, and
 restored snapshots automatically reapply proof-time CLI overrides. Snapshot and proof metadata publish under a per-branch lock and compare-and-swap as one staged pair, so a failed or concurrent
 overwrite leaves the prior branch intact, while cleanup starts only after the
-new pair commits. A live eight-pilot
-with/without-Narova experiment is documented in
-`docs/experiments/0.28-creativity-ab.md`.
+new pair commits.
 
 ## Timeline intermediate representation
 
@@ -479,13 +487,5 @@ enable forward-compatible consumers to gate on schema changes.
   bed/sfx/clip source files, and walkthrough capture inputs/media.
 
 **Consumers:** `validate(manifest)` checks schema compliance; `mergeTimings()`
-merges `out/timings.json` word-level data into the scene tree; `narova plan`
-compares manifests to classify changes; future tooling reads the manifest as
-the canonical project snapshot.
-
-## Future work (decided, not started)
-
-- `--eject`: make out/hf a standalone project you can edit in Studio.
-- Theme gallery: ready-made looks, picked by name.
-- Qwen voice cloning (`speaker: {clone: "sample.wav"}`).
-- Publish to npm.
+merges `out/timings.json` word-level data into the scene tree; and `narova plan`
+compares manifests to classify changes.

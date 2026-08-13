@@ -192,13 +192,13 @@ function syncVersion(root = DEFAULT_ROOT, logger = console) {
       'README.md version badge',
     ));
 
-  // SPEC.md — Status line
+  // SPEC.md public interface guide — shipped status line
   update(['SPEC.md'], (source, next) =>
     replaceExactlyOne(
       source,
       /^(## Status: +)[0-9.]+( +shipped)/m,
       `$1${next}$2`,
-      'SPEC.md shipped status',
+      'SPEC.md public interface guide shipped status',
     ));
 
   // Website — current-version markers on the landing page and changelog.

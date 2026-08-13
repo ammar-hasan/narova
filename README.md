@@ -469,9 +469,9 @@ docs/              the marketing site (GitHub Pages) + /changelog
 generated/narova-skill-reel/  flagship sample project (built from a plain-language prompt; more in generated/)
 generated/         agent-created projects; source kept, out/ and build/ ignored
 CHANGELOG.md       every notable change, version by version
-SPEC.md            the contract
+SPEC.md            informative guide to the currently shipped public interface
 VISION.md          the product vision, mapped to where each point is implemented
-LEARNINGS.md       bugs we hit and fixed — read before changing the pipeline
+LEARNINGS.md       non-normative implementation notes for public maintainers
 ```
 
 Run everything with `npm test`, or test the CLI independently with
