@@ -309,8 +309,10 @@ code { font-family: var(--mono); }
   letter-spacing: -0.035em;
   line-height: 1.02;
   margin-bottom: 26px;
+  text-wrap: balance;
 }
 .ht-line { display: block; }
+.ht-line .word { display: inline-block; white-space: nowrap; }
 .ht-line .char { display: inline-block; will-change: transform, opacity; }
 .grad {
   background: linear-gradient(92deg, var(--lime) 0%, var(--cyan) 45%, var(--pink) 100%);

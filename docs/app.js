@@ -59,12 +59,18 @@
       accessible.className = "visually-hidden";
       accessible.textContent = text;
       line.appendChild(accessible);
-      text.split("").forEach(function (ch) {
-        var s = document.createElement("span");
-        s.className = "char";
-        s.setAttribute("aria-hidden", "true");
-        s.textContent = ch === " " ? " " : ch;
-        line.appendChild(s);
+      text.trim().split(/\s+/).forEach(function (word, wordIndex) {
+        if (wordIndex > 0) line.appendChild(document.createTextNode(" "));
+        var wordSpan = document.createElement("span");
+        wordSpan.className = "word";
+        wordSpan.setAttribute("aria-hidden", "true");
+        word.split("").forEach(function (ch) {
+          var s = document.createElement("span");
+          s.className = "char";
+          s.textContent = ch;
+          wordSpan.appendChild(s);
+        });
+        line.appendChild(wordSpan);
       });
     });
     if (document.querySelector(".ht-line .char")) {

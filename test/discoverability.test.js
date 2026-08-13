@@ -86,18 +86,32 @@ test('READMEs lead with the product category and distribution links', () => {
   }
 });
 
-test('website metadata has one canonical identity and complete share cards', () => {
+test('website metadata and hero present the skill without making people secondary', () => {
   const home = read('docs/index.html');
   const changelog = read('docs/changelog/index.html');
   expectHeadMetadata(home, homeUrl);
   expectHeadMetadata(changelog, changelogUrl);
-  assert.match(home, /<title>[^<]*prompt-to-video[^<]*AI agents[^<]*<\/title>/i);
-  assert.match(home, /<h1[^>]*>[\s\S]*prompt-to-video[\s\S]*AI agents[\s\S]*<\/h1>/i);
+  assert.match(home, /<title>[^<]*prompt-to-video skill and local CLI[^<]*<\/title>/i);
+  assert.match(home, /<p class="kicker reveal-line">Open-source prompt-to-video<\/p>/);
+  assert.match(home, /<h1[^>]*>[\s\S]*Prompt in\.[\s\S]*Directed video out\.[\s\S]*<\/h1>/);
+  assert.match(home, /<p class="hero-sub reveal-line">[\s\S]*work interactively[\s\S]*agent run unattended[\s\S]*skill directs the work[\s\S]*local CLI handles[\s\S]*<\/p>/i);
+  assert.doesNotMatch(home, /for AI agents/i);
   assert.match(changelog, /<title>[^<]*prompt-to-video[^<]*agent skill[^<]*<\/title>/i);
   assert.match(home, new RegExp(`href="${npmUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(home, new RegExp(`href="${skillUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(home, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/);
   assert.ok(fs.existsSync(path.join(root, 'docs/assets/favicon.svg')));
+});
+
+test('animated hero headline preserves word-level wrapping', () => {
+  const script = read('docs/app.js');
+  const styles = read('docs/style.css');
+  assert.match(script, /text\.trim\(\)\.split\(\/\\s\+\/\)/);
+  assert.match(script, /wordSpan\.className = "word"/);
+  assert.match(script, /createTextNode\(" "\)/);
+  assert.doesNotMatch(script, /ch === " " \? " "/);
+  assert.match(styles, /\.hero-title\s*\{[^}]*text-wrap:\s*balance;/s);
+  assert.match(styles, /\.ht-line \.word\s*\{[^}]*display:\s*inline-block;[^}]*white-space:\s*nowrap;/s);
 });
 
 test('structured data is accurate, evergreen, and free of invented reviews', () => {
@@ -112,6 +126,10 @@ test('structured data is accurate, evergreen, and free of invented reviews', () 
   assert.equal(webPage['@id'], `${homeUrl}#webpage`);
   assert.equal(software['@id'], `${homeUrl}#software`);
   assert.equal(software.name, 'Narova');
+  assert.match(webPage.name, /prompt-to-video skill and local CLI/i);
+  assert.match(webPage.description, /agent skill and local CLI/i);
+  assert.match(software.description, /agent skill with a local CLI/i);
+  assert.doesNotMatch(JSON.stringify(data), /for AI agents/i);
   assert.equal(software.applicationCategory, 'DeveloperApplication');
   assert.equal(software.downloadUrl, npmUrl);
   assert.equal(software.codeRepository, 'https://github.com/ammar-hasan/narova');
