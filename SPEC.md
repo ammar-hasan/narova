@@ -60,6 +60,8 @@ narova/                          # the repo
 │   │                            # install: npx skills add ammar-hasan/narova
 │   │                            # (.claude/skills/narova is a symlink here)
 │   └── SKILL.md  references/    # what an agent reads
+├── skills/narova-3d-production/ # optional authored-3D direction companion
+│   └── SKILL.md  references/    # concise core + conditional technical depth
 ├── skills/narova-elevenlabs/    # optional, separately installable provider
 │   ├── SKILL.md  references/    # ElevenLabs-only setup/configuration
 │   └── tool/                    # provider manifest + isolated HTTP worker
@@ -367,6 +369,12 @@ timing rescaling, captions, composition, and rendering. Provider-specific
 code, credentials, dependencies, endpoints, models, and configuration rules
 remain in self-contained companion skills such as `skills/narova-elevenlabs/`
 and `skills/narova-openai/`.
+
+The separately installed `skills/narova-3d-production/` companion adds no
+runtime or provider. It supplies high-freedom technical judgment for authored
+3D work and conditionally loads spatial/appearance, camera/interaction, or
+inspection references. Core Narova's 3D authoring and rendering remain complete
+when it is absent.
 
 ## Status: 0.31.3 shipped
 

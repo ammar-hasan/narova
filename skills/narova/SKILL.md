@@ -221,14 +221,11 @@ user's approval before any consequential external mutation.
   duration bands, and 3D quality hints belong to `narova critique`, not
   `narova check`. `check` reports only correctness and reproducibility
   concerns. Run `narova critique` when you want optional craft guidance.
-- **Three.js is a renderer, not an art direction.** Do not infer "cinematic",
-  "detailed", or "premium" from the presence of 3D. For an ambitious 3D film,
-  write a production brief that explicitly covers geometry/prop density,
-  foreground-midground-background layering, material variation, lighting and
-  atmosphere, character blocking, camera language, motion beats, and final
-  compositing. A few low-poly primitives can be technically correct Three.js
-  and still look like a moving diorama. Use `critique creative,cinematic` and
-  `shots --beats`, then judge the rendered frames against the reference.
+- **Three.js is a renderer, not an art direction.** Core Narova retains its full
+  3D authoring and rendering surface without another skill. When authored 3D
+  needs specialist spatial, appearance, camera, interaction, or evidence
+  judgment, optionally compose with `narova-3d-production`; it adds direction,
+  not a renderer, physics engine, template, or default aesthetic.
 
 Read `references/gotchas.md` for the full list.
 
@@ -282,3 +279,7 @@ For Urdu dialogue, use the `urdu-voice-director` skill before finalizing `vo` te
 Related: `out/hf-*` is a HyperFrames composition. `hyperframes-core` documents
 its format; `hyperframes-cli` its commands. Narova owns that project — treat
 it as read-only output.
+
+Optional technical direction: install `narova-3d-production` independently for
+authored 3D work that needs deeper spatial, material, lighting, camera,
+interaction, or inspection judgment. Core Narova remains complete without it.

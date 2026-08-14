@@ -46,6 +46,11 @@ strengthening · `[ ]` gap.
   (Kimi Code, Codex, Claude Code, opencode, agentic SDKs). Verified: only
   framework mention in the skill was a stale code comment (fixed).
   Install line mentions agents only as examples.
+- [x] **Optional specialist 3D direction** — `narova-3d-production` adds a
+  concise high-freedom workflow and conditionally loaded spatial/appearance,
+  camera/interaction, and inspection knowledge without adding a runtime,
+  renderer, style, or core dependency. Core authored 3D remains complete when
+  the companion is absent.
 - [x] **Local rendering and speech** — HyperFrames + open-source TTS (piper/xtts/qwen)
   + ffmpeg. Local rendering and speech, with optional network-dependent
   setup and sourcing. `README.md`, `references/environment.md`.

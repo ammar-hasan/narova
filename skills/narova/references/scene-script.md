@@ -347,29 +347,12 @@ declarative config; `threeModule` is the raw-JS escape hatch.
 ### 3D production quality
 
 Using Three.js proves only that the scene is rendered in 3D; it does not make
-the result detailed or cinematic. Before authoring an ambitious film, turn the
-reference and creative direction into an explicit production brief. For
-ambitious 3D work, keep `creative-brief.md` at `Status: draft` until 2–3 small
-proof branches test the riskiest world, subject, material, action, or camera
-claims and one is selected:
-
-- silhouette and geometry density: hero forms, secondary props, and small-scale
-  breakup rather than one primitive per idea;
-- depth staging: foreground occluders, a readable midground, and background
-  landmarks or atmosphere in every important shot;
-- surface and light response: purposeful roughness/metalness/color variation,
-  motivated key/fill/rim light, shadows, fog, particles, or volumetric cues;
-- performance: character blocking, gesture, environmental motion, and at least
-  one meaningful visual change per narration beat;
-- camera and finish: shot-size changes, motivated movement, depth of field or
-  other deliberate post work when appropriate, and typography/compositing that
-  belongs to the same visual world.
-
-Models and textures are optional; production depth is not. Procedural geometry
-can satisfy the brief, but a sparse low-poly scene should be an intentional art
-direction rather than Narova's default. Run `narova critique creative,cinematic` and
-`narova shots --beats`; inspect both sides of every narration/marker beat and
-compare the actual rendered frames directly with the approved pilot/reference.
+the result detailed, cinematic, realistic, or physically correct. Core Narova
+deliberately supplies no 3D house style. Use the optional, independently
+installed `narova-3d-production` companion when a project needs specialist
+spatial, appearance, camera, interaction, or inspection judgment; it loads that
+depth conditionally and hands authoring and rendering back here. The complete
+3D surface above remains available without it.
 
 ## What `check` enforces (errors)
 
