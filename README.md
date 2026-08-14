@@ -308,18 +308,21 @@ See the exact [renderer capability contract](skills/narova/references/renderers.
 ### Optional 3D-production direction
 
 Core Narova includes its complete authored-3D and mixed-compositing surface
-without another skill. For work that needs deeper spatial, geometry/asset,
-material, lighting, camera, interaction, or inspection judgment, install the
+without another skill. For work that needs intentional subject/world
+representation, asset or production-capability routing, scene direction, or
+rationale-isolated inspection, install the
 independent [`narova-3d-production`](skills/narova-3d-production/) companion:
 
 ```bash
 npx skills add ammar-hasan/narova --skill narova-3d-production -g
 ```
 
-It is a concise, high-freedom direction layer with conditional references—not a
-renderer, physics simulator, preset pack, required dependency, or guarantee of
-taste. It adds no CLI or project behavior, and core Narova works identically
-without it.
+It is a concise, high-freedom direction layer with conditional references. It
+can keep an intentional abstraction or route an available generation, model,
+rigging, animation, or inspection capability when the chosen form needs one; it
+does not supply those operations itself. It is not a renderer, physics
+simulator, preset pack, required dependency, or guarantee of taste. It adds no
+CLI or project behavior, and core Narova works identically without it.
 
 ### Product walkthroughs
 

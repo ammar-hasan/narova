@@ -372,9 +372,11 @@ and `skills/narova-openai/`.
 
 The separately installed `skills/narova-3d-production/` companion adds no
 runtime or provider. It supplies high-freedom technical judgment for authored
-3D work and conditionally loads spatial/appearance, camera/interaction, or
-inspection references. Core Narova's 3D authoring and rendering remain complete
-when it is absent.
+3D work and conditionally loads subjects/assets, scene-direction, or inspection
+references. It distinguishes an accepted final representation from a blockout,
+routes optional capabilities without bundling them, and isolates perceptual
+review from author rationale. Core Narova's 3D authoring and rendering remain
+complete when it is absent.
 
 ## Status: 0.31.3 shipped
 

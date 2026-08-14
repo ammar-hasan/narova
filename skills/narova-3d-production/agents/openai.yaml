@@ -1,4 +1,4 @@
 interface:
   display_name: "Narova 3D Production"
   short_description: "High-freedom direction for authored 3D video"
-  default_prompt: "Use $narova-3d-production with Narova to direct an authored 3D scene while preserving creative freedom."
+  default_prompt: "Use $narova-3d-production with Narova to choose and prove an intentional authored-3D direction."

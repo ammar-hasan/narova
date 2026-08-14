@@ -9,16 +9,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Added
 
 - **Optional 3D-production companion.** `narova-3d-production` adds an
-  independently installable, instruction-only direction layer for authored 3D
-  space, appearance, camera, interaction, and honest inspection. Its concise
-  workflow loads at most three specialist references conditionally and adds no
-  renderer, physics engine, preset, template, script, or core dependency.
+  independently installable direction layer for intentional subject/world
+  representation, capability routing, scene direction, and honest inspection.
+  Its concise workflow loads at most three specialist references conditionally
+  and adds no renderer, physics engine, preset, template, script, or core
+  dependency.
 
 ### Changed
 
 - **3D guidance leaves the core skill.** Core Narova retains every existing 3D
   authoring and rendering capability while specialist production direction now
   lives in the optional companion instead of a universal core checklist.
+- **3D proof before scale.** The companion now prevents accidental placeholder
+  promotion, keeps abstraction and realism equally available, separates
+  artifact-only perception from structured fact checks, and proves a risky
+  visual and movement premise before full production.
 
 ## [0.31.3] - 2026-08-12
 

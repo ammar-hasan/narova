@@ -350,9 +350,10 @@ Using Three.js proves only that the scene is rendered in 3D; it does not make
 the result detailed, cinematic, realistic, or physically correct. Core Narova
 deliberately supplies no 3D house style. Use the optional, independently
 installed `narova-3d-production` companion when a project needs specialist
-spatial, appearance, camera, interaction, or inspection judgment; it loads that
-depth conditionally and hands authoring and rendering back here. The complete
-3D surface above remains available without it.
+subject/asset, scene-direction, or inspection judgment; it loads that depth
+conditionally, separates accepted representations from blockouts, and hands
+authoring and rendering back here. The complete 3D surface above remains
+available without it.
 
 ## What `check` enforces (errors)
 

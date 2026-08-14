@@ -223,9 +223,9 @@ user's approval before any consequential external mutation.
   concerns. Run `narova critique` when you want optional craft guidance.
 - **Three.js is a renderer, not an art direction.** Core Narova retains its full
   3D authoring and rendering surface without another skill. When authored 3D
-  needs specialist spatial, appearance, camera, interaction, or evidence
-  judgment, optionally compose with `narova-3d-production`; it adds direction,
-  not a renderer, physics engine, template, or default aesthetic.
+  needs specialist subject/asset, scene-direction, capability-routing, or
+  evidence judgment, optionally compose with `narova-3d-production`; it adds
+  direction, not a renderer, physics engine, template, or default aesthetic.
 
 Read `references/gotchas.md` for the full list.
 
@@ -281,5 +281,6 @@ its format; `hyperframes-cli` its commands. Narova owns that project — treat
 it as read-only output.
 
 Optional technical direction: install `narova-3d-production` independently for
-authored 3D work that needs deeper spatial, material, lighting, camera,
-interaction, or inspection judgment. Core Narova remains complete without it.
+authored 3D work that needs intentional subject/world representation, optional
+production-capability routing, scene direction, or rationale-isolated
+inspection. Core Narova remains complete without it.
