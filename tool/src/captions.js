@@ -35,12 +35,28 @@ function buildVtt(data) {
 }
 
 /* Write out/captions.srt + out/captions.vtt from the resolved config and the
- * existing out/timings.json. Throws if timings.json is missing/unreadable. */
+ * existing out/timings.json. Throws if timings.json is missing/unreadable.
+ *
+ * NAR-017-018 — empty-derivation guard: when derivation yields zero cue
+ * groups while narration audio exists, an empty sidecar is never published
+ * silently. The sidecars are omitted, the reason is recorded in
+ * out/captions-omitted.json (which release check honors), and the omission is
+ * reported in the return value for the build log. */
 function writeCaptions(config, outDir) {
   const timings = JSON.parse(fs.readFileSync(path.join(outDir, 'timings.json'), 'utf8'));
   const data = composeData(config, timings);
   const srt = path.join(outDir, 'captions.srt');
   const vtt = path.join(outDir, 'captions.vtt');
+  const audioPath = path.join(outDir, 'audio', 'full.wav');
+  const hasNarrationAudio = fs.existsSync(audioPath);
+  if (data.groups.length === 0 && hasNarrationAudio) {
+    for (const f of [srt, vtt]) fs.rmSync(f, { force: true });
+    const omissionPath = path.join(outDir, 'captions-omitted.json');
+    const reason = 'caption derivation produced an empty sentence set while narration audio exists — timing/alignment evidence is missing or empty';
+    fs.writeFileSync(omissionPath, JSON.stringify({ reason, cues: 0, at: new Date().toISOString() }, null, 2) + '\n');
+    return { srt, vtt, cues: 0, omitted: true, reason, omissionPath };
+  }
+  fs.rmSync(path.join(outDir, 'captions-omitted.json'), { force: true });
   fs.writeFileSync(srt, buildSrt(data));
   fs.writeFileSync(vtt, buildVtt(data));
   return { srt, vtt, cues: data.groups.length };

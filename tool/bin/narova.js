@@ -20,6 +20,7 @@ const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = r
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
 const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
+const { clipCoverage, formatCoverage, contactSheet, termExcerpts } = require('../src/review-evidence');
 const { ingest } = require('../src/ingest');
 const {
   creditLines, downloadAsset, inferKind, readAssetLock, registerAsset,
@@ -36,7 +37,9 @@ const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate
 const {
   addProvider, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
-const { backendHint } = require('../src/tts-backends');
+const {
+  backendHint, builtinNames, BUILTIN_BACKENDS, deliveryCapabilitiesFor,
+} = require('../src/tts-backends');
 const {
   composeWithRenderer, renderWithRenderer, shotsWithRenderer,
   getRenderer, listRenderers,
@@ -45,9 +48,9 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -274,6 +277,9 @@ Commands:
   walkthrough capture [id]  record narration-timed product actions with agent-browser
   walkthrough status [id]   report missing/stale/fresh captured walkthrough assets
   shots                snapshot QA frames with the selected renderer
+  review --coverage    advisory per-reel clip usage summary (no gates)
+  review --contact-sheet  one labeled still per scene from the encoded video
+  review --excerpt <terms>  one short audio clip per term from synthesized audio
   build                synth + compose + selected renderer -> out/video.mp4
   preview              HyperFrames Studio, or a no-browser draft preview MP4
   renderers list       list bundled local renderer providers and capabilities
@@ -943,6 +949,49 @@ async function main() {
       return;
     }
 
+    case 'review': {
+      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt].filter(Boolean).length;
+      if (modes === 0) {
+        console.error('review needs one of --coverage | --contact-sheet | --excerpt <terms>');
+        process.exit(1);
+      }
+      if (modes > 1) {
+        console.error('review modes are mutually exclusive');
+        process.exit(1);
+      }
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      if (flags.coverage) {
+        console.log(formatCoverage(clipCoverage(config)));
+        return;
+      }
+      const timingsPath = path.join(out, 'timings.json');
+      if (!fs.existsSync(timingsPath)) {
+        console.error('review needs out/timings.json — run `narova synth` first');
+        process.exit(1);
+      }
+      const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+      if (flags['contact-sheet']) {
+        const sheet = contactSheet(config, out, timings);
+        if (sheet.reason) console.log(`note: ${sheet.reason}`);
+        if (sheet.sheet) console.log(`contact sheet -> ${sheet.sheet} (${sheet.tiles.length} scenes)`);
+        if (sheet.missing.length) console.log(`no still for: ${sheet.missing.join(', ')}`);
+        console.log('advisory evidence — look at it; nothing here gates or fails a build');
+        return;
+      }
+      const terms = String(flags.excerpt).split(',').map(s => s.trim()).filter(Boolean);
+      if (terms.length === 0) {
+        console.error('review --excerpt needs comma-separated terms, e.g. --excerpt "Marjaiyyah,Ijtihad"');
+        process.exit(1);
+      }
+      const excerpts = termExcerpts(config, out, timings, terms);
+      if (excerpts.reason) { console.error(excerpts.reason); process.exit(1); }
+      for (const e of excerpts.excerpts) console.log(`excerpt -> ${e.file}  (${e.term})`);
+      if (excerpts.notFound.length) console.log(`not found in timing evidence: ${excerpts.notFound.join(', ')}`);
+      console.log('advisory evidence — listen before handing off; nothing here gates or fails a build');
+      return;
+    }
+
     case 'shots': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
@@ -1204,6 +1253,9 @@ async function main() {
       const sub = positionals[1] || 'list';
       if (sub === 'list') {
         const entries = listProviders();
+        // NAR-018-068 — surface declared delivery-control capabilities. Built-in
+        // backends declare too, so one command shows the whole speech surface.
+        const builtins = [...builtinNames()].sort();
         if (entries.length === 0) {
           console.log(`no external TTS providers registered (${providersDir()})`);
         } else {
@@ -1211,8 +1263,22 @@ async function main() {
             const version = provider.providerVersion ? ` ${provider.providerVersion}` : '';
             const voices = provider.capabilities.voiceListing ? 'voices' : 'no-voice-list';
             console.log(`${provider.name.padEnd(20)} ${provider.displayName}${version}  ${provider.protocol}  ${voices}`);
+            if (provider.deliveryCapabilities) {
+              const declared = Object.entries(provider.deliveryCapabilities)
+                .map(([family, status]) => `${family}:${status}`).join('  ');
+              console.log(`${' '.repeat(20)} delivery: ${declared}`);
+            } else {
+              console.log(`${' '.repeat(20)} delivery: (undeclared — every family reads as unknown)`);
+            }
           }
         }
+        console.log(`\nbuilt-in backends: ${builtins.join(', ')}`);
+        for (const name of builtins) {
+          const caps = deliveryCapabilitiesFor(name);
+          const declared = caps ? Object.entries(caps).map(([family, status]) => `${family}:${status}`).join('  ') : '(unknown)';
+          console.log(`${name.padEnd(20)} ${BUILTIN_BACKENDS[name].displayName}  delivery: ${declared}`);
+        }
+        console.log('\ndelivery statuses are disclosures, not restrictions — they tell you what each backend honors before you burn a render');
         return;
       }
       if (sub === 'add') {

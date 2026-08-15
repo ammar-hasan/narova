@@ -20,6 +20,8 @@ const { hashFile } = require('./manifest');
 const { verifyProofBundle } = require('./proof-receipt');
 const { projectIdentity } = require('./releases');
 const { lockPath: assetLockPath, verifyAssets } = require('./asset-registry');
+const { isBuiltinBackend, MARKUP_FAMILIES, deliveryCapabilitiesFor } = require('./tts-backends');
+const { getProvider } = require('./providers');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -161,6 +163,31 @@ function releaseChecks(config, errors, opts = {}) {
   const brief = creativeBriefStatus(config, opts);
 
   const projectDir = config.projectDir || '.';
+  // NAR-017-057 — caption sidecar release check. A delivered set containing
+  // narration audio must not carry an empty-or-absent caption sidecar without
+  // an explicitly recorded derivation reason (out/captions-omitted.json,
+  // written by build when derivation produced no sentences). Correctness, not
+  // judgment: an empty published sidecar is broken by definition.
+  {
+    const outDir = opts.outDir || path.join(projectDir, 'out');
+    const audioPath = path.join(outDir, 'audio', 'full.wav');
+    if (fs.existsSync(audioPath)) {
+      const srtPath = path.join(outDir, 'captions.srt');
+      const omissionPath = path.join(outDir, 'captions-omitted.json');
+      let recordedReason = null;
+      if (fs.existsSync(omissionPath)) {
+        try {
+          const omitted = JSON.parse(fs.readFileSync(omissionPath, 'utf8'));
+          if (omitted && typeof omitted.reason === 'string' && omitted.reason.trim()) recordedReason = omitted.reason;
+        } catch { /* unreadable marker falls through to the failure below */ }
+      }
+      const sidecarExists = fs.existsSync(srtPath);
+      const sidecarEmpty = sidecarExists && fs.statSync(srtPath).size === 0;
+      if ((sidecarExists && sidecarEmpty) || (!sidecarExists && !recordedReason)) {
+        errors.push(`captions: narration audio is present but the published caption sidecar (${path.relative(projectDir, srtPath)}) is ${sidecarEmpty ? 'empty' : 'absent'} without a recorded derivation reason — rebuild, or record the intentional omission in ${path.relative(projectDir, omissionPath)}`);
+      }
+    }
+  }
   if (fs.existsSync(assetLockPath(projectDir))) {
     try {
       const report = verifyAssets(projectDir);
@@ -573,6 +600,44 @@ function check(config, opts = {}) {
   if (projectChoreoBytes > CHOREOGRAPHY_MAX_BYTES) {
     warnings.push(`choreography: ${Math.round(projectChoreoBytes / 1024)}KB exceeds the ${CHOREOGRAPHY_MAX_BYTES / 1024}KB guideline — a choreography file growing without bound is a sign the logic belongs in the tool`);
   }
+
+  // NAR-004-022 — selective-render downgrade visibility. The same conditions
+  // that downgrade browser-profile caching to whole-video mode at build time
+  // (scene-cache.js selectiveRenderSafe) are surfaced here as an attributed
+  // warning, so the author learns BEFORE a long render that per-scene cache
+  // recovery will be unavailable. Information only: the downgrade itself is
+  // correct behavior ("never creatively wrong"); the freedom to use project
+  // choreography is unchanged.
+  if ((config.renderer || 'hyperframes') === 'hyperframes') {
+    const jsImport = Object.entries(config.imports || {}).find(([, file]) => typeof file === 'string' && file.toLowerCase().endsWith('.js'));
+    if (config.choreography && String(config.choreography).trim()) {
+      warnings.push('scene cache: project choreography downgrades HyperFrames caching to whole-video mode — per-scene render recovery is unavailable for this project; scene-local choreographyFile/scriptFile stay cacheable');
+    } else if (jsImport) {
+      warnings.push(`scene cache: project import "${jsImport[0]}" is JavaScript inlined into the global timeline, downgrading HyperFrames caching to whole-video mode — per-scene render recovery is unavailable for this project`);
+    }
+  }
+
+  // NAR-018-069 — unsupported-markup advisory. When synthesis text carries a
+  // markup family the selected backend DECLARES as ignored, warn. Honored and
+  // unknown families stay silent (no false positives from self-reported-but-
+  // drifting declarations). Advisory only: text is sent unaltered either way.
+  const backendsInUse = [...new Set(Object.values(config.voices || {}).map(v => v.backend).filter(Boolean))];
+  for (const backend of backendsInUse) {
+    const capabilities = deliveryCapabilitiesFor(backend, name => (isBuiltinBackend(name) ? null : getProvider(name)));
+    if (!capabilities) continue; // undeclared/unknown backend — stay silent
+    for (const s of config.scenes) {
+      for (const [ti, turn] of (s.vo || []).entries()) {
+        const text = turn.synthesisText != null ? String(turn.synthesisText) : null;
+        if (!text) continue;
+        for (const { family, pattern } of MARKUP_FAMILIES) {
+          if (capabilities[family] === 'ignored' && pattern.test(text)) {
+            warnings.push(`scene "${s.id}" vo[${ti}] (voice ${turn.who}, backend ${backend}): ${family} is declared ignored by this backend and will be spoken as literal text or dropped — the declaration is advisory; the text is sent unaltered`);
+          }
+        }
+      }
+    }
+  }
+
 
   // theme.css
   if (/animation[^;{}]*\binfinite\b/.test(config.themeCss || '')) {

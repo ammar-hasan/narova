@@ -102,6 +102,24 @@ function validateManifest(raw, baseDir = '.') {
       && (typeof raw.providerVersion !== 'string' || !raw.providerVersion.trim())) {
     throw new Error('provider.providerVersion: expected a non-empty string');
   }
+  // NAR-018-068 — optional delivery-control capability declarations. Open
+  // family key set (workers may declare families narova does not know), but
+  // a closed status vocabulary. Declarations are disclosures only: they
+  // never restrict what options a request may carry.
+  if (raw.deliveryCapabilities != null) {
+    if (!raw.deliveryCapabilities || typeof raw.deliveryCapabilities !== 'object'
+        || Array.isArray(raw.deliveryCapabilities)) {
+      throw new Error('provider.deliveryCapabilities: expected an object of family -> "honored" | "ignored" | "unknown"');
+    }
+    for (const [family, status] of Object.entries(raw.deliveryCapabilities)) {
+      if (!/^[a-z][a-z0-9-]*$/.test(family)) {
+        throw new Error(`provider.deliveryCapabilities.${family}: family names must be lowercase hyphenated identifiers`);
+      }
+      if (!['honored', 'ignored', 'unknown'].includes(status)) {
+        throw new Error(`provider.deliveryCapabilities.${family}: status must be "honored" | "ignored" | "unknown" (got ${JSON.stringify(status)})`);
+      }
+    }
+  }
   return {
     name: raw.name,
     displayName: raw.displayName || raw.name,
@@ -110,6 +128,7 @@ function validateManifest(raw, baseDir = '.') {
     requiredEnvironment: [...requiredEnvironment],
     capabilities: { ...capabilities },
     ...(raw.providerVersion ? { providerVersion: raw.providerVersion } : {}),
+    ...(raw.deliveryCapabilities ? { deliveryCapabilities: { ...raw.deliveryCapabilities } } : {}),
   };
 }
 
