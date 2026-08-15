@@ -292,7 +292,11 @@ function build(config, opts = {}) {
   // Preserve external narration source through the manifest bridge.
   if (hasExternalNarration && config.narrationSource) cc.narrationSource = config.narrationSource;
   const caps = writeCaptions(cc, outDir);
-  log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
+  if (caps.omitted) {
+    log(`captions omitted — ${caps.reason} (recorded in out/captions-omitted.json)`);
+  } else {
+    log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
+  }
 
   log(`[3/3] ${selectedRenderer.displayName} render${selectedRenderer.name === 'hyperframes' ? ' (first run downloads the CLI — not a hang)' : ' (browserless local Skia + FFmpeg)'}`);
   const name = opts.name || 'video.mp4';

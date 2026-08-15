@@ -890,9 +890,22 @@ const choreoConfig = (choreography, extra = {}) => ({
   ...extra,
 });
 
-test('a clean choreography file produces no warnings', () => {
+test('a clean choreography file produces no determinism warnings (the selective-render downgrade notice is expected, not a defect)', () => {
   const { lines } = run(choreoConfig('var T = function (k) { return sc.start + sc.turns[k]; };'));
-  assert.ok(!lines.some(l => l.startsWith('warn:')), lines.join('\n'));
+  assert.ok(!lines.some(l => l.startsWith('warn:') && !l.startsWith('warn: scene cache:')), lines.join('\n'));
+});
+
+test('project choreography announces the selective-render downgrade (NAR-004-022)', () => {
+  const { lines } = run(choreoConfig('var T = function (k) { return sc.start + sc.turns[k]; };'));
+  const hit = lines.find(l => l.includes('downgrades HyperFrames caching to whole-video mode'));
+  assert.ok(hit, lines.join('\n'));
+  assert.ok(hit.includes('per-scene render recovery is unavailable'));
+  // Information, not a gate: exit stays clean in every mode.
+});
+
+test('a clean project without choreography or JS imports has no downgrade notice', () => {
+  const { lines } = run(base([{ id: 's', body: '<p data-cue="0">x</p>', vo: [{ who: 'a', text: 'one' }] }]));
+  assert.ok(!lines.some(l => l.includes('whole-video mode')), lines.join('\n'));
 });
 
 test('determinism-breaking references in choreography warn', () => {
@@ -1099,4 +1112,58 @@ test('infinite CSS animation is tagged as a correctness issue, not quality', () 
   const lines = run(cfg).lines;
   assert.ok(lines.some(l => l.startsWith('warn: correctness:') && l.includes('infinite')),
     lines.join('\n'));
+});
+
+// ---- NAR-018-069 — unsupported-markup advisory (CHANGE-2026-017) ------------
+
+test('declared-ignored markup in synthesis text warns; unknown backends stay silent', () => {
+  const markupScene = { id: 's', body: '<p data-cue="0">x</p>',
+    vo: [{ who: 'a', text: 'the term', synthesisText: 'the <phoneme alphabet="ipa" ph="fiːk">term</phoneme> and <break time="0.5s"/>' }] };
+  // piper declares pronunciation-markup ignored -> both families warn
+  const piperLines = run(base([markupScene])).lines;
+  const piperWarns = piperLines.filter(l => l.includes('declared ignored by this backend'));
+  assert.ok(piperWarns.some(l => l.includes('pronunciation-markup')), piperLines.join('\n'));
+  assert.ok(piperWarns.some(l => l.includes('pause-markup')), piperLines.join('\n'));
+  assert.ok(piperWarns.every(l => l.startsWith('warn:')), 'advisory only, never fail lines');
+  // qwen declares delivery-instruct honored and the same families ignored -> same warnings
+  const qwenLines = run({ ...base([markupScene]), voices: { a: { backend: 'qwen', speaker: 'chelsie' } } }).lines;
+  assert.ok(qwenLines.some(l => l.includes('pronunciation-markup') && l.includes('declared ignored')), qwenLines.join('\n'));
+  // clean synthesis text under piper -> no markup advisory
+  const cleanLines = run(base([{ id: 's', body: '<p data-cue="0">x</p>', vo: [{ who: 'a', text: 'plain text', synthesisText: 'plain text' }] }])).lines;
+  assert.ok(!cleanLines.some(l => l.includes('declared ignored by this backend')), cleanLines.join('\n'));
+});
+
+// ---- NAR-017-057 — caption sidecar release check (CHANGE-2026-017) ---------
+
+test('release fails on an empty published caption sidecar with narration audio', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-captions-release-'));
+  fs.mkdirSync(path.join(dir, 'out', 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'out', 'audio', 'full.wav'), 'x');
+  fs.writeFileSync(path.join(dir, 'out', 'captions.srt'), '');
+  const config = { ...base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'hello' }] }]), projectDir: dir };
+  const { ok, lines } = run(config, { release: true, outDir: path.join(dir, 'out') });
+  assert.equal(ok, false);
+  assert.ok(lines.some(l => l.includes('captions:') && l.includes('empty')), lines.join('\n'));
+});
+
+test('release passes with an absent sidecar and a recorded intentional omission', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-captions-release-'));
+  fs.mkdirSync(path.join(dir, 'out', 'audio'), { recursive: true });
+  fs.writeFileSync(path.join(dir, 'out', 'audio', 'full.wav'), 'x');
+  fs.writeFileSync(path.join(dir, 'out', 'captions-omitted.json'),
+    JSON.stringify({ reason: 'intentionally captionless cut', cues: 0 }));
+  const config = { ...base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'hello' }] }]), projectDir: dir };
+  const { ok, lines } = run(config, { release: true, outDir: path.join(dir, 'out') });
+  assert.equal(ok, true, lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('caption sidecar')), lines.join('\n'));
+});
+
+test('no caption rule fires without narration audio', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-captions-release-'));
+  fs.mkdirSync(path.join(dir, 'out'), { recursive: true });
+  // silent scene, but claims/config fields check() expects must exist
+  const config = { ...base([{ id: 's', body: '<p>x</p>', vo: [] }]), projectDir: dir, claims: [] };
+  const { ok, lines } = run(config, { release: true, outDir: path.join(dir, 'out') });
+  assert.equal(ok, true, lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('caption sidecar')), lines.join('\n'));
 });

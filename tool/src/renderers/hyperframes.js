@@ -9,6 +9,7 @@ const { runHf, HYPERFRAMES_VERSION } = require('../hf');
 const { materializeVisualBodies } = require('./visual');
 const { which, ensureDir, sh } = require('../util');
 const { sha256 } = require('../manifest');
+const { probeProjectClips, attributionDiagnostic } = require('../clip-probe');
 
 function spanRenderOutput(spanProjectDir, outputFile) {
   return path.relative(spanProjectDir, outputFile);
@@ -75,7 +76,25 @@ const provider = {
     if (opts.videoFrameFormat) args.push('--video-frame-format', opts.videoFrameFormat);
     if (opts.fps) args.push('--fps', String(opts.fps));
     if (opts.quality) args.push('--quality', String(opts.quality));
-    runHf(args, composed.dir);
+    // NAR-004-021: bracket the engine's video-preprocessing stage with
+    // compose-time clip probes so a multi-clip failure names its candidates.
+    // Probes never gate the render; they only attribute failure.
+    const clips = (config.scenes || []).filter(s => s.clip).length;
+    let probes = null;
+    try {
+      runHf(args, composed.dir);
+    } catch (error) {
+      if (clips > 1) {
+        probes = probes || probeProjectClips(config, config.projectDir || outDir);
+        const wrapped = new Error(
+          `${attributionDiagnostic('render stage: engine video preprocessing (frame extraction before capture)', probes, 0, error.message)}\n` +
+          `full engine error follows:\n${error.message}`
+        );
+        wrapped.cause = error;
+        throw wrapped;
+      }
+      throw error;
+    }
     return { ...composed, mp4: path.join(outDir, name), project: composed.dir };
   },
 
@@ -97,7 +116,18 @@ const provider = {
       const args = ['render', '--output', spanRenderOutput(spanProject.dir, hfOut)];
       if (opts.quality) args.push('--quality', String(opts.quality));
       args.push('--fps', String(fps));
-      runHf(args, spanProject.dir, { quiet: true });
+      // One clip per span project: attribute a failure straight to the scene.
+      try {
+        runHf(args, spanProject.dir, { quiet: true });
+      } catch (error) {
+        const wrapped = new Error(
+          `span render failed for scene "${renderedConfig.scenes[sceneIdx] && renderedConfig.scenes[sceneIdx].id}" ` +
+          `(clip: ${renderedConfig.scenes[sceneIdx] && renderedConfig.scenes[sceneIdx].clip || 'none'}) — ` +
+          `engine video preprocessing stage; render attempts by narova: 0\n${error.message}`
+        );
+        wrapped.cause = error;
+        throw wrapped;
+      }
       // Re-encode for concat safety: setsar=1, no B-frames, strip audio.
       ensureDir(path.dirname(span.spanFile));
       const tmp = span.spanFile + '.tmp.mp4';
