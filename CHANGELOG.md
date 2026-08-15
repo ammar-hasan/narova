@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.4] - 2026-08-15
+
 ### Added
 
 - **Optional 3D-production companion.** `narova-3d-production` adds an
@@ -24,6 +26,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   promotion, keeps abstraction and realism equally available, separates
   artifact-only perception from structured fact checks, and proves a risky
   visual and movement premise before full production.
+
+### Verified
+
+- **Complete-film validation.** An owner-reviewed, 94-second procedural 3D
+  story exercised the refined companion through visual proof, movement proof,
+  release rendering, and encoded motion/black-frame audits. The result supports
+  the bounded workflow while making no claim of model-independent creative
+  quality.
 
 ## [0.31.3] - 2026-08-12
 
