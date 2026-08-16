@@ -70,13 +70,13 @@ test('silence report lists only above-threshold gaps and stays advisory', () => 
   const dir = tmp();
   const audio = path.join(dir, 'audio');
   fs.mkdirSync(audio, { recursive: true });
-  // 5s tone: 1s tone, 2.7s silence, 1.3s tone
-  spawnSync('ffmpeg', ['-y', '-loglevel', 'error',
-    '-f', 'lavfi', '-i', 'anullsrc=r=16000:cl=mono',
-    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=16000',
-    '-filter_complex',
-    '[1:a]atrim=0:1[a1];[0:a]atrim=0:2.7,aresample=16000[si];[1:a]atrim=0:1.3[a2];[a1][si][a2]concat=n=3:v=0:a=1[out]',
-    '-map', '[out]', '-t', '5', path.join(audio, 'full.wav')]);
+  // 5s tone with a 2.7s mute region (1.0s–3.7s): one lavfi input, one
+  // filter — robust across ffmpeg builds (multi-input concat is not).
+  const made = spawnSync('ffmpeg', ['-y', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'sine=frequency=440:sample_rate=16000:duration=5',
+    '-af', "volume=0:enable='between(t,1,3.7)'", '-c:a', 'pcm_s16le',
+    path.join(audio, 'full.wav')]);
+  assert.equal(made.status, 0, 'fixture synthesis must succeed');
   const report = silenceGaps(dir, { threshold: 1.0 });
   assert.equal(report.reason, undefined, 'audio exists, no reason');
   assert.equal(report.gaps.length, 1);

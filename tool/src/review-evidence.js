@@ -123,10 +123,13 @@ function termExcerpts(config, outDir, timings, terms, { pad = 0.25 } = {}) {
     }
     if (!hit) continue;
     const file = path.join(dir, `${String(term).replace(/[^\p{L}\p{N}_-]/gu, '_')}.wav`);
+    // Output-side trim + re-encode: stream-copy cuts are fragile across
+    // ffmpeg builds (zero-frame outputs when timestamps land oddly).
     const r = spawnSync('ffmpeg', [
       '-y', '-loglevel', 'error',
+      '-i', full,
       '-ss', String(Math.max(0, hit.start - pad)), '-to', String(hit.end + pad),
-      '-i', full, '-c', 'copy', file,
+      '-c:a', 'pcm_s16le', file,
     ], { encoding: 'utf8', timeout: 30000 });
     if (r.status === 0) made.push({ term, file });
   }
