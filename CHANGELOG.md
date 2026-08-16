@@ -6,6 +6,60 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.5] - 2026-08-16
+
+### Added
+
+- **Agent observability surfaces.** Multi-clip render failures now name
+  the render stage, the failing or candidate clips, and the retry count
+  before the engine exit; project-global choreography or JS imports that
+  downgrade HyperFrames caching to whole-video mode are announced at
+  check time instead of degrading silently.
+- **Advisory review evidence.** `narova review --coverage` summarizes
+  per-clip usage across the reel, `--contact-sheet` produces one labeled
+  still per scene from the encoded video, `--excerpt "term1,term2"` cuts
+  word-timed audio excerpts for risky pronunciations, `--silences
+  [threshold]` reports silence gaps in the mix, and `--takes` indexes
+  every narration sentence with timing, file, and take identity. All are
+  advisory — none gate a build.
+- **Deterministic narration takes.** Synthesis pins an identity-derived
+  seed so an unchanged sentence reproduces its take, matching the
+  renderer's determinism. Verified for all bundled backends (piper by
+  construction; xtts, qwen, and chatterbox via a pinned sampling seed —
+  byte-identical double-generation tested). Authored variation remains
+  first-class: per-voice `vary`, per-sentence `take` nonces that select
+  reproducible alternative takes, and a project-level
+  `speech.deterministicTakes: false` off-switch. Cached takes are never
+  rewritten.
+- **Take-identity records.** Every synthesized sentence records its
+  backend, voice, determinism mode, seed or nonce, language routing, and
+  model (when set) to `out/audio/takes.json`, with durable per-sentence
+  takes in `out/audio/sentences/`.
+- **Delivery-control capability disclosure.** `narova providers list`
+  now shows which pronunciation and delivery mechanisms each backend
+  honors (honored / ignored / unknown, never inferred). The ElevenLabs
+  companion declares seed stabilization honored; the OpenAI companion
+  declares delivery instructions honored and seeds ignored. Check warns
+  when synthesis text carries a markup family the selected backend
+  declares ignored, and a critique-only hint notes an unused
+  `instruct` capability.
+
+### Changed
+
+- **Empty caption sidecars can no longer ship silently.** When caption
+  derivation yields no sentences while narration audio exists, build
+  omits the sidecars and records the reason
+  (`out/captions-omitted.json`); release check fails an empty or absent
+  published sidecar without a recorded reason.
+
+### Verified
+
+- Silence review on a real seven-minute production surfaced the exact
+  owner-reported 2.7-second pause plus ten more gaps; the take index
+  exposed the bilingual voice split behind a perceived multi-narrator
+  drift. Qwen and chatterbox determinism verified by byte-identical
+  double generation under pinned seeds.
+
 ## [0.31.4] - 2026-08-15
 
 ### Added

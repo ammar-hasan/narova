@@ -66,7 +66,31 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.31.4</span>
+        <span class="rel-version" data-narova-version>0.31.5</span>
+        <span class="rel-date">2026-08-16</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Agent observability surfaces.</strong> Multi-clip render failures name the stage, the candidate clips, and retries; cache downgrades are announced at check time instead of degrading silently.</li>
+          <li><strong>Advisory review evidence.</strong> <code>narova review</code> gains <code>--coverage</code> (clip reuse), <code>--contact-sheet</code> (labeled stills), <code>--excerpt</code> (word-timed pronunciation cuts), <code>--silences</code> (pause report), and <code>--takes</code> (sentence/identity index). Advisory only — nothing gates a build.</li>
+          <li><strong>Deterministic narration takes.</strong> Unchanged sentences reproduce their takes through identity-derived seeds, verified byte-identical for every bundled backend. Authored variation stays first-class: <code>vary</code>, per-sentence take nonces, and a project off-switch.</li>
+          <li><strong>Capability disclosure.</strong> <code>narova providers list</code> shows which pronunciation and delivery mechanisms each backend honors; check warns before markup is silently ignored.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>No silent empty captions.</strong> A build with narration audio never publishes an empty caption sidecar; release check fails one without a recorded reason.</li>
+        </ul>
+        <h4><span class="tag verified">Verified</span></h4>
+        <ul>
+          <li>Review surfaces run against a real seven-minute production: the silence report found the exact owner-reported pause plus ten more; the take index exposed the voice split behind perceived narrator drift; double-generation under pinned seeds reproduced qwen and chatterbox takes byte-identically.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.31.4</span>
         <span class="rel-date">2026-08-15</span>
       </div>
       <div class="rel-body">
