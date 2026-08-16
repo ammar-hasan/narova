@@ -6,6 +6,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.6] - 2026-08-16
+
+### Added
+
+- **Optional compressed companion.** `narova build --companion [size]`
+  requests a compressed copy of the video beside the untouched primary —
+  an agent-owned iteration lever for quick review cuts (WhatsApp
+  documents, email, fast glances) while the final deliverable stays the
+  full-quality video. The size aim feeds deterministic derived encoding
+  (aim − audio − container overhead ÷ duration, clamped to rate
+  ceilings; documented 720p quick-review defaults without an aim), and
+  every companion reports `aim/achieved/bitrate` as information — misses
+  never fail anything; re-aiming is the requester's visible loop.
+  Nothing is enforced and no preset commits to a size.
+
+### Verified
+
+- The seven-minute production that motivated the change produced a
+  58.1MB companion from a 60MB aim (derived 1032k, 720p) with a single
+  flag, replacing a hand-rolled two-pass ffmpeg escape.
+
 ## [0.31.5] - 2026-08-16
 
 ### Added
