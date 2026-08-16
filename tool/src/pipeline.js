@@ -328,8 +328,18 @@ function build(config, opts = {}) {
     const mp4 = path.join(outDir, name);
     const seconds = probe(mp4);
     log(`done -> ${results.map(r => r.mp4).join(', ')}  (${seconds.toFixed(1)}s base)`);
+    // Optional compressed companion (NAR-017-058..060).
+    let companion = null;
+    if (opts.companion) {
+      const { buildCompanion } = require('./exports');
+      const standardResult = results.find(r => r.id === 'narova-standard') || results[0];
+      companion = buildCompanion(standardResult.mp4, outDir,
+        typeof opts.companion === 'string' ? { aim: opts.companion } : {},
+        { log });
+    }
     return {
       mp4, seconds, project: projectDir, renderer: selectedRenderer.name, deliverables: results,
+      ...(companion ? { companion } : {}),
       ...(selectedRenderer.name === 'hyperframes' ? { hf: projectDir } : {}),
     };
   }
@@ -343,6 +353,15 @@ function build(config, opts = {}) {
     ...opts, name, videoFrameFormat: hasWalkthroughs ? 'png' : null, log,
   });
   const mp4 = rendered.mp4;
+  // Optional compressed companion (NAR-017-058..060): an iteration lever the
+  // requester opts into; the primary stays untouched; nothing is enforced.
+  let companion = null;
+  if (opts.companion) {
+    const { buildCompanion } = require('./exports');
+    companion = buildCompanion(mp4, outDir,
+      typeof opts.companion === 'string' ? { aim: opts.companion } : {},
+      { log });
+  }
   const seconds = rendered.seconds == null ? probe(mp4) : rendered.seconds;
   log(`done -> ${mp4}  (${seconds.toFixed(1)}s)`);
   return {

@@ -48,8 +48,8 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes']);
-const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion']);
+const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
@@ -282,6 +282,9 @@ Commands:
   review --excerpt <terms>  one short audio clip per term from synthesized audio
   review --silences [s]  advisory silence-gap report (threshold seconds, default 1.0)
   review --takes        advisory narration take index (timing, sentence file, take identity)
+  --companion [size]    also write a compressed companion of the video for quick review
+                          e.g. --companion 60MB; no size uses quick-review defaults;
+                          never enforced, never gates, primary stays full quality
   build                synth + compose + selected renderer -> out/video.mp4
   preview              HyperFrames Studio, or a no-browser draft preview MP4
   renderers list       list bundled local renderer providers and capabilities
@@ -1087,6 +1090,7 @@ async function main() {
           ? (flags.deliverables === true ? true : String(flags.deliverables).split(',').map(s => s.trim()).filter(Boolean))
           : undefined,
         safeAreaGuides: flags['safe-area-guides'],
+        companion: flags.companion,
       };
       if (flags.variants) {
         // One resolved config per pass: base first, then each declared variant.
