@@ -331,6 +331,120 @@ function buildDeliverablesFromSource(config, sourceMp4, outDir, opts = {}) {
   return results;
 }
 
+/* ---- Optional compressed companion (NAR-017-058..060) -----------------
+ * An agent-owned iteration lever: one request at build or delivery time
+ * produces an additional compressed copy beside the primary video. The
+ * primary is untouched; nothing is ever created unrequested; no size is
+ * enforced anywhere. The aim (when given) feeds deterministic arithmetic;
+ * the evidence line reports reality back. The adjustment loop belongs to
+ * the requester, visibly. */
+
+/* Quick-review defaults when no aim is given (NAR-017-059). */
+const COMPANION_DEFAULTS = Object.freeze({
+  width: 1280,          // half-HD long edge; height follows the source aspect
+  videoBitrate: 1000,   // kbps — a moderate quick-review band
+  audioBitrateKbps: 80, // mono-review narration is fine at 80k
+  channels: 1,
+});
+
+/* Container overhead allowance for the derived-bitrate arithmetic: a fixed
+ * base plus a duration-proportional term (faststart moov + index growth).
+ * Deliberately conservative; a visible miss is cheaper than a hidden one. */
+function containerOverheadBytes(seconds) {
+  return 256 * 1024 + Math.round(seconds * 2048);
+}
+
+function parseSizeAim(raw) {
+  if (raw == null || raw === true) return null;
+  const text = String(raw).trim().toLowerCase();
+  const m = text.match(/^(\d+(?:\.\d+)?)\s*(b|kb|k|mb|m|gb|g)?$/);
+  if (!m) throw new Error(
+    `companion aim must be a size like 60MB, 16MB, or 250000000 (got ${JSON.stringify(String(raw))})`);
+  const value = parseFloat(m[1]);
+  const unit = m[2] || 'b';
+  const mult = { b: 1, kb: 1024, k: 1024, mb: 1024 * 1024, m: 1024 * 1024, gb: 1024 ** 3, g: 1024 ** 3 }[unit];
+  return Math.round(value * mult);
+}
+
+/* Deterministic derivation (NAR-017-059): pure function of the aim, the
+ * source's measured duration, the companion audio bitrate, dimensions, and
+ * the preset rate ceiling. One pass, no retries. */
+function deriveCompanionParams({ aimBytes, seconds, audioBitrateKbps, maxVideoBitrateKbps }) {
+  const audio = COMPANION_DEFAULTS.audioBitrateKbps;
+  const abr = audioBitrateKbps != null ? audioBitrateKbps : audio;
+  if (aimBytes == null) {
+    let bitrate = COMPANION_DEFAULTS.videoBitrate;
+    if (maxVideoBitrateKbps != null) bitrate = Math.min(bitrate, maxVideoBitrateKbps);
+    return { videoBitrateKbps: bitrate, audioBitrateKbps: abr, derived: false };
+  }
+  const available = aimBytes - containerOverheadBytes(seconds) - (abr * 1000 / 8) * seconds;
+  let bitrate = Math.floor((available * 8) / 1000 / Math.max(0.1, seconds));
+  if (!Number.isFinite(bitrate) || bitrate < 1) bitrate = 1; // physical floor
+  if (maxVideoBitrateKbps != null) bitrate = Math.min(bitrate, maxVideoBitrateKbps);
+  return { videoBitrateKbps: bitrate, audioBitrateKbps: abr, derived: true };
+}
+
+/* Create the companion for an existing primary mp4 (NAR-017-058).
+ * Returns { mp4, aimBytes, achievedBytes, videoBitrateKbps, seconds } and
+ * logs the evidence line (NAR-017-060). Never touches the primary. */
+function buildCompanion(primaryMp4, outDir, request = {}, opts = {}) {
+  const log = opts.log || console.log;
+  const seconds = probe(primaryMp4);
+  const aimBytes = parseSizeAim(request.aim);
+  // Half-HD long edge; height keeps the source aspect and stays even.
+  const srcW = Number(probeStream(primaryMp4, 'width')) || 1920;
+  const srcH = Number(probeStream(primaryMp4, 'height')) || 1080;
+  let width = Number(request.width) || COMPANION_DEFAULTS.width;
+  if (width % 2 === 1) width += 1;
+  let height = Math.round((width * srcH) / srcW);
+  if (height % 2 === 1) height += 1;
+
+  const params = deriveCompanionParams({
+    aimBytes,
+    seconds,
+    audioBitrateKbps: COMPANION_DEFAULTS.audioBitrateKbps,
+    maxVideoBitrateKbps: 12000, // ceiling: never worse than a generous preset max
+  });
+
+  const base = path.basename(primaryMp4, '.mp4');
+  const outName = `${base}-companion.mp4`;
+  const outPath = path.join(path.dirname(primaryMp4), outName);
+  const tmp = `${outPath}.tmp.mp4`;
+  sh('ffmpeg', [
+    '-y', '-loglevel', 'error', '-i', primaryMp4,
+    '-vf', `scale=${width}:${height}:force_original_aspect_ratio=decrease,pad=${width}:${height}:(ow-iw)/2:(oh-ih)/2`,
+    '-c:v', 'libx264', '-preset', 'slow',
+    '-b:v', `${params.videoBitrateKbps}k`,
+    '-maxrate', `${Math.round(params.videoBitrateKbps * 1.2)}k`,
+    '-bufsize', `${Math.round(params.videoBitrateKbps * 2.4)}k`,
+    '-pix_fmt', 'yuv420p',
+    '-ac', String(COMPANION_DEFAULTS.channels),
+    '-c:a', 'aac', '-b:a', `${params.audioBitrateKbps}k`,
+    '-movflags', '+faststart',
+    tmp,
+  ]);
+  fs.renameSync(tmp, outPath);
+  const achievedBytes = fs.statSync(outPath).size;
+  const fmtAim = aimBytes != null ? `${(aimBytes / (1024 * 1024)).toFixed(1)}MB` : 'default';
+  const fmtGot = `${(achievedBytes / (1024 * 1024)).toFixed(1)}MB`;
+  log(`companion -> ${path.join(outDir ? path.basename(outPath) : outPath, '')}`.replace(/\/$/, '') +
+      `  (aim=${fmtAim} achieved=${fmtGot} video=${params.videoBitrateKbps}k${params.derived ? ' (derived)' : ''} ${width}x${height})`);
+  return { mp4: outPath, aimBytes, achievedBytes, videoBitrateKbps: params.videoBitrateKbps, seconds };
+}
+
+/* Stream property via ffprobe (width/height of the video stream). */
+function probeStream(file, field) {
+  const { execFileSync } = require('child_process');
+  try {
+    const out = execFileSync('ffprobe', [
+      '-v', 'error', '-select_streams', 'v:0',
+      '-show_entries', `stream=${field}`,
+      '-of', 'default=noprint_wrappers=1:nokey=1', String(file),
+    ], { encoding: 'utf8' });
+    return out.trim();
+  } catch { return null; }
+}
+
 module.exports = {
   PRESETS,
   PLATFORM_TO_PRESET,
@@ -342,4 +456,8 @@ module.exports = {
   renderDeliverable,
   buildDeliverables,
   buildDeliverablesFromSource,
+  buildCompanion,
+  deriveCompanionParams,
+  parseSizeAim,
+  COMPANION_DEFAULTS,
 };
