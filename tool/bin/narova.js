@@ -20,7 +20,7 @@ const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = r
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
 const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
-const { clipCoverage, formatCoverage, contactSheet, termExcerpts } = require('../src/review-evidence');
+const { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes } = require('../src/review-evidence');
 const { ingest } = require('../src/ingest');
 const {
   creditLines, downloadAsset, inferKind, readAssetLock, registerAsset,
@@ -48,8 +48,8 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet']);
-const BOOL_OR_VALUE = new Set(['deliverables', 'critique']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes']);
+const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
@@ -280,6 +280,8 @@ Commands:
   review --coverage    advisory per-reel clip usage summary (no gates)
   review --contact-sheet  one labeled still per scene from the encoded video
   review --excerpt <terms>  one short audio clip per term from synthesized audio
+  review --silences [s]  advisory silence-gap report (threshold seconds, default 1.0)
+  review --takes        advisory narration take index (timing, sentence file, take identity)
   build                synth + compose + selected renderer -> out/video.mp4
   preview              HyperFrames Studio, or a no-browser draft preview MP4
   renderers list       list bundled local renderer providers and capabilities
@@ -950,14 +952,39 @@ async function main() {
     }
 
     case 'review': {
-      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt].filter(Boolean).length;
+      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt, flags.silences, flags.takes].filter(Boolean).length;
       if (modes === 0) {
-        console.error('review needs one of --coverage | --contact-sheet | --excerpt <terms>');
+        console.error('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes');
         process.exit(1);
       }
       if (modes > 1) {
         console.error('review modes are mutually exclusive');
         process.exit(1);
+      }
+      if (flags.silences) {
+        const threshold = flags.silences === true ? 1.0 : Number(flags.silences);
+        if (!Number.isFinite(threshold) || threshold <= 0) {
+          console.error('--silences needs a positive threshold in seconds, e.g. --silences 0.8');
+          process.exit(1);
+        }
+        const { config, projectDir } = await loadResolved(flags);
+        const report = silenceGaps(outDirOf(flags, projectDir), { threshold });
+        console.log(formatSilences(report));
+        console.log('advisory evidence — a long silence may be intentional; nothing here gates or fails a build');
+        return;
+      }
+      if (flags.takes) {
+        const { config, projectDir } = await loadResolved(flags);
+        const out = outDirOf(flags, projectDir);
+        const timingsPath = path.join(out, 'timings.json');
+        if (!fs.existsSync(timingsPath)) {
+          console.error('review --takes needs out/timings.json — run `narova synth` first');
+          process.exit(1);
+        }
+        const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+        console.log(formatTakes(takeIndex(config, out, timings)));
+        console.log('advisory evidence — audition weak takes, then re-roll surgically with vo take: N or vary: true');
+        return;
       }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);

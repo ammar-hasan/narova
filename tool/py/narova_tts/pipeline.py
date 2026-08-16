@@ -198,15 +198,28 @@ def rescale_timings(t: dict[str, Any], actual: float) -> dict[str, Any]:
 
 # ---- sentence synthesis (raw voice -> tempo + fades + resample) --------------
 
-def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float, lang: str | None = None) -> str:
+def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float,
+                       lang: str | None = None, nonce: int | None = None) -> str:
     """Stable identity of one synthesized sentence. Bump v1 when the processing
-    chain (rate/fades/atempo) changes so old entries are naturally abandoned."""
+    chain (rate/fades/atempo) changes so old entries are naturally abandoned.
+    An explicit take nonce (NAR-018-071) participates in identity, so take 2
+    of the same sentence is a different cache entry AND a different derived
+    seed — a reproducible alternative take, not a random re-roll."""
     h = hashlib.sha1()
     parts = f"v1|{kind}|{speaker}|{tempo}|{RATE}|{FADE}|{text}"
     if lang:
         parts += f"|lang={lang}"
+    if nonce is not None:
+        parts += f"|take={nonce}"
     h.update(parts.encode("utf-8"))
     return h.hexdigest()
+
+
+def derived_seed(cache_key: str) -> int:
+    """Deterministic take seed derived solely from sentence identity
+    (NAR-018-071). Identity changes (text/voice/direction/nonce) naturally
+    change the seed; identical identity reproduces the same take."""
+    return int(hashlib.sha1(f"seed|{cache_key}".encode("utf-8")).hexdigest()[:8], 16)
 
 
 def _clone_sample_cache_identity(kind: str | None, speaker: str) -> str:
@@ -242,6 +255,8 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
     parts = [spk]
     if v.get("instruct"):
         parts.append(v["instruct"])
+    if v.get("vary"):
+        parts.append("vary")  # authored variation (NAR-018-071): distinct reproducible take
     if kind == "chatterbox" and (
             v.get("exaggeration") is not None or v.get("cfg_weight") is not None):
         parts.append(f"exg={v.get('exaggeration')}|cfg={v.get('cfg_weight')}")
@@ -263,17 +278,18 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
 
 def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,
                    cache_key: str | None = None, lang: str | None = None,
-                   gain_db: float = 0.0) -> float:
+                   gain_db: float = 0.0, seed: int | None = None) -> tuple[float, bool]:
     """Synthesize one sentence, speed via atempo (pitch-preserving; NEVER the XTTS
     speed param, LEARNINGS #9), then fade the edges. Returns the MEASURED duration
-    of the processed clip — word timing is distributed across this real value.
-    With cache_key, a hit skips TTS + processing entirely (byte-identical copy)."""
+    of the processed clip and whether a cache hit served it — word timing is
+    distributed across the real value. With cache_key, a hit skips TTS +
+    processing entirely (byte-identical copy)."""
     cached = CACHE_DIR / f"{cache_key}.wav" if cache_key else None
     if cached is not None and cached.exists():
         shutil.copyfile(cached, out)
-        return probe(out)
+        return probe(out), True
     raw = tmp / "_raw.wav"
-    backend.synthesize(who, text, raw, lang=lang)
+    backend.synthesize(who, text, raw, lang=lang, seed=seed)
     d = probe(raw) / tempo                 # duration on the post-tempo timeline
     fo = max(0.0, d - FADE)
     gain = f",volume={gain_db}dB" if gain_db != 0.0 else ""
@@ -285,7 +301,7 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
     if cached is not None:
         CACHE_DIR.mkdir(parents=True, exist_ok=True)
         shutil.copyfile(out, cached)
-    return dur
+    return dur, False
 
 
 # ---- main pipeline ------------------------------------------------------------
@@ -357,6 +373,14 @@ def _synthesize_with_router(
     # Per-voice default lang for chatterbox/qwen/xtts (may be overridden per-turn).
     voice_lang = {who: v.get("lang") for who, v in voices.items() if v.get("lang")}
     voice_gain_db = {who: float(v.get("gainDb", 0.0)) for who, v in voices.items()}
+    # NAR-018-071: deterministic takes. Default ON for new synthesis; cached
+    # takes are served unchanged either way. Projects can disable pinning
+    # (speech.deterministicTakes: false) — an ordinary authoring surface.
+    deterministic_takes = bool(
+        (config.get("speech") or {}).get("deterministicTakes", True))
+    # Take-identity records (NAR-018-070) + durable per-sentence takes.
+    take_records: list[dict[str, Any]] = []
+    sentences_dir = audio_dir / "sentences"
 
     sil = {}
     for name, d in (("s", gap_sentence), ("t", gap_turn), ("lead", lead), ("tail", tail)):
@@ -413,18 +437,46 @@ def _synthesize_with_router(
                     clock += gap_sentence
                 w = tmp / f"{nn}_{si:03d}.wav"
                 turn_lang = turn.get("lang") or voice_lang.get(who)
+                nonce = turn.get("take")
                 key = sentence_cache_key(
                     voice_kind.get(who, default_backend),
                     voice_speaker.get(who, who),
                     synth_sent,
                     tempo,
                     lang=turn_lang,
+                    nonce=nonce if isinstance(nonce, int) and nonce > 0 else None,
                 )
-                d = synth_sentence(
-                    router[who], who, synth_sent, tmp, w, tempo,
+                backend = router[who]
+                seed_capable = bool(getattr(backend, "seed_capable", False))
+                pin = deterministic_takes and seed_capable
+                seed = derived_seed(key) if pin else None
+                mode = ("pinned" if not isinstance(nonce, int)
+                        else "pinned+nonce") if pin else "provider-default"
+                d, cache_hit = synth_sentence(
+                    backend, who, synth_sent, tmp, w, tempo,
                     cache_key=key, lang=turn_lang,
                     gain_db=voice_gain_db.get(who, 0.0),
+                    seed=seed,
                 )
+                # Durable per-sentence take (advisory evidence; NAR-007-026
+                # surfaces this as the take index).
+                sentences_dir.mkdir(parents=True, exist_ok=True)
+                sentence_file = f"{nn}_{si:03d}.wav"
+                shutil.copyfile(w, sentences_dir / sentence_file)
+                vcfg = voices.get(who, {})
+                take_records.append({
+                    "scene": s["n"], "sceneId": s["id"], "si": si, "who": who,
+                    "backend": voice_kind.get(who, default_backend),
+                    "speaker": vcfg.get("speaker", who),
+                    "model": (vcfg.get("providerOptions") or {}).get("model"),
+                    "lang": turn_lang,
+                    "mode": mode,
+                    **({"seed": seed} if seed is not None else {}),
+                    **({"take": nonce} if isinstance(nonce, int) and nonce > 0 else {}),
+                    "cacheHit": cache_hit,
+                    "file": f"audio/sentences/{sentence_file}",
+                    "text": synth_sent,
+                })
                 pieces.append(w)
                 # Distribute clean text words across the sentence's real duration
                 toks = clean_sent.split()
@@ -451,6 +503,10 @@ def _synthesize_with_router(
         rescale_timings(timings[s["id"]], probe(wav))  # sync timeline to actual audio
         print(f"scene {nn} [{s['id']:>9}] {timings[s['id']]['dur']:5.1f}s  "
               f"turns={''.join(t['who'] for t in s['segments'])}", flush=True)
+    # NAR-018-070: advisory take-identity evidence. Never required by any
+    # gate; regenerable by re-synthesis.
+    (audio_dir / "takes.json").write_text(
+        json.dumps(take_records, ensure_ascii=False, indent=1) + "\n")
     return timings
 
 

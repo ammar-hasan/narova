@@ -63,6 +63,14 @@ def validate_provider_manifest(value: Any) -> dict:
     version = value.get("providerVersion", "")
     if version and not isinstance(version, str):
         raise ValueError(f"provider {name!r}: providerVersion must be a string")
+    delivery = value.get("deliveryCapabilities")
+    if delivery is not None:
+        if (not isinstance(delivery, dict)
+                or any(not isinstance(k, str) or k == "" for k in delivery)
+                or any(v not in {"honored", "ignored", "unknown"} for v in delivery.values())):
+            raise ValueError(
+                f"provider {name!r}: deliveryCapabilities must map families to "
+                f"'honored' | 'ignored' | 'unknown'")
     return {
         "name": name,
         "displayName": value.get("displayName") or name,
@@ -71,6 +79,7 @@ def validate_provider_manifest(value: Any) -> dict:
         "requiredEnvironment": list(required),
         "capabilities": dict(capabilities),
         "providerVersion": version,
+        **({"deliveryCapabilities": dict(delivery)} if delivery else {}),
     }
 
 

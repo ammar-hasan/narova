@@ -1027,6 +1027,28 @@ function critique(config, opts = {}) {
   function activeFor(p) { return active == null || active.has(p); }
   function note(msg) { results.push(msg); }
 
+  // -- narration: unused capability hints (NAR-007-027) ----------------------
+  // Critique-only by design: default check stays silent on this subject in
+  // every case. A backend declaring delivery-instruct honored while the
+  // project configures no delivery direction is an unused capability, not a
+  // defect — the note names where direction would be set.
+  if (activeFor('narration') || activeFor('all')) {
+    const voicesInUse = config.voices || {};
+    const byBackend = new Map();
+    for (const v of Object.values(voicesInUse)) {
+      if (!v.backend) continue;
+      if (!byBackend.has(v.backend)) byBackend.set(v.backend, []);
+      byBackend.get(v.backend).push(v);
+    }
+    for (const [backend, vs] of byBackend) {
+      const caps = deliveryCapabilitiesFor(backend, name => (isBuiltinBackend(name) ? null : getProvider(name)));
+      if (!caps || caps['delivery-instruct'] !== 'honored') continue;
+      if (!vs.some(v => v.instruct && String(v.instruct).trim())) {
+        note(`narration: backend ${backend} honors delivery direction (per-voice \`instruct\`) but no voice using it configures one — a free performance surface, e.g. instruct: "warm, measured storyteller; never flat"`);
+      }
+    }
+  }
+
   // -- creative: ambition and pilot readiness -------------------------------
   if (activeFor('creative') || activeFor('cinematic') || activeFor('all')) {
     if (needsCreativeBrief(config, opts)) {

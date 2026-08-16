@@ -22,7 +22,9 @@ const BUILTIN_BACKENDS = Object.freeze({
  *                         `instruct`, e.g. "warm, never flat").
  *   pause-markup          authored <break time="…s"/> pauses.
  *   emphasis-markup       <emphasis>/<prosody> emphasis tags.
- *   non-latin-script      native Arabic/Urdu script text synthesis. */
+ *   non-latin-script      native Arabic/Urdu script text synthesis.
+ *   seed-stabilization    deterministic takes from an identity-derived seed
+ *                         (NAR-018-071). */
 const DELIVERY_CAPABILITIES = Object.freeze({
   piper: Object.freeze({
     'pronunciation-markup': 'ignored',
@@ -30,6 +32,7 @@ const DELIVERY_CAPABILITIES = Object.freeze({
     'pause-markup': 'ignored',
     'emphasis-markup': 'ignored',
     'non-latin-script': 'ignored', // single Arabic voice exists; tags are not parsed
+    'seed-stabilization': 'honored', // deterministic by construction (no sampling)
   }),
   xtts: Object.freeze({
     'pronunciation-markup': 'ignored',
@@ -37,6 +40,7 @@ const DELIVERY_CAPABILITIES = Object.freeze({
     'pause-markup': 'ignored',
     'emphasis-markup': 'ignored',
     'non-latin-script': 'honored', // Arabic is in the trained language set
+    'seed-stabilization': 'honored', // torch.manual_seed pinned from the derived seed
   }),
   qwen: Object.freeze({
     'pronunciation-markup': 'ignored',
@@ -44,6 +48,7 @@ const DELIVERY_CAPABILITIES = Object.freeze({
     'pause-markup': 'ignored',
     'emphasis-markup': 'ignored',
     'non-latin-script': 'honored', // language pass-through / auto-detect
+    'seed-stabilization': 'honored', // torch.manual_seed-pinned sampling (verified 2026-08-16)
   }),
   chatterbox: Object.freeze({
     'pronunciation-markup': 'ignored',
@@ -51,6 +56,7 @@ const DELIVERY_CAPABILITIES = Object.freeze({
     'pause-markup': 'ignored',
     'emphasis-markup': 'ignored',
     'non-latin-script': 'honored', // multilingual v3 with per-voice lang
+    'seed-stabilization': 'honored', // worker pins torch.manual_seed (verified 2026-08-16)
   }),
 });
 

@@ -14,5 +14,9 @@
     "voiceListing": true,
     "languages": true,
     "wordTimings": false
+  },
+  "deliveryCapabilities": {
+    "delivery-instruct": "unknown",
+    "seed-stabilization": "honored"
   }
 }

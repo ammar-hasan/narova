@@ -331,6 +331,7 @@ function compileVoices(voices) {
       ...(v.gainDb != null ? { gainDb: v.gainDb } : {}),
       ...(v.lang ? { lang: v.lang } : {}),
       ...(v.instruct ? { instruct: v.instruct } : {}),
+      ...(v.vary ? { vary: true } : {}),
       ...(v.exaggeration != null ? { exaggeration: v.exaggeration } : {}),
       ...(v.cfg_weight != null ? { cfg_weight: v.cfg_weight } : {}),
       ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
@@ -353,6 +354,7 @@ function compileScenes(scenes) {
       text: turn.text,
       ...(turn.lang ? { lang: turn.lang } : {}),
       ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
+      ...(turn.take != null ? { take: turn.take } : {}),
       start: 0,            // filled after synth
       words: [],           // filled after synth
     })),

@@ -123,10 +123,13 @@ function termExcerpts(config, outDir, timings, terms, { pad = 0.25 } = {}) {
     }
     if (!hit) continue;
     const file = path.join(dir, `${String(term).replace(/[^\p{L}\p{N}_-]/gu, '_')}.wav`);
+    // Output-side trim + re-encode: stream-copy cuts are fragile across
+    // ffmpeg builds (zero-frame outputs when timestamps land oddly).
     const r = spawnSync('ffmpeg', [
       '-y', '-loglevel', 'error',
+      '-i', full,
       '-ss', String(Math.max(0, hit.start - pad)), '-to', String(hit.end + pad),
-      '-i', full, '-c', 'copy', file,
+      '-c:a', 'pcm_s16le', file,
     ], { encoding: 'utf8', timeout: 30000 });
     if (r.status === 0) made.push({ term, file });
   }
@@ -137,3 +140,116 @@ function termExcerpts(config, outDir, timings, terms, { pad = 0.25 } = {}) {
 }
 
 module.exports = { clipCoverage, formatCoverage, contactSheet, termExcerpts };
+
+/* NAR-007-025 — silence-gap report from existing audio (advisory). Parses
+ * ffmpeg silencedetect output; ordering by start time comes free. A long
+ * silence may be a deliberate dramatic beat — this is information, never a
+ * defect finding. */
+function silenceGaps(outDir, { threshold = 1.0, noise = -38 } = {}) {
+  const candidates = [
+    path.join(outDir, 'audio', 'mix.wav'),
+    path.join(outDir, 'audio', 'full.wav'),
+  ];
+  const audio = candidates.find(f => fs.existsSync(f));
+  if (!audio) {
+    return { gaps: [], audio: null, reason: 'no out/audio/mix.wav or full.wav — run a build first' };
+  }
+  const r = spawnSync('ffmpeg', [
+    '-hide_banner', '-i', audio,
+    '-af', `silencedetect=noise=${noise}dB:d=${threshold}`,
+    '-f', 'null', '-',
+  ], { encoding: 'utf8', timeout: 120000 });
+  const text = String(r.stderr || '');
+  const gaps = [];
+  let open = null;
+  for (const line of text.split('\n')) {
+    const startMatch = line.match(/silence_start:\s*(-?[\d.]+)/);
+    const endMatch = line.match(/silence_end:\s*([\d.]+)/);
+    if (startMatch) open = parseFloat(startMatch[1]);
+    if (endMatch && open != null) {
+      const end = parseFloat(endMatch[1]);
+      const durMatch = line.match(/\|\s*([\d.]+)/);
+      gaps.push({
+        start: Math.max(0, open), end,
+        duration: Math.round((durMatch ? parseFloat(durMatch[1]) : end - open) * 1000) / 1000,
+      });
+      open = null;
+    }
+  }
+  return { gaps, audio, threshold };
+}
+
+function formatSilences(report) {
+  if (report.reason) return `silences: ${report.reason}`;
+  if (report.gaps.length === 0) {
+    return `silences (advisory): no gap above ${report.threshold}s in ${path.basename(report.audio)} — nothing that reads as an unintended pause`;
+  }
+  const lines = report.gaps.map(g =>
+    `  ${g.start.toFixed(2)}s → ${g.end.toFixed(2)}s  (${g.duration.toFixed(2)}s)`);
+  return [`silences (advisory — a long silence may be a deliberate dramatic beat):`,
+    `  ${report.gaps.length} gap(s) above ${report.threshold}s in ${path.basename(report.audio)}`,
+    ...lines].join('\n');
+}
+
+/* NAR-007-026 — narration take index (advisory). Joins timings.json word
+ * groups (si) with durable per-sentence takes and out/audio/takes.json
+ * identities (NAR-018-070). Absent evidence is marked unavailable, never
+ * inferred. */
+function takeIndex(config, outDir, timings) {
+  const takesPath = path.join(outDir, 'audio', 'takes.json');
+  let records = null;
+  if (fs.existsSync(takesPath)) {
+    try { records = JSON.parse(fs.readFileSync(takesPath, 'utf8')); }
+    catch { records = null; }
+  }
+  const byKey = new Map();
+  for (const r of records || []) byKey.set(`${r.scene}:${r.si}`, r);
+  const sentences = [];
+  const sceneOrder = new Map(config.scenes.map((s, i) => [s.id, i + 1]));
+  // Per-scene sentences rebuilt from timings directly: words carry si.
+  for (const [sceneId, t] of Object.entries(timings)) {
+    const perSi = new Map();
+    for (const w of t.words || []) {
+      if (!perSi.has(w.si)) perSi.set(w.si, { who: w.who, words: [], t0: w.t0, t1: w.t1 });
+      const entry = perSi.get(w.si);
+      entry.words.push(w.w);
+      entry.t0 = Math.min(entry.t0, w.t0);
+      entry.t1 = Math.max(entry.t1, w.t1);
+    }
+    const n = sceneOrder.get(sceneId);
+    for (const [si, entry] of [...perSi.entries()].sort((a, b) => a[0] - b[0])) {
+      const r = byKey.get(`${n}:${si}`) || null;
+      const file = path.join(outDir, 'audio', 'sentences',
+        `${String(n).padStart(2, '0')}_${String(si).padStart(3, '0')}.wav`);
+      sentences.push({
+        scene: sceneId, si, who: entry.who,
+        text: entry.words.join(' '),
+        start: entry.t0, end: entry.t1,
+        file: fs.existsSync(file) ? file : null,
+        take: r ? {
+          backend: r.backend, mode: r.mode,
+          ...(r.seed != null ? { seed: r.seed } : {}),
+          ...(r.take != null ? { nonce: r.take } : {}),
+          ...(r.lang ? { lang: r.lang } : {}),
+          ...(r.model ? { model: r.model } : {}),
+        } : 'unavailable',
+      });
+    }
+  }
+  return { sentences, identities: records != null ? 'audio/takes.json' : null };
+}
+
+function formatTakes(index) {
+  const lines = [];
+  for (const s of index.sentences) {
+    const take = typeof s.take === 'string' ? 'take identity unavailable (pre-change build?)' : s.take;
+    const bits = typeof s.take === 'string' ? '' : ` backend=${s.take.backend} mode=${s.take.mode}`
+      + (s.take.seed != null ? ` seed=${s.take.seed}` : '')
+      + (s.take.nonce != null ? ` nonce=${s.take.nonce}` : '')
+      + (s.take.lang ? ` lang=${s.take.lang}` : '');
+    lines.push(`  ${s.start.toFixed(2)}-${s.end.toFixed(2)}s [${s.scene}/${s.si}] ${s.who}: "${s.text.slice(0, 48)}${s.text.length > 48 ? '…' : ''}"${bits || ' (identity unavailable)'}${s.file ? '' : ' [no sentence file]'}`);
+  }
+  return [`narration take index (${index.sentences.length} sentences${index.identities ? `; identities from ${index.identities}` : '; take identities unavailable'}):`, ...lines].join('\n');
+}
+
+module.exports = { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes };

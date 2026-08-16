@@ -140,7 +140,7 @@ class _FakeBackend:
     def __init__(self):
         self.calls = 0
 
-    def synthesize(self, who, text, out_path, lang=None):
+    def synthesize(self, who, text, out_path, lang=None, seed=None):
         self.calls += 1
         Path(out_path).write_bytes(b"raw audio")
 
@@ -518,3 +518,65 @@ class TestSynthesisText(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestDeterministicTakes(unittest.TestCase):
+    """CHANGE-2026-018 / NAR-018-070..072: derived seeds, nonce identity,
+    vary identity, and take-record shapes."""
+
+    def test_derived_seed_is_pure_function_of_identity(self):
+        from narova_tts.pipeline import derived_seed
+        k = sentence_cache_key("piper", "spk", "Hello", 1.18)
+        self.assertEqual(derived_seed(k), derived_seed(k))
+        k2 = sentence_cache_key("piper", "spk", "Hello", 1.18, nonce=2)
+        self.assertNotEqual(derived_seed(k), derived_seed(k2))
+
+    def test_nonce_participates_in_cache_identity(self):
+        base = sentence_cache_key("piper", "spk", "Hello", 1.18)
+        take2 = sentence_cache_key("piper", "spk", "Hello", 1.18, nonce=2)
+        self.assertNotEqual(base, take2)
+        self.assertEqual(take2, sentence_cache_key("piper", "spk", "Hello", 1.18, nonce=2))
+
+    def test_vary_participates_in_voice_identity(self):
+        v = {"speaker": "spk", "backend": "piper"}
+        plain = voice_cache_speaker(v, "a")
+        varied = voice_cache_speaker({**v, "vary": True}, "a")
+        self.assertNotEqual(plain, varied)
+
+    def test_seed_forwarded_to_backend(self):
+        """synth_sentence passes the derived seed through; a cache MISS calls
+        backend.synthesize(seed=...) (NAR-018-071)."""
+        import tempfile
+        tmp = Path(tempfile.mkdtemp())
+        out = tmp / "s.wav"
+        # Minimal wav so probe() can read duration.
+        import wave
+        with wave.open(str(out), "wb") as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(22050)
+            wf.writeframes(b"\x00\x00" * 22050)
+
+        class FakeBackend:
+            seed_capable = True
+            calls = {}
+
+            def synthesize(self, who, text, out_path, lang=None, seed=None):
+                FakeBackend.calls["seed"] = seed
+                import shutil
+                shutil.copyfile(out, out_path)
+                return out_path
+
+        # Pre-seed the output so processing reads a real wav.
+        FakeBackend.raw = out
+        # Mock sh (CI has no ffmpeg): "processing" copies raw -> out.
+        with mock.patch.object(pipeline, "probe", return_value=1.0), \
+                mock.patch.object(pipeline, "sh",
+                                  lambda *a: Path(a[-1]).write_bytes(
+                                      Path(a[a.index("-i") + 1]).read_bytes())):
+            dur, hit = synth_sentence(
+                FakeBackend(), "a", "Hello", tmp, tmp / "proc.wav", 1.0,
+                cache_key=None, seed=4242)
+        self.assertFalse(hit)
+        self.assertEqual(FakeBackend.calls["seed"], 4242)
+        self.assertEqual(dur, 1.0)

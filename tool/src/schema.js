@@ -233,6 +233,10 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         || v.gainDb < -24 || v.gainDb > 24)) {
       errs.push(`${at}.gainDb: must be a number from -24 to 24`);
     }
+    // NAR-018-071: authored variation — a distinct reproducible take.
+    if (v.vary != null && typeof v.vary !== 'boolean') {
+      errs.push(`${at}.vary: must be a boolean`);
+    }
     const optionsError = v.providerOptions == null
       ? null
       : (typeof v.providerOptions !== 'object' || Array.isArray(v.providerOptions)
@@ -427,6 +431,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       // Used by external providers for performance tags that must not appear in captions.
       if (turn.synthesisText != null && (typeof turn.synthesisText !== 'string' || !turn.synthesisText.trim())) {
         errs.push(`${at}.vo[${j}].synthesisText: must be a non-empty string`);
+      }
+      if (turn.take != null && (typeof turn.take !== 'number' || !Number.isInteger(turn.take) || turn.take < 1)) {
+        errs.push(`${at}.vo[${j}].take: must be a positive integer (explicit take nonce)`);
       }
       // Per-turn language override for multilingual TTS (chatterbox/qwen/xtts).
       // Accepted but not validated against a list — the backend decides.
@@ -850,6 +857,16 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     });
   }
 
+  // Speech: determinism surface for narration takes (NAR-018-071).
+  if (raw.speech != null) {
+    if (typeof raw.speech !== 'object' || Array.isArray(raw.speech)) {
+      errs.push('config.speech: expected an object like { deterministicTakes }');
+    } else if (raw.speech.deterministicTakes != null
+        && typeof raw.speech.deterministicTakes !== 'boolean') {
+      errs.push('config.speech.deterministicTakes: must be a boolean');
+    }
+  }
+
   // Series: multi-part mode for long scripts split into numbered episodes.
   // `part` is 1-indexed; `total` is optional (unknown series length).
   // compose adds a "Part X/Y" badge overlay; no enforcement of cliffhangers.
@@ -987,7 +1004,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
   scenes.forEach(s => { if (s.dur == null) s.dur = Math.max(6, (s.vo.length || 1) * 5); });
 
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers };
+  const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
+    ? { ...raw.speech } : {};
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {
