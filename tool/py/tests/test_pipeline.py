@@ -569,8 +569,11 @@ class TestDeterministicTakes(unittest.TestCase):
 
         # Pre-seed the output so processing reads a real wav.
         FakeBackend.raw = out
-        # synth_sentence writes processed audio to `out`; give it a source.
-        with mock.patch.object(pipeline, "probe", return_value=1.0):
+        # Mock sh (CI has no ffmpeg): "processing" copies raw -> out.
+        with mock.patch.object(pipeline, "probe", return_value=1.0), \
+                mock.patch.object(pipeline, "sh",
+                                  lambda *a: Path(a[-1]).write_bytes(
+                                      Path(a[a.index("-i") + 1]).read_bytes())):
             dur, hit = synth_sentence(
                 FakeBackend(), "a", "Hello", tmp, tmp / "proc.wav", 1.0,
                 cache_key=None, seed=4242)
