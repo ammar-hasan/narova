@@ -6,7 +6,7 @@ backends). So `ChatterboxBackend` (in the main venv) launches this script with
 the chatterbox venv's Python and talks to it over a line-delimited JSON
 protocol on stdio:
 
-    stdin  <- one request per line: {"text","out","ref","exaggeration"?,"cfg_weight"?,"lang"?}
+    stdin  <- one request per line: {"text","out","ref","exaggeration"?,"cfg_weight"?,"lang"?,"seed"?}
     stdout -> one reply per line:   {"ready":true} once, then {"ok":true} | {"ok":false,"error":...}
 
 The English model is loaded ONCE at startup and reused for every request. A
@@ -91,6 +91,11 @@ def main() -> int:
         try:
             req = json.loads(line)
             kw = {}
+            # Deterministic takes (NAR-018-071): pin the sampling RNG in this
+            # process before generation. Verified: same seed -> byte-identical
+            # wav for both the English and Multilingual models.
+            if req.get("seed") is not None:
+                torch.manual_seed(int(req["seed"]))
             ref = req.get("ref")
             if ref:
                 kw["audio_prompt_path"] = ref

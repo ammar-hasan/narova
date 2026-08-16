@@ -521,14 +521,17 @@ class QwenBackend:
             print("[qwen] device fallback cpu:", e, flush=True)
             self._model = Qwen3TTSModel.from_pretrained(self.MODEL, device_map="cpu", dtype=torch.float32)
         print("[qwen] speakers:", self._speakers, flush=True)
-        self.seed_capable = False
+        self.seed_capable = True  # torch.manual_seed-pinned sampling (verified)
 
     def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
                    seed: int | None = None) -> Path:
         import soundfile as sf  # dep of qwen-tts
-        # No seed hook in generate_custom_voice; declared unknown (capability
-        # surface) — the seed is accepted and unused (provider-default mode).
-        _ = seed
+        # generate_custom_voice has no seed parameter, but its sampling goes
+        # through torch's global RNG — pinning torch.manual_seed before the
+        # call reproduces takes (verified: same seed, byte-identical wav).
+        if seed is not None:
+            import torch
+            torch.manual_seed(seed)
 
         turn_lang = lang or self._langs.get(who)
         wavs, sr = self._model.generate_custom_voice(
@@ -554,6 +557,7 @@ class ChatterboxBackend:
                  langs: dict[str, str] | None = None,
                  venv_python: Path | None = None):
         self._speakers = dict(speakers)
+        self.seed_capable = True  # worker pins torch.manual_seed (verified)
         self._exg = self._validate_delivery(
             exaggerations or {}, "exaggeration", 0.25, 2.0)
         self._cfgw = self._validate_delivery(
@@ -628,10 +632,11 @@ class ChatterboxBackend:
 
     def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
                    seed: int | None = None) -> Path:
-        # Worker protocol has no seed field; declared unknown — accepted and
-        # unused (provider-default mode).
-        _ = seed
+        # The seed rides the worker JSON protocol; the worker pins
+        # torch.manual_seed before generation (verified byte-identical).
         req = {"text": text, "out": str(out_path), "ref": self._speakers[who]}
+        if seed is not None:
+            req["seed"] = seed
         if who in self._exg:
             req["exaggeration"] = self._exg[who]
         if who in self._cfgw:

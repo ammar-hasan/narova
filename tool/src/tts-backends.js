@@ -48,7 +48,7 @@ const DELIVERY_CAPABILITIES = Object.freeze({
     'pause-markup': 'ignored',
     'emphasis-markup': 'ignored',
     'non-latin-script': 'honored', // language pass-through / auto-detect
-    'seed-stabilization': 'unknown', // no seed hook in generate_custom_voice
+    'seed-stabilization': 'honored', // torch.manual_seed-pinned sampling (verified 2026-08-16)
   }),
   chatterbox: Object.freeze({
     'pronunciation-markup': 'ignored',
@@ -56,7 +56,7 @@ const DELIVERY_CAPABILITIES = Object.freeze({
     'pause-markup': 'ignored',
     'emphasis-markup': 'ignored',
     'non-latin-script': 'honored', // multilingual v3 with per-voice lang
-    'seed-stabilization': 'unknown', // worker protocol has no seed field
+    'seed-stabilization': 'honored', // worker pins torch.manual_seed (verified 2026-08-16)
   }),
 });
 

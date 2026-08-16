@@ -24,11 +24,10 @@ const tmp = () => fs.mkdtempSync(path.join(os.tmpdir(), 'narova-takes-'));
 
 /* ---- NAR-018-072 — seed-stabilization disclosure --------------------------- */
 
-test('built-ins declare seed stabilization honestly', () => {
-  assert.equal(DELIVERY_CAPABILITIES.piper['seed-stabilization'], 'honored');
-  assert.equal(DELIVERY_CAPABILITIES.xtts['seed-stabilization'], 'honored');
-  assert.equal(DELIVERY_CAPABILITIES.qwen['seed-stabilization'], 'unknown');
-  assert.equal(DELIVERY_CAPABILITIES.chatterbox['seed-stabilization'], 'unknown');
+test('all built-ins declare seed stabilization honored (each verified empirically)', () => {
+  for (const name of ['piper', 'xtts', 'qwen', 'chatterbox']) {
+    assert.equal(DELIVERY_CAPABILITIES[name]['seed-stabilization'], 'honored', name);
+  }
 });
 
 test('provider manifests accept a seed-stabilization declaration', () => {
