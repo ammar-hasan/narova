@@ -19,6 +19,7 @@ const path = require('node:path');
 const { writeCaptions } = require('../src/captions');
 const { clipCoverage, formatCoverage, contactSheet, termExcerpts } = require('../src/review-evidence');
 const { DELIVERY_CAPABILITIES, MARKUP_FAMILIES, deliveryCapabilitiesFor } = require('../src/tts-backends');
+const { spawnSync } = require('node:child_process');
 const { probeProjectClips, attributionDiagnostic } = require('../src/clip-probe');
 const { resolveConfig } = require('../src/schema');
 
@@ -81,7 +82,7 @@ test('contact sheet reports the no-build reason instead of invoking a renderer',
   assert.ok(/run a build first/.test(out.reason));
 });
 
-test('term excerpts report not-found terms and produce the rest', () => {
+test('term excerpts report not-found terms and produce the rest', { skip: spawnSync('ffmpeg', ['-version']).status !== 0 }, () => {
   const dir = tmp();
   fs.mkdirSync(path.join(dir, 'audio'), { recursive: true });
   // A real 1s WAV so the ffmpeg cut succeeds (fake bytes would fail the cut).

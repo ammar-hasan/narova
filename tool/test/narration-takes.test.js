@@ -66,7 +66,7 @@ test('derived seeds are a pure function of sentence identity (mirror of pipeline
 
 /* ---- NAR-007-025 — silence-gap review --------------------------------------- */
 
-test('silence report lists only above-threshold gaps and stays advisory', () => {
+test('silence report lists only above-threshold gaps and stays advisory', { skip: spawnSync('ffmpeg', ['-version']).status !== 0 }, () => {
   const dir = tmp();
   const audio = path.join(dir, 'audio');
   fs.mkdirSync(audio, { recursive: true });
