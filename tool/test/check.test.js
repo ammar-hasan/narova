@@ -1167,3 +1167,22 @@ test('no caption rule fires without narration audio', () => {
   assert.equal(ok, true, lines.join('\n'));
   assert.ok(!lines.some(l => l.includes('caption sidecar')), lines.join('\n'));
 });
+
+// ---- NAR-007-027 — unused-delivery-control critique hint (CHANGE-2026-018) --
+
+test('critique (not default check) notes a seed-honoring instruct backend with no direction', () => {
+  const scenes = [{ id: 's', body: '<p data-cue="0">x</p>', vo: [{ who: 'a', text: 'one' }] }];
+  const qwen = { ...base(scenes), voices: { a: { backend: 'qwen', speaker: 'chelsie' } } };
+  // Default check: silent on this subject, in every case.
+  const checkLines = run(qwen).lines;
+  assert.ok(!checkLines.some(l => l.includes('honors delivery direction')), checkLines.join('\n'));
+  // Critique: the note appears, naming the backend.
+  const results = runCritique(qwen, { profile: 'narration' }).results;
+  assert.ok(results.some(r => r.startsWith('narration:') && r.includes('qwen') && r.includes('instruct')), results.join('\n'));
+  // With an instruct configured: no note.
+  const directed = runCritique({ ...base(scenes), voices: { a: { backend: 'qwen', speaker: 'chelsie', instruct: 'warm storyteller' } } }, { profile: 'narration' }).results;
+  assert.ok(!directed.some(r => r.includes('honors delivery direction')), directed.join('\n'));
+  // A backend not declaring honored: no note even without direction.
+  const piper = runCritique(base(scenes), { profile: 'narration' }).results;
+  assert.ok(!piper.some(r => r.includes('honors delivery direction')), piper.join('\n'));
+});

@@ -57,7 +57,8 @@ def chatterbox_python() -> Path:
 class Backend(Protocol):
     """A backend synthesizes one utterance for one speaker to a raw wav."""
 
-    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path: ...
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
+                   seed: int | None = None) -> Path: ...
 
 
 def _provider_error(response: dict, fallback: str) -> str:
@@ -251,6 +252,13 @@ class ExternalProviderBackend:
                  provider_options: dict[str, dict] | None = None,
                  startup_timeout: float = 10.0, request_timeout: float | None = None):
         self.manifest = dict(manifest)
+        # NAR-018-071/072: honor seeds only when the provider's registration
+        # declares the family honored. Undeclared or other statuses keep the
+        # provider's default behavior (mode recorded as provider-default).
+        self.seed_capable = (
+            (self.manifest.get("deliveryCapabilities") or {})
+            .get("seed-stabilization") == "honored"
+        )
         if self.manifest.get("protocol") != PROVIDER_PROTOCOL:
             raise ValueError(
                 f"provider {self.manifest.get('name')!r}: unsupported protocol "
@@ -301,11 +309,16 @@ class ExternalProviderBackend:
                 f"provider output is not a valid WAV file: {path}") from exc
 
     def synthesize(self, who: str, text: str, out_path: Path,
-                   lang: str | None = None) -> Path:
+                   lang: str | None = None, seed: int | None = None) -> Path:
         output = self._validate_output(Path(out_path))
         worker = self._ensure_worker()
         self._request_number += 1
         request_id = f"request-{self._request_number}"
+        # The derived seed rides in the request options COPY; the authored
+        # providerOptions (and therefore cache identity) are never mutated.
+        options = dict(self._options.get(who, {}))
+        if seed is not None and self.seed_capable:
+            options["seed"] = seed
         request = {
             "id": request_id,
             "operation": "synthesize",
@@ -313,7 +326,7 @@ class ExternalProviderBackend:
             "speaker": self._speakers[who],
             "language": lang,
             "output": str(output),
-            "options": self._options.get(who, {}),
+            "options": options,
         }
         response = worker.exchange(request, operation=f"synthesis {request_id}")
         if response.get("id") != request_id:
@@ -404,7 +417,11 @@ class PiperBackend:
             )
         return onnx
 
-    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
+                   seed: int | None = None) -> Path:
+        # Deterministic by construction: fixed syn_config, no sampling
+        # variance. The seed is accepted for interface parity and unused.
+        self.seed_capable = True  # deterministic by construction
         with wave.open(str(out_path), "wb") as wf:
             self._voices[who].synthesize_wav(text, wf, syn_config=self._cfg)
         return out_path
@@ -434,8 +451,15 @@ class XttsBackend:
         if dev != "cpu":
             self._tts.to(dev)
         print("[xtts] speakers:", self._speakers, flush=True)
+        self.seed_capable = True
 
-    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
+                   seed: int | None = None) -> Path:
+        # NAR-018-071: pin the sampling RNG when a derived seed is supplied so
+        # an unchanged sentence reproduces its take.
+        if seed is not None:
+            import torch
+            torch.manual_seed(seed)
         # `speaker` may be a studio speaker name OR an ABSOLUTE path to a
         # short clean recording (wav/mp3/flac/m4a) — XTTS then clones that
         # voice. (Absolute because synth does not run in the project dir.)
@@ -497,9 +521,14 @@ class QwenBackend:
             print("[qwen] device fallback cpu:", e, flush=True)
             self._model = Qwen3TTSModel.from_pretrained(self.MODEL, device_map="cpu", dtype=torch.float32)
         print("[qwen] speakers:", self._speakers, flush=True)
+        self.seed_capable = False
 
-    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
+                   seed: int | None = None) -> Path:
         import soundfile as sf  # dep of qwen-tts
+        # No seed hook in generate_custom_voice; declared unknown (capability
+        # surface) — the seed is accepted and unused (provider-default mode).
+        _ = seed
 
         turn_lang = lang or self._langs.get(who)
         wavs, sr = self._model.generate_custom_voice(
@@ -597,7 +626,11 @@ class ChatterboxBackend:
             raise RuntimeError(
                 f"chatterbox worker returned an invalid response: {line.rstrip()!r}") from e
 
-    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None) -> Path:
+    def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
+                   seed: int | None = None) -> Path:
+        # Worker protocol has no seed field; declared unknown — accepted and
+        # unused (provider-default mode).
+        _ = seed
         req = {"text": text, "out": str(out_path), "ref": self._speakers[who]}
         if who in self._exg:
             req["exaggeration"] = self._exg[who]
