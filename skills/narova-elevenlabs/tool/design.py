@@ -133,6 +133,10 @@ def build_design_payload(args) -> dict:
                 "omit --text to let ElevenLabs generate suitable preview lines",
             )
         payload["text"] = text
+    else:
+        # The API rejects a design request that carries neither text nor
+        # auto_generate_text (observed live, 2026-08-18).
+        payload["auto_generate_text"] = True
     if args.language:
         payload["language_code"] = args.language
     if args.seed is not None:
@@ -186,7 +190,7 @@ def write_previews(response: dict, payload: dict, out_dir: Path) -> list[dict]:
     lines = ["# Voice design previews", ""]
     lines.append(f"- description: {payload['voice_description']}")
     if payload.get("seed") is not None:
-        lines.append(f"- seed: {payload['seed']} (same seed + inputs reproduce these previews)")
+        lines.append(f"- seed: {payload['seed']} (request seed; preview identities are NOT guaranteed stable across calls — audition each run)")
     lines += ["", "| # | file | generated voice id | duration |", "|---|---|---|---|"]
     for row in rows:
         duration = row["duration_secs"]
@@ -211,13 +215,18 @@ def build_create_payload(args) -> dict:
         raise DesignError("invalid_request", "--create needs the generated voice id you chose from the audition index")
     if not args.name or not args.name.strip():
         raise DesignError("invalid_request", "--name is required when creating a voice")
-    payload = {
+    description = (args.voice_description or "").strip()
+    if len(description) < 20:
+        raise DesignError(
+            "invalid_request",
+            f"a voice description of at least 20 characters is required when creating a voice "
+            f"(the API enforces it; got {len(description)})",
+        )
+    return {
         "voice_name": args.name.strip(),
         "generated_voice_id": args.create.strip(),
+        "voice_description": description,
     }
-    if args.description and args.description.strip():
-        payload["voice_description"] = args.description.strip()
-    return payload
 
 
 def main(argv: list[str]) -> int:
@@ -226,7 +235,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--text", help=f"preview text, {PREVIEW_TEXT_MIN}-{PREVIEW_TEXT_MAX} characters; omit to auto-generate")
     parser.add_argument("--out", default="out/voice-design", help="directory for previews, index, and parameters (default out/voice-design)")
     parser.add_argument("--model", default=DEFAULT_MODEL, help=f"design model (default {DEFAULT_MODEL})")
-    parser.add_argument("--seed", type=int, help="seed: same seed + inputs reproduce the same previews")
+    parser.add_argument("--seed", type=int, help="seed: passed to the API (request-reproducible; preview identities are not guaranteed stable)")
     parser.add_argument("--language", help="language code for the preview generation")
     parser.add_argument("--loudness", type=float, help="preview loudness, -1 (quiet) to 1 (loud)")
     parser.add_argument("--guidance-scale", type=float, dest="guidance_scale", help="prompt adherence, 0 (freer) to 20 (stricter; high values can sound robotic)")
@@ -234,6 +243,7 @@ def main(argv: list[str]) -> int:
     parser.add_argument("--remix", metavar="VOICE_ID", help="design by remixing an existing remixable voice (designed/IVC/PVC or library voice with infinite notice)")
     parser.add_argument("--create", metavar="GENERATED_VOICE_ID", help="create the permanent voice from the preview you chose")
     parser.add_argument("--name", help="name for the created voice (required with --create)")
+    parser.add_argument("--description", dest="voice_description", help="optional description for the created voice (min 20 chars)")
     parser.add_argument("--timeout", type=float, default=DEFAULT_TIMEOUT, help=f"request timeout in seconds (default {DEFAULT_TIMEOUT:.0f})")
     args = parser.parse_args(argv)
 

@@ -26,7 +26,8 @@ class Args:
             "text": None, "out": "out/voice-design", "model": design.DEFAULT_MODEL,
             "seed": None, "language": None, "loudness": None,
             "guidance_scale": None, "enhance": False, "remix": None,
-            "create": None, "name": None, "timeout": design.DEFAULT_TIMEOUT,
+            "create": None, "name": None, "voice_description": None,
+            "timeout": design.DEFAULT_TIMEOUT,
         }
         base.update(overrides)
         for key, value in base.items():
@@ -76,6 +77,13 @@ class TestDesignPayload(unittest.TestCase):
         self.assertTrue(payload["should_enhance"])
         self.assertNotIn("text", payload)
         self.assertNotIn("previous_voice_id", payload)
+        # No text supplied -> the API requires auto_generate_text (observed live).
+        self.assertTrue(payload["auto_generate_text"])
+
+    def test_supplied_text_disables_auto_generate(self):
+        payload = design.build_design_payload(Args(text="x" * 120))
+        self.assertEqual(payload["text"], "x" * 120)
+        self.assertNotIn("auto_generate_text", payload)
 
     def test_remix_uses_previous_voice_id(self):
         payload = design.build_design_payload(Args(remix="JBFqnCBsd6RMkjVDRZzb"))
@@ -120,12 +128,20 @@ class TestCreate(unittest.TestCase):
             design.build_create_payload(Args(create="gen1", name=None))
         self.assertEqual(error.exception.code, "invalid_request")
 
+    def test_create_requires_description_of_at_least_20_chars(self):
+        for short in (None, "", "too short"):
+            with self.assertRaises(design.DesignError) as error:
+                design.build_create_payload(Args(create="gen1", name="Dadi", voice_description=short))
+            self.assertEqual(error.exception.code, "invalid_request")
+
     def test_create_payload_shape(self):
-        payload = design.build_create_payload(Args(create=" gen2 ", name="Dadi", description="Warm grandmother"))
+        payload = design.build_create_payload(Args(
+            create=" gen2 ", name="Dadi", voice_description="Warm Urdu-speaking grandmother voice",
+        ))
         self.assertEqual(payload, {
             "voice_name": "Dadi",
             "generated_voice_id": "gen2",
-            "voice_description": "Warm grandmother",
+            "voice_description": "Warm Urdu-speaking grandmother voice",
         })
 
 
@@ -164,7 +180,8 @@ class TestMain(unittest.TestCase):
         created = {"voice_id": "PERMANENT123"}
         with mock.patch.dict(os.environ, {"ELEVENLABS_API_KEY": "k"}), \
                 mock.patch.object(design, "request_json", return_value=created) as request_json:
-            code, out, _ = self.run_main(["--create", "gen2", "--name", "Dadi"])
+            code, out, _ = self.run_main(["--create", "gen2", "--name", "Dadi",
+                                          "--description", "Warm Urdu-speaking grandmother voice"])
         self.assertEqual(code, 0)
         self.assertIn("PERMANENT123", out)
         self.assertIn('speaker: "PERMANENT123"', out)
@@ -172,6 +189,7 @@ class TestMain(unittest.TestCase):
         request_json.assert_called_once()
         self.assertEqual(request_json.call_args[0][0], "/v1/text-to-voice")
         self.assertEqual(request_json.call_args[0][1]["generated_voice_id"], "gen2")
+        self.assertEqual(request_json.call_args[0][1]["voice_description"], "Warm Urdu-speaking grandmother voice")
 
     def test_http_error_classification(self):
         import urllib.error

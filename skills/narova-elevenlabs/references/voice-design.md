@@ -27,13 +27,15 @@ Writes into `out/voice-design/`:
 - `preview-01-<id>.mp3`, `preview-02-<id>.mp3`, … — the generated previews
 - `index.md` — the audition table (file, generated voice id, duration)
   and the exact create command to copy
-- `design.json` — the recorded request parameters and preview metadata;
-  the same **seed** with the same inputs reproduces the same previews
+- `design.json` — the recorded request parameters and preview metadata.
+  Passing the same **seed** reproduces the request byte-for-byte, but
+  ElevenLabs does NOT guarantee identical preview identities across
+  calls (verified live) — audition each run, don't assume cached IDs
 
-By default ElevenLabs generates its own short preview lines. Supply
-`--text` to hear the voice speak your own material (100–1000 characters
-— try real narration lines, including Urdu); shorter or longer text
-fails locally before any network call.
+By default the helper asks ElevenLabs to generate its own short preview
+lines. Supply `--text` to hear the voice speak your own material (100–1000
+characters — try real narration lines, including Urdu); shorter or longer
+text fails locally before any network call.
 
 Tunables: `--language` (preview language), `--loudness` (-1..1),
 `--guidance-scale` (0 freer … 20 stricter; high values can sound
