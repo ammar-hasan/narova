@@ -121,6 +121,45 @@ class TestWritePreviews(unittest.TestCase):
                 design.write_previews({"previews": []}, {"voice_description": "x"}, Path(tmp))
             self.assertEqual(error.exception.code, "invalid_response")
 
+    def test_hostile_generated_id_is_rejected_before_any_write(self):
+        import tempfile
+        resp = {'text': 't', 'previews': [{
+            'generated_voice_id': 'a/../../pwned',  # path injection attempt
+            'audio_base_64': 'eA==', 'media_type': 'audio/mpeg', 'duration_secs': 1.0,
+        }]}
+        with tempfile.TemporaryDirectory() as tmp:
+            out = Path(tmp) / 'vd'
+            with self.assertRaises(design.DesignError) as error:
+                design.write_previews(resp, {"voice_description": "x"}, out)
+            self.assertEqual(error.exception.code, "invalid_response")
+            # Nothing was written outside the intended output directory.
+            escaped = list(Path(tmp).rglob("pwned*"))
+            self.assertEqual(escaped, [], f"hostile id wrote outside out dir: {escaped}")
+            self.assertEqual(list(out.glob("*")), [], "no preview file written under the hostile id")
+
+    def test_invalid_base64_is_structured(self):
+        import tempfile
+        resp = {'text': 't', 'previews': [{
+            'generated_voice_id': 'gen1', 'audio_base_64': '!!!not-base64!!!',
+            'media_type': 'audio/mpeg', 'duration_secs': 1.0,
+        }]}
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(design.DesignError) as error:
+                design.write_previews(resp, {"voice_description": "x"}, Path(tmp) / 'vd')
+            self.assertEqual(error.exception.code, "invalid_response")
+
+    def test_preview_count_cap(self):
+        import tempfile
+        resp = {'text': 't', 'previews': [{
+            'generated_voice_id': f'g{i}', 'audio_base_64': 'eA==',
+            'media_type': 'audio/mpeg', 'duration_secs': 1.0,
+        } for i in range(design.MAX_PREVIEWS + 1)]}
+        with tempfile.TemporaryDirectory() as tmp:
+            with self.assertRaises(design.DesignError) as error:
+                design.write_previews(resp, {"voice_description": "x"}, Path(tmp) / 'vd')
+            self.assertEqual(error.exception.code, "invalid_response")
+            self.assertIn("cap", error.exception.message)
+
 
 class TestCreate(unittest.TestCase):
     def test_create_requires_name(self):
@@ -143,6 +182,16 @@ class TestCreate(unittest.TestCase):
             "generated_voice_id": "gen2",
             "voice_description": "Warm Urdu-speaking grandmother voice",
         })
+
+    def test_create_rejects_hostile_id_and_quoted_name(self):
+        # A path-shaped id must never reach the API/create step.
+        with self.assertRaises(design.DesignError) as error:
+            design.build_create_payload(Args(create="../evil", name="Dadi", voice_description="x" * 20))
+        self.assertEqual(error.exception.code, "invalid_request")
+        # A quoted name would break the printed config fragment.
+        with self.assertRaises(design.DesignError) as error:
+            design.build_create_payload(Args(create="gen1", name='Dadi "the" great', voice_description="x" * 20))
+        self.assertEqual(error.exception.code, "invalid_request")
 
 
 class TestMain(unittest.TestCase):

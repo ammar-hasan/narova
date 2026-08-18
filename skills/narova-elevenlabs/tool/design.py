@@ -24,8 +24,10 @@ from __future__ import annotations
 
 import argparse
 import base64
+import binascii
 import json
 import os
+import re
 import sys
 import urllib.error
 import urllib.request
@@ -37,6 +39,14 @@ DEFAULT_TIMEOUT = 120.0
 PREVIEW_TEXT_MIN = 100
 PREVIEW_TEXT_MAX = 1000
 DESIGN_MODELS = {"eleven_multilingual_ttv_v2", "eleven_ttv_v3"}
+MAX_PREVIEWS = 20
+# ElevenLabs preview/voice ids are short base-62 tokens. Restricting the
+# charset here closes the path-injection class entirely: the id is used in a
+# filename and echoed into index.md, and a hostile value must never reshape
+# either (adversarial review, 2026-08-18).
+VOICE_ID_RE = re.compile(r"^[A-Za-z0-9_-]+$")
+# Config-fragment safety: names/quotes are embedded in the printed JS fragment.
+FRAGMENT_QUOTE_RE = re.compile(r'["\\]')
 
 
 class DesignError(Exception):
@@ -99,7 +109,11 @@ def request_json(path: str, payload: dict, key: str, timeout: float) -> dict:
         headers={"xi-api-key": key, "Content-Type": "application/json"},
     )
     with _open(request, timeout) as response:
-        data = json.loads(response.read().decode("utf-8"))
+        raw = response.read().decode("utf-8", "replace")
+    try:
+        data = json.loads(raw)
+    except (ValueError, UnicodeDecodeError) as error:
+        raise DesignError("invalid_response", "ElevenLabs returned a non-JSON response") from error
     if not isinstance(data, dict):
         raise DesignError("invalid_response", "ElevenLabs returned a non-object design response")
     return data
@@ -159,13 +173,29 @@ def write_previews(response: dict, payload: dict, out_dir: Path) -> list[dict]:
     previews = response.get("previews")
     if not isinstance(previews, list) or not previews:
         raise DesignError("invalid_response", "ElevenLabs returned no voice previews")
+    if len(previews) > MAX_PREVIEWS:
+        raise DesignError(
+            "invalid_response",
+            f"ElevenLabs returned {len(previews)} previews (cap {MAX_PREVIEWS}); refusing to write",
+        )
     out_dir.mkdir(parents=True, exist_ok=True)
     rows = []
     for index, preview in enumerate(previews, start=1):
         generated_id = str(preview.get("generated_voice_id") or "")
         audio = preview.get("audio_base_64")
-        if not generated_id or not isinstance(audio, str) or not audio:
-            raise DesignError("invalid_response", f"preview {index} is missing audio or its generated voice id")
+        if not generated_id or not VOICE_ID_RE.match(generated_id):
+            raise DesignError(
+                "invalid_response",
+                f"preview {index} has an unexpected generated voice id (not a plain id token)",
+            )
+        if not isinstance(audio, str) or not audio:
+            raise DesignError("invalid_response", f"preview {index} is missing audio")
+        try:
+            audio_bytes = base64.b64decode(audio, validate=False)
+        except (binascii.Error, ValueError) as error:
+            raise DesignError("invalid_response", f"preview {index} has undecodable audio") from error
+        if not audio_bytes:
+            raise DesignError("invalid_response", f"preview {index} audio decoded empty")
         suffix = "mp3"
         media_type = str(preview.get("media_type") or "audio/mpeg")
         if media_type.lower() == "audio/mpeg":
@@ -173,7 +203,7 @@ def write_previews(response: dict, payload: dict, out_dir: Path) -> list[dict]:
         elif "/" in media_type and media_type.split("/")[1].isalnum():
             suffix = media_type.split("/")[1]
         name = f"preview-{index:02d}-{generated_id}.{suffix}"
-        (out_dir / name).write_bytes(base64.b64decode(audio))
+        (out_dir / name).write_bytes(audio_bytes)
         rows.append({
             "file": name,
             "generated_voice_id": generated_id,
@@ -213,8 +243,17 @@ def write_previews(response: dict, payload: dict, out_dir: Path) -> list[dict]:
 def build_create_payload(args) -> dict:
     if not args.create or not args.create.strip():
         raise DesignError("invalid_request", "--create needs the generated voice id you chose from the audition index")
+    generated_id = args.create.strip()
+    if not VOICE_ID_RE.match(generated_id):
+        raise DesignError("invalid_request", "--create expects a plain generated voice id token")
     if not args.name or not args.name.strip():
         raise DesignError("invalid_request", "--name is required when creating a voice")
+    name = args.name.strip()
+    if FRAGMENT_QUOTE_RE.search(name):
+        raise DesignError(
+            "invalid_request",
+            "voice name must not contain quotes or backslashes (it is embedded in the printed config fragment)",
+        )
     description = (args.voice_description or "").strip()
     if len(description) < 20:
         raise DesignError(
@@ -223,8 +262,8 @@ def build_create_payload(args) -> dict:
             f"(the API enforces it; got {len(description)})",
         )
     return {
-        "voice_name": args.name.strip(),
-        "generated_voice_id": args.create.strip(),
+        "voice_name": name,
+        "generated_voice_id": generated_id,
         "voice_description": description,
     }
 
