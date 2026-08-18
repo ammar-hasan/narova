@@ -37,12 +37,15 @@ const NUMBER_WORDS = [
   'thousand', 'million', 'billion', 'trillion',
 ];
 const NW = NUMBER_WORDS.join('|');
-// Trailing boundary: without it, "eight" matches inside "eighty" because the
-// unit/ratio groups are optional in fragment extraction.
-const NUMWORD_RUN = `(?:${NW})(?:[\\s-]+(?:and[\\s-]+)?(?:${NW}))*(?![\\w-])`;
+// Trailing boundary: without it, "eight" matches inside "eighty". Hyphens are
+// allowed here so hyphenated forms ("eighty-percent") can reach the unit
+// group; a trailing hyphen alone never matches because a unit is required.
+const NUMWORD_RUN = `(?:${NW})(?:[\\s-]+(?:and[\\s-]+)?(?:${NW}))*(?!\\w)`;
 const CLAIM_PATTERNS = [
   /\d[\d,.]*\s*(?:%|percent\b|x\b|\+|k\b|million\b|billion\b|users?\b|products?\b|customers?\b|downloads?\b|countries\b)/i,
-  new RegExp(`\\b${NUMWORD_RUN}\\s+(?:percent\\b|percentage\\s+points?\\b|points?\\b|times\\b|fold\\b)`, 'i'),
+  // Bare "points" is deliberately not a unit ("one point about pacing",
+  // "six-point plan" are idioms, not quantities); "percentage points" is.
+  new RegExp(`\\b${NUMWORD_RUN}(?:[\\s-]+percent\\b|\\s+percentage\\s+points?\\b|\\s+times\\b|\\s+fold\\b)`, 'i'),
   new RegExp(`\\b(?:${NUMWORD_RUN}|\\d[\\d,.]*)\\s+of\\s+(?:${NUMWORD_RUN}|\\d[\\d,.]*)\\b`, 'i'),
   /\b(?:leading|best[- ]in-class|industry[- ]first|world'?s first|largest|most popular|#1|number one|top-rated|half of)\b/i,
 ];
@@ -86,13 +89,14 @@ function wordsToNumber(run) {
 function quantityFragments(text) {
   const lower = text.toLowerCase();
   const frags = [];
-  const runRe = new RegExp(`\\b(${NUMWORD_RUN})(\\s+(?:percent|percentage\\s+points?|points?|times|fold)\\b|\\s+of\\s+(${NUMWORD_RUN}))?`, 'g');
+  const runRe = new RegExp(`\\b(${NUMWORD_RUN})(?:([\\s-]+percent|\\s+percentage\\s+points?|\\s+times|\\s+fold)|(?:\\s+of\\s+)(${NUMWORD_RUN}))?`, 'g');
   for (const m of lower.matchAll(runRe)) {
     const run = m[1], unit = m[2] || '', second = m[3] || '';
     // Only shaped fragments (unit or ratio present): bare numbers match too
     // loosely ("15" inside "2015") and carry no claim meaning alone.
     if (!unit && !second) continue;
-    const unitNorm = unit.replace(/\s+/g, ' ');
+    const unitNorm = unit ? unit.replace(/[\s-]+/g, ' ')
+      : (second ? ` of ${second}` : '');
     frags.push((run + unitNorm).trim());
     const n = wordsToNumber(run);
     if (n != null) {
@@ -164,18 +168,26 @@ function readClaimsLedger(config) {
 /* Check if a vo claim is ledgered. Matching (NAR-007-029): the pre-existing
  * prefix rules (turn prefix in the ledger) OR quantity-content matching — the
  * claim's matched quantity appears in a ledger entry, across digit↔number-word
- * spelling. Strictly additive: nothing that matched before stops matching. */
+ * spelling. Strictly additive: nothing that matched before stops matching.
+ * Fragments are digit-boundary anchored: "8%" must not satisfy a claim by
+ * landing inside "48%", and "15 of 15" must not land inside "15 of 150". */
 function matchClaim(claimText, ledger) {
   if (!ledger || !ledger.claims.length) return false;
   const needle = claimText.toLowerCase();
   // Also try a shorter digest: drop leading punctuation/stopwords for a
   // looser match.
   const short = needle.replace(/^[^a-z0-9]*/, '').slice(0, 40);
-  const frags = quantityFragments(claimText);
+  const fragRes = quantityFragments(claimText)
+    .filter(f => f.length > 1)
+    .map(f => {
+      const esc = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tail = /\d$/.test(f) ? '(?!\\d)' : '';
+      return new RegExp(`(?<![\\d.])${esc}${tail}`, 'i');
+    });
   return ledger.claims.some(entry => {
     const hay = entry.toLowerCase();
     return hay.includes(needle.slice(0, 60)) || hay.includes(short)
-      || frags.some(f => f.length > 1 && hay.includes(f));
+      || fragRes.some(re => re.test(hay));
   });
 }
 

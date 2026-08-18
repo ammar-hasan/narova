@@ -249,6 +249,60 @@ test('bullets in a ledger without any claim heading are still collected', () => 
   assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
 });
 
+test('adversarial: a same-shape figure in the ledger does not satisfy a different claim (8% vs 48%)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Metrics\n\n- signups held while churn sat at 48% of new signups (source: metrics)\n');
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Roughly eight percent of users churn every month.' },
+  ] }];
+  const { lines } = run({ ...base(scenes), projectDir: dir }, { strict: true });
+  assert.ok(lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+});
+
+test('adversarial: ratio and x-form fragments are digit-boundary anchored', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Notes\n\n- review covered 15 of 150 files\n- latency saw a 13x speedup on the read path\n');
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Fifteen of fifteen checks passed tonight.' },
+    { who: 'a', text: 'The new path is three times faster than before.' },
+  ] }];
+  const { lines } = run({ ...base(scenes), projectDir: dir }, { strict: true });
+  const misses = lines.filter(l => l.includes('not found in claims'));
+  assert.equal(misses.length, 1, lines.join('\n'));
+  // Both distinct-fact claims stay unledgered: neither "15 of 15" may match
+  // "15 of 150" nor "3x" match "13x".
+  assert.ok(misses[0].includes('2 of 2'), misses[0]);
+});
+
+test('adversarial: bare "one point" idioms are not claims; percentage points are', () => {
+  const { lines } = run(base([{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Let me make one point about pacing before we continue.' },
+    { who: 'a', text: 'Here is a six-point plan for the next quarter.' },
+    { who: 'a', text: 'Retention improved by eight percentage points year over year.' },
+  ] }]));
+  assert.ok(lines.some(l => /^claims: 1 of 3 vo turns look factual \(heuristic\)$/.test(l)), lines.join('\n'));
+  const claimsLine = lines.find(l => l.startsWith('claims:'));
+  const warns = lines.filter(l => l.startsWith('warn:'));
+  // No ledger: the one detected claim warns; the idioms never appear in it.
+  assert.ok(warns.some(l => l.includes('eight percentage points')), lines.join('\n'));
+  assert.ok(!warns.some(l => l.includes('one point') || l.includes('six-point')), lines.join('\n'));
+  assert.ok(claimsLine);
+});
+
+test('adversarial: hyphenated percent quantities are detected and match spaced ledgers', () => {
+  const { lines } = run(base([{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'We saw an eighty-percent jump in retention this quarter.' },
+  ] }]));
+  assert.ok(lines.some(l => /^claims: 1 of 1 vo turns look factual \(heuristic\)$/.test(l)), lines.join('\n'));
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Retention\n\n- retention up 80 percent this quarter (source: dashboard)\n');
+  const { lines: matched } = run({ ...base([{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'We saw an eighty-percent jump in retention this quarter.' },
+  ] }]), projectDir: dir }, { strict: true });
+  assert.ok(!matched.some(l => l.includes('not found in claims')), matched.join('\n'));
+});
+
 test('quantity fragments carry raw, digit-normalized, and symbol unit forms', () => {
   const frags = quantityFragments('Accuracy rose from eighty percent to ninety-four percent across fifteen of fifteen runs.');
   for (const expected of ['eighty percent', '80 percent', '80%', 'ninety-four percent', '94 percent', '94%', 'fifteen of fifteen', '15 of 15']) {
