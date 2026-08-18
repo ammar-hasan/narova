@@ -6,6 +6,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.8] - 2026-08-18
+
+### Fixed
+
+- **Fresh-directory release builds pass.** Captions (or their recorded
+  intentional omission) now publish before the post-synth release gate
+  inside `narova build --release`. Previously a first-ever release build
+  in a fresh directory always failed the gate on caption-sidecar absence,
+  because captions published only later in the same flow — the
+  workaround was an undocumented plain `build` first. Gate conditions,
+  the pre-synth gate, and plain-build behavior are unchanged.
+
 ## [0.31.7] - 2026-08-18
 
 ### Added
