@@ -34,7 +34,15 @@ const LIGHT_TOKENS = {
 
 function rootBlock(t) {
   const vars = Object.keys(t).map(k => `  --${k}:${t[k]};`).join('\n');
-  return `:root{\n${vars}\n  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;\n  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;\n}`;
+  // Local-first default stacks (NAR-002-026): generic/system keywords only.
+  // Any NAMED family here (Roboto, Consolas, Menlo, …) makes the HyperFrames
+  // compiler fetch it from Google Fonts at compose/render time — the one
+  // network call in an otherwise local pipeline, issued even when project
+  // CSS follows the system-only guidance. Authors who want a named family
+  // override the token; that explicit choice may resolve via the renderer.
+  const mono = t.mono != null ? '' : '\n  --mono:ui-monospace,monospace;';
+  const sans = t.sans != null ? '' : '\n  --sans:system-ui,sans-serif;';
+  return `:root{\n${vars}${mono}${sans}}`;
 }
 
 function voiceBlock(voices = {}) {

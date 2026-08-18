@@ -176,7 +176,9 @@ For a local brand font, add `@font-face` and use a generic fallback only:
 ```
 
 Named fallbacks such as Georgia, Times New Roman, or Roboto can make
-HyperFrames fetch and bundle extra families.
+HyperFrames fetch and bundle extra families. Theme defaults are generic-only,
+so naming a family anywhere in project styles is the explicit opt-in that
+triggers that resolution.
 
 ## 5. Translate evidence into a video
 
