@@ -6,6 +6,52 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.7] - 2026-08-18
+
+### Added
+
+- **Claim coverage reporting.** Every `check` level prints
+  `claims: N of M vo turns look factual (heuristic)` — informational,
+  never a warning. A gate that sees little is now a visible number
+  instead of silence.
+
+### Changed
+
+- **Spoken-style figures are claims.** The grounding heuristic now
+  classifies number-word quantities ("eighty percent", "eight
+  percentage points", "three times") and numeric ratios ("fifteen of
+  fifteen") — the natural authoring style for local TTS narration,
+  previously invisible to the digits-only gate, which let unledgered
+  spoken figures pass `check --release` clean.
+- **Human claims ledgers match.** Ledger bullets count anywhere in
+  `claims.md` (not only after `## claim:` headings), and a detected
+  claim matches ledger quantity content across digit↔number-word
+  spelling ("94%" ↔ "ninety-four percent", "3x" ↔ "three times") on top
+  of the unchanged prefix rules. Matching is digit-boundary anchored:
+  "8%" never satisfies a claim by landing inside a ledger's "48%".
+- **Honest narration estimates.** The synthesis-free estimate accounts
+  for per-sentence gaps exactly as narration assembly does, removing the
+  tempo-correlated under-report (measured sweep: −17.0% error at tempo
+  1.0 vs −17.1% at 1.3 — uniform per-voice calibration, no drift).
+- **Local-first default fonts.** Default `--sans`/`--mono` token chains
+  are generic-only (`system-ui`, `sans-serif`, `ui-monospace`,
+  `monospace`); a project that names no font anywhere composes and
+  renders with zero network font resolution — previously every default
+  composition fetched Roboto and Consolas from Google Fonts. A
+  `sans`/`mono` token override now genuinely replaces the default chain.
+
+### Fixed
+
+- `branch save` failure diagnostic names `narova shots --motion --proof`,
+  the only command that writes the proof receipt it demands.
+
+### Verified
+
+- End-to-end: spelled-narration release builds refuse without a ledger
+  and pass with a topic-organized digit-only one, where stock 0.31.6
+  passed silently; default projects build complete videos with zero
+  font-fetch lines across the whole pipeline.
+
 ## [0.31.6] - 2026-08-16
 
 ### Added
