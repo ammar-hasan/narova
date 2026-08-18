@@ -30,6 +30,18 @@ test('default font stacks are generic-only so composition stays network-free (NA
 test('an explicit token override still replaces the default font stack', () => {
   const css = composeCss({ sans: 'Inter, system-ui, sans-serif' }, voices, size);
   assert.match(css, /--sans:Inter, system-ui, sans-serif;/);
+  // Exactly one declaration — a later duplicate would defeat the override.
+  assert.equal((css.match(/--sans:/g) || []).length, 1);
+  assert.equal((css.match(/--mono:/g) || []).length, 1);
+});
+
+test('empty string font tokens fall back to the default chain, never a broken var', () => {
+  for (const mode of ['dark', 'light']) {
+    const css = composeCss({ sans: '', mono: '   ' }, voices, size, '', mode);
+    assert.match(css, /--mono:ui-monospace,monospace;/);
+    assert.match(css, /--sans:system-ui,sans-serif;/);
+    assert.ok(!/--sans:;|--mono:;/.test(css), `${mode}: empty font token emitted`);
+  }
 });
 
 test('light mode flips the field tokens in one switch', () => {
