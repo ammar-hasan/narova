@@ -275,6 +275,20 @@ function build(config, opts = {}) {
     });
   }
   enrichTimeline(outDir);
+  // Captions publish before the post-synth release gate (NAR-009-008): they
+  // depend only on the enriched manifest and measured timing, both ready
+  // here, and the caption presence rule must be satisfiable by a first-ever
+  // release build in a fresh directory — not only by an earlier plain build.
+  const manifest = read(path.join(outDir, 'manifest.json'));
+  const cc = configFromManifest(manifest, config) || config;
+  // Preserve external narration source through the manifest bridge.
+  if (hasExternalNarration && config.narrationSource) cc.narrationSource = config.narrationSource;
+  const caps = writeCaptions(cc, outDir);
+  if (caps.omitted) {
+    log(`captions omitted — ${caps.reason} (recorded in out/captions-omitted.json)`);
+  } else {
+    log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
+  }
   // The first preflight deliberately runs before expensive work. Actual voice
   // duration is unknowable until synth, so release builds run the same gate once
   // more here: after timings exist, before compose or rendering writes a video.
@@ -287,16 +301,6 @@ function build(config, opts = {}) {
 
   const selectedRenderer = getRenderer(opts.renderer || config.renderer);
   log(`[2/3] compose (${selectedRenderer.name})`);
-  const manifest = read(path.join(outDir, 'manifest.json'));
-  const cc = configFromManifest(manifest, config) || config;
-  // Preserve external narration source through the manifest bridge.
-  if (hasExternalNarration && config.narrationSource) cc.narrationSource = config.narrationSource;
-  const caps = writeCaptions(cc, outDir);
-  if (caps.omitted) {
-    log(`captions omitted — ${caps.reason} (recorded in out/captions-omitted.json)`);
-  } else {
-    log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
-  }
 
   log(`[3/3] ${selectedRenderer.displayName} render${selectedRenderer.name === 'hyperframes' ? ' (first run downloads the CLI — not a hang)' : ' (browserless local Skia + FFmpeg)'}`);
   const name = opts.name || 'video.mp4';
