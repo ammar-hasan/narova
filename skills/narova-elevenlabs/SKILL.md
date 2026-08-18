@@ -13,7 +13,7 @@ compatibility: >
   ElevenLabs account, and ELEVENLABS_API_KEY.
 metadata:
   author: ammar-hasan
-  version: "1.0.1"
+  version: "1.1.0"
 ---
 
 # Narova + ElevenLabs
@@ -60,6 +60,12 @@ audio/video stage.
 Read [references/configuration.md](references/configuration.md) before writing
 the voice block. It documents supported provider options, synthesis, errors,
 security, billing, and removal.
+
+When a brief needs a voice that does not exist yet, use
+[references/voice-design.md](references/voice-design.md) and
+`tool/design.py` to design previews from a description, audition them,
+and create the permanent voice — the resulting voice ID slots into the
+normal voice block.
 
 ## Operating rules
 
