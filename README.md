@@ -10,7 +10,7 @@ source material, and real product walkthroughs into narrated or silent 2D/3D
 video with local TTS, word-synced captions, and deterministic rendering.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.31.8-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.31.9-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 

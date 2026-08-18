@@ -6,6 +6,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.9] - 2026-08-18
+
+### Added
+
+- **ElevenLabs voice design.** The optional companion ships an explicitly
+  invoked helper (`skills/narova-elevenlabs/tool/design.py`) that turns a
+  text voice description into preview audio plus an audition index, from
+  which a human picks a preview; a separate step creates the permanent
+  voice and prints a ready-to-paste config fragment. The resulting voice
+  ID is an ordinary `speaker` value, so everything downstream is
+  unchanged. Seed makes the design request reproducible; `--remix`
+  derives a new voice from an existing remixable one. Companion skill
+  1.1.0; no core or provider-protocol change.
+
 ## [0.31.8] - 2026-08-18
 
 ### Fixed
