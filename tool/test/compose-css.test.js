@@ -13,6 +13,37 @@ test('dark mode is the default and uses neutral monochrome tokens', () => {
   assert.match(css, /--track:rgba\(255,255,255,\.06\)/);
 });
 
+test('default font stacks are generic-only so composition stays network-free (NAR-002-026)', () => {
+  for (const mode of ['dark', 'light']) {
+    const css = composeCss({}, voices, size, '', mode);
+    assert.match(css, /--mono:ui-monospace,monospace;/);
+    assert.match(css, /--sans:system-ui,sans-serif;/);
+    // No named family may appear in any default-emitted font token: the
+    // HyperFrames compiler fetches every named family it finds from Google
+    // Fonts, even when project CSS follows the system-only guidance.
+    for (const named of ['Roboto', 'Consolas', 'Menlo', 'SF Mono', 'Segoe UI', 'Inter', 'Helvetica']) {
+      assert.ok(!new RegExp(`--(?:mono|sans):[^;]*${named.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}`, 'i').test(css), `${mode}: ${named} must not appear in default font stacks`);
+    }
+  }
+});
+
+test('an explicit token override still replaces the default font stack', () => {
+  const css = composeCss({ sans: 'Inter, system-ui, sans-serif' }, voices, size);
+  assert.match(css, /--sans:Inter, system-ui, sans-serif;/);
+  // Exactly one declaration — a later duplicate would defeat the override.
+  assert.equal((css.match(/--sans:/g) || []).length, 1);
+  assert.equal((css.match(/--mono:/g) || []).length, 1);
+});
+
+test('empty string font tokens fall back to the default chain, never a broken var', () => {
+  for (const mode of ['dark', 'light']) {
+    const css = composeCss({ sans: '', mono: '   ' }, voices, size, '', mode);
+    assert.match(css, /--mono:ui-monospace,monospace;/);
+    assert.match(css, /--sans:system-ui,sans-serif;/);
+    assert.ok(!/--sans:;|--mono:;/.test(css), `${mode}: empty font token emitted`);
+  }
+});
+
 test('light mode flips the field tokens in one switch', () => {
   const css = composeCss({}, voices, size, '', 'light');
   assert.match(css, /--bg:#f5f5f5/);

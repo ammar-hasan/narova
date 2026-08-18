@@ -33,8 +33,22 @@ const LIGHT_TOKENS = {
 };
 
 function rootBlock(t) {
-  const vars = Object.keys(t).map(k => `  --${k}:${t[k]};`).join('\n');
-  return `:root{\n${vars}\n  --mono:ui-monospace,"SF Mono",Menlo,Consolas,monospace;\n  --sans:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;\n}`;
+  // sans/mono are emitted last and exactly once: a duplicate --sans line
+  // later in the block would win the cascade, which is how the old hardcoded
+  // default silently defeated user overrides. Empty/whitespace values count
+  // as unset — emitting `--sans:;` would break every var(--sans) consumer.
+  const fontValue = v => (v != null && String(v).trim() !== '' ? v : null);
+  const vars = Object.keys(t).filter(k => k !== 'sans' && k !== 'mono')
+    .map(k => `  --${k}:${t[k]};`).join('\n');
+  // Local-first default stacks (NAR-002-026): generic/system keywords only.
+  // Any NAMED family here (Roboto, Consolas, Menlo, …) makes the HyperFrames
+  // compiler fetch it from Google Fonts at compose/render time — the one
+  // network call in an otherwise local pipeline, issued even when project
+  // CSS follows the system-only guidance. Authors who want a named family
+  // override the token; that explicit choice may resolve via the renderer.
+  const mono = fontValue(t.mono) ?? 'ui-monospace,monospace';
+  const sans = fontValue(t.sans) ?? 'system-ui,sans-serif';
+  return `:root{\n${vars}\n  --mono:${mono};\n  --sans:${sans};\n}`;
 }
 
 function voiceBlock(voices = {}) {

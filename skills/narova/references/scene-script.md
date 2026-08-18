@@ -542,7 +542,11 @@ images or fonts into `theme.css`; it makes the source hard to inspect and
 diff. Do not use `http(s)` URLs: `check` warns and offline renders can fail.
 When bundling a brand font, list only that family plus generic fallbacks such
 as `serif` or `sans-serif`; named fallbacks such as Georgia or Times New Roman
-can make HyperFrames fetch additional font families.
+can make HyperFrames fetch additional font families. The built-in theme
+defaults are generic-only (`system-ui`, `sans-serif`, `ui-monospace`,
+`monospace`), so a project that never names a font composes and renders with
+no network font fetch; naming a family anywhere opts that family into the
+renderer's own resolution.
 
 ## Built-in scene layouts
 
