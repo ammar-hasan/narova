@@ -4,7 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { check, critique, internalShotCount, needsCreativeBrief } = require('../src/check');
+const { check, critique, internalShotCount, needsCreativeBrief, estimateSeconds, quantityFragments } = require('../src/check');
 const { resolveConfig } = require('../src/schema');
 const { timingsFingerprint } = require('../src/audio-fingerprint');
 const { hashFile, buildHashes } = require('../src/manifest');
@@ -191,6 +191,154 @@ test('a claims.md ledger in the project dir silences the grounding warning', () 
   const scenes = [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Over 2,000+ products.' }] }];
   const { lines } = run({ ...base(scenes), projectDir: dir });
   assert.ok(!lines.some(l => l.includes('claims.md')), lines.join('\n'));
+});
+
+test('spelled-out quantities are claim-like: percent words, percentage points, and ratios', () => {
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Accuracy rose from eighty percent to ninety-four percent across fifteen of fifteen runs.' },
+    { who: 'a', text: 'Latency improved three times as fast after the fix.' },
+    { who: 'a', text: 'Growth added eight percentage points year over year.' },
+    { who: 'a', text: 'The dashboard covers 15 of 15 checks.' },
+    { who: 'a', text: 'A calm sentence with no figures at all.' },
+    { who: 'a', text: 'This one is one of a kind, not a ratio.' },
+  ] }];
+  const { lines } = run(base(scenes));
+  const warns = lines.filter(l => l.startsWith('warn:'));
+  for (const needle of ['eighty percent', 'three times', 'eight percentage points', '15 of 15']) {
+    assert.ok(warns.some(l => l.includes(needle)), `${needle} must be claim-like: ${lines.join('\n')}`);
+  }
+  for (const plain of ['no figures at all', 'one of a kind']) {
+    assert.ok(!warns.some(l => l.includes(plain)), `${plain} must stay unclassified: ${lines.join('\n')}`);
+  }
+  assert.ok(lines.some(l => /^claims: 4 of 6 vo turns look factual \(heuristic\)$/.test(l)), lines.join('\n'));
+});
+
+test('claim coverage is stated at every check level, including zero claims', () => {
+  const clean = run(base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Just words, nothing numeric.' }] }]));
+  assert.ok(clean.lines.some(l => /^claims: 0 of 1 vo turns look factual \(heuristic\)$/.test(l)), clean.lines.join('\n'));
+  const strict = run(base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Ninety percent of nothing is still nothing.' }] }]), { strict: true });
+  assert.ok(strict.lines.some(l => /^claims: 1 of 1 vo turns look factual \(heuristic\)$/.test(l)), strict.lines.join('\n'));
+  const release = run(base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Ninety percent of nothing is still nothing.' }] }]), { release: true });
+  assert.ok(release.lines.some(l => /^claims: 1 of 1 vo turns look factual \(heuristic\)$/.test(l)), release.lines.join('\n'));
+  assert.ok(!release.ok);
+});
+
+test('a topic-organized ledger matches spoken figures across digit/word spelling', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), [
+    '# Benchmarks', '',
+    '- accuracy rose to 94% across 15 of 15 runs (source: benchmarks.md)', '',
+    '## Latency', '',
+    '- latency improved 3x after the fix (source: perf.txt)',
+  ].join('\n'));
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Accuracy rose from eighty percent to ninety-four percent across fifteen of fifteen runs.' },
+    { who: 'a', text: 'Latency improved three times as fast after the fix.' },
+  ] }];
+  const { lines } = run({ ...base(scenes), projectDir: dir }, { strict: true });
+  assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+});
+
+test('bullets in a ledger without any claim heading are still collected', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Notes\n\n- uptime measured at ninety-nine percent last quarter\n');
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Uptime held at ninety-nine percent all quarter.' },
+  ] }];
+  const { lines } = run({ ...base(scenes), projectDir: dir }, { strict: true });
+  assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+});
+
+test('adversarial: a same-shape figure in the ledger does not satisfy a different claim (8% vs 48%)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Metrics\n\n- signups held while churn sat at 48% of new signups (source: metrics)\n');
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Roughly eight percent of users churn every month.' },
+  ] }];
+  const { lines } = run({ ...base(scenes), projectDir: dir }, { strict: true });
+  assert.ok(lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+});
+
+test('adversarial: ratio and x-form fragments are digit-boundary anchored', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Notes\n\n- review covered 15 of 150 files\n- latency saw a 13x speedup on the read path\n');
+  const scenes = [{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Fifteen of fifteen checks passed tonight.' },
+    { who: 'a', text: 'The new path is three times faster than before.' },
+  ] }];
+  const { lines } = run({ ...base(scenes), projectDir: dir }, { strict: true });
+  const misses = lines.filter(l => l.includes('not found in claims'));
+  assert.equal(misses.length, 1, lines.join('\n'));
+  // Both distinct-fact claims stay unledgered: neither "15 of 15" may match
+  // "15 of 150" nor "3x" match "13x".
+  assert.ok(misses[0].includes('2 of 2'), misses[0]);
+});
+
+test('adversarial: bare "one point" idioms are not claims; percentage points are', () => {
+  const { lines } = run(base([{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'Let me make one point about pacing before we continue.' },
+    { who: 'a', text: 'Here is a six-point plan for the next quarter.' },
+    { who: 'a', text: 'Retention improved by eight percentage points year over year.' },
+  ] }]));
+  assert.ok(lines.some(l => /^claims: 1 of 3 vo turns look factual \(heuristic\)$/.test(l)), lines.join('\n'));
+  const claimsLine = lines.find(l => l.startsWith('claims:'));
+  const warns = lines.filter(l => l.startsWith('warn:'));
+  // No ledger: the one detected claim warns; the idioms never appear in it.
+  assert.ok(warns.some(l => l.includes('eight percentage points')), lines.join('\n'));
+  assert.ok(!warns.some(l => l.includes('one point') || l.includes('six-point')), lines.join('\n'));
+  assert.ok(claimsLine);
+});
+
+test('adversarial: hyphenated percent quantities are detected and match spaced ledgers', () => {
+  const { lines } = run(base([{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'We saw an eighty-percent jump in retention this quarter.' },
+  ] }]));
+  assert.ok(lines.some(l => /^claims: 1 of 1 vo turns look factual \(heuristic\)$/.test(l)), lines.join('\n'));
+
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-claims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '# Retention\n\n- retention up 80 percent this quarter (source: dashboard)\n');
+  const { lines: matched } = run({ ...base([{ id: 's', body: '<p>x</p>', vo: [
+    { who: 'a', text: 'We saw an eighty-percent jump in retention this quarter.' },
+  ] }]), projectDir: dir }, { strict: true });
+  assert.ok(!matched.some(l => l.includes('not found in claims')), matched.join('\n'));
+});
+
+test('quantity fragments carry raw, digit-normalized, and symbol unit forms', () => {
+  const frags = quantityFragments('Accuracy rose from eighty percent to ninety-four percent across fifteen of fifteen runs.');
+  for (const expected of ['eighty percent', '80 percent', '80%', 'ninety-four percent', '94 percent', '94%', 'fifteen of fifteen', '15 of 15']) {
+    assert.ok(frags.includes(expected), `missing fragment ${expected}: ${frags.join(' | ')}`);
+  }
+});
+
+test('estimate accounts for per-sentence gaps exactly as assembly does', () => {
+  const words = 'word '.repeat(30).trim();
+  const block = `${words} ${words} ${words}`; // 90 words, one sentence
+  const single = { scenes: [{ id: 's', vo: [{ who: 'a', text: block }] }] };
+  const triple = { scenes: [{ id: 's', vo: [{ who: 'a', text: `${words}. ${words}. ${words}.` }] }] };
+  const gapTotal = 2 * 0.24;
+  assert.ok(Math.abs((estimateSeconds(triple) - estimateSeconds(single)) - gapTotal) < 1e-9);
+  // Hand value: lead+tail + words/wps + sentence gaps, mirroring the pipeline.
+  const tempo = 1.18, wps = (170 * tempo) / 60;
+  const expected = 0.16 + 0.58 + 90 / wps + gapTotal;
+  assert.ok(Math.abs(estimateSeconds(triple) - expected) < 1e-6, `${estimateSeconds(triple)} vs ${expected}`);
+});
+
+test('estimate counts silent scenes by their authored duration, not gaps', () => {
+  const cfg = { scenes: [{ id: 'a', dur: 5, vo: [] }, { id: 'b', dur: 7, vo: [] }] };
+  assert.ok(Math.abs(estimateSeconds(cfg) - 12) < 1e-9);
+});
+
+test('estimate error does not drift downward as tempo rises (structural non-drift)', () => {
+  // Non-word time (scene lead/tail + sentence gaps) must be tempo-independent
+  // and fully accounted: est(t) - words/wps(t) is the same constant at every
+  // tempo, so no term shrinks that assembly keeps as tempo rises.
+  const cfg = { scenes: [{ id: 's', vo: [{ who: 'a', text: 'One two three four five. Six seven eight nine ten. Eleven twelve.' }] }] };
+  const gapConstant = 0.16 + 0.58 + 2 * 0.24;
+  for (const t of [1.0, 1.1, 1.18, 1.3]) {
+    const est = estimateSeconds({ ...cfg, timing: { tempo: t } });
+    const nonWord = est - 12 / ((170 * t) / 60);
+    assert.ok(Math.abs(nonWord - gapConstant) < 1e-9, `tempo ${t}: nonWord ${nonWord}`);
+  }
 });
 
 test('unknown scene transitions warn naming the valid set; fade/wipe/slide/zoom/absent do not', () => {

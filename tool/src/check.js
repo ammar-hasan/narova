@@ -25,10 +25,29 @@ const { getProvider } = require('./providers');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
- * the source. Heuristic — warnings only, never errors. */
+ * the source. Heuristic — warnings only, never errors.
+ * Narration written for local TTS normally spells figures out ("eighty
+ * percent", "fifteen of fifteen") because bare numerals mispronounce, so
+ * number-word quantities and ratios are claim shapes too (NAR-007-028). */
+const NUMBER_WORDS = [
+  'zero', 'one', 'two', 'three', 'four', 'five', 'six', 'seven', 'eight',
+  'nine', 'ten', 'eleven', 'twelve', 'thirteen', 'fourteen', 'fifteen',
+  'sixteen', 'seventeen', 'eighteen', 'nineteen', 'twenty', 'thirty',
+  'forty', 'fifty', 'sixty', 'seventy', 'eighty', 'ninety', 'hundred',
+  'thousand', 'million', 'billion', 'trillion',
+];
+const NW = NUMBER_WORDS.join('|');
+// Trailing boundary: without it, "eight" matches inside "eighty". Hyphens are
+// allowed here so hyphenated forms ("eighty-percent") can reach the unit
+// group; a trailing hyphen alone never matches because a unit is required.
+const NUMWORD_RUN = `(?:${NW})(?:[\\s-]+(?:and[\\s-]+)?(?:${NW}))*(?!\\w)`;
 const CLAIM_PATTERNS = [
   /\d[\d,.]*\s*(?:%|percent\b|x\b|\+|k\b|million\b|billion\b|users?\b|products?\b|customers?\b|downloads?\b|countries\b)/i,
-  /\b(?:leading|best[- ]in[- ]class|industry[- ]first|world'?s first|largest|most popular|#1|number one|top-rated|half of)\b/i,
+  // Bare "points" is deliberately not a unit ("one point about pacing",
+  // "six-point plan" are idioms, not quantities); "percentage points" is.
+  new RegExp(`\\b${NUMWORD_RUN}(?:[\\s-]+percent\\b|\\s+percentage\\s+points?\\b|\\s+times\\b|\\s+fold\\b)`, 'i'),
+  new RegExp(`\\b(?:${NUMWORD_RUN}|\\d[\\d,.]*)\\s+of\\s+(?:${NUMWORD_RUN}|\\d[\\d,.]*)\\b`, 'i'),
+  /\b(?:leading|best[- ]in-class|industry[- ]first|world'?s first|largest|most popular|#1|number one|top-rated|half of)\b/i,
 ];
 
 function findClaims(config) {
@@ -44,10 +63,71 @@ function findClaims(config) {
   return hits;
 }
 
+/* Number-word runs ("ninety-four", "two thousand five hundred") → digits.
+ * Compact parser: enough for spoken quantities; non-numeric text returns null. */
+const WORD_VALUES = { zero: 0, one: 1, two: 2, three: 3, four: 4, five: 5, six: 6, seven: 7, eight: 8, nine: 9, ten: 10, eleven: 11, twelve: 12, thirteen: 13, fourteen: 14, fifteen: 15, sixteen: 16, seventeen: 17, eighteen: 18, nineteen: 19, twenty: 20, thirty: 30, forty: 40, fifty: 50, sixty: 60, seventy: 70, eighty: 80, ninety: 90 };
+const WORD_SCALES = { hundred: 100, thousand: 1e3, million: 1e6, billion: 1e9, trillion: 1e12 };
+function wordsToNumber(run) {
+  const tokens = run.toLowerCase().split(/[\s-]+/).filter(t => t && t !== 'and');
+  let total = 0, current = 0;
+  for (const t of tokens) {
+    if (t in WORD_VALUES) current += WORD_VALUES[t];
+    else if (t in WORD_SCALES) {
+      const scale = WORD_SCALES[t];
+      if (scale === 100) current = (current || 1) * scale;
+      else { total += (current || 1) * scale; current = 0; }
+    } else return null;
+  }
+  const n = total + current;
+  return n > 0 || tokens[0] === 'zero' ? n : null;
+}
+
+/* Quantity fragments of a turn for content-based ledger matching (NAR-007-029):
+ * each number-word run with its unit, in raw and digit-normalized forms
+ * ("ninety-four percent" → also "94 percent", "94%"), plus ratio runs
+ * ("fifteen of fifteen" → "15 of 15"). Digit fragments pass through raw. */
+function quantityFragments(text) {
+  const lower = text.toLowerCase();
+  const frags = [];
+  const runRe = new RegExp(`\\b(${NUMWORD_RUN})(?:([\\s-]+percent|\\s+percentage\\s+points?|\\s+times|\\s+fold)|(?:\\s+of\\s+)(${NUMWORD_RUN}))?`, 'g');
+  for (const m of lower.matchAll(runRe)) {
+    const run = m[1], unit = m[2] || '', second = m[3] || '';
+    // Only shaped fragments (unit or ratio present): bare numbers match too
+    // loosely ("15" inside "2015") and carry no claim meaning alone.
+    if (!unit && !second) continue;
+    const unitNorm = unit ? unit.replace(/[\s-]+/g, ' ')
+      : (second ? ` of ${second}` : '');
+    frags.push((run + unitNorm).trim());
+    const n = wordsToNumber(run);
+    if (n != null) {
+      frags.push(`${n}${unitNorm}`);
+      if (/^\s*percent\b/.test(unitNorm)) frags.push(`${n}%`);
+      if (/^\s*times\b/.test(unitNorm)) frags.push(`${n}x`);
+    }
+    if (second) {
+      const n2 = wordsToNumber(second);
+      if (n2 != null && n != null) frags.push(`${n} of ${n2}`);
+    }
+  }
+  const digitRe = /\b\d[\d,.]*(?:\s*(?:%|percent|percentage\s+points?|points?|times|fold|x)\b|\s+of\s+\d[\d,.]*\b)?/g;
+  for (const m of lower.matchAll(digitRe)) {
+    const f = m[0].replace(/\s+/g, ' ').trim();
+    if (!/(%|percent|points?|times|fold|x|of)/i.test(f)) continue; // shaped only
+    frags.push(f);
+    const dm = f.match(/^(\d[\d,.]*)\s*(%|percent|points?|times|x)$/i);
+    if (dm) {
+      if (/^percent$/i.test(dm[2])) frags.push(`${dm[1]}%`);
+      if (/^times$/i.test(dm[2])) frags.push(`${dm[1]}x`);
+    }
+  }
+  return frags;
+}
+
 /* Parse a claims.md ledger into an array of claim-text lines for matching.
- * Supports three formats:
+ * Supports three formats (NAR-007-029 — bullets count anywhere in the file,
+ * heading or not, so a human-organized ledger is never silently empty):
  *   1. ## claim: ... headings
- *   2. Bullet lines beneath claim headings
+ *   2. Bullet lines anywhere in the document
  *   3. Markdown table rows under ## Claims (the format generated by `narova ingest`) */
 function readClaimsLedger(config) {
   const dir = config.projectDir || '.';
@@ -74,7 +154,7 @@ function readClaimsLedger(config) {
             const claimCol = cols[1];
             if (claimCol.length > 4) claimLines.push(claimCol);
           }
-        } else if (!inClaimsTable && l.startsWith('- ') && claimLines.length) {
+        } else if (!inClaimsTable && l.startsWith('- ')) {
           const bullet = l.replace(/^-\s+/, '');
           if (bullet.length > 4) claimLines.push(bullet);
         }
@@ -85,17 +165,29 @@ function readClaimsLedger(config) {
   return null;
 }
 
-/* Check if a vo claim is ledgered. It matches when the claim text (or a
- * significant substring of it) appears somewhere in the ledger lines. */
+/* Check if a vo claim is ledgered. Matching (NAR-007-029): the pre-existing
+ * prefix rules (turn prefix in the ledger) OR quantity-content matching — the
+ * claim's matched quantity appears in a ledger entry, across digit↔number-word
+ * spelling. Strictly additive: nothing that matched before stops matching.
+ * Fragments are digit-boundary anchored: "8%" must not satisfy a claim by
+ * landing inside "48%", and "15 of 15" must not land inside "15 of 150". */
 function matchClaim(claimText, ledger) {
   if (!ledger || !ledger.claims.length) return false;
   const needle = claimText.toLowerCase();
   // Also try a shorter digest: drop leading punctuation/stopwords for a
   // looser match.
   const short = needle.replace(/^[^a-z0-9]*/, '').slice(0, 40);
+  const fragRes = quantityFragments(claimText)
+    .filter(f => f.length > 1)
+    .map(f => {
+      const esc = f.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+      const tail = /\d$/.test(f) ? '(?!\\d)' : '';
+      return new RegExp(`(?<![\\d.])${esc}${tail}`, 'i');
+    });
   return ledger.claims.some(entry => {
     const hay = entry.toLowerCase();
-    return hay.includes(needle.slice(0, 60)) || hay.includes(short);
+    return hay.includes(needle.slice(0, 60)) || hay.includes(short)
+      || fragRes.some(re => re.test(hay));
   });
 }
 
@@ -320,8 +412,16 @@ function inspectAssetRef(ref, config, at, warnings, opts = {}) {
  * be tuned BEFORE synth: piper at ~1.1–1.2 tempo speaks near 170 wpm base
  * (calibrated against real builds; 647 words at 1.12 ≈ 231s actual), scaled
  * by tempo (matching the narova_tts default of 1.18 when unset), plus the
- * fixed per-turn/scene gaps the pipeline inserts. Word timing is computed,
+ * exact gap structure narration assembly inserts (NAR-007-030): lead+tail per
+ * scene, one gap per turn boundary, and one sentence gap between consecutive
+ * sentences within a turn — the pipeline synthesizes per sentence and pads
+ * between them, so per-turn accounting alone drifts low as tempo rises.
+ * Silent scenes contribute their authored duration. Word timing is computed,
  * not measured — this is a planning number, not a promise. */
+const SENTENCE_SPLIT_RE = /(?<=[.!?۔؟])\s+/;
+function countSentences(text) {
+  return text.trim().split(SENTENCE_SPLIT_RE).filter(Boolean).length || 1;
+}
 function estimateSeconds(config) {
   const timing = config.timing || {};
   const tempo = timing.tempo || 1.18;
@@ -330,9 +430,15 @@ function estimateSeconds(config) {
   const gapS = timing.gapSentence ?? 0.24, gapT = timing.gapTurn ?? 0.44;
   let total = 0;
   for (const s of config.scenes) {
+    if (!s.vo || !s.vo.length) {
+      total += s.dur ?? 2.0;
+      continue;
+    }
     total += lead + tail;
     s.vo.forEach((t, i) => {
-      total += t.text.trim().split(/\s+/).length / wps + gapS + (i ? gapT : 0);
+      total += t.text.trim().split(/\s+/).length / wps
+        + (countSentences(t.text) - 1) * gapS
+        + (i ? gapT : 0);
     });
   }
 
@@ -692,6 +798,13 @@ function check(config, opts = {}) {
   // Claims ledger: in strict mode, warn on unledgered claims.
   // In release mode, error on unledgered claims.
   const claims = findClaims(config);
+  // Coverage statement (NAR-007-028): informational at every level, never a
+  // warning — a low count against figure-heavy narration is the visible
+  // signal that the heuristic sees little, where silence hid everything.
+  const totalVoTurns = config.scenes.reduce((n, s) => n + (s.vo ? s.vo.length : 0), 0);
+  if (totalVoTurns > 0) {
+    console.log(`claims: ${claims.length} of ${totalVoTurns} vo turns look factual (heuristic)`);
+  }
   if (claims.length) {
     if (strict) {
       const ledger = readClaimsLedger(config);
@@ -1185,4 +1298,4 @@ function critique(config, opts = {}) {
   return results;
 }
 
-module.exports = { check, critique, internalShotCount, creativeBriefStatus, needsCreativeBrief, productionSeconds, measuredProductionSeconds };
+module.exports = { check, critique, internalShotCount, creativeBriefStatus, needsCreativeBrief, productionSeconds, measuredProductionSeconds, estimateSeconds, quantityFragments };
