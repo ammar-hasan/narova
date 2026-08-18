@@ -824,7 +824,7 @@ async function main() {
         }
         const proof = verifyProofReceipt(config, out);
         if (!proof.ok) {
-          console.error(`${proof.reason} — rerun narova compose && narova shots --motion --proof before saving this branch`);
+          console.error(`${proof.reason} — rerun narova shots --motion --proof before saving this branch`);
           process.exit(1);
         }
         // Build the complete snapshot and external proof bundle under a unique
