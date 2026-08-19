@@ -201,6 +201,13 @@ user's approval before any consequential external mutation.
   those layout guardrails. Set
   `patterns: true` to include Narova's built-in layout classes when they
   serve your concept. Every aesthetic choice is yours to make.
+- **Unattended runs converge; the creative-identity contract counters it.**
+  In unattended mode, an agent left alone drifts every video into the same
+  warm/muted house style. When no human will review the look, write
+  `creative.md` (families + provenance + claims block, see
+  `references/prompt-to-video.md` §Videography) so `narova check` verifies
+  the rationale against the measured identity and flags near-identical
+  siblings. Advisory-only — never a build failure.
 - **No looping CSS in theme.css.** The renderer jumps between frames:
   `animation: ... infinite`, hover effects, and CSS transitions break.
   Motion comes from the timeline: `reveal`/`data-cue` entrances and
@@ -256,7 +263,7 @@ sentences; untouched scenes are byte-identical). See
 
 | Read…                          | to…                                                          |
 |--------------------------------|--------------------------------------------------------------|
-| `references/prompt-to-video.md` | creative contract, pilot gate, intake, direction, iteration |
+| `references/prompt-to-video.md` | creative contract, pilot gate, intake, direction, iteration, creative-identity (creative.md) |
 | `references/url-to-source.md`   | classify a source page and extract factual & visual evidence |
 | `references/scene-script.md`   | write a `reel.config.mjs` (scenes, cues, voices, theme)      |
 | `references/product-walkthroughs.md` | explore, capture, compose, and QA product demos         |

@@ -247,6 +247,28 @@ prompt gets its own visual language — you are the director, so direct:
   entirely — not every work needs word-by-word karaoke.
 - **Self-check before synth:** if this config could become someone else's
   video by swapping only the words, art-direct harder.
+- **Creative-identity contract (unattended mode):** when no human will review
+  the look, write a short `creative.md` in the project before authoring,
+  declaring per style family (palette/theme, transitions, animations,
+  graphics/layout) the chosen direction and its provenance — `brief` (quote
+  the clause), `brand` (verified token), `source` (evidence file), or
+  `invented`. Add the machine-readable claims block so `narova check` can
+  verify it:
+  ```markdown
+  palette: <tone family, e.g. "dark cool navy" or "light cream warm">
+  provenance: <brief | brand | source | invented>
+  structure: <grammar, e.g. "montage" | "linear journey" | "single shot">
+  motion: <vocabulary, e.g. "reveal + draw" | "kinetic type" | "none">
+  ```
+  `narova check` then verifies the claims against the measured identity
+  (flagging contradicted or under-authored choices) and compares against the
+  local fingerprint-only ledger of your recent projects (flagging
+  near-identical siblings — legitimate for a brand series, a defect for
+  unrelated briefs). `narova check --creative-identity` also writes
+  `out/creative-identity.json` as a readable record. These surfaces are
+  advisory only: they never fail the build. Use them whenever the same
+  author runs many briefs unattended — this is the mechanism that keeps each
+  prompt from becoming one re-skinned video.
 - **Media check before synth:** if the source has useful logos, product
   imagery, figures, diagrams, screenshots, or people and the video uses none
   of them, revisit the art direction.

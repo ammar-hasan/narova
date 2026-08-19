@@ -300,6 +300,11 @@ narova check          validate the config (fast, no side effects); prints an
                        --release: strict + fail on remote deps, missing claims,
                        unsupported HTML, black frames, or stale walkthrough
                        captures (exit 1)
+                       --creative-identity: also emit out/creative-identity.json
+                       (advisory identity fingerprint + rationale verification).
+                       Projects with an authored creative.md maintain the local
+                       fingerprint-only sibling ledger and advisory output at
+                       every check level; none of these surfaces fail a build
 narova synth          Python TTS -> out/audio/*, out/timings.json
 narova walkthrough explore <id>  open a declared product source in a named
                       agent-browser session and print its interactive snapshot
