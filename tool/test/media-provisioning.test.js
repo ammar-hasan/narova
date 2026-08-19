@@ -175,48 +175,32 @@ test('recorded Linux pins carry complete verifiable identities', () => {
 });
 
 test('probe reports a binDir for a satisfied provisioned install (warm-run F10)', () => {
+  const realPin = acquisition.mediaPinFor();
+  if (!realPin) return; // unpinned host (e.g. darwin): CI on Linux covers this
   const home = tmp();
-  const work = tmp();
-  const fx = fixtureArchive(work, 'ffmpeg-fixture3-linux64-gpl');
-  const pin = {
-    id: 'fixture-gpl-warm', url: 'file:///unused', sha256: '0'.repeat(64),
-    bytes: 1, topdir: fx.topdir,
-  };
-  // Lay down what a completed provisionMedia leaves behind.
-  const root = path.join(home, 'tools', 'media', pin.id);
-  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
-  fs.writeFileSync(path.join(root, 'bin', 'ffmpeg'), '#!/bin/sh\n');
-  fs.writeFileSync(path.join(root, 'bin', 'ffprobe'), '#!/bin/sh\n');
-  fs.writeFileSync(path.join(root, '.narova-pin.json'), JSON.stringify({
-    sha256: pin.sha256, url: pin.url, bytes: pin.bytes,
-  }));
-
-  // Force the probe off PATH-found ffmpeg and onto the provisioned install.
-  const savedFfmpeg = process.env.NAROVA_FFMPEG;
-  const savedFfprobe = process.env.NAROVA_FFPROBE;
-  const savedHome = process.env.NAROVA_HOME;
-  process.env.NAROVA_FFMPEG = 'narova-absent-ffmpeg';
+  const saved = {};
+  for (const k of ['NAROVA_FFMPEG', 'NAROVA_FFPROBE', 'NAROVA_HOME']) saved[k] = process.env[k];
+  process.env.NAROVA_FFMPEG = 'narova-absent-ffmpeg';   // force off PATH-found tools
   process.env.NAROVA_FFPROBE = 'narova-absent-ffprobe';
   process.env.NAROVA_HOME = home;
   try {
-    assert.ok(acquisition.mediaMarkerOk(root, pin));
-    // mediaMarkerOk is the same gate probeMedia uses for provisioned state;
-    // with the marker valid, a conforming probe resolves binDir for that
-    // root. Exercise the real probe through readinessMatrix.
-    const readiness = require('../src/readiness');
-    const media = readiness.readinessMatrix().find((i) => i.id === 'media');
-    // On an unpinned host (e.g. darwin) the probe cannot reach the
-    // provisioned branch — assert only when the platform pin exists.
-    if (require('../src/acquisition').mediaPinFor()) {
-      assert.equal(media.status, 'satisfied');
-      assert.ok(media.binDir, 'binDir exposed so warm runs can scope PATH');
-      assert.ok(fs.existsSync(path.join(media.binDir)));
-    } else {
-      assert.notEqual(media.status, 'satisfied');
-    }
+    // Lay down exactly what a completed provisionMedia leaves behind, at the
+    // REAL pin's install root — the probe resolves that path, not a fixture id.
+    const root = acquisition.mediaInstallDir(realPin);
+    fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
+    fs.writeFileSync(path.join(root, 'bin', 'ffmpeg'), '#!/bin/sh\n');
+    fs.writeFileSync(path.join(root, 'bin', 'ffprobe'), '#!/bin/sh\n');
+    fs.writeFileSync(path.join(root, '.narova-pin.json'), JSON.stringify({
+      sha256: realPin.sha256, url: realPin.url, bytes: realPin.bytes,
+    }));
+    assert.ok(acquisition.mediaMarkerOk(root, realPin), 'fixture marker matches the real pin');
+
+    const media = require('../src/readiness').readinessMatrix().find((i) => i.id === 'media');
+    assert.equal(media.status, 'satisfied');
+    assert.equal(media.binDir, path.join(root, 'bin'), 'binDir exposed so warm runs can scope PATH');
   } finally {
-    if (savedFfmpeg === undefined) delete process.env.NAROVA_FFMPEG; else process.env.NAROVA_FFMPEG = savedFfmpeg;
-    if (savedFfprobe === undefined) delete process.env.NAROVA_FFPROBE; else process.env.NAROVA_FFPROBE = savedFfprobe;
-    if (savedHome === undefined) delete process.env.NAROVA_HOME; else process.env.NAROVA_HOME = savedHome;
+    for (const [k, v] of Object.entries(saved)) {
+      if (v === undefined) delete process.env[k]; else process.env[k] = v;
+    }
   }
 });

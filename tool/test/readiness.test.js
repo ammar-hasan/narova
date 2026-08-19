@@ -205,22 +205,30 @@ test('provisionFile is idempotent: a matching artifact is never re-acquired (NAR
 });
 
 test('TTY view prints the plan first and confirms each item (NAR-021-008)', async () => {
-  const sink = new Sink(true);
-  const view = new ProgressView(sink, { heartbeatMs: 10 });
-  view.plan([{ label: 'media tool (ffmpeg)', bytes: 81_000_000 }, { label: 'voice model', bytes: 6_100_000 }]);
-  view.ok('Node 20.11.0', 'found on PATH');
-  view.itemStart('media tool (ffmpeg)', 1, 2);
-  view.itemProgress({ bytes: 35_000_000, totalBytes: 81_000_000 });
-  await sleep(25); // let the throttled TTY redraw fire
-  view.itemOk('media tool (ffmpeg)', '/tools/ffmpeg');
-  view.itemOk('voice model', '/tools/voice.onnx');
-  const text = sink.text();
-  assert.match(text, /2 items to set up \(about 83\.1 MB\)/);
-  assert.match(text, /1\. media tool \(ffmpeg\)  ~77\.2 MB/);
-  assert.match(text, /✓ Node 20\.11\.0 — found on PATH/);
-  assert.match(text, /33\.4 MB \/ 77\.2 MB/);
-  assert.match(text, /left/); // estimate present
-  assert.match(text, /✓ media tool \(ffmpeg\) — \/tools\/ffmpeg \(/);
+  // Hermetic TTY: CI runners export CI=true, which correctly forces the
+  // non-TTY renderer — this test is about the TTY path, so clear it.
+  const savedCI = process.env.CI;
+  delete process.env.CI;
+  try {
+    const sink = new Sink(true);
+    const view = new ProgressView(sink, { heartbeatMs: 10 });
+    view.plan([{ label: 'media tool (ffmpeg)', bytes: 81_000_000 }, { label: 'voice model', bytes: 6_100_000 }]);
+    view.ok('Node 20.11.0', 'found on PATH');
+    view.itemStart('media tool (ffmpeg)', 1, 2);
+    view.itemProgress({ bytes: 35_000_000, totalBytes: 81_000_000 });
+    await sleep(25); // let the throttled TTY redraw fire
+    view.itemOk('media tool (ffmpeg)', '/tools/ffmpeg');
+    view.itemOk('voice model', '/tools/voice.onnx');
+    const text = sink.text();
+    assert.match(text, /2 items to set up \(about 83\.1 MB\)/);
+    assert.match(text, /1\. media tool \(ffmpeg\)  ~77\.2 MB/);
+    assert.match(text, /✓ Node 20\.11\.0 — found on PATH/);
+    assert.match(text, /33\.4 MB \/ 77\.2 MB/);
+    assert.match(text, /left/); // estimate present
+    assert.match(text, /✓ media tool \(ffmpeg\) — \/tools\/ffmpeg \(/);
+  } finally {
+    if (savedCI === undefined) delete process.env.CI; else process.env.CI = savedCI;
+  }
 });
 
 test('non-TTY view emits liveness lines on a bounded interval, not silence', async () => {

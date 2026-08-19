@@ -77,16 +77,19 @@ async function provisionMedia(view, pin = mediaPinFor()) {
   const root = mediaInstallDir(pin);
   if (mediaMarkerOk(root, pin)) return { dir: root, acquired: 0, reused: true };
 
-  const archive = `${root}.tar.xz`;
+  // Archive extension follows the pinned artifact (GNU tar requires the
+  // matching decompression flag; bsdtar sniffs — do not rely on that).
+  const ext = pin.url.endsWith('.tar.gz') ? '.tar.gz' : '.tar.xz';
+  const xflag = ext === '.tar.gz' ? '-xzf' : '-xJf';
+  const archive = `${root}${ext}`;
   const staging = `${root}.staging-${process.pid}`;
   const cleanup = () => { fs.rmSync(archive, { force: true }); fs.rmSync(staging, { recursive: true, force: true }); };
   try {
     fs.rmSync(root, { recursive: true, force: true }); // stale or corrupt prior install
     const got = await acquireFile(pin.url, archive, { sha256: pin.sha256, bytes: pin.bytes, view });
 
-    // Staged extraction; system tar with xz/gz per extension.
+    // Staged extraction; system tar with the extension-matched flag.
     fs.mkdirSync(staging, { recursive: true });
-    const xflag = archive.endsWith('.tar.gz') ? '-xzf' : '-xJf';
     const extracted = spawnSync('tar', [xflag, archive, '-C', staging], { stdio: 'ignore' });
     if (extracted.status !== 0) throw new Error(`extracting ${pin.url} failed (tar exited ${extracted.status})`);
     const inner = path.join(staging, pin.topdir);
