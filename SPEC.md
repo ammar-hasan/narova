@@ -320,6 +320,18 @@ successful build is reported without failing the build.
 
 ```
 narova init <dir>     new project
+narova demo           activation: readiness checklist with live progress, then
+                      the built-in demo project through the ordinary build
+                      pipeline (real synthesis/timing/render/encode) ->
+                      narova-demo/out/video.mp4 + captions + the readable
+                      project itself. No keys, config, or questions; measured
+                      time-to-first-video and network bytes are reported.
+                      --renderer no-browser selects the browserless profile
+                      (and skips the engine download). First bare invocation
+                      (`narova` with no command, interactive) runs the welcome
+                      flow: checklist, one creation-intent question recorded
+                      as draft-brief material in a scaffolded project, and
+                      consent-gated agent-skill installation
 narova ingest <url>   fetch a source page: images -> assets/, Chrome screenshot,
                       sources.md entry, claims.md skeleton (references/url-to-source.md)
 narova provenance    read-only claims/media/AI/reproducibility report; every

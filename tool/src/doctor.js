@@ -19,6 +19,7 @@ const PY_ENV = { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') };
 
 const NAROVA_HOME = process.env.NAROVA_HOME || path.join(os.homedir(), '.narova');
 const TOOL_DIR = path.resolve(__dirname, '..');
+const { readinessMatrix } = require('./readiness');
 
 function sourceFingerprint(toolDir) {
   const files = ['bin/narova.js', 'src/compose/three.js', 'src/pipeline.js'];
@@ -140,6 +141,16 @@ function doctor(projectDir) {
     if (!r.ok && !r.optional) { allOk = false; missing.push(r.name); }
   }
   console.log('');
+
+  // First-run readiness matrix parity (NAR-021-007): the same matrix the
+  // first-run surface evaluates, printable here without interaction or
+  // mutation. Pure probe — no network, no provisioning.
+  try {
+    const { formatMatrix } = require('./readiness');
+    console.log(formatMatrix(readinessMatrix()));
+    console.log('');
+  } catch { /* advisory parity — never fails doctor */ }
+
   if (allOk) {
     console.log('All required tools present.');
   } else {

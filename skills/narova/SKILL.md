@@ -66,9 +66,16 @@ Or bring your own recording with `narration.file` and `narration.wordTimings`.
 
 ## Install the CLI
 
-Requires Node.js 18+, Python 3.10+, and FFmpeg. First-time model and
-HyperFrames setup requires internet access. Product walkthrough capture can
-optionally use agent-browser.
+Requires Node.js 18+ (Python 3.10+ and FFmpeg are found on the machine or,
+where a digest-verified source is pinned, provisioned automatically on
+first use into `~/.narova`). First-time model and HyperFrames setup requires
+internet access. Product walkthrough capture can optionally use
+agent-browser. Verify any installation in one command — it builds a real
+narrated MP4 end to end and reports measured time and bytes:
+
+```bash
+narova demo
+```
 
 Before the first Narova command in a session, require the exact CLI release
 that matches this skill. Reuse a matching `narova` on `PATH` or at

@@ -47,6 +47,31 @@ video with local TTS, word-synced captions, and deterministic rendering.
 
 ## Install
 
+### Try it first — one command
+
+With Node 18+ as the only prerequisite, the demo builds a real narrated,
+captioned MP4 on your machine and leaves the project behind as a working
+reference:
+
+```bash
+npx @narova/narova demo
+```
+
+The first run shows a readiness checklist with live progress, then fetches
+what this machine is missing — a digest-verified ffmpeg (Linux), the pinned
+local voice, the renderer engine, and the Python speech environment — into
+Narova user storage. No keys, no configuration, no decisions; nothing is
+installed on system paths. The completion report states the measured
+time-to-first-video and network bytes. Reference budget, advisory only:
+about a minute on a modern laptop with a typical broadband link (measured
+2026-08-19: 47 s cold on macOS arm64, 3 s warm; the clean-machine Linux CI
+job prints its own measurement on every run). Re-running reuses everything.
+
+On macOS, install ffmpeg yourself first (`brew install ffmpeg`) — Narova
+auto-provisions it only where a digest-verified source is pinned.
+
+### The two-part install
+
 Narova has two parts: the CLI and the agent skill. Install the CLI first from
 the public npm package:
 
@@ -77,7 +102,10 @@ narova-uninstall
 
 The command detects a custom install prefix automatically. You can also pass
 `--prefix <dir>`. It removes the Narova package and its three commands. It does
-not remove projects, downloaded models, caches, or the agent skill.
+not remove projects, downloaded models, caches, or the agent skill. To also
+remove Narova-provisioned tooling (the TTS venv, provisioned media tools, the
+voice cache), use `narova-uninstall --purge-tools` — projects, media assets,
+and voice samples are always kept.
 
 Then install the skill for any agent that supports skills. If the CLI is
 missing or its version differs, the skill installs its exact matching published
@@ -208,7 +236,9 @@ narova preview --detach   # direct the film in HyperFrames Studio
 narova build --reuse --release  # fail-before-render final gate → out/video.mp4
 ```
 
-You need: **ffmpeg**, **Node 18+**, **Python 3.10+**.
+You need: **Node 18+**, plus **ffmpeg** and **Python 3.10+** (the published
+package self-provisions the Python speech environment and, on pinned
+platforms, a digest-verified ffmpeg; a source checkout expects them on PATH).
 
 The first default `build` downloads a few things one time: it creates a Python venv
 at `~/.narova/venv`, gets a voice model, and gets the HyperFrames CLI.

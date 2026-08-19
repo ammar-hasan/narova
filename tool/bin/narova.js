@@ -49,6 +49,8 @@ const {
 const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
+const { substrateGuard, welcomeWizard, firstRunQuiet, firstRunDone, isInteractive } = require('../src/first-run');
+const { demo } = require('../src/demo');
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
@@ -342,6 +344,8 @@ Commands:
                                                         (keeps provider/model/prompt; override any of them)
                               A .gen.json spec sidecar is written next to every clip so the
                               generative intent (prompt/model/params) survives as editable source.
+  demo                 first video in one command: readiness + a built-in demo
+                       project through the full pipeline -> narova-demo/out/video.mp4
   doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
@@ -396,17 +400,44 @@ Options:
 `;
 
 async function main() {
+  substrateGuard();
   const { positionals, flags } = parseArgs(process.argv.slice(2));
   const cmd = positionals[0];
 
   if (flags.version) { console.log(require('../package.json').version); return; }
-  if (!cmd || flags.help || flags.h || cmd === 'help' || cmd === '-h') { console.log(HELP); return; }
+  if (!cmd || cmd === 'help' || cmd === '-h') {
+    if (!flags.help && !flags.h && !firstRunDone()
+        && (isInteractive() || process.env.NAROVA_FIRST_RUN === '1')) {
+      // First contact with the product (NAR-021-001/002/006): the welcome
+      // wizard interactively, or the quiet checklist + commands when a
+      // non-interactive caller opts in (NAROVA_FIRST_RUN=1).
+      if (isInteractive()) { await welcomeWizard({ cwd: process.cwd() }); return; }
+      firstRunQuiet({});
+      console.log('');
+    }
+    console.log(HELP);
+    return;
+  }
+  if ((flags.help || flags.h) && cmd !== 'demo') { console.log(HELP); return; }
 
   switch (cmd) {
     case 'init': {
       const dir = positionals[1];
       if (!dir) { console.error('usage: narova init <dir>'); process.exit(1); }
       initProject(dir);
+      return;
+    }
+
+    case 'demo': {
+      // The activation event (NAR-021-004): one command to a finished MP4
+      // through the ordinary pipeline. No keys, no config, no questions.
+      if (flags.help || flags.h) { console.log('usage: narova demo   # one command to a finished MP4: narova-demo/out/video.mp4'); return; }
+      try {
+        await demo({ cwd: process.cwd(), renderer: flags.renderer });
+      } catch (err) {
+        if (err.code === 'NAROVA_DEMO_BLOCKED') { process.exitCode = 1; return; }
+        throw err;
+      }
       return;
     }
 

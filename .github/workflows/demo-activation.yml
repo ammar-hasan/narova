@@ -1,0 +1,57 @@
+name: Demo activation (clean machine)
+
+# NAR-SPEC-021 clean-machine evidence: a Linux container with NO ffmpeg,
+# NO Narova installation, NO venv, and NO voice model produces the demo MP4
+# end to end through `narova demo`, exercising the real pinned acquisitions
+# (digest-verified static ffmpeg, pinned piper voice, fresh venv). The
+# browserless renderer is selected because the container has no browser
+# toolchain; python3 itself is environment setup (probed find-first by the
+# product, never auto-installed).
+on:
+  pull_request:
+  push:
+    branches:
+      - main
+
+permissions:
+  contents: read
+
+jobs:
+  demo:
+    name: npx-to-MP4 on a clean Linux container
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    container:
+      image: node:22-bookworm
+    env:
+      CI: '1'
+    steps:
+      - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
+
+      - name: Environment setup (interpreter + extractor only)
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends python3-venv xz-utils ca-certificates
+          python3 --version
+          ! command -v ffmpeg && echo 'clean: no ffmpeg on the machine (narova must provision it)'
+
+      - name: Install tool dev dependencies (renderer runtime)
+        run: npm ci --prefix tool
+
+      - name: Cold demo run — one command to a finished MP4
+        run: node tool/bin/narova.js demo --renderer no-browser
+
+      - name: Verify activation artifacts
+        run: |
+          test -s narova-demo/out/video.mp4
+          test -s narova-demo/out/captions.srt
+          test -s narova-demo/out/captions.vtt
+          test -s narova-demo/reel.config.mjs
+          echo '--- ffprobe on the provisioned toolchain ---'
+          "$HOME/.narova/tools/media"/linux64-gpl-*/bin/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 narova-demo/out/video.mp4
+
+      - name: Warm demo run — reuse, zero acquisition
+        run: |
+          node tool/bin/narova.js demo --renderer no-browser | tee warm.log
+          grep -q 'network acquired: 0 B' warm.log
+          grep -q 'time to first video' warm.log
