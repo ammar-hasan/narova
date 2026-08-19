@@ -4,6 +4,18 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.31.14] - 2026-08-19
+
+### Changed
+
+- **Living center visuals for the demo.** The built-in demo project's
+  scenes now animate a centered play-mark medallion (scene 1) and
+  staggered popping dots (scene 2) over a subtle gradient, using only
+  cross-renderer motion primitives (`enter`/`drift`, explicit heights,
+  `textAlign`) so the browser and browserless profiles render identical
+  geometry. Public-surface refresh under CHANGE-2026-029; no normative
+  or pipeline change.
+
 ## [0.31.13] - 2026-08-19
 
 ### Added
