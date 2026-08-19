@@ -6,6 +6,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **One-command activation: `narova demo`.** A readiness checklist with live
+  progress (upfront plan, byte-level transfer lines, bounded waits, 20-second
+  stall timeout, non-interactive liveness) reconciles the machine first:
+  find-what-exists, then digest-verified provisioning into `~/.narova` — a
+  pinned piper voice on every platform and a pinned static ffmpeg on Linux
+  (macOS and Windows fail closed to explicit install guidance until
+  checksummed sources are recorded). The demo then runs the ordinary build
+  pipeline — real synthesis, measured timing, render, encode — and finishes
+  with a playable MP4, SRT/VTT captions, and the readable demo project left
+  behind, reporting measured time-to-first-video and network bytes. Warm
+  reruns reuse everything. A bare interactive `narova` runs the welcome flow:
+  checklist, one creation-intent question recorded as draft-brief material,
+  and consent-gated agent-skill installation. `doctor` prints the same
+  readiness matrix, and `narova-uninstall --purge-tools` removes provisioned
+  tooling on request. New clean-machine CI job proves the Linux path
+  end to end on every change.
+
 ## [0.31.12] - 2026-08-19
 
 ### Added
