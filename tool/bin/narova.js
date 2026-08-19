@@ -48,7 +48,7 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
@@ -252,8 +252,13 @@ Commands:
   compile               compile reel.config -> out/manifest.json
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
-  check                validate config fast — no TTS, no browser, no writes
+  check                validate config fast — no TTS, no browser
                             --strict: verify every claim in claims.md ledger
+                            --creative-identity: also emit out/creative-identity.json
+                              (advisory identity fingerprint + rationale verification;
+                              never fails the build). Projects with creative.md
+                              always maintain the local fingerprint-only sibling
+                              ledger and advisory output at every check level
                             --release: strict + fail on remote deps, missing
                               claims, unsupported HTML, black frames, stale
                               walkthrough captures, or an unapproved non-trivial
@@ -648,6 +653,7 @@ async function main() {
         release: flags.release,
         outDir: outDirOf(flags, projectDir),
         critiqueProfile: flags.critique || null,
+        emitCreativeArtifact: !!flags['creative-identity'],
       });
       // Run critique when requested via --critique flag or as a standalone command.
       if (flags.critique) {
