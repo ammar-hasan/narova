@@ -252,11 +252,13 @@ Commands:
   compile               compile reel.config -> out/manifest.json
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
-  check                validate config fast — no TTS, no browser, no writes
+  check                validate config fast — no TTS, no browser
                             --strict: verify every claim in claims.md ledger
                             --creative-identity: also emit out/creative-identity.json
                               (advisory identity fingerprint + rationale verification;
-                              never fails the build)
+                              never fails the build). Projects with creative.md
+                              always maintain the local fingerprint-only sibling
+                              ledger and advisory output at every check level
                             --release: strict + fail on remote deps, missing
                               claims, unsupported HTML, black frames, stale
                               walkthrough captures, or an unapproved non-trivial

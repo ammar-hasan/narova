@@ -145,6 +145,106 @@ test('advisories are deduplicated per unchanged project state (NAR-007-032)', (t
   assert.deepEqual(ci.run(cfg, { projectDir: dir }).lines, []);
 });
 
+test('dedup holds across multiple state changes (H1 regression)', (t) => {
+  isolateHome(t);
+  const dir = tmp();
+  writeCreative(dir, 'palette: light bright sunny\nprovenance: brief\n');
+  const cfg = projectConfig(dir, { bg: '#0b1220', accent: '#eda15f' });
+  assert.equal(ci.run(cfg, { projectDir: dir }).lines.length, 1); // state1
+  assert.equal(ci.run(cfg, { projectDir: dir }).lines.length, 0); // unchanged
+  cfg.theme.accent = '#ffcc00';
+  assert.equal(ci.run(cfg, { projectDir: dir }).lines.length, 1); // state2
+  assert.equal(ci.run(cfg, { projectDir: dir }).lines.length, 0); // unchanged
+  cfg.theme.accent = '#00aa00';
+  assert.equal(ci.run(cfg, { projectDir: dir }).lines.length, 1); // state3
+  assert.equal(ci.run(cfg, { projectDir: dir }).lines.length, 0); // unchanged
+});
+
+test('a newly appearing sibling re-emits only sibling lines (M1 regression)', (t) => {
+  isolateHome(t);
+  const dirB = tmp();
+  const dirA = tmp();
+  writeCreative(dirB, 'palette: dark navy amber\nprovenance: brief\n');
+  writeCreative(dirA, 'palette: dark navy amber\nprovenance: brief\n');
+  const cfgB = () => projectConfig(dirB, { bg: '#0b1220', accent: '#eda15f' });
+  // B alone: no self advisories (matching claims), no siblings -> silent
+  assert.deepEqual(ci.run(cfgB(), { projectDir: dirB }).lines, []);
+  assert.deepEqual(ci.run(cfgB(), { projectDir: dirB }).lines, []);
+  // A appears as a near-sibling of B
+  ci.run(projectConfig(dirA, { bg: '#0b1221', accent: '#eda15e' }), { projectDir: dirA });
+  const r = ci.run(cfgB(), { projectDir: dirB });
+  assert.ok(r.lines.some(l => /identity near sibling/.test(l)), r.lines.join('\n'));
+  // unchanged again -> silent
+  assert.deepEqual(ci.run(cfgB(), { projectDir: dirB }).lines, []);
+});
+
+test('alpha-hex palette tokens are parsed (M2 regression)', () => {
+  const dir = tmp();
+  const fp = ci.fingerprint(projectConfig(dir, { bg: '#0b1220ff', accent: '#eda15f80' }));
+  assert.ok(fp.palette.stats.meanLuma != null);
+  assert.ok(fp.palette.stats.meanSat != null);
+});
+
+test('unparseable authored palette tokens produce an advisory (M2)', (t) => {
+  isolateHome(t);
+  const dir = tmp();
+  writeCreative(dir, 'palette: dark navy\nprovenance: brief\n');
+  const cfg = projectConfig(dir, { bg: 'rebeccapurple', accent: '#eda15f' });
+  const r = ci.run(cfg, { projectDir: dir });
+  assert.ok(r.self.some(a => /not a parseable hex color/.test(a)), r.self.join('\n'));
+});
+
+test('beat-spine sibling advisory requires equal scene counts (L2 regression)', (t) => {
+  isolateHome(t);
+  const dirA = tmp();
+  const dirB = tmp();
+  writeCreative(dirA, 'palette: dark navy amber\nprovenance: brief\n');
+  writeCreative(dirB, 'palette: dark navy amber\nprovenance: brief\n');
+  // A: 2 scenes [0.5, 0.5]; B: 3 scenes [0.5, 0.5, 0]-ish — different counts
+  const cfgA = { ...projectConfig(dirA, { bg: '#0b1220', accent: '#eda15f' }),
+    scenes: [
+      { id: 'one', dur: 10, vo: [{ who: 'a', text: 'one' }], body: '<p>x</p>' },
+      { id: 'two', dur: 10, vo: [], body: '<p>y</p>' },
+    ] };
+  ci.run(cfgA, { projectDir: dirA });
+  const cfgB = { ...projectConfig(dirB, { bg: '#0b1221', accent: '#eda15e' }),
+    scenes: [
+      { id: 'one', dur: 10, vo: [{ who: 'a', text: 'one' }], body: '<p>x</p>' },
+      { id: 'two', dur: 10, vo: [], body: '<p>y</p>' },
+      { id: 'three', dur: 10, vo: [], body: '<p>z</p>' },
+    ] };
+  const r = ci.siblingCheck(cfgB, dirB, ci.fingerprint(cfgB));
+  assert.ok(!r.advisories.some(a => /structural beat spine identical/.test(a)), r.advisories.join('\n'));
+});
+
+test('malformed ledger entries are ignored, surface still works (L5 regression)', (t) => {
+  isolateHome(t);
+  const dir = tmp();
+  writeCreative(dir, 'palette: dark navy amber\nprovenance: brief\n');
+  const ledgerDir = process.env.NAROVA_CREATIVE_IDENTITY_DIR;
+  fs.mkdirSync(ledgerDir, { recursive: true });
+  fs.writeFileSync(path.join(ledgerDir, 'ledger.json'), JSON.stringify([
+    { key: 'x', fp: 'not-an-object' },
+    { title: 'T', at: 'now' }, // no fp
+  ]));
+  const cfg = projectConfig(dir, { bg: '#0b1220', accent: '#eda15f' });
+  const r = ci.run(cfg, { projectDir: dir });
+  assert.ok(Array.isArray(r.lines));
+});
+
+test('ledger stores hashed titles, never raw narration or claims (M3/privacy)', (t) => {
+  isolateHome(t);
+  const dir = tmp();
+  writeCreative(dir, 'palette: dark navy amber\nprovenance: brief\n');
+  const cfg = { ...projectConfig(dir, { bg: '#0b1220', accent: '#eda15f' }), title: 'Private Pitch Project' };
+  ci.run(cfg, { projectDir: dir });
+  const ledger = JSON.parse(fs.readFileSync(
+    path.join(process.env.NAROVA_CREATIVE_IDENTITY_DIR, 'ledger.json'), 'utf8'));
+  assert.ok(!JSON.stringify(ledger).includes('Private Pitch Project'));
+  assert.ok(!JSON.stringify(ledger).includes('one')); // no narration text
+  assert.ok(ledger.every(e => !e.title || e.title.length <= 12));
+});
+
 test('artifact is emitted with fingerprint, claims, and comparison basis (NAR-007-034)', (t) => {
   isolateHome(t);
   const dir = tmp();

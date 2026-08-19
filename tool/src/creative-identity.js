@@ -39,13 +39,18 @@ function ledgerPath() {
 
 function hexToRgb(value) {
   const v = String(value || '').trim();
-  const m = v.match(/^#?([0-9a-f]{6})$/i) || v.match(/^#?([0-9a-f]{3})$/i);
+  const m = v.match(/^#?([0-9a-f]{8})$/i) || v.match(/^#?([0-9a-f]{6})$/i)
+    || v.match(/^#?([0-9a-f]{4})$/i) || v.match(/^#?([0-9a-f]{3})$/i);
   if (!m) return null;
-  const h = m[1].length === 3 ? m[1].split('').map(c => c + c).join('') : m[1];
+  const h = m[1].length === 3 || m[1].length === 4
+    ? m[1].split('').map(c => c + c).join('')
+    : m[1];
   return {
     r: parseInt(h.slice(0, 2), 16),
     g: parseInt(h.slice(2, 4), 16),
     b: parseInt(h.slice(4, 6), 16),
+    // alpha (8/4-digit forms) is carried but does not affect hue/luma/sat
+    a: h.length === 8 ? parseInt(h.slice(6, 8), 16) / 255 : 1,
   };
 }
 
@@ -126,7 +131,6 @@ function motionVocabulary(config) {
 function fingerprint(config) {
   const theme = config.theme || {};
   const mode = config.mode || 'dark';
-  const colorValues = Object.values(theme).filter(v => typeof v === 'string' && hexToRgb(v));
   const bg = theme.bg || (mode === 'light' ? '#f2f2f0' : '#080d16');
   const accent = theme.accent || (mode === 'light' ? '#1a6f66' : '#2ee6d6');
   const scenes = config.scenes || [];
@@ -241,6 +245,17 @@ function selfCheck(config, fp, claims) {
   if (!hasAuthoredPalette) {
     warnings.push('UNDER-AUTHORED: no explicit authored palette tokens detected (bg/accent default or unknown)');
   }
+  // An authored palette token that cannot be parsed disables the tone
+  // checks silently; surface it so a legit syntax (e.g. named colors) does
+  // not pass unnoticed (NAR-007-032 measured-value naming).
+  if (hasAuthoredPalette) {
+    if (!colorStats(theme.bg)) {
+      warnings.push(`UNDER-AUTHORED: authored bg token "${theme.bg}" is not a parseable hex color — palette tone checks are disabled`);
+    }
+    if (!colorStats(theme.accent)) {
+      warnings.push(`UNDER-AUTHORED: authored accent token "${theme.accent}" is not a parseable hex color — palette tone checks are disabled`);
+    }
+  }
   if (!Object.keys(claims).length) {
     warnings.push('UNDER-AUTHORED: creative.md contains no parseable identity claims');
     return warnings;
@@ -291,7 +306,9 @@ function readLedger() {
   try {
     const raw = fs.readFileSync(ledgerPath(), 'utf8');
     const parsed = JSON.parse(raw);
-    return Array.isArray(parsed) ? parsed.filter(e => e && e.fp) : [];
+    if (!Array.isArray(parsed)) return [];
+    return parsed.filter(e => e && typeof e === 'object' && e.key
+      && e.fp && typeof e.fp === 'object' && e.fp.palette && Array.isArray(e.fp.palette.hueHist));
   } catch { return []; }
 }
 
@@ -301,9 +318,13 @@ function writeLedger(entries) {
   fs.mkdirSync(root, { recursive: true });
   const slim = entries.slice(-LEDGER_MAX_ENTRIES).map(e => ({
     key: e.key,
+    // titles can carry private/client/pitch names; the title is hashed once
+    // at push time (not re-hashed here) so the stored short id is stable
+    // across rewrites and the sibling advisory can name "which sibling".
     title: e.title,
     at: e.at,
-    stateHash: e.stateHash,
+    selfStateHash: e.selfStateHash,
+    siblingStateHash: e.siblingStateHash,
     fp: {
       palette: { bg: e.fp.palette.bg, accent: e.fp.palette.accent, mode: e.fp.palette.mode, hueHist: e.fp.palette.hueHist, stats: e.fp.palette.stats },
       structure: { sceneCount: e.fp.structure.sceneCount, explicitDur: e.fp.structure.explicitDur, durationShare: e.fp.structure.durationShare, turnShare: e.fp.structure.turnShare },
@@ -314,27 +335,40 @@ function writeLedger(entries) {
   fs.writeFileSync(ledgerPath(), JSON.stringify(slim, null, 2));
 }
 
+/* Short, stable sibling identifier: a hash of the raw title, computed once. */
+function titleTag(title) {
+  return title ? crypto.createHash('sha256').update(String(title)).digest('hex').slice(0, 12) : '';
+}
+
 function siblingCheck(config, dir, fp) {
   const advisories = [];
   const ledger = readLedger();
-  if (!ledger.length) return { advisories, ledger: null };
+  if (!ledger.length) return { advisories, ledger: null, signature: '' };
   const key = projectKey(config, dir);
+  // Stable signature over the sibling set (keys + rounded distances), so a
+  // new/changed sibling re-fires the advisory while an unchanged sibling set
+  // stays silent. The volatile `at` timestamp must NOT enter this signature.
+  const signatureParts = [];
   for (const entry of ledger.slice(-10)) {
     if (entry.key === key) continue; // self
     const paletteDist = jsd(fp.palette.hueHist, entry.fp.palette.hueHist);
     const structureDist = jsd(fp.structure.durationShare, entry.fp.structure.durationShare);
+    signatureParts.push(`${entry.key}:${paletteDist.toFixed(3)}:${structureDist.toFixed(3)}`);
     if (paletteDist <= SIBLING_PALETTE_THRESHOLD) {
       advisories.push(
-        `identity near sibling "${entry.title}" (${entry.at}): palette JSD ${paletteDist.toFixed(3)} — ` +
+        `identity near sibling #${entry.title} (${entry.at}): palette JSD ${paletteDist.toFixed(3)} — ` +
         `similarity is only a defect relative to this brief; a brand series or multi-part piece may legitimately match`);
     }
-    if (structureDist === 0 && fp.structure.sceneCount > 1 && entry.fp.structure.sceneCount > 1) {
+    if (structureDist === 0 && fp.structure.sceneCount > 1 && entry.fp.structure.sceneCount > 1
+        && fp.structure.sceneCount === entry.fp.structure.sceneCount) {
       advisories.push(
-        `structural beat spine identical to sibling "${entry.title}" (${entry.at}): same scene-count/duration spine — ` +
+        `structural beat spine identical to sibling #${entry.title} (${entry.at}): same scene-count/duration spine — ` +
         `consider a different beat structure unless the brief demands it`);
     }
   }
-  return { advisories, ledger: ledger.length ? ledger : null };
+  const signature = crypto.createHash('sha256')
+    .update(signatureParts.sort().join('\n')).digest('hex');
+  return { advisories, ledger: ledger.length ? ledger : null, signature };
 }
 
 function intersection(x, y) { return x.filter(v => y.includes(v)); }
@@ -382,32 +416,47 @@ function run(config, opts = {}) {
     self = selfCheck(config, fp, claims);
     citations = citationAdvisories(config, dir);
     sibling = siblingCheck(config, dir, fp);
-    lines.push(
+    const selfLines = [
       ...self.map(w => `creative-identity: ${w}`),
       ...citations.map(w => `creative-identity: ${w}`),
-      ...sibling.advisories.map(w => `creative-identity: ${w}`),
-    );
+    ];
+    const siblingLines = sibling.advisories.map(w => `creative-identity: ${w}`);
     // record to the ledger (fingerprints only) after checks are computed
     const entries = readLedger();
     const key = projectKey(config, dir);
-    const prev = entries.find(e => e.key === key);
-    const stateHash = crypto.createHash('sha256')
-      .update(JSON.stringify({ fp, claims })).digest('hex');
-    // dedupe: don't emit the same advisories twice for an unchanged project
-    const dedupe = prev && prev.stateHash === stateHash;
-    const emitted = dedupe ? [] : lines.slice();
-    lines.length = 0;
-    lines.push(...emitted);
-    if (!dedupe) {
-      entries.push({
-        key,
-        title: config.title,
-        at: new Date().toISOString(),
-        stateHash,
-        fp,
-      });
-      writeLedger(entries);
+    // The ledger upserts by key: find the latest matching entry (a linear
+    // scan, NOT `find()`, which would return the oldest and break dedup
+    // after the second state change — advisories would re-fire forever).
+    let prev = null;
+    let prevIndex = -1;
+    for (let i = 0; i < entries.length; i++) {
+      if (entries[i].key === key) { prev = entries[i]; prevIndex = i; }
     }
+    // Dedup is per-surface: self/citation advisories depend on the project's
+    // own identity claims; sibling advisories depend on the sibling set, so a
+    // newly appearing sibling re-emits the sibling lines even when the
+    // project's own config is unchanged (NAR-007-033 "names sibling"). The
+    // sibling key is a stable signature over sibling keys + distances — never
+    // the volatile `at` timestamp.
+    const selfStateHash = crypto.createHash('sha256')
+      .update(JSON.stringify({ fp, claims })).digest('hex');
+    const siblingStateHash = sibling.signature || crypto.createHash('sha256')
+      .update('none').digest('hex');
+    const emitSelf = !prev || prev.selfStateHash !== selfStateHash;
+    const emitSiblings = !prev || prev.siblingStateHash !== siblingStateHash;
+    if (emitSelf) lines.push(...selfLines);
+    if (emitSiblings) lines.push(...siblingLines);
+    const entry = {
+      key,
+      title: titleTag(config.title),
+      at: new Date().toISOString(),
+      selfStateHash,
+      siblingStateHash,
+      fp,
+    };
+    if (prevIndex >= 0) entries[prevIndex] = entry;
+    else entries.push(entry);
+    writeLedger(entries);
   }
 
   if (opts.emitArtifact && (creativeFile || fp.structure.sceneCount >= 1)) {
