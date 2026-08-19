@@ -22,6 +22,7 @@ const { projectIdentity } = require('./releases');
 const { lockPath: assetLockPath, verifyAssets } = require('./asset-registry');
 const { isBuiltinBackend, MARKUP_FAMILIES, deliveryCapabilitiesFor } = require('./tts-backends');
 const { getProvider } = require('./providers');
+const creativeIdentity = require('./creative-identity');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -792,6 +793,25 @@ function check(config, opts = {}) {
 
   // Craft advice (hook, platform bands) has moved to narova critique.
   // Run `narova critique` or `narova check --critique` for optional craft checks.
+
+  // ---- Creative identity (NAR-002-027, NAR-007-031..034) ----
+  // Advisory-only convergence surfaces. Never gated; never affects validity.
+  // Runs at every check level. Deduplicated per project-state change via the
+  // fingerprint-only local ledger.
+  try {
+    const ci = creativeIdentity.run(config, {
+      projectDir: config.projectDir,
+      outDir: opts.outDir,
+      emitArtifact: !!opts.emitCreativeArtifact,
+    });
+    for (const line of ci.lines) warnings.push(line);
+    if (opts.emitCreativeArtifact && ci.artifactPath) {
+      console.log(`creative-identity: wrote ${ci.artifactPath}`);
+    }
+  } catch (error) {
+    // The identity surfaces are advisory; a harness defect must not break check.
+    warnings.push(`creative-identity: advisory skipped (${error.message})`);
+  }
 
   // ---- Strict / Release ----
 
