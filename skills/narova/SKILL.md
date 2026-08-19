@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.31.12"
+  version: "0.31.13"
 ---
 # narova — video from scene scripts
 
@@ -83,7 +83,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.31.12"
+narova_required="@narova/narova@0.31.13"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
