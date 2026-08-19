@@ -7,6 +7,8 @@ const os = require('os');
 
 const { resolveConfig } = require('../src/schema');
 const { compile, validate, isValid, mergeTimings, MANIFEST_SCHEMA_VER } = require('../src/manifest');
+const { writeStageInputs } = require('../src/pipeline');
+const { HYPERFRAMES_VERSION } = require('../src/hf');
 
 // ---- minimal config fixture -------------------------------------------------
 function makeRaw(overrides = {}) {
@@ -56,6 +58,45 @@ test('compile produces versioned document', () => {
   assert.equal(tl.version, MANIFEST_SCHEMA_VER);
   assert.equal(typeof tl.narova, 'string');
   assert.ok(tl.narova.length > 0);
+});
+
+test('compile records supplied toolchain versions and explicit absence', () => {
+  const config = resolve(makeRaw());
+  const recorded = compile(config, { rendererVersion: 'renderer-1.2.3', backendVersion: 'speech-4.5.6' });
+  assert.equal(recorded.renderer.providerVersion, 'renderer-1.2.3');
+  assert.equal(recorded.environment.backendVersion, 'speech-4.5.6');
+
+  const absent = compile(config);
+  assert.equal(absent.renderer.providerVersion, null);
+  assert.equal(absent.environment.backendVersion, null);
+  assert.deepEqual(validate(absent), []);
+  delete absent.renderer.providerVersion;
+  delete absent.environment.backendVersion;
+  assert.deepEqual(validate(absent), [], 'pre-version manifests remain valid');
+
+  const invalid = compile(config);
+  invalid.renderer.providerVersion = { not: 'a version' };
+  invalid.environment.backend = { not: 'a backend' };
+  invalid.environment.backendVersion = '   ';
+  assert.match(validate(invalid).join('\n'), /renderer\.providerVersion/);
+  assert.match(validate(invalid).join('\n'), /environment\.backend:/);
+  assert.match(validate(invalid).join('\n'), /environment\.backendVersion/);
+});
+
+test('stage compilation records bundled renderer and registered speech versions without provider execution', () => {
+  const config = resolve(makeRaw());
+  config.voices.a.backend = 'registered-test';
+  config.voices.a.providerVersion = '1.2.3';
+  const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-toolchain-versions-'));
+  try {
+    writeStageInputs(config, out);
+    const manifest = JSON.parse(fs.readFileSync(path.join(out, 'manifest.json'), 'utf8'));
+    assert.equal(manifest.renderer.providerVersion, HYPERFRAMES_VERSION);
+    assert.equal(manifest.environment.backend, 'registered-test');
+    assert.equal(manifest.environment.backendVersion, '1.2.3');
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
 });
 
 test('compile includes project metadata', () => {

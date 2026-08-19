@@ -19,8 +19,8 @@ function makeConfig(overrides = {}) {
   }, {}, os.tmpdir());
 }
 
-function writeManifest(config, dir, name) {
-  const m = compile(config, { toolVersion: '0.8.2' });
+function writeManifest(config, dir, name, compileOpts = {}) {
+  const m = compile(config, { toolVersion: '0.8.2', ...compileOpts });
   const p = path.join(dir, name || 'manifest.json');
   write(m, p);
   return p;
@@ -108,6 +108,18 @@ test('plan treats renderer switching as compose/render-only config work', () => 
   const result = plan(mp, makeConfig({ renderer: 'no-browser' }));
   assert.equal(result.level, STAGE.CONFIG);
   assert.ok(result.detail.configDiff.some(diff => diff.key === 'renderer'));
+  fs.rmSync(tmp, { recursive: true, force: true });
+});
+
+test('plan ignores additive renderer-version evidence', () => {
+  const tmp = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-plan-version-'));
+  const cfg1 = makeConfig();
+  const mp = writeManifest(cfg1, tmp, null, { rendererVersion: 'recorded-1.2.3' });
+  const cfg2 = makeConfig({ theme: { accent: '#ff0000' } });
+  const result = plan(mp, cfg2);
+  assert.equal(result.level, STAGE.CONFIG);
+  assert.ok(result.detail.configDiff.some(diff => diff.key === 'theme'));
+  assert.ok(!result.detail.configDiff.some(diff => diff.key === 'renderer'));
   fs.rmSync(tmp, { recursive: true, force: true });
 });
 

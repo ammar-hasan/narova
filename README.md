@@ -10,7 +10,7 @@ source material, and real product walkthroughs into narrated or silent 2D/3D
 video with local TTS, word-synced captions, and deterministic rendering.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.31.11-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.31.12-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -141,7 +141,17 @@ narova assets download "https://cdn.example/clip.mp4" --output assets/clip.mp4 \
 narova assets import assets/logo.svg --origin original
 narova assets verify
 narova assets credits
+narova assets credits --format youtube   # or web|json
+narova provenance                        # graded project trust report
+narova provenance --json
 ```
+
+`narova provenance` composes the evidence Narova already has into four
+read-only sections: claim grounding, tracked media and rights buckets, AI
+generation, and reproducibility. Every fact is labeled verified, declared, or
+unknown; missing records stay visible instead of becoming green checks. The
+report is advisory and offline. It does not prove legal permission or exact
+used-asset closure, and it never changes the project.
 
 Core owns every deterministic adapter: Wikimedia, Openverse, NASA, Internet
 Archive, Iconify, Poly Haven, The Met, Cleveland Museum, Library of Congress,
@@ -188,6 +198,7 @@ narova init generated/myreel && cd generated/myreel
 # complete the medium-neutral creative brief; keep each direction to a small proof
 narova critique creative
 narova synth        # makes narration + word timings
+narova provenance   # inspect claims/media/AI/reproducibility evidence
 narova walkthrough capture   # product demos only: explicit, timed browser take
 narova compose && narova shots --motion --proof  # reject an invisible pilot
 narova branch save proof-a --rationale "why this direction may serve the brief"
@@ -225,6 +236,10 @@ export default {
   voices: {
     a: { backend: "piper", speaker: "en_US-ryan-high",         color: "#2ee6d6", label: "host · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
+  },
+  provenance: {                              // optional authored declarations
+    script: { authorship: "mixed", note: "agent draft, human review" },
+    disclosure: "Contains AI-generated media",
   },
   theme: { accent: "#2ee6d6", bg: "#080d16" },   // optional
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },

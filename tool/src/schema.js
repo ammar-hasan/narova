@@ -19,7 +19,7 @@ const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
  * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, choreography,
  * choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir, platform,
- * bed, sfx, captions, align, variants, variant } and throws on anything the
+ * bed, sfx, captions, align, variants, variant, provenance } and throws on anything the
  * pipeline can't render. */
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
@@ -867,6 +867,42 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
+  // provenance: optional authored declarations of record (script authorship,
+  // disclosure note). Advisory only — surfaced by `narova provenance` labeled
+  // as declared; never gates, never alters execution. Authorship is an open
+  // non-empty string: agent/human/mixed are recognized, anything else is
+  // displayed as recorded.
+  let provenance = null;
+  if (raw.provenance != null) {
+    if (typeof raw.provenance !== 'object' || Array.isArray(raw.provenance)) {
+      errs.push('config.provenance: expected an object like { script: { authorship, note? }, disclosure? }');
+    } else {
+      provenance = {};
+      const p = raw.provenance;
+      if (p.script != null) {
+        if (typeof p.script !== 'object' || Array.isArray(p.script)) {
+          errs.push('config.provenance.script: expected an object like { authorship, note? }');
+        } else {
+          if (typeof p.script.authorship !== 'string' || !p.script.authorship.trim()) {
+            errs.push('config.provenance.script.authorship: must be a non-empty string (agent|human|mixed recognized; other values are displayed as recorded)');
+          } else {
+            provenance.script = { authorship: p.script.authorship };
+            if (p.script.note != null) {
+              if (typeof p.script.note !== 'string' || !p.script.note.trim()) {
+                errs.push('config.provenance.script.note: must be a non-empty string');
+              } else provenance.script.note = p.script.note;
+            }
+          }
+        }
+      }
+      if (p.disclosure != null) {
+        if (typeof p.disclosure !== 'string' || !p.disclosure.trim()) {
+          errs.push('config.provenance.disclosure: must be a non-empty string');
+        } else provenance.disclosure = p.disclosure;
+      }
+    }
+  }
+
   // Series: multi-part mode for long scripts split into numbered episodes.
   // `part` is 1-indexed; `total` is optional (unknown series length).
   // compose adds a "Part X/Y" badge overlay; no enforcement of cliffhangers.
@@ -1006,7 +1042,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

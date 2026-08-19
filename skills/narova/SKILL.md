@@ -14,7 +14,7 @@ description: >
 license: MIT
 metadata:
   author: ammar-hasan
-  version: "0.31.11"
+  version: "0.31.12"
 ---
 # narova — video from scene scripts
 
@@ -76,7 +76,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.31.11"
+narova_required="@narova/narova@0.31.12"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -182,7 +182,10 @@ user's approval before any consequential external mutation.
    LLM-led discovery with the available web search, HTTP, or browser capability.
    Finish with `assets download` or `assets import`; see
    `references/stock-assets.md`.
-3. Write `claims.md` — every factual claim must trace to a source.
+3. Write `claims.md` — every factual claim must trace to a source. When the
+   author knows a disclosure fact that artifacts cannot prove, optionally add
+   `provenance: { script: { authorship, note? }, disclosure? }`; never infer or
+   auto-fill it. See `references/scene-script.md`.
 4. `check` — fast validation (no TTS). Run after every config edit.
    For optional craft advice: `narova critique [creative|social-short|explainer|presentation|cinematic|accessibility]`.
 5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
@@ -192,6 +195,10 @@ user's approval before any consequential external mutation.
 8. `build --release` — preflights strict checks before synthesis, rechecks
    measured timing before compose/render, writes `out/video.mp4`, then runs the
    temporal audit. Verify the encoded contact sheet against the approved brief.
+9. When delivery needs attribution or an evidence summary, run `provenance`
+   (or `provenance --json`) and `assets credits --format
+   text|youtube|web|json`. These are read-only advisory projections, not legal
+   clearance or release gates.
 
 ## Key gotchas
 
@@ -224,6 +231,10 @@ user's approval before any consequential external mutation.
   `claims.md`, but a one-sided narrative built from sourced claims passes
   clean. For contested topics, ledger the major perspectives and re-read the
   script for framing — balance is the author's job.
+- **A provenance checkmark has a narrow meaning.** `provenance` distinguishes
+  artifact-backed facts (verified), authored statements (declared), and absent
+  evidence (unknown). Rights buckets are display groupings, not legal
+  determinations, and the report does not establish exact used-asset closure.
 - **Craft advice is opt-in.** Hook checks, saveable end-frames, platform
   duration bands, and 3D quality hints belong to `narova critique`, not
   `narova check`. `check` reports only correctness and reproducibility

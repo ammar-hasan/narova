@@ -4,7 +4,10 @@ const assert = require('node:assert/strict');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, _internals } = require('../src/proof-receipt');
+const {
+  writeProofReceipt, verifyProofReceipt, clearProofReceipt,
+  writeProofBundle, verifyProofBundle, _internals,
+} = require('../src/proof-receipt');
 const { buildHashes } = require('../src/manifest');
 
 test('proof receipt binds config, manifest, timings, contact sheet, and audited frames', () => {
@@ -15,7 +18,11 @@ test('proof receipt binds config, manifest, timings, contact sheet, and audited 
   const evidence = path.join(out, 'contact-sheet.jpg');
   const frame = path.join(out, 'frame.jpg');
   try {
-    fs.writeFileSync(manifest, JSON.stringify({ hashes: buildHashes(config, config.projectDir) }));
+    fs.writeFileSync(manifest, JSON.stringify({
+      hashes: buildHashes(config, config.projectDir),
+      renderer: { provider: 'hyperframes', providerVersion: 'renderer-1' },
+      environment: { backend: 'piper', backendVersion: 'speech-1' },
+    }));
     fs.writeFileSync(timings, '{}');
     fs.writeFileSync(path.join(out, 'config.resolved.json'), JSON.stringify(config));
     fs.writeFileSync(evidence, 'sheet');
@@ -23,6 +30,17 @@ test('proof receipt binds config, manifest, timings, contact sheet, and audited 
     const receipt = writeProofReceipt(config, out, [evidence], [frame]);
     assert.match(receipt.projectIdentity, /^[a-f0-9]{64}$/);
     assert.equal(verifyProofReceipt(config, out).ok, true);
+    const versionOnly = JSON.parse(fs.readFileSync(manifest, 'utf8'));
+    versionOnly.renderer.providerVersion = 'renderer-2';
+    versionOnly.environment.backendVersion = 'speech-2';
+    fs.writeFileSync(manifest, JSON.stringify(versionOnly));
+    assert.equal(verifyProofReceipt(config, out).ok, true,
+      'compile-time version evidence does not invalidate a reviewed proof');
+    versionOnly.renderer.provider = 'no-browser';
+    fs.writeFileSync(manifest, JSON.stringify(versionOnly));
+    assert.match(verifyProofReceipt(config, out).reason, /manifest changed/);
+    versionOnly.renderer.provider = 'hyperframes';
+    fs.writeFileSync(manifest, JSON.stringify(versionOnly));
     assert.match(verifyProofReceipt({ ...config, projectDir: path.join(out, 'other-project') }, out).reason,
       /belongs to another project/);
     assert.match(verifyProofReceipt({ ...config, title: 'edited' }, out).reason, /config changed/);
@@ -64,13 +82,23 @@ test('proof receipt rejects changed and newly added source assets', () => {
   }
 });
 
-test('semantic proof and snapshot identities ignore only volatile manifest creation time', () => {
+test('semantic proof and snapshot identities ignore volatile time and toolchain-version evidence', () => {
   const first = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-stable-a-'));
   const second = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-stable-b-'));
   try {
     const base = { narova: '0.28.0', project: { title: 'Same proof' }, scenes: [{ id: 'one' }] };
-    fs.writeFileSync(path.join(first, 'manifest.json'), JSON.stringify({ ...base, project: { ...base.project, created: '2026-01-01T00:00:00Z' } }));
-    fs.writeFileSync(path.join(second, 'manifest.json'), JSON.stringify({ ...base, project: { ...base.project, created: '2026-08-08T00:00:00Z' } }));
+    fs.writeFileSync(path.join(first, 'manifest.json'), JSON.stringify({
+      ...base,
+      project: { ...base.project, created: '2026-01-01T00:00:00Z' },
+      renderer: { provider: 'hyperframes', providerVersion: 'renderer-1' },
+      environment: { backend: 'piper', backendVersion: 'speech-1' },
+    }));
+    fs.writeFileSync(path.join(second, 'manifest.json'), JSON.stringify({
+      ...base,
+      project: { ...base.project, created: '2026-08-08T00:00:00Z' },
+      renderer: { provider: 'hyperframes', providerVersion: 'renderer-2' },
+      environment: { backend: 'piper', backendVersion: 'speech-2' },
+    }));
     fs.writeFileSync(path.join(first, 'reel.config.json'), '{"title":"Same proof"}');
     fs.writeFileSync(path.join(second, 'reel.config.json'), '{"title":"Same proof"}');
     assert.equal(_internals.stableManifestHash(path.join(first, 'manifest.json')),
@@ -86,5 +114,40 @@ test('semantic proof and snapshot identities ignore only volatile manifest creat
   } finally {
     fs.rmSync(first, { recursive: true, force: true });
     fs.rmSync(second, { recursive: true, force: true });
+  }
+});
+
+test('portable proof bundles accept toolchain-version-only differences', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-proof-portable-'));
+  const out = path.join(project, 'out');
+  const metadata = path.join(project, 'metadata');
+  const snapshot = path.join(project, 'snapshot');
+  fs.mkdirSync(out); fs.mkdirSync(metadata); fs.mkdirSync(snapshot);
+  const config = { title: 'Portable proof', projectDir: project, scenes: [] };
+  const manifestFor = version => ({
+    hashes: buildHashes(config, project),
+    renderer: { provider: 'hyperframes', providerVersion: `renderer-${version}` },
+    environment: { backend: 'piper', backendVersion: `speech-${version}` },
+  });
+  try {
+    fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifestFor('1')));
+    fs.writeFileSync(path.join(out, 'timings.json'), '{}');
+    fs.writeFileSync(path.join(out, 'config.resolved.json'), JSON.stringify(config));
+    fs.writeFileSync(path.join(out, 'contact-sheet.jpg'), 'sheet');
+    fs.writeFileSync(path.join(out, 'frame.jpg'), 'frame');
+    writeProofReceipt(config, out, [path.join(out, 'contact-sheet.jpg')], [path.join(out, 'frame.jpg')]);
+
+    // Proof output and release snapshot may have been compiled with different
+    // installed toolchain versions; the reviewed semantic content is the same.
+    fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifestFor('2')));
+    fs.writeFileSync(path.join(snapshot, 'manifest.json'), JSON.stringify(manifestFor('3')));
+    fs.writeFileSync(path.join(snapshot, 'timings.json'), '{}');
+    const verified = verifyProofReceipt(config, out);
+    assert.equal(verified.ok, true);
+    const bundle = writeProofBundle(out, verified, metadata, snapshot);
+    const branch = { projectIdentity: verified.receipt.projectIdentity, ...bundle };
+    assert.equal(verifyProofBundle(metadata, snapshot, branch, verified.receipt.projectIdentity), true);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
   }
 });

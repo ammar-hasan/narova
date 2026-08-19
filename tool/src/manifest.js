@@ -42,7 +42,10 @@ function hashFile(filePath) {
 }
 
 function hashConfig(config) {
-  const { assetsDir: _a, projectDir = '.', ...serializable } = config;
+  // Authored provenance declarations are advisory report inputs. They do not
+  // affect synthesis, composition, rendering, creative-proof validity, or
+  // revision identity, so they must not enter the execution fingerprint.
+  const { assetsDir: _a, provenance: _provenance, projectDir = '.', ...serializable } = config;
   // Resolved action-policy paths are absolute so the capture adapter can use
   // them from any working directory. Keep the config fingerprint portable:
   // moving an otherwise-identical project must not make every capture stale.
@@ -158,6 +161,9 @@ function compile(config, opts = {}) {
     renderer: {
       provider: renderer,
       protocol: 'narova-renderer-provider/v1',
+      // Additive compile-time evidence only. Consumers must accept null/missing
+      // values and must not use this as a freshness or execution gate.
+      providerVersion: opts.rendererVersion || null,
     },
     format: {
       width:  (size && size.w) || 1280,
@@ -239,6 +245,7 @@ function compile(config, opts = {}) {
     environment: {
       narova:    opts.toolVersion || '0.8.0',
       backend:   opts.backend || config.voices && Object.values(config.voices)[0]?.backend || 'piper',
+      backendVersion: opts.backendVersion || null,
       renderer,
       compiled:  new Date().toISOString(),
     },
@@ -569,6 +576,24 @@ function validate(tl) {
       if (tl.renderer.protocol !== 'narova-renderer-provider/v1') {
         errs.push('manifest.renderer.protocol: expected narova-renderer-provider/v1');
       }
+      if (tl.renderer.providerVersion != null
+          && (typeof tl.renderer.providerVersion !== 'string' || !tl.renderer.providerVersion.trim())) {
+        errs.push('manifest.renderer.providerVersion: expected a non-empty string or null');
+      }
+    }
+  }
+  if (tl.environment != null) {
+    if (!tl.environment || typeof tl.environment !== 'object' || Array.isArray(tl.environment)) {
+      errs.push('manifest.environment: expected an object');
+    } else {
+      if (tl.environment.backend != null
+          && (typeof tl.environment.backend !== 'string' || !tl.environment.backend.trim())) {
+        errs.push('manifest.environment.backend: expected a non-empty string');
+      }
+      if (tl.environment.backendVersion != null
+          && (typeof tl.environment.backendVersion !== 'string' || !tl.environment.backendVersion.trim())) {
+        errs.push('manifest.environment.backendVersion: expected a non-empty string or null');
+      }
     }
   }
   if (!tl.format || typeof tl.format !== 'object') errs.push('manifest.format: required (object)');
@@ -682,6 +707,20 @@ function write(m, outPath) {
   fs.writeFileSync(outPath, JSON.stringify(m, null, 2));
 }
 
+/* Toolchain versions are recorded evidence, not execution or identity inputs
+ * (NAR-014-048). Return a detached projection for consumers that calculate
+ * freshness, proof, revision, or plan identities. */
+function withoutToolchainVersionEvidence(manifest) {
+  const projected = JSON.parse(JSON.stringify(manifest));
+  if (projected.renderer && typeof projected.renderer === 'object') {
+    delete projected.renderer.providerVersion;
+  }
+  if (projected.environment && typeof projected.environment === 'object') {
+    delete projected.environment.backendVersion;
+  }
+  return projected;
+}
+
 module.exports = {
   MANIFEST_SCHEMA_VER,
   compile,
@@ -692,6 +731,7 @@ module.exports = {
   hashFile,
   hashConfig,
   buildHashes,
+  withoutToolchainVersionEvidence,
   read,
   write,
 };

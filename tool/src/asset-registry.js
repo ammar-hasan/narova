@@ -518,6 +518,74 @@ function creditLines(projectDir) {
   return lines.sort();
 }
 
+/* Credit entries behind creditLines: the same selection (records carrying
+ * attribution or creator text), deduplication (on the composed line), and
+ * sorting — enriched with the recorded fields the other output formats need.
+ * Records without creator/attribution produce no entry in any format. */
+function creditEntries(projectDir) {
+  const lock = readAssetLock(projectDir);
+  const entries = [];
+  const seen = new Set();
+  for (const asset of lock.assets) {
+    const rights = asset.rights || {};
+    const credit = rights.attribution || rights.creator;
+    if (!credit) continue;
+    const license = rights.license ? ` (${rights.license})` : '';
+    const source = asset.origin && asset.origin.sourcePage ? ` — ${asset.origin.sourcePage}` : '';
+    const line = `${credit}${license}${source}`;
+    if (seen.has(line)) continue;
+    seen.add(line);
+    entries.push({
+      line,
+      creator: rights.creator || null,
+      attribution: rights.attribution || null,
+      license: rights.license || null,
+      licenseUrl: rights.licenseUrl || null,
+      sourceUrl: (asset.origin && asset.origin.sourcePage) || null,
+    });
+  }
+  return entries.sort((a, b) => (a.line < b.line ? -1 : a.line > b.line ? 1 : 0));
+}
+
+const CREDIT_FORMATS = ['text', 'youtube', 'web', 'json'];
+
+function escapeHtml(value) {
+  return String(value).replace(/[&<>"']/g, ch => ({
+    '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+  }[ch]));
+}
+
+/* Render credit entries in a selected output format (NAR-009-029). Format
+ * changes presentation only: every format derives from the same deduplicated,
+ * sorted entries, and no format invents missing fields — text/youtube/web
+ * omit absent values, json carries them as null. */
+function formatCredits(entries, format = 'text') {
+  if (!CREDIT_FORMATS.includes(format)) {
+    throw new Error(`unknown credits format ${JSON.stringify(format)} (${CREDIT_FORMATS.join('|')})`);
+  }
+  if (format === 'json') {
+    return JSON.stringify(entries.map(({ creator, attribution, license, licenseUrl, sourceUrl }) => ({
+      creator, attribution, license, licenseUrl, sourceUrl,
+    })), null, 2);
+  }
+  if (format === 'youtube') {
+    return entries.map(entry => entry.line).join('\n');
+  }
+  if (format === 'web') {
+    const items = entries.map(entry => {
+      const credit = escapeHtml(entry.attribution || entry.creator);
+      const license = entry.license
+        ? ` (${entry.licenseUrl ? `<a href="${escapeHtml(entry.licenseUrl)}">${escapeHtml(entry.license)}</a>` : escapeHtml(entry.license)})`
+        : '';
+      const source = entry.sourceUrl ? ` — <a href="${escapeHtml(entry.sourceUrl)}">${escapeHtml(entry.sourceUrl)}</a>` : '';
+      return `  <li>${credit}${license}${source}</li>`;
+    });
+    return `<ul class="narova-credits">\n${items.join('\n')}\n</ul>`;
+  }
+  return entries.map(entry => entry.line).join('\n');
+}
+
+
 function validateDownloadType(contentType, { destination } = {}) {
   const type = String(contentType || '').split(';')[0].trim().toLowerCase();
   if (!type) return;
@@ -605,8 +673,12 @@ async function downloadAsset(url, destination, opts = {}) {
 module.exports = {
   ASSET_LOCK_FILE,
   ASSET_LOCK_VERSION,
+  CREDIT_FORMATS,
+  creditEntries,
   creditLines,
   downloadAsset,
+  escapeHtml,
+  formatCredits,
   inferKind,
   inspectAsset,
   lockPath,

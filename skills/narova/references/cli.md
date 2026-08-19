@@ -24,8 +24,9 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | `narova assets providers [--pack core\|essential]` | list every core adapter and credential readiness; `essential` selects the original six no-key providers. | instant |
 | `narova assets search <query> --provider <name> --kind <kind>` | search a core provider and print normalized candidates; `--limit 1..20` and `--json` are supported. | provider API request |
 | `narova assets acquire <id> --provider <name> --kind <kind> --output assets/<file>` | resolve a selected catalogue item, then use the same bounded download, atomic publication, and provenance registration as `assets download`. | provider API + media download |
-| `narova assets list\|verify\|credits` | list tracked assets, detect missing/modified bytes, or print deduplicated attribution text from `assets.lock.json`. Release checks also verify tracked bytes. | instant |
+| `narova assets list\|verify\|credits` | list tracked assets, detect missing/modified bytes, or print deduplicated attribution from `assets.lock.json`. Credits accepts `--format text\|youtube\|web\|json`; text remains the default, web escapes recorded text, and JSON uses null for absent fields. Release checks also verify tracked bytes. | instant |
 | `narova assets untrack <file>` | remove a provenance record without deleting the local file. | instant |
+| `narova provenance [--json]` | read-only, offline project report with Claims, Media, AI generation, and Reproducibility sections. Every fact is graded verified (artifact-backed), declared (authored statement), or unknown; missing/tampered evidence is shown without failing. Rights buckets are not legal clearance and exact used-asset closure is not claimed. | instant |
 
 Core owns all deterministic adapters. Wikimedia, Openverse, NASA, Internet
 Archive, Iconify, Poly Haven, The Met, Cleveland Museum, and Library of Congress
@@ -34,7 +35,7 @@ separate `narova-stock-extensions` skill is the LLM-led discovery path for
 changing sites. Run `npm run test:stock-live` for every available core adapter;
 absent optional keys are reported as skips.
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, stale walkthrough captures, and missing/draft creative approval for non-trivial work. Exit 1 on release-mode failures. | instant |
-| `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
+| `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). It records the selected renderer and speech-backend implementation versions when they are available locally, otherwise explicit nulls; no provider is executed to obtain them. The manifest is also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
 | `narova diff` | per-scene revision impact vs the latest recorded revision: each scene `unchanged` / `script changed` / `visual changed` / `timing changed` / `structural`, derived impacts (narration regenerated, captions retimed, spans reused/re-rendered), predicted reuse with basis and unit, and an estimated render time scaled from recorded measured stage durations (omitted with a plain statement before any measurement exists). No ledger: may compare against the last build manifest, naming that baseline; states plainly when nothing is recorded. Pass the same `--fps`/`--quality`/`--renderer` flags as the build so the render-context comparison matches. | instant |
 | `narova history` | `list` recorded revisions (ordinal, timestamp, change summary, measured reuse, optional label); `annotate <v> "label"` (metadata only); `compare <a>..<b>` — the same impact report computed from the records alone. Missing/empty ledger states so plainly and exits 0. | instant |
@@ -145,6 +146,7 @@ bibliography.
 
 ```
 out/
+├── manifest.json          # project IR + compile-time renderer/backend versions
 ├── narration.json         # scenes → the TTS input
 ├── config.resolved.json   # the validated config
 ├── audio/NN.wav|mp3       # audio per scene

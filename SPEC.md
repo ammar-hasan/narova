@@ -114,6 +114,10 @@ export default {
     a: { backend: "piper", speaker: "en_US-ryan-high", color: "#2ee6d6", label: "host · A", gainDb: 0 },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
+  provenance: {                          // optional authored declarations; advisory only
+    script: { authorship: "mixed", note: "agent draft, human review" },
+    disclosure: "Contains AI-generated media",
+  },
   theme: { accent: "#2ee6d6", bg: "#080d16", css: "theme.css" },  // optional; mode: "light" flips the base palette
   chrome: { topbar: true, counter: true, progress: true },        // optional; false strips all page furniture
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
@@ -158,6 +162,9 @@ Rules:
   segmentation recognizes English terminal punctuation plus Urdu full stop
   `۔` and question mark `؟`, so synthesis, timings, and caption groups stay
   aligned for Urdu and mixed-language turns.
+- `provenance` records facts that artifacts cannot establish, such as script
+  authorship. These values are always reported as declared, never verified;
+  omitting the block is valid and reads "not declared".
 - `body` is HTML, placed into the scene clip as-is.
 - `data-cue="k"`: hidden until turn `k` starts. `k` counts from 0.
 - `class="reveal"` (no cue): animates in when the scene starts.
@@ -315,8 +322,13 @@ successful build is reported without failing the build.
 narova init <dir>     new project
 narova ingest <url>   fetch a source page: images -> assets/, Chrome screenshot,
                       sources.md entry, claims.md skeleton (references/url-to-source.md)
+narova provenance    read-only claims/media/AI/reproducibility report; every
+                      fact is verified, declared, or unknown; --json supported
+narova assets credits [--format text|youtube|web|json]
+                      deduplicated attribution in the selected presentation
 narova compile        reel.config.* -> out/manifest.json (versioned project
-                      manifest; also written automatically by synth/compose/build)
+                      manifest, including locally reported renderer/speech
+                      versions; also written automatically by synth/compose/build)
 narova plan           compare current config against last manifest; classify
                       what changed and predict which stages will rebuild
 narova diff           per-scene revision impact vs the latest recorded
@@ -420,7 +432,7 @@ routes optional capabilities without bundling them, and isolates perceptual
 review from author rationale. Core Narova's 3D authoring and rendering remain
 complete when it is absent.
 
-## Status: 0.31.11 shipped
+## Status: 0.31.12 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →
@@ -518,6 +530,8 @@ enable forward-compatible consumers to gate on schema changes.
 `variants`, `series`, `variant`, `environment`, `hashes`, `deliverables`.
 
 - `project` — title, creation timestamp, platform target.
+- `renderer` — selected provider, protocol, and compile-time provider version
+  when locally available (`null` otherwise).
 - `format` — width, height, fps, sampleRate, colorSpace.
 - `voices` — every voice with label, color, backend, speaker, gainDb, lang,
   instruct, exaggeration, cfg_weight.
@@ -534,7 +548,8 @@ enable forward-compatible consumers to gate on schema changes.
   platform when `platform` is set. Entries carry width, height, fps, codec,
   bitrate, sampleRate.
 - `stages.synth` — ISO timestamp set after synthesis completes.
-- `environment` — narova version, TTS backend, and compile timestamp.
+- `environment` — narova version, TTS backend, compile-time backend version
+  when locally available (`null` otherwise), renderer, and compile timestamp.
 - `hashes` — SHA-256 content hashes for config, theme CSS, assets/ tree,
   bed/sfx/clip source files, and walkthrough capture inputs/media.
 

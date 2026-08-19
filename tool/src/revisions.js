@@ -27,7 +27,7 @@
 const fs = require('fs');
 const path = require('path');
 const crypto = require('crypto');
-const { compile } = require('./manifest');
+const { compile, withoutToolchainVersionEvidence } = require('./manifest');
 const { audioFingerprint, timingsFingerprint, narrationContextDigest } = require('./audio-fingerprint');
 const { renderContextHash } = require('./scene-cache');
 
@@ -53,7 +53,7 @@ function hashFile(filePath) {
  * authored state + identical options always yield the same identity. */
 function stateIdentity(config, opts = {}) {
   const manifest = compile(config, { toolVersion: require('../package.json').version });
-  const stable = JSON.parse(JSON.stringify(manifest, (k, v) =>
+  const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(manifest), (k, v) =>
     ((k === 'created' || k === 'compiled')) ? undefined : v));
   return sha256(JSON.stringify({
     manifest: stable,
@@ -70,7 +70,7 @@ function stateIdentity(config, opts = {}) {
  * volatile timestamps stripped). This is the measured build's canonical
  * artifact identity — distinct from stateIdentity, which is authored. */
 function manifestIdentity(manifest) {
-  const stable = JSON.parse(JSON.stringify(manifest, (k, v) =>
+  const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(manifest), (k, v) =>
     ((k === 'created' || k === 'compiled')) ? undefined : v));
   return sha256(JSON.stringify(stable));
 }

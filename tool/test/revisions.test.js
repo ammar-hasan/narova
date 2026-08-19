@@ -23,6 +23,21 @@ const { compile, mergeTimings } = require('../src/manifest');
 const { resolveConfig } = require('../src/schema');
 const { build } = require('../src/pipeline');
 
+test('revision manifest identity ignores additive toolchain-version evidence', () => {
+  const base = {
+    project: { title: 'same' },
+    renderer: { provider: 'hyperframes', providerVersion: 'renderer-1' },
+    environment: { backend: 'piper', backendVersion: 'speech-1' },
+    scenes: [],
+  };
+  const changedVersions = JSON.parse(JSON.stringify(base));
+  changedVersions.renderer.providerVersion = 'renderer-2';
+  changedVersions.environment.backendVersion = 'speech-2';
+  assert.equal(rev.manifestIdentity(base), rev.manifestIdentity(changedVersions));
+  changedVersions.renderer.provider = 'no-browser';
+  assert.notEqual(rev.manifestIdentity(base), rev.manifestIdentity(changedVersions));
+});
+
 const HAS_FFMPEG = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status === 0;
 let HAS_CANVAS = false;
 try { require.resolve('@napi-rs/canvas'); HAS_CANVAS = true; } catch {}

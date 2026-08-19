@@ -61,6 +61,10 @@ export default {
     a: { backend: "piper", speaker: "en_US-ryan-high",         color: "#2ee6d6", label: "host · A" },
     b: { backend: "piper", speaker: "en_US-hfc_female-medium", color: "#ff7eb6", label: "host · B" },
   },
+  provenance: {                         // optional; never inferred by Narova
+    script: { authorship: "mixed", note: "agent draft, human review" },
+    disclosure: "Contains AI-generated media",
+  },
   theme: {
     mode: "light",                         // "dark" (default) | "light" — flips the base palette
     accent: "#2ee6d6", bg: "#080d16",   // color tokens (optional)
@@ -91,6 +95,13 @@ export default {
   ],
 }
 ```
+
+`provenance` is an optional authored statement-of-record block for facts the
+project artifacts cannot prove. `script.authorship` is any non-empty string;
+`agent`, `human`, and `mixed` are recognized display values, while other values
+are preserved as written. `note` and `disclosure` are optional non-empty text.
+`narova provenance` always labels these values declared, never verified, and
+reports an absent block as "not declared" without warning or failure.
 
 ## 3D scenes and the element model
 

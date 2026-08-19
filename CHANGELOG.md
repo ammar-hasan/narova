@@ -6,6 +6,25 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.12] - 2026-08-19
+
+### Added
+
+- **Evidence-graded project provenance.** `narova provenance` composes existing
+  project artifacts into Claims, Media, AI generation, and Reproducibility
+  sections, with a matching `--json` form. Every fact is labeled verified,
+  declared, or unknown; tampered and missing evidence stays visible while the
+  advisory command succeeds. Rights buckets are display-only, not legal
+  clearance, and exact used-asset closure is never implied. Projects may add an
+  optional authored `provenance` declaration for script authorship and a
+  disclosure note; declarations are never upgraded to verified evidence.
+- **Portable credit formats and toolchain identity.** `narova assets credits
+  --format text|youtube|web|json` renders the same deduplicated attribution set
+  for each destination while preserving the prior default text output. Compile
+  now records locally available renderer and speech-backend implementation
+  versions in `manifest.json` (explicit null when unavailable) without running
+  a provider or using the network; the provenance report consumes those facts.
+
 ## [0.31.11] - 2026-08-19
 
 ### Added

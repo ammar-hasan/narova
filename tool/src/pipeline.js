@@ -72,6 +72,45 @@ function ensureVenv(projectDir, log = console.log) {
  *   backend, speaker, text, language, tempo, gain, instruct,
  *   exaggeration, cfg_weight, gapSentence, gapTurn, lead, tail,
  *   clone-sample contents (XTTS and chatterbox), and pipeline version. */
+/* Toolchain implementation versions recorded into the manifest
+ * (NAR-014-048). Local sources only — the renderer provider's pinned version
+ * constant, and the speech backend's installed package version read from an
+ * EXISTING venv via importlib.metadata (the same mechanism doctor uses).
+ * Never provisions a venv, never runs a provider or synthesis, never touches
+ * the network. A version that cannot be determined locally records as null. */
+const BACKEND_PACKAGE = { piper: 'piper-tts', xtts: 'coqui-tts', qwen: 'qwen-tts', chatterbox: 'chatterbox-tts' };
+
+function installedPackageVersion(py, pkg) {
+  const r = spawnSync(py, ['-c', `import importlib.metadata as m;print(m.version("${pkg}"))`], { encoding: 'utf8' });
+  return r.status === 0 && r.stdout.trim() ? r.stdout.trim() : null;
+}
+
+function speechBackendVersion(config) {
+  const voices = Object.values(config.voices || {});
+  const backend = (voices[0] && voices[0].backend) || 'piper';
+  // External provider backends carry the version recorded at registration.
+  const voice = voices.find(v => v.backend === backend);
+  if (voice && voice.providerVersion) return voice.providerVersion;
+  const pkg = BACKEND_PACKAGE[backend];
+  if (!pkg) return null;
+  let py;
+  if (backend === 'chatterbox') {
+    // Mirrors doctor: chatterbox runs from its own isolated venv.
+    const home = process.env.NAROVA_HOME || path.join(require('os').homedir(), '.narova');
+    py = path.join(process.env.NAROVA_CHATTERBOX_VENV || path.join(home, 'venv-chatterbox'), 'bin', 'python');
+    if (!fs.existsSync(py)) return null;
+  } else {
+    py = findVenvPython(config.projectDir);
+    if (!py) return null;
+  }
+  return installedPackageVersion(py, pkg);
+}
+
+function rendererVersion(config) {
+  try { return getRenderer(config.renderer).providerVersion || null; }
+  catch { return null; }
+}
+
 /* Write the Python stage inputs (narration.json + config.resolved.json)
  * plus the canonical manifest.json.
 
@@ -86,7 +125,11 @@ function ensureVenv(projectDir, log = console.log) {
 function writeStageInputs(config, outDir) {
   ensureDir(outDir);
   // manifest.json — canonical versioned project model
-  const tl = compile(config, { toolVersion: require('../package.json').version });
+  const tl = compile(config, {
+    toolVersion: require('../package.json').version,
+    rendererVersion: rendererVersion(config),
+    backendVersion: speechBackendVersion(config),
+  });
   const manifestFile = path.join(outDir, 'manifest.json');
   fs.writeFileSync(manifestFile, JSON.stringify(tl, null, 2));
   // A restored pre-0.28 project keeps its historical safe geometry across
@@ -104,7 +147,10 @@ function writeStageInputs(config, outDir) {
   // narration.json — Python TTS contract (compatibility projection)
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
   // config.resolved.json — resolved config for Python (compatibility projection)
-  const { assetsDir: _assetsDir, ...serializableConfig } = config;
+  // Provenance declarations are advisory report inputs, not Python/runtime
+  // inputs. Keeping them out also ensures an authorship-note edit cannot
+  // invalidate a previously reviewed creative proof via this projection.
+  const { assetsDir: _assetsDir, provenance: _provenance, ...serializableConfig } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
 }
 

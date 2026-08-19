@@ -45,6 +45,7 @@ narova init my-video
 cd my-video
 narova check
 narova build --release
+narova provenance
 ```
 
 ## What it makes
@@ -54,6 +55,8 @@ narova build --release
 - Deterministic 2D HTML/CSS/SVG and Three.js/WebGL scenes
 - Real product walkthrough videos with timed browser actions
 - Local MP4, SRT, and VTT deliverables without a render service
+- Read-only evidence-graded provenance reports and text, YouTube, web, or JSON
+  credit output
 
 See the [project README](https://github.com/ammar-hasan/narova#readme) for the
 scene-script format, renderer choices, product walkthroughs, source grounding,

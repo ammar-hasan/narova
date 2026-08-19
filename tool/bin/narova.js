@@ -23,10 +23,11 @@ const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
 const { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes } = require('../src/review-evidence');
 const { ingest } = require('../src/ingest');
 const {
-  creditLines, downloadAsset, inferKind, readAssetLock, registerAsset,
+  creditLines, creditEntries, formatCredits, downloadAsset, inferKind, readAssetLock, registerAsset,
   normalizeRegistrationMetadata, resolveProjectFile, unregisterAsset, verifyAssets,
   withAssetMutation,
 } = require('../src/asset-registry');
+const { collectProvenance, formatProvenance } = require('../src/provenance');
 const { listStockProviders, resolveStock, searchStock } = require('../src/stock-providers');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
@@ -51,7 +52,7 @@ const {
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function parseArgs(argv) {
   const positionals = [];
@@ -122,13 +123,28 @@ function assetRegistrationFromFlags(flags, defaults = {}) {
   };
 }
 
-async function loadResolved(flags) {
+async function loadResolved(flags, { readOnly = false } = {}) {
   const projectDir = flags.project || '.';
-  const { raw, dir } = await loadProjectConfig(projectDir, flags.config);
+  const { raw, dir, file } = await loadProjectConfig(projectDir, flags.config);
   const out = path.resolve(flags.out || path.join(dir, 'out'));
+  const mayReadOutputEvidence = evidenceFile => {
+    if (!readOnly) return true;
+    try {
+      const root = fs.realpathSync(dir);
+      const file = fs.realpathSync(evidenceFile);
+      const relative = path.relative(root, file);
+      if (!relative || relative === '..' || relative.startsWith(`..${path.sep}`)
+          || path.isAbsolute(relative) || !fs.statSync(file).isFile()) return false;
+      return true;
+    } catch {
+      // Advisory commands never consume restore/build evidence that resolves
+      // outside the project. The collector will grade external output unknown.
+      return false;
+    }
+  };
   let restoredOverrides = {};
   const restoredOverridesFile = path.join(out, RESTORE_OVERRIDES);
-  if (fs.existsSync(restoredOverridesFile)) {
+  if (fs.existsSync(restoredOverridesFile) && mayReadOutputEvidence(restoredOverridesFile)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(restoredOverridesFile, 'utf8'));
       const allowed = new Set(['backend', 'size', 'platform', 'variant', 'renderer', 'tempo', 'voiceA', 'voiceB']);
@@ -136,10 +152,12 @@ async function loadResolved(flags) {
     } catch { /* malformed restored overrides are ignored; schema still validates CLI input */ }
   }
   const effectiveOverrides = { ...restoredOverrides, ...overridesFrom(flags) };
+  const cliOverrides = overridesFrom(flags);
   const config = resolveConfig(raw, effectiveOverrides, dir);
   const manifestFile = path.join(out, 'manifest.json');
   const markerFile = path.join(out, RESTORE_MARKER);
-  if (fs.existsSync(markerFile) && fs.existsSync(manifestFile)) {
+  if (fs.existsSync(markerFile) && fs.existsSync(manifestFile)
+      && mayReadOutputEvidence(markerFile) && mayReadOutputEvidence(manifestFile)) {
     try {
       const marker = JSON.parse(fs.readFileSync(markerFile, 'utf8'));
       const restored = JSON.parse(fs.readFileSync(manifestFile, 'utf8'));
@@ -147,7 +165,7 @@ async function loadResolved(flags) {
       if (marker.manifestSha256 === hashFile(manifestFile) && legacySafeLayout) {
         if (config._safeLayoutAuthored && config.safeLayout === false) {
           config._retireLegacySafeLayout = true;
-          fs.rmSync(markerFile, { force: true });
+          if (!readOnly) fs.rmSync(markerFile, { force: true });
         } else {
           config._legacySafeLayout = true;
           if (!config._safeLayoutAuthored) config.safeLayout = true;
@@ -155,7 +173,7 @@ async function loadResolved(flags) {
       }
     } catch { /* malformed or stale restore metadata cannot change layout */ }
   }
-  return { config, projectDir: dir, effectiveOverrides };
+  return { config, projectDir: dir, effectiveOverrides, restoredOverrides, cliOverrides, raw, configFile: file };
 }
 
 const outDirOf = (flags, projectDir) =>
@@ -250,6 +268,11 @@ Commands:
   assets untrack <file> remove a provenance record without deleting the file
   assets verify         verify tracked file hashes, sizes, and media kinds
   assets credits        print deduplicated attribution lines
+                           --format text|youtube|web|json (default: text)
+  provenance            read-only provenance report: claims grounding, media
+                           origins + rights buckets, AI generation, reproducibility
+                           (advisory; missing evidence reads "not recorded"; --json
+                           for the machine-readable form)
   compile               compile reel.config -> out/manifest.json
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
@@ -458,6 +481,12 @@ async function main() {
           return;
         }
         if (action === 'credits') {
+          if (flags.format && flags.format !== 'text') {
+            const entries = creditEntries(projectDir);
+            const formatted = formatCredits(entries, flags.format);
+            if (formatted) console.log(formatted);
+            return;
+          }
           const lines = creditLines(projectDir);
           if (!lines.length) console.log('no tracked attribution text');
           else for (const line of lines) console.log(`- ${line}`);
@@ -750,6 +779,35 @@ async function main() {
       }
       const result = plan(prev, config, { toolVersion: require('../package.json').version });
       console.log(formatPlan(result));
+      return;
+    }
+
+    case 'provenance': {
+      // CHANGE-2026-027 / NAR-009-028: read-only provenance report composed
+      // from existing project evidence (claims ledger, registry, manifest,
+      // declarations). Advisory; never mutates, synthesizes, renders, probes
+      // tools, or touches the network; missing evidence reads "not recorded"
+      // and never fails the command.
+      let config;
+      let projectDir;
+      let raw;
+      let configFile;
+      let restoredOverrides;
+      let cliOverrides;
+      try {
+        ({ config, projectDir, raw, configFile, restoredOverrides, cliOverrides }
+          = await loadResolved(flags, { readOnly: true }));
+      }
+      catch (e) { console.error(e.message); process.exit(1); }
+      const report = collectProvenance(config, {
+        outDir: outDirOf(flags, projectDir),
+        configFile,
+        raw,
+        restoredOverrides,
+        cliOverrides,
+      });
+      if (flags.json) console.log(JSON.stringify(report, null, 2));
+      else console.log(formatProvenance(report));
       return;
     }
 

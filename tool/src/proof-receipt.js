@@ -4,7 +4,9 @@
  * the exact config, manifest, timings, and frame files being snapshotted. */
 const fs = require('node:fs');
 const path = require('node:path');
-const { sha256, hashConfig, hashFile, buildHashes } = require('./manifest');
+const {
+  sha256, hashConfig, hashFile, buildHashes, withoutToolchainVersionEvidence,
+} = require('./manifest');
 const { projectIdentity } = require('./releases');
 
 const RECEIPT = '.proof-receipt.json';
@@ -53,6 +55,7 @@ function writeProofReceipt(config, outDir, evidenceFiles, frameFiles) {
     configSha256: hashConfig(config),
     configResolvedSha256: hashFile(resolvedConfig),
     manifestSha256: hashFile(manifest),
+    manifestContentSha256: stableManifestHash(manifest),
     timingsSha256: hashFile(timings),
     evidence: (evidenceFiles || []).map(file => relativeRecord(outDir, file)),
     frames: (frameFiles || []).map(file => relativeRecord(outDir, file)),
@@ -87,7 +90,14 @@ function verifyProofReceipt(config, outDir) {
     }
     if (receipt.configSha256 !== hashConfig(config)) return { ok: false, reason: 'project config changed after proof review' };
     if (receipt.configResolvedSha256 !== hashFile(path.join(outDir, 'config.resolved.json'))) return { ok: false, reason: 'resolved config changed after proof review' };
-    if (receipt.manifestSha256 !== hashFile(path.join(outDir, 'manifest.json'))) return { ok: false, reason: 'manifest changed after proof review' };
+    const currentManifest = path.join(outDir, 'manifest.json');
+    if (receipt.manifestContentSha256) {
+      if (receipt.manifestContentSha256 !== stableManifestHash(currentManifest)) {
+        return { ok: false, reason: 'manifest changed after proof review' };
+      }
+    } else if (receipt.manifestSha256 !== hashFile(currentManifest)) {
+      return { ok: false, reason: 'manifest changed after proof review' };
+    }
     if (receipt.timingsSha256 !== hashFile(path.join(outDir, 'timings.json'))) return { ok: false, reason: 'timings changed after proof review' };
     if (!sourceHashesMatch(config, outDir)) return { ok: false, reason: 'project source assets changed after proof review' };
     const evidenceError = verifyRecords(outDir, receipt.evidence, 'proof evidence');
@@ -126,7 +136,7 @@ function snapshotHashes(dir) {
 }
 
 function stableManifestHash(file) {
-  const manifest = JSON.parse(fs.readFileSync(file, 'utf8'));
+  const manifest = withoutToolchainVersionEvidence(JSON.parse(fs.readFileSync(file, 'utf8')));
   if (manifest.project && typeof manifest.project === 'object') delete manifest.project.created;
   return sha256(JSON.stringify(manifest));
 }
@@ -185,16 +195,35 @@ function writeProofBundle(outDir, verified, metadataDir, snapshotDir) {
         return { path: finalRef(path.join(kind, name)), sha256: record.sha256 };
       });
     };
+    const currentManifest = path.join(outDir, 'manifest.json');
+    const currentManifestSha256 = hashFile(currentManifest);
+    const currentManifestContentSha256 = stableManifestHash(currentManifest);
+    if (receipt.manifestContentSha256) {
+      if (receipt.manifestContentSha256 !== currentManifestContentSha256) {
+        throw new Error('proof manifest changed while saving proof');
+      }
+    } else if (receipt.manifestSha256 !== currentManifestSha256) {
+      throw new Error('proof manifest changed while saving proof');
+    }
+    const snapshotManifest = path.join(snapshotDir, 'manifest.json');
+    if (receipt.manifestContentSha256) {
+      if (stableManifestHash(snapshotManifest) !== currentManifestContentSha256) {
+        throw new Error('proof manifest does not match the release snapshot');
+      }
+    } else if (hashFile(snapshotManifest) !== currentManifestSha256) {
+      throw new Error('proof manifest does not match the release snapshot');
+    }
     const portable = {
       version: receipt.version,
       created: receipt.created,
       projectIdentity: receipt.projectIdentity,
       configSha256: receipt.configSha256,
       configResolvedSha256: receipt.configResolvedSha256,
-      manifestSha256: receipt.manifestSha256,
+      manifestSha256: currentManifestSha256,
+      ...(receipt.manifestContentSha256 ? { manifestContentSha256: currentManifestContentSha256 } : {}),
       timingsSha256: receipt.timingsSha256,
       configPath: copyIdentity('config.resolved.json', 'config.resolved.json', receipt.configResolvedSha256),
-      manifestPath: copyIdentity('manifest.json', 'manifest.json', receipt.manifestSha256),
+      manifestPath: copyIdentity('manifest.json', 'manifest.json', currentManifestSha256),
       timingsPath: copyIdentity('timings.json', 'timings.json', receipt.timingsSha256),
       evidence: copyRecords(receipt.evidence, 'evidence', 'contact-sheet'),
       frames: copyRecords(receipt.frames, 'frames', 'frame'),
@@ -233,9 +262,14 @@ function verifyProofBundle(metadataDir, snapshotDir, branch, expectedProjectIden
     if (!configFile || !manifestFile || !timingsFile) return false;
     if (branch.proofIdentity !== proofContentIdentity(receipt, manifestFile)) return false;
     if (hashFile(configFile) !== receipt.configResolvedSha256) return false;
+    if (receipt.manifestContentSha256
+        && stableManifestHash(manifestFile) !== receipt.manifestContentSha256) return false;
     if (hashConfig(JSON.parse(fs.readFileSync(configFile, 'utf8'))) !== receipt.configSha256) return false;
     if (hashFile(manifestFile) !== receipt.manifestSha256 || hashFile(timingsFile) !== receipt.timingsSha256) return false;
-    if (hashFile(path.join(snapshotDir, 'manifest.json')) !== receipt.manifestSha256) return false;
+    const snapshotManifest = path.join(snapshotDir, 'manifest.json');
+    if (receipt.manifestContentSha256) {
+      if (stableManifestHash(snapshotManifest) !== receipt.manifestContentSha256) return false;
+    } else if (hashFile(snapshotManifest) !== receipt.manifestSha256) return false;
     if (hashFile(path.join(snapshotDir, 'timings.json')) !== receipt.timingsSha256) return false;
     if (verifyRecords(metadataDir, receipt.evidence, 'proof evidence')) return false;
     if (verifyRecords(metadataDir, receipt.frames, 'audited proof frames')) return false;

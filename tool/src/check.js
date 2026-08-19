@@ -1318,4 +1318,4 @@ function critique(config, opts = {}) {
   return results;
 }
 
-module.exports = { check, critique, internalShotCount, creativeBriefStatus, needsCreativeBrief, productionSeconds, measuredProductionSeconds, estimateSeconds, quantityFragments };
+module.exports = { check, critique, internalShotCount, creativeBriefStatus, needsCreativeBrief, productionSeconds, measuredProductionSeconds, estimateSeconds, quantityFragments, findClaims, readClaimsLedger, matchClaim };

@@ -297,8 +297,15 @@ function diffScenes(fromScenes, toScenes) {
 }
 
 function diffConfigTopLevel(from, to, fromHash, toHash, hasAssetChange) {
+  const rendererIdentity = renderer => {
+    if (!renderer || typeof renderer !== 'object') return renderer;
+    const { providerVersion: _recordedVersion, ...identity } = renderer;
+    return identity;
+  };
   const checks = [
-    { key: 'renderer', from: from.renderer,          to: to.renderer },
+    // Compile-time version evidence is additive and must not become a plan or
+    // freshness signal (NAR-014-048).
+    { key: 'renderer', from: rendererIdentity(from.renderer), to: rendererIdentity(to.renderer) },
     { key: 'platform', from: from.project?.platform, to: to.project?.platform },
     { key: 'bed',      from: from.audio?.bed,       to: to.audio?.bed },
     { key: 'sfx',      from: from.audio?.sfx,       to: to.audio?.sfx },
