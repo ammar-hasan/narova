@@ -32,6 +32,7 @@ const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
+const revisions = require('../src/revisions');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, branchDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
 const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
@@ -750,6 +751,147 @@ async function main() {
       const result = plan(prev, config, { toolVersion: require('../package.json').version });
       console.log(formatPlan(result));
       return;
+    }
+
+    case 'diff': {
+      // CHANGE-2026-026 / NAR-009-027: per-scene revision-impact report
+      // against the latest recorded revision (or, pre-ledger, the last build
+      // manifest, named as that baseline). Advisory; produces no media.
+      const { config, projectDir } = await loadResolved(flags);
+      const out = outDirOf(flags, projectDir);
+      const { compile } = require('../src/manifest');
+      const { renderContextHash } = require('../src/scene-cache');
+      const { narrationContextDigest } = require('../src/audio-fingerprint');
+      const fresh = compile(config, { toolVersion: require('../package.json').version });
+      const currentNc = narrationContextDigest(config);
+      const records = revisions.readLedger(out);
+      if (records.length === 0) {
+        // Migration path: a project built before the ledger existed still
+        // has its last enriched manifest. Comparing against it names that
+        // baseline explicitly (NAR-009-027 MAY).
+        const prevManifestPath = path.join(out, 'manifest.json');
+        if (fs.existsSync(prevManifestPath)) {
+          try {
+            const prev = JSON.parse(fs.readFileSync(prevManifestPath, 'utf8'));
+            let prevNc = null;
+            try { prevNc = fs.readFileSync(path.join(out, '.narration-context'), 'utf8').trim() || null; } catch {}
+            const baselineRecord = {
+              ordinal: null,
+              renderContextIdentity: renderContextHash(prev, {
+                fps: flags.fps || (prev.format && prev.format.fps) || 30,
+                quality: flags.quality,
+              }),
+              sceneIdentities: (prev.scenes || []).map(s => ({
+                id: s.id, digest: s.hash || null, narration: revisions.narrationDigest(s),
+                silentDur: s.dur || null, duration: s.duration || null, sentences: null,
+              })),
+              stageDurations: null,
+            };
+            const report = revisions.buildRevisionReport({
+              currentScenes: revisions.sceneProjection(fresh),
+              currentContextIdentity: renderContextHash(fresh, { fps: flags.fps, quality: flags.quality }),
+              baselineRecord,
+              audioIdentityChanged: prevNc != null && prevNc !== currentNc,
+            });
+            console.log(revisions.formatRevisionImpact(report, { baselineName: 'last build manifest (no recorded revision)' }));
+            return;
+          } catch { /* fall through to the no-revision statement */ }
+        }
+        console.log('no revisions recorded yet — build once, then narova diff predicts the impact of your edits');
+        return;
+      }
+      const baseline = records[records.length - 1];
+      const report = revisions.buildRevisionReport({
+        currentScenes: revisions.sceneProjection(fresh, revisions.sentenceCountsFromTakes(out)),
+        currentContextIdentity: renderContextHash(fresh, { fps: flags.fps, quality: flags.quality }),
+        baselineRecord: baseline,
+        // Shared narration context (voices/tempo/gaps) — NOT the full audio
+        // fingerprint, which flips on any single turn edit. A turn-text edit
+        // is scene-scoped (per-scene classes + sentence cache); a shared
+        // input change is what re-synthesizes every scene. Records from
+        // before this field existed carry only the full fingerprint: compare
+        // per-scene narration digests in that case and skip the project line.
+        audioIdentityChanged: baseline.narrationContext != null && baseline.narrationContext !== currentNc,
+      });
+      console.log(revisions.formatRevisionImpact(report));
+      const changed = report.rows.some(r => r.cls !== 'unchanged') || report.contextChanged || report.audioIdentityChanged;
+      if (!changed) console.log('\nno changes since the last recorded revision — the next build records no new revision');
+      return;
+    }
+
+    case 'history': {
+      // CHANGE-2026-026 / NAR-009-026: list / annotate / compare over the
+      // append-only revision ledger. Read-only except annotate (label only).
+      const sub = positionals[1];
+      const projectDir = flags.project || '.';
+      const out = outDirOf(flags, projectDir);
+      const records = revisions.readLedger(out);
+      if (!sub || sub === 'list') {
+        if (records.length === 0) {
+          console.log('no revisions recorded yet — every state-changing build appends one to out/revisions.jsonl');
+          return;
+        }
+        for (const rec of records) {
+          const parent = rec.parent != null ? records.find(r => r.ordinal === rec.parent) : null;
+          const when = rec.recordedAt ? rec.recordedAt.slice(0, 16).replace('T', ' ') : '';
+          const label = rec.label ? `  ${rec.label}` : '';
+          const summary = revisions.changeSummaryForRecord(rec, parent);
+          const mr = rec.measuredReuse || {};
+          const reuseBits = [];
+          if (mr.audio && mr.audio.scenesIdentical != null) {
+            reuseBits.push(`${mr.audio.scenesIdentical}/${mr.audio.scenesEvidenced} audio`);
+          }
+          if (mr.spans && mr.spans.reusedCount != null) reuseBits.push(`${mr.spans.reusedCount}/${mr.spans.totalCount} spans`);
+          const reuse = reuseBits.length ? `  [measured: ${reuseBits.join(', ')}]` : '';
+          console.log(`  v${rec.ordinal}  ${when}  ${summary}${reuse}${label}`);
+        }
+        console.log(`\ncompare: narova history compare <a>..<b>   annotate: narova history annotate <v> "label"`);
+        return;
+      }
+      if (sub === 'annotate') {
+        const ordinal = parseInt(positionals[2], 10);
+        const label = positionals.slice(3).join(' ').trim();
+        if (!Number.isInteger(ordinal) || !label) {
+          console.error('usage: narova history annotate <version> "label"');
+          process.exit(1);
+        }
+        const r = revisions.annotateLedger(out, ordinal, label);
+        if (!r.ok) {
+          console.error(r.error);
+          process.exit(1);
+        }
+        console.log(`annotated v${ordinal} — "${label}" (label only; identities and evidence unchanged)`);
+        return;
+      }
+      if (sub === 'compare') {
+        const spec = String(positionals[2] || '');
+        const m = spec.match(/^(\d+)\.\.(\d+)$/);
+        let a, b;
+        if (m) { a = parseInt(m[1], 10); b = parseInt(m[2], 10); }
+        else {
+          a = parseInt(positionals[2], 10);
+          b = parseInt(positionals[3], 10);
+        }
+        if (!Number.isInteger(a) || !Number.isInteger(b)) {
+          console.error('usage: narova history compare <a>..<b>  (or <a> <b>)');
+          process.exit(1);
+        }
+        const recA = records.find(r => r.ordinal === a);
+        const recB = records.find(r => r.ordinal === b);
+        if (!recA) { console.error(`no revision v${a} recorded`); process.exit(1); }
+        if (!recB) { console.error(`no revision v${b} recorded`); process.exit(1); }
+        if (a === b) { console.error('pick two different revisions'); process.exit(1); }
+        const report = revisions.buildRevisionReport({
+          baselineRecord: recA,
+          afterRecord: recB,
+          audioIdentityChanged: recA.narrationContext != null && recB.narrationContext != null
+            && recA.narrationContext !== recB.narrationContext,
+        });
+        console.log(revisions.formatRevisionImpact(report));
+        return;
+      }
+      console.error(`unknown history subcommand "${sub}" — use list, annotate, or compare`);
+      process.exit(1);
     }
 
     case 'release': {

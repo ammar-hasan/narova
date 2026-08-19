@@ -36,6 +36,8 @@ absent optional keys are reported as skips.
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, stale walkthrough captures, and missing/draft creative approval for non-trivial work. Exit 1 on release-mode failures. | instant |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). The manifest is a self-contained snapshot of every datum the pipeline needs — also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
+| `narova diff` | per-scene revision impact vs the latest recorded revision: each scene `unchanged` / `script changed` / `visual changed` / `timing changed` / `structural`, derived impacts (narration regenerated, captions retimed, spans reused/re-rendered), predicted reuse with basis and unit, and an estimated render time scaled from recorded measured stage durations (omitted with a plain statement before any measurement exists). No ledger: may compare against the last build manifest, naming that baseline; states plainly when nothing is recorded. Pass the same `--fps`/`--quality`/`--renderer` flags as the build so the render-context comparison matches. | instant |
+| `narova history` | `list` recorded revisions (ordinal, timestamp, change summary, measured reuse, optional label); `annotate <v> "label"` (metadata only); `compare <a>..<b>` — the same impact report computed from the records alone. Missing/empty ledger states so plainly and exits 0. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. **Skipped automatically when `config.narration.file` is set** — external audio is copied directly and mixed with bed/sfx. | built-ins are local; external-provider cost depends on its service |
 | `narova walkthrough explore <id>` | open a declared URL in an isolated agent-browser session and print its interactive accessibility snapshot. The session stays open so an author/agent can inspect real roles, labels, text, and test ids before scripting. | browser startup |
 | `narova walkthrough capture [id]` | execute declared semantic actions on measured narration anchors and write a WebM, capture manifest, and evidence PNGs under project assets. Omit id (or use `all`) for every declaration. Explicit only; build never runs actions. | live walkthrough duration + browser startup |
@@ -158,8 +160,20 @@ out/
 │   ├── assets/            #   copied local media/fonts
 │   └── audio/narration.wav
 ├── video.mp4              # the final video (build only)
-└── video-<id>.mp4         # per-variant videos (build --variant/--variants)
+├── video-<id>.mp4         # per-variant videos (build --variant/--variants)
+└── revisions.jsonl        # append-only revision ledger (advisory; build only)
 ```
+
+`revisions.jsonl` records one entry per successful base build whose effective
+resolved state changed since the last entry (an unchanged rebuild records
+nothing and prints so). Each entry holds the audio/timing fingerprints,
+per-scene identity digests, measured stage durations, and a measured reuse
+report: per-scene audio byte-identity vs the previous revision (by digest),
+render-span reuse vs identity re-render vs fallback, sentence-cache hit/fresh
+counts, and shared artifacts rebuilt by design (full mix, encoded video,
+deliveries). Ratios state basis and unit; missing evidence is "not
+applicable"; fallback re-renders never count as reuse. Deleting the ledger is
+safe — history restarts at v1 on the next state-changing build.
 
 `out/` is a single directory, so `synth`/`compose` reflect whichever variant
 was selected last (plain = base, `--variant <id>` = that variant's scene 1).
