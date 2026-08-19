@@ -378,7 +378,7 @@ routes optional capabilities without bundling them, and isolates perceptual
 review from author rationale. Core Narova's 3D authoring and rendering remain
 complete when it is absent.
 
-## Status: 0.31.9 shipped
+## Status: 0.31.10 shipped
 
 Build works end to end. Lint and check pass on generated pages. Caption sync
 verified in snapshots. The skill goes prompt → script → check → synth →

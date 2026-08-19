@@ -6,6 +6,27 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.10] - 2026-08-19
+
+### Added
+
+- **Creative-identity contract.** `narova check` gains advisory-only
+  surfaces that counter unattended-mode visual convergence (agents reaching
+  near-identical looks across unrelated briefs). A project with an authored
+  `creative.md` rationale gets: citation resolvability (unresolvable cites
+  warn); a deterministic multi-dimensional identity fingerprint computed
+  from the config alone (palette, structure, layout, motion); an
+  isolation-safe self-check that verifies the written claims against the
+  measured identity and flags contradicted or under-authored identity (works
+  with zero sibling history, i.e. sandboxed runs); and a sibling advisory
+  against a local fingerprint-only ledger that names the nearest sibling
+  with the brief-dependence caveat. `narova check --creative-identity` emits
+  `out/creative-identity.json` with the fingerprint, claims, comparison
+  basis, and per-dimension breakdown. None of these surfaces can fail any
+  check level. Validated by a preregistered controlled comparison
+  (NAR-EXP-2026-010): palette diversity ratios 4.24×/2.18× across regions,
+  two fixation events fired, owner blind review confirmed improvement.
+
 ## [0.31.9] - 2026-08-18
 
 ### Added
