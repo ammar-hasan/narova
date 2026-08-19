@@ -173,3 +173,50 @@ test('recorded Linux pins carry complete verifiable identities', () => {
     assert.match(pin.topdir, /^ffmpeg-N-\d+-g[0-9a-f]+-linux(64|arm64)-gpl$/);
   }
 });
+
+test('probe reports a binDir for a satisfied provisioned install (warm-run F10)', () => {
+  const home = tmp();
+  const work = tmp();
+  const fx = fixtureArchive(work, 'ffmpeg-fixture3-linux64-gpl');
+  const pin = {
+    id: 'fixture-gpl-warm', url: 'file:///unused', sha256: '0'.repeat(64),
+    bytes: 1, topdir: fx.topdir,
+  };
+  // Lay down what a completed provisionMedia leaves behind.
+  const root = path.join(home, 'tools', 'media', pin.id);
+  fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
+  fs.writeFileSync(path.join(root, 'bin', 'ffmpeg'), '#!/bin/sh\n');
+  fs.writeFileSync(path.join(root, 'bin', 'ffprobe'), '#!/bin/sh\n');
+  fs.writeFileSync(path.join(root, '.narova-pin.json'), JSON.stringify({
+    sha256: pin.sha256, url: pin.url, bytes: pin.bytes,
+  }));
+
+  // Force the probe off PATH-found ffmpeg and onto the provisioned install.
+  const savedFfmpeg = process.env.NAROVA_FFMPEG;
+  const savedFfprobe = process.env.NAROVA_FFPROBE;
+  const savedHome = process.env.NAROVA_HOME;
+  process.env.NAROVA_FFMPEG = 'narova-absent-ffmpeg';
+  process.env.NAROVA_FFPROBE = 'narova-absent-ffprobe';
+  process.env.NAROVA_HOME = home;
+  try {
+    assert.ok(acquisition.mediaMarkerOk(root, pin));
+    // mediaMarkerOk is the same gate probeMedia uses for provisioned state;
+    // with the marker valid, a conforming probe resolves binDir for that
+    // root. Exercise the real probe through readinessMatrix.
+    const readiness = require('../src/readiness');
+    const media = readiness.readinessMatrix().find((i) => i.id === 'media');
+    // On an unpinned host (e.g. darwin) the probe cannot reach the
+    // provisioned branch — assert only when the platform pin exists.
+    if (require('../src/acquisition').mediaPinFor()) {
+      assert.equal(media.status, 'satisfied');
+      assert.ok(media.binDir, 'binDir exposed so warm runs can scope PATH');
+      assert.ok(fs.existsSync(path.join(media.binDir)));
+    } else {
+      assert.notEqual(media.status, 'satisfied');
+    }
+  } finally {
+    if (savedFfmpeg === undefined) delete process.env.NAROVA_FFMPEG; else process.env.NAROVA_FFMPEG = savedFfmpeg;
+    if (savedFfprobe === undefined) delete process.env.NAROVA_FFPROBE; else process.env.NAROVA_FFPROBE = savedFfprobe;
+    if (savedHome === undefined) delete process.env.NAROVA_HOME; else process.env.NAROVA_HOME = savedHome;
+  }
+});

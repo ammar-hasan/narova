@@ -146,6 +146,12 @@ async function demo({ cwd = process.cwd(), out = process.stdout, renderer } = {}
     // is shadowed; no system path, profile, or environment is modified.
     process.env.PATH = `${path.join(m.dir, 'bin')}${path.delimiter}${process.env.PATH}`;
     view.note('media tool', `in scope for this run — ${m.dir} (no system changes)`);
+  } else if (media.status === 'satisfied' && media.binDir) {
+    // Satisfied by a PROVISIONED install (clean-machine warm runs — CI
+    // finding F10): the install lives in user storage, not on PATH, so this
+    // run must scope it in the same way. A PATH-found tool needs nothing.
+    process.env.PATH = `${media.binDir}${path.delimiter}${process.env.PATH}`;
+    view.note('media tool', `in scope for this run — ${media.binDir} (no system changes)`);
   }
   if (voice.status !== 'satisfied') {
     const r = await provisionDemoVoice(view);

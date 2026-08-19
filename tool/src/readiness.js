@@ -355,8 +355,9 @@ function probeMedia() {
   const pin = mediaPinFor();
   const root = mediaInstallDir(pin);
   if (pin && root && mediaMarkerOk(root, pin)) {
+    const binDir = path.join(root, 'bin');
     return { id: 'media', label: 'media tool (ffmpeg + ffprobe)', status: 'satisfied',
-      resolved: path.join(root, 'bin'), detail: `provisioned (${pin.id})` };
+      resolved: binDir, binDir, detail: `provisioned (${pin.id})` };
   }
   if (pin) return { id: 'media', label: 'media tool (ffmpeg + ffprobe)', status: 'auto-provisionable' };
   const { mediaGuidance } = require('./acquisition');
