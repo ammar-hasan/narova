@@ -284,6 +284,31 @@ All times are scene-local seconds, already rescaled to the real audio.
 With `align` on, word `t0`/`t1` come from measured forced alignment instead of
 length-weighted estimates (per-scene fallback to estimates on any mismatch).
 
+## Revision ledger (advisory)
+
+Every successful base build compares the effective resolved project state
+(config + scene identities + narration/timing identities + renderer + render
+context + output-affecting overrides) against the latest recorded revision
+and appends one record to the append-only `out/revisions.jsonl` when — and
+only when — that state changed. A rebuild of identical authored state records
+no revision, even if encoded bytes differ. Variant and delivery members never
+record revisions; standalone `synth`/`compose`/`captions` do not either.
+
+Each record carries an ordinal, its parent ordinal, the audio/timing
+fingerprints, manifest and render-context identities, per-scene identity
+digests, measured per-stage durations, and a **measured reuse record** for
+that build: which scenes' processed audio is byte-identical to the previous
+revision (by content digest), which render spans were reused / re-rendered
+by identity change / re-rendered by fallback, sentence-cache hit and fresh
+counts, and the shared artifacts rebuilt by design (full mix, encoded video,
+deliveries). Every ratio states its basis and unit; unevidenced quantities
+are reported as not applicable, never invented. Fallback re-renders are
+never counted as reuse.
+
+The ledger is advisory evidence: losing or truncating it never fails any
+operation (history simply restarts at v1), and a ledger write failure after a
+successful build is reported without failing the build.
+
 ## CLI
 
 ```
@@ -294,6 +319,18 @@ narova compile        reel.config.* -> out/manifest.json (versioned project
                       manifest; also written automatically by synth/compose/build)
 narova plan           compare current config against last manifest; classify
                       what changed and predict which stages will rebuild
+narova diff           per-scene revision impact vs the latest recorded
+                      revision (narration/visual/timing/structural classes,
+                      derived impacts, predicted reuse with stated basis and
+                      unit, render estimate from recorded measured durations
+                      or omitted with a plain statement). With no ledger it
+                      may compare against the last build manifest, naming
+                      that baseline. Advisory; produces no media
+narova history        list revisions (ordinal, change summary, measured
+                      reuse, optional label); annotate <v> "label" (label
+                      only); compare <a>..<b> (same report shape, computed
+                      from the records alone). Empty/missing ledger states
+                      so plainly and succeeds
 narova check          validate the config (fast, no side effects); prints an
                        estimated narration length for target-duration tuning
                        --strict: verify every claim in the claims.md ledger

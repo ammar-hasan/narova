@@ -26,6 +26,7 @@ const { compile, read, mergeTimings, hashFile } = require('./manifest');
 const { buildDeliverables } = require('./exports');
 const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
+const revisions = require('./revisions');
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
@@ -109,11 +110,15 @@ function writeStageInputs(config, outDir) {
 
 /* Commit the audio and timing fingerprints after successful synthesis.
  * Uses a write-to-temp + rename pattern so a crash partway through
- * never leaves a corrupt fingerprint behind. */
+ * never leaves a corrupt fingerprint behind. The shared narration-context
+ * digest is committed the same way so pre-ledger `narova diff` runs can
+ * compare shared narration inputs (CHANGE-2026-026). */
 function commitFingerprint(config, outDir) {
+  const { narrationContextDigest } = require('./audio-fingerprint');
   for (const [name, fp] of [
     ['.audio-fingerprint', audioFingerprint(config)],
     ['.timings-fingerprint', timingsFingerprint(config)],
+    ['.narration-context', narrationContextDigest(config)],
   ]) {
     const tmp = path.join(outDir, `${name}.tmp`);
     const dest = path.join(outDir, name);
@@ -226,6 +231,22 @@ function build(config, opts = {}) {
 
   const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
 
+  // Measured per-stage durations for the advisory revision record
+  // (CHANGE-2026-026 / NAR-009-025). Stage boundaries follow the logged
+  // [1/3]/[2/3]/[3/3] phases; compose and render are measured together.
+  const t = { synthStart: process.hrtime.bigint(), synthSeconds: null, renderSeconds: null };
+  const markSynthDone = () => {
+    t.synthSeconds = Number(process.hrtime.bigint() - t.synthStart) / 1e9;
+    t.renderStart = process.hrtime.bigint();
+  };
+  const stageDurations = () => {
+    if (t.synthSeconds != null && t.renderSeconds == null && t.renderStart) {
+      t.renderSeconds = Number(process.hrtime.bigint() - t.renderStart) / 1e9;
+    }
+    const round3 = n => (n == null ? null : Math.round(n * 1000) / 1000);
+    return { synth: round3(t.synthSeconds), composeAndRender: round3(t.renderSeconds) };
+  };
+
   if (hasExternalNarration) {
     log('[1/3] synth (skip — external narration)');
     writeStageInputs(config, outDir);
@@ -298,6 +319,7 @@ function build(config, opts = {}) {
       throw new Error('release check failed after measured narration timing');
     }
   }
+  markSynthDone();
 
   const selectedRenderer = getRenderer(opts.renderer || config.renderer);
   log(`[2/3] compose (${selectedRenderer.name})`);
@@ -311,6 +333,7 @@ function build(config, opts = {}) {
     log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
     let results;
     let projectDir;
+    let renderReuse = null; // span reuse is not applicable on per-preset paths
     if (selectedRenderer.name === 'hyperframes') {
       const composed = selectedRenderer.compose(cc, outDir);
       projectDir = composed.dir;
@@ -326,6 +349,7 @@ function build(config, opts = {}) {
       // buildDeliverables above and are not cached at the base level.
       const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, { ...opts, name, log });
       projectDir = rendered.dir;
+      renderReuse = rendered.reuse || null;
       const { buildDeliverablesFromSource } = require('./exports');
       results = buildDeliverablesFromSource(cc, rendered.mp4, outDir, { ...opts, log });
     }
@@ -341,9 +365,17 @@ function build(config, opts = {}) {
         typeof opts.companion === 'string' ? { aim: opts.companion } : {},
         { log });
     }
+    // CHANGE-2026-026 / NAR-009-025: advisory revision recording. The build
+    // has succeeded; a ledger problem is reported and never fails it.
+    const revision = revisions.recordRevision({
+      config, opts, outDir, manifest, renderReuse,
+      deliverableCount: results.length, videoName: name,
+      stageDurations: stageDurations(), log,
+    });
     return {
       mp4, seconds, project: projectDir, renderer: selectedRenderer.name, deliverables: results,
       ...(companion ? { companion } : {}),
+      ...(revision ? { revisions: revision } : {}),
       ...(selectedRenderer.name === 'hyperframes' ? { hf: projectDir } : {}),
     };
   }
@@ -368,8 +400,17 @@ function build(config, opts = {}) {
   }
   const seconds = rendered.seconds == null ? probe(mp4) : rendered.seconds;
   log(`done -> ${mp4}  (${seconds.toFixed(1)}s)`);
+  // CHANGE-2026-026 / NAR-009-025: advisory revision recording. The build has
+  // succeeded; a ledger problem is reported and never fails it.
+  const revision = revisions.recordRevision({
+    config, opts, outDir, manifest,
+    renderReuse: rendered.reuse || null,
+    deliverableCount: 0, videoName: name,
+    stageDurations: stageDurations(), log,
+  });
   return {
     mp4, seconds, project: rendered.dir, renderer: selectedRenderer.name,
+    ...(revision ? { revisions: revision } : {}),
     ...(selectedRenderer.name === 'hyperframes' ? { hf: rendered.dir } : {}),
   };
 }

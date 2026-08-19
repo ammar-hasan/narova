@@ -6,6 +6,33 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Revision ledger (advisory).** Every successful base build now records a
+  revision to the append-only `out/revisions.jsonl` when — and only when —
+  the effective resolved project state changed since the last recorded
+  revision; an unchanged rebuild records nothing and says so. Each record
+  carries the audio/timing fingerprints, per-scene identity digests, measured
+  stage durations, and a measured reuse report for that build: per-scene
+  audio byte-identity by content digest, render-span reuse vs identity
+  re-render vs fallback, sentence-cache hit/fresh counts, and the shared
+  artifacts rebuilt by design. Ratios state their basis and unit; missing
+  evidence is "not applicable", never invented; fallback re-renders never
+  count as reuse. Losing the ledger never fails anything (history restarts
+  at v1); variants, deliverables, and standalone synth/compose/captions
+  never record revisions.
+- **`narova diff` and `narova history`.** `diff` predicts the revision
+  impact of your current edits per scene (script / visual / timing /
+  structural; narration-only edits keep other scenes' audio and visuals),
+  with a predicted reuse summary that states its basis and unit and an
+  estimated render time scaled from previously measured stage durations —
+  omitted, with a plain statement, before any measurement exists. With no
+  ledger yet, `diff` may compare against the last build manifest and names
+  that baseline. `history` lists recorded revisions with one-line change
+  summaries and measured reuse, annotates a free-text label (metadata
+  only), and compares two revisions `a..b` producing the same report from
+  the records alone. Both are advisory and produce no media.
+
 ## [0.31.10] - 2026-08-19
 
 ### Added

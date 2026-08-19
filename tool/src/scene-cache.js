@@ -307,6 +307,22 @@ function fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, rea
  * - whole-video renderer: reuse the whole MP4 if valid, else full render and
  *   store the result.
  * - none: delegate straight to renderer.render(). */
+/* Build the measured reuse summary (CHANGE-2026-026 / NAR-007-036) attached
+ * to every renderToMp4 result. `fallback` and `selectiveSkipped` name causes
+ * plainly; a fallback re-render is never counted as reuse. */
+function reuseSummary(cachePlan, spans, fallback = null) {
+  return {
+    mode: cachePlan.mode,
+    fallback,
+    selectiveSkipped: cachePlan.selectiveSkipped || null,
+    spans: (spans || []).map(s => ({
+      sceneId: s.sceneId,
+      status: fallback ? 'fallback' : (s.reusable ? 'reused' : 'rendered'),
+      seconds: s.expectedSeconds,
+    })),
+  };
+}
+
 function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
   const log = opts.log || (() => {});
   const name = opts.name || 'video.mp4';
@@ -331,7 +347,9 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
         // safe) and fall through to a full render below.
         log(`scene cache: per-scene render failed (${e.message}) — falling back to full render`);
         for (const s of needRender) { try { fs.rmSync(s.spanFile, { force: true }); } catch {} }
-        return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, e.message);
+        const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, e.message);
+        fb.reuse = reuseSummary(cachePlan, spans, `per-scene render failed: ${e.message}`);
+        return fb;
       }
     }
     // Re-validate after rendering (a freshly written span that came up short
@@ -339,21 +357,30 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     const broken = spans.filter(s => !spanIsValid(s.spanFile, s.expectedSeconds));
     if (broken.length) {
       log(`scene cache: ${broken.length} span(s) invalid after render — falling back to full render`);
-      return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `${broken.length} invalid span(s)`);
+      const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `${broken.length} invalid span(s)`);
+      fb.reuse = reuseSummary(cachePlan, spans, `${broken.length} invalid span(s) after render`);
+      return fb;
     }
     const audio = fullAudioPath(outDir, config);
     if (!fs.existsSync(audio)) {
       log('scene cache: full narration audio missing — falling back to full render');
-      return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, 'full narration audio missing');
+      const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, 'full narration audio missing');
+      fb.reuse = reuseSummary(cachePlan, spans, 'full narration audio missing');
+      return fb;
     }
     try {
       assembleFromSpans(spans, audio, outMp4, log);
     } catch (e) {
       log(`scene cache: concat failed (${e.message}) — falling back to full render`);
-      return fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `concat failed: ${e.message}`);
+      const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `concat failed: ${e.message}`);
+      fb.reuse = reuseSummary(cachePlan, spans, `concat failed: ${e.message}`);
+      return fb;
     }
     pruneCache(cacheDir(outDir), spans.map(s => s.spanFile));
-    return { mp4: outMp4, seconds: probe(outMp4), dir: outDir, project: outDir, renderer: renderer.name };
+    return {
+      mp4: outMp4, seconds: probe(outMp4), dir: outDir, project: outDir, renderer: renderer.name,
+      reuse: reuseSummary(cachePlan, spans, null),
+    };
   }
 
   if (mode === 'whole-video') {
@@ -370,7 +397,10 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     if (cachePlan.reused) {
       fs.copyFileSync(cachePlan.wholeFile, outMp4);
       log(`scene cache: whole-video reuse (${renderer.displayName}) — render skipped`);
-      return { ...composed, mp4: outMp4, seconds: probe(outMp4), project: composed.dir || outDir };
+      return {
+        ...composed, mp4: outMp4, seconds: probe(outMp4), project: composed.dir || outDir,
+        reuse: { mode: 'whole-video', fallback: null, selectiveSkipped: cachePlan.selectiveSkipped || null, spans: null, wholeVideoReused: true },
+      };
     }
     log(`scene cache: whole-video miss (${renderer.displayName}) — full render, then cached`);
     const rendered = renderer.render(config, outDir, opts);
@@ -384,11 +414,14 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     } catch (e) {
       log(`scene cache: could not store whole-video cache (${e.message}) — build result is unaffected`);
     }
+    rendered.reuse = { mode: 'whole-video', fallback: null, selectiveSkipped: cachePlan.selectiveSkipped || null, spans: null, wholeVideoReused: false };
     return rendered;
   }
 
   // mode === 'none' — no caching for this renderer.
-  return renderer.render(config, outDir, opts);
+  const direct = renderer.render(config, outDir, opts);
+  direct.reuse = direct.reuse || { mode: 'none', fallback: null, selectiveSkipped: null, spans: null };
+  return direct;
 }
 
 /* Full render via the renderer, then (for per-scene renderers) split the
@@ -500,5 +533,5 @@ module.exports = {
   CACHE_DIR, cacheDir,
   renderContextHash, sceneTimingsFingerprint, sceneCacheKey, wholeVideoKey,
   spanIsValid, planSpans, plan, assembleFromSpans, renderToMp4, fullAudioPath,
-  formatCacheStatus, selectiveRenderSafe, pruneCache,
+  formatCacheStatus, selectiveRenderSafe, pruneCache, reuseSummary,
 };
