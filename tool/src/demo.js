@@ -21,12 +21,20 @@ const DEMO_DIR_NAME = 'narova-demo';
 /* The demo project — demonstration material, deliberately NOT the neutral
  * init scaffold (NAR-021-004). Voice matches the pinned acquisition
  * (en_US-ryan-medium) so first run needs exactly one voice download.
- * Scenes use the portable visual vocabulary so the demo renders under the
- * browser profile AND the browserless profile (NAR-000-006). */
+ *
+ * Portability discipline (the demo must look right under BOTH renderer
+ * profiles, NAR-000-006): every stack child carries an explicit height so
+ * layout is identical top-packed geometry in the canvas engine (which has
+ * no justify) and the CSS engine; every text centers via textAlign; the
+ * only animations used are `enter` (staggered pop/rise/fade) and `drift`,
+ * the two mechanisms both engines animate. Flex-distributed or
+ * animate-array motion is avoided because the browser projection does not
+ * emit it. */
 const DEMO_CONFIG = `// Narova demo — demonstration material. This file is the demo project that
 // \`narova demo\` builds; it is intentionally NOT the neutral \`narova init\`
 // scaffold. Keep it if you want a working reference; delete the directory
 // anytime. Make your own project with: narova init <dir>
+const BG = { type: "linear", angle: 160, stops: [{ color: "#0e0e13", at: 0 }, { color: "#17171f", at: 1 }] };
 export default {
   title: "Made with Narova",
   size: "16:9",
@@ -40,10 +48,26 @@ export default {
       vo: [
         { who: "a", text: "This video was made by Narova, on this machine, from one command." },
       ],
-      visual: { type: "stack", style: { direction: "column", align: "center", justify: "center", gap: 22, background: "#101014" },
+      visual: { type: "stack", style: { direction: "column", align: "center", background: BG },
         children: [
-          { type: "text", text: "npx narova demo", style: { color: "#f5f5f5", fontSize: 64, weight: 800 }, enter: "rise" },
-          { type: "text", text: "scene-scripted video, synthesized locally", style: { color: "#a0a0a8", fontSize: 22 }, enter: "fade" },
+          { type: "rect", style: { height: 116, background: "transparent" } },
+          { type: "text", text: "npx narova demo",
+            style: { height: 54, fontSize: 44, fontWeight: 800, color: "#f5f5f5", textAlign: "center" },
+            enter: { type: "rise", duration: 0.6 } },
+          { type: "rect", style: { height: 30, background: "transparent" } },
+          { type: "group", style: { width: 180, height: 180 }, enter: { type: "pop", duration: 0.55 }, drift: "in",
+            children: [
+              { type: "circle", style: { width: 180, height: 180, fill: "transparent", borderWidth: 3, borderColor: "#2ee6d6" } },
+              { type: "circle", style: { position: "absolute", x: 84, y: -6, width: 12, height: 12, fill: "#2ee6d6" } },
+              { type: "circle", style: { position: "absolute", x: 156, y: 120, width: 12, height: 12, fill: "#a0a0a8" } },
+              { type: "circle", style: { position: "absolute", x: 12, y: 120, width: 12, height: 12, fill: "#a0a0a8" } },
+              { type: "path", d: "M38 30 L74 50 L38 70 Z", viewBox: "0 0 100 100",
+                style: { position: "absolute", x: 48, y: 48, width: 84, height: 84, fill: "#f5f5f5" } },
+            ] },
+          { type: "rect", style: { height: 30, background: "transparent" } },
+          { type: "text", text: "scene-scripted video, synthesized locally",
+            style: { height: 30, fontSize: 20, color: "#a0a0a8", textAlign: "center" },
+            enter: { type: "fade", at: 0.5, duration: 0.5 } },
         ] },
     },
     {
@@ -51,10 +75,23 @@ export default {
       vo: [
         { who: "a", text: "Your story goes here. Edit this file and build again." },
       ],
-      visual: { type: "stack", style: { direction: "column", align: "center", justify: "center", gap: 22, background: "#101014" },
+      visual: { type: "stack", style: { direction: "column", align: "center", background: BG },
         children: [
-          { type: "text", text: "What would you like to make?", style: { color: "#f5f5f5", fontSize: 56, weight: 800 }, enter: "rise" },
-          { type: "text", text: "narova-demo/reel.config.mjs — this text, this voice, this render", style: { color: "#a0a0a8", fontSize: 20 }, enter: "fade" },
+          { type: "rect", style: { height: 140, background: "transparent" } },
+          { type: "text", text: "What would you like to make?",
+            style: { height: 50, fontSize: 38, fontWeight: 800, color: "#f5f5f5", textAlign: "center" },
+            enter: { type: "rise", duration: 0.6 } },
+          { type: "rect", style: { height: 44, background: "transparent" } },
+          { type: "stack", style: { direction: "row", width: 120, height: 24, align: "center", gap: 24 },
+            children: [
+              { type: "circle", style: { width: 14, height: 14, fill: "#a0a0a8" }, enter: { type: "pop", at: 0.15, duration: 0.4 } },
+              { type: "circle", style: { width: 18, height: 18, fill: "#2ee6d6" }, enter: { type: "pop", at: 0.4, duration: 0.4 } },
+              { type: "circle", style: { width: 14, height: 14, fill: "#a0a0a8" }, enter: { type: "pop", at: 0.65, duration: 0.4 } },
+            ] },
+          { type: "rect", style: { height: 44, background: "transparent" } },
+          { type: "text", text: "narova-demo/reel.config.mjs — this text, this voice, this render",
+            style: { height: 30, fontSize: 19, color: "#a0a0a8", textAlign: "center" },
+            enter: { type: "fade", at: 0.6, duration: 0.5 } },
         ] },
     },
   ],
