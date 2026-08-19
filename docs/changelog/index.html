@@ -66,7 +66,21 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.31.10</span>
+        <span class="rel-version" data-narova-version>0.31.11</span>
+        <span class="rel-date">2026-08-19</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Revision impact and history.</strong> Every successful base build now records a revision to the append-only <code>out/revisions.jsonl</code> when — and only when — the effective resolved project state changed; an unchanged rebuild records nothing and says so. Each record carries the audio/timing fingerprints, per-scene identity digests, measured stage durations, and a <em>measured reuse report</em>: per-scene audio byte-identity by content digest, render-span reuse vs identity re-render vs fallback, sentence-cache hit/fresh counts, and shared artifacts rebuilt by design. Ratios state their basis and unit; missing evidence is "not applicable", never invented; fallback re-renders never count as reuse.</li>
+          <li><strong><code>narova diff</code> and <code>narova history</code>.</strong> <code>diff</code> predicts the revision impact of your current edits per scene (script / visual / timing / structural; narration-only edits keep other scenes' audio and visuals), with a predicted reuse summary that states its basis and unit, and an estimated render time scaled from previously measured stage durations — omitted, with a plain statement, before any measurement exists. <code>history</code> lists recorded revisions with one-line change summaries and measured reuse, annotates a free-text label (metadata only), and compares two revisions <code>a..b</code> producing the same report from the records alone. Verified end to end on a real narrated build: editing one spoken turn left every other scene's audio byte-identical (digest-verified) while prediction matched measurement exactly.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.31.10</span>
         <span class="rel-date">2026-08-19</span>
       </div>
       <div class="rel-body">

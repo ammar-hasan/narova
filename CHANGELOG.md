@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.31.11] - 2026-08-19
+
 ### Added
 
 - **Revision ledger (advisory).** Every successful base build now records a
