@@ -15,6 +15,23 @@ const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
 const CAPTION_PRESETS = new Set(['subtitle', 'karaoke', 'slam', 'pop', 'rise']);
 const ALIGN_ENGINES = new Set(['auto', 'faster-whisper', 'whisper-cpp']);
+const ASSERTION_CLASSES = new Set([
+  'factual', 'mechanical', 'continuity', 'creative-intent',
+  'creative-hypothesis', 'deliberate-violation', 'deliberate-choice', 'brand',
+  'accessibility', 'narrative', 'experimental',
+]);
+const ASSERTION_ORIGINS = new Set([
+  'user-brief', 'agent-hypothesis', 'creative-brief', 'proof-branch',
+  'project-state', 'entity', 'brand', 'source-evidence',
+  'production-requirement', 'human-feedback',
+]);
+const ASSERTION_METRICS = new Set([
+  'audio.silence_ratio', 'audio.mean_db', 'audio.peak_db',
+  'video.motion_mean', 'video.motion_p95', 'video.static_ratio',
+  'video.black_ratio', 'video.cut_count',
+  'attention.dominant_region_share', 'caption.word_count',
+]);
+const ASSERTION_OPERATORS = new Set(['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'between']);
 
 /* Resolve a raw config (from reel.config.*) applying defaults + CLI overrides.
  * Returns { title, size:{w,h}, voices, theme, mode, chrome, themeCss, choreography,
@@ -488,6 +505,159 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       }
     }
   });
+
+  // Creative assertions are creator-owned judgement inputs. They are resolved
+  // with the project so `narova judge` sees the same effective scene/timeline,
+  // but they never become rendering, cache, proof, or validity inputs.
+  const assertions = [];
+  if (raw.assertions != null) {
+    if (!Array.isArray(raw.assertions)) {
+      errs.push('config.assertions: expected an array');
+    } else {
+      const assertionIds = new Set();
+      const normalizeTextArray = (value, at) => {
+        if (value == null) return undefined;
+        if (!Array.isArray(value)) {
+          errs.push(`${at}: expected an array of non-empty strings`);
+          return undefined;
+        }
+        const normalized = [];
+        value.forEach((item, index) => {
+          if (typeof item !== 'string' || !item.trim()) {
+            errs.push(`${at}[${index}]: expected a non-empty string`);
+          } else normalized.push(item.trim());
+        });
+        return normalized;
+      };
+
+      raw.assertions.forEach((entry, index) => {
+        const at = `config.assertions[${index}]`;
+        if (!entry || typeof entry !== 'object' || Array.isArray(entry)) {
+          errs.push(`${at}: expected an object`);
+          return;
+        }
+        const normalized = {};
+        if (typeof entry.id !== 'string' || !ID_RE.test(entry.id)) {
+          errs.push(`${at}.id: must match ${ID_RE}`);
+        } else if (assertionIds.has(entry.id)) {
+          errs.push(`${at}.id: duplicate "${entry.id}"`);
+        } else {
+          assertionIds.add(entry.id);
+          normalized.id = entry.id;
+        }
+        if (!ASSERTION_CLASSES.has(entry.class)) {
+          errs.push(`${at}.class: expected one of ${[...ASSERTION_CLASSES].join('|')}`);
+        } else normalized.class = entry.class;
+        if (typeof entry.expect !== 'string' || !entry.expect.trim()) {
+          errs.push(`${at}.expect: required non-empty string`);
+        } else normalized.expect = entry.expect.trim();
+
+        if (entry.origin == null) {
+          normalized.origin = { kind: 'unspecified' };
+        } else if (typeof entry.origin === 'object' && !Array.isArray(entry.origin)) {
+          if (!ASSERTION_ORIGINS.has(entry.origin.kind)) {
+            errs.push(`${at}.origin.kind: expected one of ${[...ASSERTION_ORIGINS].join('|')}`);
+          } else {
+            normalized.origin = { kind: entry.origin.kind };
+            if (entry.origin.ref != null) {
+              if (typeof entry.origin.ref !== 'string' || !entry.origin.ref.trim()) {
+                errs.push(`${at}.origin.ref: expected a non-empty string`);
+              } else normalized.origin.ref = entry.origin.ref.trim();
+            }
+          }
+        } else errs.push(`${at}.origin: expected { kind, ref? }`);
+
+        if (entry.scope != null) {
+          if (typeof entry.scope !== 'object' || Array.isArray(entry.scope)) {
+            errs.push(`${at}.scope: expected an object`);
+          } else {
+            const scope = {};
+            if (entry.scope.scene != null) {
+              if (typeof entry.scope.scene !== 'string' || !seen.has(entry.scope.scene)) {
+                errs.push(`${at}.scope.scene: must name a base scene`);
+              } else scope.scene = entry.scope.scene;
+            }
+            const hasStart = entry.scope.start != null;
+            const hasEnd = entry.scope.end != null;
+            if (hasStart !== hasEnd) {
+              errs.push(`${at}.scope: start and end must be supplied together`);
+            } else if (hasStart) {
+              if (typeof entry.scope.start !== 'number' || !Number.isFinite(entry.scope.start)
+                  || entry.scope.start < 0) {
+                errs.push(`${at}.scope.start: expected a finite non-negative number`);
+              } else scope.start = entry.scope.start;
+              if (typeof entry.scope.end !== 'number' || !Number.isFinite(entry.scope.end)
+                  || entry.scope.end <= entry.scope.start) {
+                errs.push(`${at}.scope.end: expected a finite number greater than start`);
+              } else scope.end = entry.scope.end;
+            }
+            normalized.scope = scope;
+          }
+        }
+
+        if (entry.observe != null) {
+          if (!Array.isArray(entry.observe)) {
+            errs.push(`${at}.observe: expected an array`);
+          } else {
+            normalized.observe = [];
+            entry.observe.forEach((probe, probeIndex) => {
+              const pat = `${at}.observe[${probeIndex}]`;
+              if (!probe || typeof probe !== 'object' || Array.isArray(probe)) {
+                errs.push(`${pat}: expected an object`);
+                return;
+              }
+              const out = {};
+              if (!ASSERTION_METRICS.has(probe.metric)) {
+                errs.push(`${pat}.metric: expected one of ${[...ASSERTION_METRICS].join('|')}`);
+              } else out.metric = probe.metric;
+              if (!ASSERTION_OPERATORS.has(probe.operator)) {
+                errs.push(`${pat}.operator: expected one of ${[...ASSERTION_OPERATORS].join('|')}`);
+              } else out.operator = probe.operator;
+              if (probe.operator === 'between') {
+                if (!Array.isArray(probe.value) || probe.value.length !== 2
+                    || !probe.value.every(value => typeof value === 'number' && Number.isFinite(value))
+                    || probe.value[1] < probe.value[0]) {
+                  errs.push(`${pat}.value: between expects two ascending finite numbers`);
+                } else out.value = probe.value.slice();
+              } else if (typeof probe.value !== 'number' || !Number.isFinite(probe.value)) {
+                errs.push(`${pat}.value: expected a finite number`);
+              } else out.value = probe.value;
+              if (probe.tolerance != null) {
+                if (typeof probe.tolerance !== 'number' || !Number.isFinite(probe.tolerance)
+                    || probe.tolerance < 0) {
+                  errs.push(`${pat}.tolerance: expected a finite non-negative number`);
+                } else out.tolerance = probe.tolerance;
+              }
+              normalized.observe.push(out);
+            });
+          }
+        }
+
+        for (const key of ['riskyBecause', 'questions']) {
+          const value = normalizeTextArray(entry[key], `${at}.${key}`);
+          if (value !== undefined) normalized[key] = value;
+        }
+
+        if (entry.related != null) {
+          if (typeof entry.related !== 'object' || Array.isArray(entry.related)) {
+            errs.push(`${at}.related: expected an object`);
+          } else {
+            const related = {};
+            for (const key of ['scene', 'beat', 'component', 'source', 'asset', 'generation', 'creativeLineage']) {
+              if (entry.related[key] == null) continue;
+              if (typeof entry.related[key] !== 'string' || !entry.related[key].trim()) {
+                errs.push(`${at}.related.${key}: expected a non-empty string`);
+              } else related[key] = entry.related[key].trim();
+            }
+            const protectedValues = normalizeTextArray(entry.related.protected, `${at}.related.protected`);
+            if (protectedValues !== undefined) related.protected = protectedValues;
+            normalized.related = related;
+          }
+        }
+        assertions.push(normalized);
+      });
+    }
+  }
 
   // External narration: use a pre-recorded audio file instead of TTS synthesis.
   // When set, synth copies this file as the narration track (no TTS run).
@@ -1042,7 +1212,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

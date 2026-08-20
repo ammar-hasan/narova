@@ -106,22 +106,28 @@ unproven visual assumption.
 1. **Diverge** — form 2–3 structurally different hypotheses.
 2. **Specify** — fill `creative-brief.md`: intended effect, unusual hypothesis,
    evidence, constraints, representation, temporal behavior, medium choice,
-   and observable rejection criteria. Add camera, depth, light, performance,
-   or interaction fields only when the chosen medium actually uses them.
+   and observable rejection criteria. Carry decisive finished-artifact intent
+   into root `assertions`; use measurable probes only for facts the metric
+   actually represents. Add camera, depth, light, performance, or interaction
+   fields only when the chosen medium actually uses them.
 3. **Prove separately** — give each direction only the smallest decisive proof:
    a representative state plus the risky transition/detail/interaction, or an
    equivalent 8–12 second sequence. Save each as a branch with rationale.
-4. **Commit** — compare the 2–3 rendered proofs directly with the reference or
-   written intent. Approve one branch; reject or archive the others. Set
+4. **Commit** — run `narova judge` over each encoded proof when available, then
+   compare the 2–3 rendered proofs directly with the evidence, reference, and
+   written intent. Treat the report as expanded perception rather than a vote;
+   `UNCERTAIN` is a prompt for direct inspection, and an intentional divergence
+   may be exactly the discovery worth keeping. Approve one branch; reject or archive the others. Set
    `Status: approved` only when the selected proof passes.
 5. **Expand once** — restore the approved branch, record its exact proof identity
    in the brief's expansion-lineage fields, then build the complete work from
    it. Saved CLI overrides such as `--variant` are reapplied automatically.
    Preserve its coherent rules without drifting scene by scene.
-6. **Reject observably** — run beat-level QA and fail output for the declared,
-   medium-specific problems: conceptual familiarity, invisible change, lost
-   evidence, ambiguous interaction, generic craft, broken continuity, or
-   reference mismatch.
+6. **Reject observably** — run beat-level QA and Video CI over the encoded
+   output. Reject only against the declared, medium-specific intent and
+   evidence: invisible change, lost evidence, ambiguous interaction, broken
+   continuity, or reference mismatch. Creative interpretation remains with the
+   directing agent; no universal pacing, clarity, or engagement rule applies.
 
 The brief is a creative launchpad, not paperwork. It gives the model enough
 specificity to make confident decisions without collapsing into generic defaults.

@@ -28,6 +28,7 @@ const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
 const revisions = require('./revisions');
 const machine = require('./machine');
+const { writeVideoCiBinding } = require('./video-ci-binding');
 const machineActive = machine.isActive;
 
 /* ---- Python (synth) handoff -------------------------------------------------
@@ -165,10 +166,10 @@ function writeStageInputs(config, outDir) {
   // narration.json — Python TTS contract (compatibility projection)
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
   // config.resolved.json — resolved config for Python (compatibility projection)
-  // Provenance declarations are advisory report inputs, not Python/runtime
-  // inputs. Keeping them out also ensures an authorship-note edit cannot
+  // Provenance declarations and creative assertions are advisory report inputs,
+  // not Python/runtime inputs. Keeping them out also ensures either kind of edit cannot
   // invalidate a previously reviewed creative proof via this projection.
-  const { assetsDir: _assetsDir, provenance: _provenance, ...serializableConfig } = config;
+  const { assetsDir: _assetsDir, provenance: _provenance, assertions: _assertions, ...serializableConfig } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
   return {
     manifest: manifestFile,
@@ -475,8 +476,13 @@ function build(config, opts = {}) {
       deliverableCount: results.length, videoName: name,
       stageDurations: stageDurations(), log,
     });
+    const videoCiEvidence = writeVideoCiBinding(mp4, {
+      outDir, projectDir: config.projectDir,
+    });
+    artifact(videoCiEvidence, 'video-ci-evidence');
     return {
       mp4, seconds, project: projectDir, renderer: selectedRenderer.name, deliverables: results,
+      videoCiEvidence,
       ...(companion ? { companion } : {}),
       ...(revision ? { revisions: revision } : {}),
       ...(selectedRenderer.name === 'hyperframes' ? { hf: projectDir } : {}),
@@ -514,8 +520,13 @@ function build(config, opts = {}) {
     deliverableCount: 0, videoName: name,
     stageDurations: stageDurations(), log,
   });
+  const videoCiEvidence = writeVideoCiBinding(mp4, {
+    outDir, projectDir: config.projectDir,
+  });
+  artifact(videoCiEvidence, 'video-ci-evidence');
   return {
     mp4, seconds, project: rendered.dir, renderer: selectedRenderer.name,
+    videoCiEvidence,
     ...(companion ? { companion } : {}),
     ...(revision ? { revisions: revision } : {}),
     ...(selectedRenderer.name === 'hyperframes' ? { hf: rendered.dir } : {}),

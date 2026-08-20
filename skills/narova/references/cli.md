@@ -39,6 +39,7 @@ separate `narova-stock-extensions` skill is the LLM-led discovery path for
 changing sites. Run `npm run test:stock-live` for every available core adapter;
 absent optional keys are reported as skips.
 | `narova check` | validate config, lint cues / ids / data-* attrs / theme CSS, sniff `vo` for unledgered stats & superlatives, and report walkthrough freshness. The `ok:` line ends with an **estimated narration length** at the configured tempo — the knob for hitting a target duration before any audio exists. No TTS, browser, or writes. `--strict` checks that every claim has a ledger entry. `--release` adds a build gate: remote deps, missing claims, unsupported HTML, black frames, stale walkthrough captures, and missing/draft creative approval for non-trivial work. Exit 3 on release-mode non-pass findings. | instant |
+| `narova judge [--video <file>] [--json]` | read-only Video CI mirror over one self-contained encoded artifact (default `out/video.mp4`). Joins explicit creative assertions to measured frame, motion, timing, audio, caption, hierarchy-proxy, and production-state evidence; build receipts bind shared sidecars/timing to the matching video digest, while unbound context stays unavailable. Indirect playlists and attached artwork are rejected. Accounts for five perception families and marks unavailable semantic perception `UNCERTAIN`. No universal score, taste gate, mutation, network access, plan, or repair. | bounded local decode |
 | `narova compile` | compile `reel.config.*` → `out/manifest.json` (versioned project manifest). It records the selected renderer and speech-backend implementation versions when they are available locally, otherwise explicit nulls; no provider is executed to obtain them. The manifest is also written automatically by `synth`, `compose`, and `build`. | instant |
 | `narova plan` | compare current `reel.config.*` against the last `out/manifest.json` and classify what changed. Prints change level (none/config/visual/walkthrough-capture/audio/full), affected scenes, and which pipeline stages will rebuild. | instant |
 | `narova diff` | per-scene revision impact vs the latest recorded revision: each scene `unchanged` / `script changed` / `visual changed` / `timing changed` / `structural`, derived impacts (narration regenerated, captions retimed, spans reused/re-rendered), predicted reuse with basis and unit, and an estimated render time scaled from recorded measured stage durations (omitted with a plain statement before any measurement exists). No ledger: may compare against the last build manifest, naming that baseline; states plainly when nothing is recorded. Pass the same `--fps`/`--quality`/`--renderer` flags as the build so the render-context comparison matches. | instant |
@@ -93,6 +94,10 @@ Renderer providers are different: both are bundled, local, and free. See
   path to a clean 10–20s recording (install once: `narova-setup --chatterbox`).
 - `--renderer hyperframes|no-browser` — renderer provider. HyperFrames is the
   default; no-browser is browserless and requires `scene.visual` on every scene.
+- `--video <file>` — `judge` only: inspect this local, self-contained encoded
+  video instead of `<project>/out/video.mp4`. Indirect playlists are not video
+  artifacts; optional shared output context is used only when a matching build
+  evidence receipt binds it to the selected bytes.
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
   Meant for visual-only edits; if spoken text, scene topology, or silent runtime
   changed since the last synth, `--reuse` is ignored with a note and the needed
@@ -215,9 +220,10 @@ times for you.
   window/full presentation edits reuse the recording.
 - Visual QA: use `narova shots --beats` for narration/marker-driven work and
   `shots --motion` for scene coverage (`--at t1,t2` remains available for a
-  custom shot plan). Then LOOK at every frame against `creative-brief.md` —
-  technical lint cannot reject hidden action, empty staging, weak hierarchy,
-  broken continuity, or a generic visual direction.
+  custom shot plan). After encoding, run `narova judge` to expose assertion
+  correspondence, temporal behavior, and uncertainty, then LOOK at the evidence
+  against `creative-brief.md`. Judgement is a mirror, not a substitute for the
+  directing agent's taste or a universal definition of quality.
 - Extra checks on the generated page, inside `out/hf`:
   `npx hyperframes lint`, `npx hyperframes check`,
   `npx hyperframes snapshot --at <t1,t2> -o <directory>`. Snapshot `-o` /

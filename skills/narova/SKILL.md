@@ -180,7 +180,7 @@ user's approval before any consequential external mutation.
    rejection criteria. See `references/prompt-to-video.md` §Creative confidence loop.
 1. **Intake** — `references/prompt-to-video.md` §Intake.
 2. `doctor` — check the machine. Fix with `references/environment.md`.
-2. `init generated/<slug>` + write `reel.config.mjs`. Format: `references/scene-script.md`.
+3. `init generated/<slug>` + write `reel.config.mjs`. Format: `references/scene-script.md`.
    Creative direction: `references/prompt-to-video.md`. URL sources: `ingest <url>`
    first, then `references/url-to-source.md`. For creative media, use the
    built-in stock adapters for repeatable search/download mechanics, but keep
@@ -189,20 +189,32 @@ user's approval before any consequential external mutation.
    LLM-led discovery with the available web search, HTTP, or browser capability.
    Finish with `assets download` or `assets import`; see
    `references/stock-assets.md`.
-3. Write `claims.md` — every factual claim must trace to a source. When the
+4. Record creator-owned `assertions` for finished-artifact conditions that
+   matter: explicit requirements, unusual hypotheses, deliberate violations,
+   continuity, accessibility, brand, and factual constraints. Add inspectable
+   `observe` probes only when a supported measurement actually represents the
+   intent; leave interpretive intent as prose rather than inventing a score.
+   See `references/scene-script.md` §Creative assertions.
+5. Write `claims.md` — every factual claim must trace to a source. When the
    author knows a disclosure fact that artifacts cannot prove, optionally add
    `provenance: { script: { authorship, note? }, disclosure? }`; never infer or
    auto-fill it. See `references/scene-script.md`.
-4. `check` — fast validation (no TTS). Run after every config edit.
+6. `check` — fast validation (no TTS). Run after every config edit.
    For optional craft advice: `narova critique [creative|social-short|explainer|presentation|cinematic|accessibility]`.
-5. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
-6. `compose` — generates the selected renderer project. Run `narova shots --beats`
+7. `synth` — audio & word timings. Walkthroughs: follow with `walkthrough capture <id>`.
+8. `compose` — generates the selected renderer project. Run `narova shots --beats`
    for narration/marker-driven work, or `shots --motion` for scene coverage.
-7. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
-8. `build --release` — preflights strict checks before synthesis, rechecks
+9. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
+10. `build --release` — preflights strict checks before synthesis, rechecks
    measured timing before compose/render, writes `out/video.mp4`, then runs the
-   temporal audit. Verify the encoded contact sheet against the approved brief.
-9. When delivery needs attribution or an evidence summary, run `provenance`
+   temporal audit. Then run `narova judge` (or `narova judge --json`) to compare
+   the encoded result with assertions. Treat `ALIGNED`, `DIVERGED`, `OBSERVED`,
+   and `UNCERTAIN` as evidence relationships, never artistic pass/fail states;
+   build receipts bind timing/caption context to each rendered video's digest,
+   and unbound optional context stays unavailable rather than being guessed;
+   preserve intentional surprises and make the directing decision yourself.
+   Verify the encoded contact sheet against the approved brief.
+11. When delivery needs attribution or an evidence summary, run `provenance`
    (or `provenance --json`) and `assets credits --format
    text|youtube|web|json`. These are read-only advisory projections, not legal
    clearance or release gates.

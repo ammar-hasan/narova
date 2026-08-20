@@ -280,6 +280,16 @@ test('no-browser provider renders a real browserless MP4 with local audio', { ti
   }, {}, project);
   const result = build(config, { out: path.join(project, 'out'), projectDir: project, fps: 10, quality: 'draft', log: () => {} });
   assert.ok(fs.existsSync(result.mp4));
+  assert.ok(fs.existsSync(result.videoCiEvidence));
+  const videoCiEvidence = JSON.parse(fs.readFileSync(result.videoCiEvidence, 'utf8'));
+  assert.equal(videoCiEvidence.schema, 'narova.video-ci-evidence/1');
+  assert.equal(videoCiEvidence.artifact.path, path.basename(result.mp4));
+  assert.match(videoCiEvidence.artifact.sha256, /^[a-f0-9]{64}$/);
+  assert.equal(videoCiEvidence.context.manifest.available, true);
+  assert.ok(Array.isArray(videoCiEvidence.context.manifest.content.scenes));
+  assert.equal(Object.hasOwn(videoCiEvidence.context.manifest, 'value'), false);
+  assert.equal(Object.hasOwn(videoCiEvidence.context.manifest, 'scenes'), false);
+  assert.equal(videoCiEvidence.context.captions.every(item => typeof item.content === 'string'), true);
   assert.equal(result.renderer, 'no-browser');
   assert.match(fs.readFileSync(path.join(project, 'out', 'captions.srt'), 'utf8'), /No-browser captions work\./);
   const dimensions = spawnSync('ffprobe', [

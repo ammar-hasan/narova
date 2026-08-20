@@ -74,6 +74,7 @@ operation may add fields in a later schema-1 release.
 | `compile` | `{ manifest, scenes }` | `manifest`, `stage-input`, `compatibility-state` |
 | `check` | `{ level, warnings, errors, critique? }` | `report` when creative identity is requested |
 | `critique` | `{ profile, advice }` | none |
+| `judge` | `{ judgement }`, where `judgement.schema` is `narova.judgement/1` | none |
 | `plan` | the stage plan object | none |
 | `provenance` | the provenance report object | none |
 | `diff` | the revision-impact report, plus its named baseline when applicable | none |
@@ -121,6 +122,47 @@ operation may add fields in a later schema-1 release.
 | `voice sample list` | `{ samples[] }` | none |
 | `voice sample add` | `{ name, path }` | `voice-sample` |
 | `voice sample remove` | `{ name, removed }` | none |
+
+### Video CI judgement
+
+`narova judge --json` inspects the existing encoded video and returns a
+read-only rendered-evidence mirror. The default subject is `out/video.mp4`;
+`--video <local-file>` selects another artifact. It never builds, downloads,
+rewrites assertions, changes project validity, or publishes a report file.
+The selected input must be one self-contained encoded media file; indirect
+playlists and attached artwork are rejected, and media decoding cannot use
+network protocols. Build-created `*.narova-ci.json` evidence receipts bind
+shared manifest/timing/caption context to one artifact digest. Unbound optional
+context is reported unavailable instead of being joined to an arbitrary video.
+Receipt context sources use one shape: `path`, `bytes`, `sha256`, `available`,
+optional `format`, optional `content`, and optional `reason`.
+Observation outcomes do not affect exit success. Missing or undecodable video
+and analysis failures are operation failures; `--plan` and `--repair` are not
+available in this phase and are usage errors.
+
+The `judgement` object contains:
+
+- `schema: "narova.judgement/1"`, `score: null`, `validityEffect: "none"`,
+  and `mutation: "none"`;
+- encoded artifact path, SHA-256, bytes, measured duration, and stream facts;
+- resolved authored-config path/byte digest/effective digest and any matching
+  build evidence-receipt identity;
+- the deterministic bounded sampling basis, explicit local/replaceable
+  perception implementation identities, and source-coverage grades;
+- normalized authored assertions;
+- exactly five ordered family summaries: intent/rendered correspondence,
+  visual/narrative correspondence, entity continuity, attention/visual
+  hierarchy, and temporal behavior; and
+- ordered observations with a time range, assertion/intent, observed result,
+  evidence, interpretation, confidence, principal classification, outcome,
+  production-state mapping, and suggested questions.
+
+`classification` is one of `MEASURED`, `INFERRED`, or `INTERPRETIVE`.
+`outcome` is one of `ALIGNED`, `DIVERGED`, `OBSERVED`, or `UNCERTAIN`; these are
+relationships to evidence, never artistic pass/fail states. Evidence records
+keep their source, metric, value, unit, basis, and availability. Missing
+semantic perception is explicit `UNCERTAIN`, not a guessed defect. Consumers
+must not derive a universal quality score from these independent observations.
 
 The removed `render` spelling is a usage error and directs callers to
 `compose` or `build`.
@@ -175,7 +217,10 @@ within `narova.result/1`.
    correctness gate.
 6. Build: `narova build --json`, adding `--release` only after release checks
    pass. Use `artifacts` to locate videos, captions, and evidence.
-7. Verify: inspect build artifacts, run `narova review --contact-sheet --json`
+7. Perceive the encoded result: `narova judge --json`. Compare observations to
+   authored assertions; preserve intentional surprises and resolve uncertainty
+   with direct review or a more capable explicit perceiver.
+8. Verify: inspect build artifacts, run `narova review --contact-sheet --json`
    and/or `narova shots --beats --json`, and use `--verify-motion` for the
    encoded audit. Treat exit 3 as a completed audit whose subject failed.
 

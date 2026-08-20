@@ -205,6 +205,79 @@ test('narration produces the Python contract', () => {
   assert.deepEqual(n[1].segments, c.scenes[1].vo);
 });
 
+test('creative assertions resolve as judgement-only authored state', () => {
+  const raw = {
+    ...validRaw(),
+    assertions: [{
+      id: 'silent-opening',
+      class: 'deliberate-choice',
+      expect: 'The first four seconds remain silent and nearly static.',
+      origin: { kind: 'user-brief', ref: 'opening experiment' },
+      scope: { scene: 's1', start: 0, end: 4 },
+      observe: [
+        { metric: 'audio.silence_ratio', operator: 'gte', value: 0.95 },
+        { metric: 'video.static_ratio', operator: 'between', value: [0.9, 1], tolerance: 0.01 },
+      ],
+      riskyBecause: ['no conventional hook'],
+      questions: ['Did any unintended movement enter the frame?'],
+      related: {
+        scene: 's1', source: 'scenes/opening.html', creativeLineage: 'proof-b',
+        protected: ['silence', 'camera rhythm'],
+      },
+      ignoredFutureKey: { safe: true },
+    }],
+  };
+  const resolved = resolveConfig(raw, {}, '.');
+  assert.deepEqual(resolved.assertions, [{
+    id: 'silent-opening',
+    class: 'deliberate-choice',
+    expect: 'The first four seconds remain silent and nearly static.',
+    origin: { kind: 'user-brief', ref: 'opening experiment' },
+    scope: { scene: 's1', start: 0, end: 4 },
+    observe: [
+      { metric: 'audio.silence_ratio', operator: 'gte', value: 0.95 },
+      { metric: 'video.static_ratio', operator: 'between', value: [0.9, 1], tolerance: 0.01 },
+    ],
+    riskyBecause: ['no conventional hook'],
+    questions: ['Did any unintended movement enter the frame?'],
+    related: {
+      scene: 's1', source: 'scenes/opening.html', creativeLineage: 'proof-b',
+      protected: ['silence', 'camera rhythm'],
+    },
+  }]);
+  assert.equal(raw.assertions[0].expect, 'The first four seconds remain silent and nearly static.');
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').assertions, []);
+  assert.throws(() => resolveConfig({
+    ...validRaw(),
+    assertions: [{ id: 'scalar-origin', class: 'creative-intent', expect: 'stay strange', origin: 'user-brief' }],
+  }, {}, '.'), /config\.assertions\[0\]\.origin: expected \{ kind, ref\? \}/);
+});
+
+test('creative assertions reject ambiguous identifiers, scopes, and probes', () => {
+  const bad = {
+    ...validRaw(),
+    assertions: [
+      { id: 'same', class: 'creative-intent', expect: 'one' },
+      { id: 'same', class: 'taste', expect: '', origin: 'model-opinion', scope: { scene: 'ghost', start: 2 }, observe: [
+        { metric: 'video.fun_score', operator: 'best', value: 'high', tolerance: -1 },
+      ] },
+    ],
+  };
+  assert.throws(() => resolveConfig(bad, {}, '.'), error => {
+    assert.match(error.message, /duplicate "same"/);
+    assert.match(error.message, /config\.assertions\[1\]\.class: expected one of/);
+    assert.match(error.message, /config\.assertions\[1\]\.expect: required non-empty string/);
+    assert.match(error.message, /config\.assertions\[1\]\.origin: expected \{ kind, ref\? \}/);
+    assert.match(error.message, /scope\.scene: must name a base scene/);
+    assert.match(error.message, /scope: start and end must be supplied together/);
+    assert.match(error.message, /observe\[0\]\.metric: expected one of/);
+    assert.match(error.message, /observe\[0\]\.operator: expected one of/);
+    assert.match(error.message, /observe\[0\]\.value: expected a finite number/);
+    assert.match(error.message, /observe\[0\]\.tolerance: expected a finite non-negative number/);
+    return true;
+  });
+});
+
 /* ---- new keys: platform, music, sfx, captions, align, variants ------------- */
 
 const noSize = () => { const raw = validRaw(); delete raw.size; return raw; };

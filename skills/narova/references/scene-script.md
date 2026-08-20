@@ -103,6 +103,73 @@ are preserved as written. `note` and `disclosure` are optional non-empty text.
 `narova provenance` always labels these values declared, never verified, and
 reports an absent block as "not declared" without warning or failure.
 
+## Creative assertions
+
+Root `assertions` are ordered, creator-owned statements about the finished
+artifact. Use them to preserve explicit requirements, creative hypotheses,
+deliberate exceptions, continuity, factual/brand/accessibility constraints,
+and decisions learned from a brief, proof branch, source, or human response.
+They are inputs to `narova judge`, not render instructions: changing an
+assertion does not change pixels, synthesis, cache/revision identity, proof
+validity, or release eligibility.
+
+```js
+assertions: [{
+  id: "silent-opening",                  // unique project ID
+  class: "deliberate-choice",
+  expect: "No narration or music occurs during the first four seconds.",
+  origin: { kind: "user-brief", ref: "opening direction" },
+  scope: { scene: "title", start: 0, end: 4 }, // scene and/or global seconds
+  observe: [
+    { metric: "audio.silence_ratio", operator: "gte", value: 0.98 },
+    { metric: "video.static_ratio", operator: "gte", value: 0.9 },
+  ],
+  riskyBecause: ["unconventional opening", "prolonged stillness"],
+  questions: ["Did any unintended movement weaken the effect?"],
+  related: {
+    scene: "title",
+    source: "scenes/title.html",
+    creativeLineage: "proof-b",
+    protected: ["silence", "camera rhythm", "other scenes"],
+  },
+}],
+```
+
+Classes: `factual`, `mechanical`, `continuity`, `creative-intent`,
+`creative-hypothesis`, `deliberate-violation`, `deliberate-choice`, `brand`,
+`accessibility`, `narrative`, `experimental`.
+
+Origins: `user-brief`, `agent-hypothesis`, `creative-brief`, `proof-branch`,
+`project-state`, `entity`, `brand`, `source-evidence`,
+`production-requirement`, `human-feedback`. An omitted origin is retained as
+unspecified.
+
+Phase 1 measurable probes are:
+
+- audio: `audio.silence_ratio`, `audio.mean_db`, `audio.peak_db`;
+- rendered video: `video.motion_mean`, `video.motion_p95`,
+  `video.static_ratio`, `video.black_ratio`, `video.cut_count`;
+- hierarchy proxy: `attention.dominant_region_share`; and
+- timed caption evidence: `caption.word_count`.
+
+Operators are `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, and inclusive `between`
+(two ascending values). `tolerance` is optional and non-negative; it expands
+the accepted comparison boundary in either direction, including inequalities. A probe
+should encode only a condition the metric genuinely represents. Do not turn
+“uncomfortable,” “alive,” “premium,” “beautiful,” or another interpretive
+goal into an arbitrary numeric target. Keep such intent in `expect`; the local
+judge will return `UNCERTAIN` when it lacks a capable semantic perceiver.
+
+Run `narova judge` after the relevant artifact exists. `ALIGNED` means every
+available explicit probe held; `DIVERGED` means one did not; `OBSERVED`
+describes a property without testing an assertion; `UNCERTAIN` means the
+relationship could not be established. None means good/bad or pass/fail.
+Successful builds record a per-video evidence receipt that binds shared timing,
+manifest, and caption context to that video's digest. A video without a
+matching receipt is still inspected, but unbound
+optional context remains unavailable rather than being guessed from current
+shared output files.
+
 ## 3D scenes and the element model
 
 narova renders 3D through HyperFrames' browser WebGL (Three.js). There are two

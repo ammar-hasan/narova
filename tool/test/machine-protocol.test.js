@@ -135,7 +135,7 @@ test('successful project operations expose data and created artifacts without st
 
 test('every public command can return a pre-dispatch usage envelope and is documented', () => {
   const commands = [
-    'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique',
+    'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique', 'judge',
     'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
     'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
     'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
@@ -182,6 +182,7 @@ test('public operation handlers preserve stdout purity under controlled dispatch
     { operation: 'compile', args: ['compile', '--project', project] },
     { operation: 'check', args: ['check', '--project', project] },
     { operation: 'critique', args: ['critique', 'all', '--project', project] },
+    { operation: 'judge', args: ['judge', '--project', project] },
     { operation: 'walkthrough status', args: ['walkthrough', 'status', '--project', project] },
     { operation: 'plan', args: ['plan', '--project', project] },
     { operation: 'provenance', args: ['provenance', '--project', project] },
@@ -757,5 +758,6 @@ test('delegated voice usage errors preserve exit 2', () => {
   assert.ok(built);
   assert.ok(built.artifacts.some(item => item.role === 'video' && item.path.endsWith('video.mp4')));
   assert.ok(built.artifacts.some(item => item.role === 'captions'));
+  assert.ok(built.artifacts.some(item => item.role === 'video-ci-evidence' && item.path.endsWith('video.mp4.narova-ci.json')));
   assert.ok(built.artifacts.some(item => item.role === 'video-companion' && item.path.endsWith('-companion.mp4')));
 });

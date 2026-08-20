@@ -16,6 +16,7 @@ const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previe
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
+const { judge, formatJudgement } = require('../src/judge');
 const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = require('../src/motion-audit');
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
@@ -177,7 +178,7 @@ function operationName(cmd, positionals, flags = {}) {
 }
 
 const PUBLIC_COMMANDS = new Set([
-  'help', 'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique',
+  'help', 'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique', 'judge',
   'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
   'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
   'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
@@ -204,11 +205,13 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
 
 function validateInvocationFlags(flags, cmd) {
+  if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
+  if (flags.video != null && cmd !== 'judge') invocationError('--video is only valid with narova judge');
   const positiveNumber = (name, max = Infinity) => {
     if (flags[name] == null) return;
     const value = Number(flags[name]);
@@ -528,6 +531,10 @@ Commands:
                               creative brief (exit 3, subject non-pass)
   critique [profiles]  opt-in craft review; comma-separate creative, cinematic,
                            social-short, explainer, presentation, accessibility
+  judge                inspect the encoded artifact as an evidence mirror
+                           --video <file> selects a self-contained local video (default: out/video.mp4)
+                           --json returns narova.judgement/1 in narova.result/1
+                           read-only; no score, validity gate, taste lens, or repair
   plan                 compare current config against the last manifest;
                            classify what changed and which stages will rebuild
   release save <name>  save out/manifest.json as a named release
@@ -627,6 +634,7 @@ Options:
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
+  --video <file>           judge: self-contained encoded artifact (default: <project>/out/video.mp4)
   --dir <dir>              open/remix target directory
   --inspect                open: verify and summarize without extraction
   --overwrite              open/remix: replace an occupied target atomically
@@ -1218,6 +1226,27 @@ async function main() {
       const profile = positionals[1] || flags.profile || 'all';
       const advice = critique(config, { profile, projectDir, outDir: outDirOf(flags, projectDir) });
       mData({ profile, advice });
+      return;
+    }
+
+    case 'judge': {
+      if (positionals[1] != null) {
+        invocationError('usage: narova judge [--video <file>] [--json]');
+      }
+      if (flags.plan || flags.repair) {
+        invocationError('narova judge Phase 1 is observation-only; --plan and --repair are not available');
+      }
+      const { config, projectDir, configFile } = await loadResolved(flags, { readOnly: true });
+      const out = outDirOf(flags, projectDir);
+      const defaultVideo = config.variant ? `video-${config.variant}.mp4` : 'video.mp4';
+      const report = judge(config, {
+        projectDir,
+        outDir: out,
+        configFile,
+        video: flags.video ? path.resolve(projectDir, flags.video) : path.join(out, defaultVideo),
+      });
+      console.log(formatJudgement(report));
+      mSetData({ judgement: report });
       return;
     }
 

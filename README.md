@@ -38,6 +38,10 @@ Agents calling the CLI directly can use the versioned
   and can be disabled with `captions: false`.
 - **Beat-level visual QA** — deterministic snapshots cover the arrival and resolved
   state of every narration beat, both sides of named markers, and silent scenes.
+- **Video CI as a creative mirror** — `narova judge` compares authored
+  assertions with the encoded artifact, exposes measured motion, silence,
+  timing, spatial hierarchy, and uncertainty, and maps observations back to
+  production state. It never emits a universal quality score or changes the work.
 - **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
   HyperFrames, or select Narova No-Browser for deterministic Skia + FFmpeg output
   on machines where no browser is available. No render service or fee.
@@ -236,6 +240,7 @@ narova branch save proof-a --rationale "why this direction may serve the brief"
 # in creative-brief.md, then expand only that config
 narova preview --detach   # direct the film in HyperFrames Studio
 narova build --reuse --release  # fail-before-render final gate → out/video.mp4
+narova judge          # inspect intent vs the encoded result; read-only, scoreless
 ```
 
 You need: **Node 18+**, plus **ffmpeg** and **Python 3.10+** (the published
@@ -273,6 +278,20 @@ export default {
     script: { authorship: "mixed", note: "agent draft, human review" },
     disclosure: "Contains AI-generated media",
   },
+  assertions: [{                             // optional creator-owned Video CI intent
+    id: "restrained-opening",
+    class: "creative-hypothesis",
+    expect: "The opening should feel restrained; only the cue reveal should move.",
+    origin: { kind: "agent-hypothesis", ref: "opening proof" },
+    scope: { scene: "title" },
+    observe: [
+      { metric: "video.static_ratio", operator: "gte", value: 0.7 },
+      { metric: "video.cut_count", operator: "lte", value: 1 },
+    ],
+    riskyBecause: ["unconventional stillness"],
+    questions: ["Did unintended motion weaken the restraint?"],
+    related: { scene: "title", source: "reel.config.mjs", protected: ["camera rhythm"] },
+  }],
   theme: { accent: "#2ee6d6", bg: "#080d16" },   // optional
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   scenes: [
@@ -304,6 +323,26 @@ The rules:
 - Put logos, images, and local fonts in `assets/`; scene HTML and theme CSS
   reference them as `assets/...`. Inline SVG and small data URIs also work.
   Remote render-time files do not.
+
+`assertions` describe what the creator intends to survive into the finished
+artifact. Classes include factual, mechanical, continuity, creative intent or
+hypothesis, deliberate choice or violation, brand, accessibility, narrative,
+and experimental intent. Free-form expectations remain creator-owned prose;
+only explicit `observe` probes are mechanically compared. Phase 1 supports
+silence/audio-level, motion/static/black-frame/cut, dominant-region-share, and
+caption-word-count probes with `eq|ne|lt|lte|gt|gte|between`. Assertions do not
+change rendering, cache identity, proof validity, or release eligibility.
+`tolerance` expands the accepted boundary in either direction, including for
+inequality probes.
+
+Each successful build also records a compact evidence receipt beside its
+primary video (for example `out/video.mp4.narova-ci.json`). The receipt binds
+that video's digest to the manifest timing and caption snapshot that existed
+for that exact render, so variants cannot accidentally borrow one another's
+shared `out/` context. `judge` uses embedded evidence directly and uses sidecar
+or derived timing evidence only through a matching receipt. Any artifact
+without one remains judgeable, with unbound
+optional context reported unavailable.
 
 ### Two local renderer providers
 
@@ -482,6 +521,7 @@ narova pack           write a deterministic .narova project archive
 narova open <archive> verify, inspect, or materialize an untrusted archive
 narova remix <source> copy a local project/archive or public github: locator
 narova check          validate the config (fast, no side effects)
+narova judge          inspect the encoded result against creative assertions
 narova synth          make the audio + word timings
 narova compose        make the selected renderer project
 narova walkthrough    explore/capture/status narrated product demos
@@ -505,7 +545,7 @@ format, safety boundary, deterministic normalization, and remote locator grammar
 Useful flags: `--backend <built-in-or-registered-provider>`,
 `--renderer hyperframes|no-browser`, `--reuse` (keep old audio),
 `--tempo`, `--size`, `--fps`, `--quality draft|standard|high`,
-`--deliverables` (per-platform export presets via scale+pad — see
+`--video <file>` (`judge` only), `--deliverables` (per-platform export presets via scale+pad — see
 [`references/cli.md`](skills/narova/references/cli.md) for the full list).
 
 ## How it works
@@ -525,6 +565,8 @@ reel.config.mjs
    ▼  render     HyperFrames or No-browser renders the mp4 with audio inside.
    │
 out/video.mp4
+   │
+   ▼  judge      read-only rendered evidence ↔ authored intent; no score or repair
 ```
 
 `out/`, `out/hf-*`, and `out/no-browser-*` are build folders. Never edit them.
