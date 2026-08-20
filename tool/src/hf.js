@@ -22,14 +22,16 @@ function sleep(ms) {
 /* Check if a TCP port is available on localhost. Uses a quick connection
  * attempt — if the connection succeeds, the port is in use. */
 function isPortAvailable(port) {
-  try {
-    const server = net.createServer();
-    server.listen(port, '127.0.0.1');
+  let available = true;
+  const server = net.createServer();
+  server.once('error', () => {
+    available = false;
     server.close();
-    return true;
-  } catch {
-    return false;
-  }
+  });
+  server.once('listening', () => server.close());
+  server.listen(port, '127.0.0.1');
+  server.unref();
+  return available;
 }
 
 /* Find an available TCP port starting from the given port. */
