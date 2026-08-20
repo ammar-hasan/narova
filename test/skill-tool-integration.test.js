@@ -256,6 +256,12 @@ test('repository version sources agree with the standalone tool package', () => 
   assert.doesNotMatch('## Memory requirements', prohibitedGuideHeading);
   assert.doesNotMatch(publicGuide, /docs\/experiments\//);
 
+  const agentProtocol = fs.readFileSync(path.join(ROOT, 'AGENT_PROTOCOL.md'), 'utf8');
+  const protocolMatch = agentProtocol.match(/^Narova release: \*\*([0-9.]+)\*\*$/m);
+  assert.ok(protocolMatch, 'AGENT_PROTOCOL.md must have a release identity');
+  assert.equal(protocolMatch[1], rootVer, 'AGENT_PROTOCOL.md release identity must match root');
+  assert.match(agentProtocol, /Machine schema: \*\*`narova\.result\/1`\*\*/);
+
   const maintainerNotes = fs.readFileSync(path.join(ROOT, 'LEARNINGS.md'), 'utf8');
   assert.match(maintainerNotes, /<!-- narova-document-role: implementation-maintainer-notes; authority: non-normative -->/);
   const prohibitedMaintainerHeading = /^#{1,6} .*\b(?:product (?:vision|roadmap|strategy)|research store|strategic memory|future work|creative (?:confidence|divergence|strategy)|scene model|agent (?:instructions|guidance|context|memory))\b/im;
@@ -299,6 +305,8 @@ test('version sync updates skill metadata and its exact npm bootstrap pin', t =>
   ].join('\n'));
   write('README.md', 'https://img.shields.io/badge/version-0.0.1-blue.svg\n');
   write('SPEC.md', '## Status: 0.0.1 shipped\n');
+  write('AGENT_PROTOCOL.md', 'Narova release: **0.0.1**\n');
+  write('tool/AGENT_PROTOCOL.md', 'Narova release: **0.0.1**\n');
   write('docs/index.html', '<span data-narova-version>v0.0.1</span>\n');
   write('docs/changelog/index.html', '<span data-narova-version>0.0.1</span>\n');
 
@@ -313,6 +321,8 @@ test('version sync updates skill metadata and its exact npm bootstrap pin', t =>
   assert.equal(lock.packages[''].version, '9.8.7');
   assert.match(fs.readFileSync(path.join(tmp, 'README.md'), 'utf8'), /version-9\.8\.7-/);
   assert.match(fs.readFileSync(path.join(tmp, 'SPEC.md'), 'utf8'), /Status: 9\.8\.7 shipped/);
+  assert.match(fs.readFileSync(path.join(tmp, 'AGENT_PROTOCOL.md'), 'utf8'), /release: \*\*9\.8\.7\*\*/);
+  assert.match(fs.readFileSync(path.join(tmp, 'tool/AGENT_PROTOCOL.md'), 'utf8'), /release: \*\*9\.8\.7\*\*/);
   assert.match(fs.readFileSync(path.join(tmp, 'docs/index.html'), 'utf8'), />v9\.8\.7</);
   assert.match(fs.readFileSync(path.join(tmp, 'docs/changelog/index.html'), 'utf8'), />9\.8\.7</);
 

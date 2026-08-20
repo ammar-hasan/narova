@@ -340,7 +340,9 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     } else {
       log(`scene cache: rendering ${needRender.length} of ${spans.length} scene span(s) (${spans.length - needRender.length} reused)`);
       try {
-        renderer.renderSpans(config, outDir, needRender, { fps, quality, keepFrames: opts.keepFrames });
+        renderer.renderSpans(config, outDir, needRender, {
+          fps, quality, keepFrames: opts.keepFrames, artifact: opts.artifact,
+        });
       } catch (e) {
         // Never fail the build over the cache: discard any half-written span
         // (atomic temp+rename in the renderer means none should exist, but be
@@ -391,11 +393,13 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     let composed = {};
     try {
       if (typeof renderer.compose === 'function') composed = renderer.compose(config, outDir) || {};
+      if (composed.dir && typeof opts.artifact === 'function') opts.artifact(composed.dir, 'renderer-project');
     } catch (e) {
       log(`scene cache: compose refresh skipped (${e.message})`);
     }
     if (cachePlan.reused) {
       fs.copyFileSync(cachePlan.wholeFile, outMp4);
+      if (typeof opts.artifact === 'function') opts.artifact(outMp4, 'video');
       log(`scene cache: whole-video reuse (${renderer.displayName}) — render skipped`);
       return {
         ...composed, mp4: outMp4, seconds: probe(outMp4), project: composed.dir || outDir,

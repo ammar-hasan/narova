@@ -140,20 +140,27 @@ const GITIGNORE = `out/\n.venv/\nnode_modules/\n`;
 
 function initProject(dir) {
   const target = path.resolve(dir);
+  const targetCreated = !fs.existsSync(target);
+  const assetsPath = path.join(target, 'assets');
+  const assetsCreated = !fs.existsSync(assetsPath);
+  const created = [];
+  const skipped = [];
   ensureDir(target);
   const write = (name, content) => {
     const p = path.join(target, name);
-    if (fs.existsSync(p)) { console.log(`  skip  ${name} (exists)`); return; }
+    if (fs.existsSync(p)) { skipped.push(p); console.log(`  skip  ${name} (exists)`); return; }
     fs.writeFileSync(p, content);
+    created.push(p);
     console.log(`  create ${name}`);
   };
   console.log(`Scaffolding narova project in ${target}`);
-  ensureDir(path.join(target, 'assets'));
+  ensureDir(assetsPath);
   write('reel.config.mjs', CONFIG);
   write('creative-brief.md', CREATIVE_BRIEF);
   write('README.md', README);
   write('.gitignore', GITIGNORE);
   console.log(`\nNext: fill ${dir}/creative-brief.md; for ambitious work save 2–3 small proof branches, choose one, then expand`);
+  return { target, assets: assetsPath, targetCreated, assetsCreated, created, skipped };
 }
 
 module.exports = { initProject };

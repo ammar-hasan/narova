@@ -110,6 +110,19 @@ if (!new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{
   throw new Error(`CHANGELOG.md has no dated ${version} release entry`);
 }
 
+const agentProtocol = fs.readFileSync(path.join(root, 'AGENT_PROTOCOL.md'), 'utf8');
+const packagedAgentProtocol = fs.readFileSync(path.join(root, 'tool', 'AGENT_PROTOCOL.md'), 'utf8');
+if (packagedAgentProtocol !== agentProtocol) {
+  throw new Error('tool/AGENT_PROTOCOL.md must match the repository protocol guide');
+}
+const protocolVersion = agentProtocol.match(/^Narova release: \*\*([0-9.]+)\*\*$/m)?.[1];
+if (protocolVersion !== version) {
+  throw new Error(`AGENT_PROTOCOL.md is ${protocolVersion || 'missing'}; expected ${version}`);
+}
+if (!agentProtocol.includes('Machine schema: **`narova.result/1`**')) {
+  throw new Error('AGENT_PROTOCOL.md is missing the current machine schema identity');
+}
+
 const publishWorkflow = fs.readFileSync(path.join(root, '.github/workflows/publish.yml'), 'utf8');
 for (const required of [
   'id-token: write',

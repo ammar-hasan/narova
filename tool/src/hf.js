@@ -6,6 +6,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawn, spawnSync } = require('child_process');
 const net = require('net');
+const { isActive: machineActive } = require('./machine');
 
 const HYPERFRAMES_VERSION = '0.7.96';
 
@@ -57,14 +58,21 @@ function npxSync(args, opts) {
  * progress is visible. Throws on non-zero exit. */
 function runHf(args, cwd, opts = {}) {
   const { quiet = false, ...spawnOpts } = opts;
+  // Machine mode (--json): the engine's progress must not reach stdout, so
+  // capture it like quiet mode and replay it on stderr (NAR-015-070).
+  const capture = quiet || machineActive();
   const r = npxSync(['--yes', `hyperframes@${HYPERFRAMES_VERSION}`, ...args], {
     cwd,
-    ...(quiet ? { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] } : { stdio: 'inherit' }),
+    ...(capture ? { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'], maxBuffer: 64 * 1024 * 1024 } : { stdio: 'inherit' }),
     ...spawnOpts,
   });
+  if (capture && !quiet) {
+    if (r.stdout) process.stderr.write(r.stdout);
+    if (r.stderr) process.stderr.write(r.stderr);
+  }
   if (r.error) throw r.error;
   if (r.status !== 0) {
-    const detail = quiet ? String(r.stderr || r.stdout || '').trim().split('\n').pop() : '';
+    const detail = capture ? String(r.stderr || r.stdout || '').trim().split('\n').pop() : '';
     throw new Error(`hyperframes ${args[0]} exited ${r.status}${detail ? `: ${detail}` : ''}`);
   }
   return r;
@@ -114,8 +122,9 @@ function startHfPreview(cwd, { port, logFile, pidFile, projectName } = {}) {
   fs.closeSync(fd);
   child.unref();
   fs.writeFileSync(pid, `${child.pid}\n`);
-  fs.writeFileSync(portFileFor(pid), `${actualPort}\n`);
-  return { pid: child.pid, pidFile: pid, logFile: log, port: actualPort, url: previewUrl(cwd, actualPort, projectName) };
+  const portFile = portFileFor(pid);
+  fs.writeFileSync(portFile, `${actualPort}\n`);
+  return { pid: child.pid, pidFile: pid, portFile, logFile: log, port: actualPort, url: previewUrl(cwd, actualPort, projectName) };
 }
 
 function portFileFor(pidFile) {

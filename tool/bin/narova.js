@@ -37,7 +37,7 @@ const revisions = require('../src/revisions');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, branchDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
 const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
-  addProvider, listProviders, removeProvider, doctorProvider, providersDir,
+  addProvider, getProvider, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
 const {
   backendHint, builtinNames, BUILTIN_BACKENDS, deliveryCapabilitiesFor,
@@ -50,11 +50,204 @@ const {
   captureWalkthrough, captureStatus, exploreWalkthrough, safeUrl,
 } = require('../src/walkthrough');
 const { substrateGuard, welcomeWizard, firstRunQuiet, firstRunDone, isInteractive } = require('../src/first-run');
-const { demo } = require('../src/demo');
+const { demo, DEMO_DIR_NAME } = require('../src/demo');
+const machine = require('../src/machine');
+
+/* Machine protocol conveniences: no-ops unless this invocation passed --json. */
+const mData = fields => machine.data(fields);
+const mSetData = payload => machine.setData(payload);
+const mArtifact = (path, role) => machine.artifact(path, role);
+const mDiag = (severity, code, message, subject) => machine.diag(severity, code, message, subject);
+
+/* Provider command arrays are execution internals and may contain legacy
+ * inline credentials. Machine payloads expose only public provider facts. */
+function publicProviderData(provider) {
+  if (!provider) return provider;
+  const { command: _command, ...publicFields } = provider;
+  return publicFields;
+}
+
+function publicProviderHello(hello) {
+  return {
+    protocol: hello.protocol,
+    provider: hello.provider,
+    providerVersion: hello.providerVersion,
+  };
+}
+
+function registerProviderSecrets(manifest) {
+  for (const name of manifest.requiredEnvironment || []) machine.secret(process.env[name]);
+  const secretName = /(?:api[-_]?key|authorization|credential|password|secret|token)/i;
+  const registerFragments = value => {
+    const text = String(value);
+    machine.secret(text);
+    const assignment = text.match(/^[^=]+=(.*)$/s);
+    if (assignment) machine.secret(assignment[1]);
+    // Header carriers may be echoed as only their value by a worker. Treat all
+    // header values as credentials; cookies and proprietary auth schemes are
+    // not reliably identifiable by name.
+    const header = text.match(/(?:^|=)[^:=\s]+:\s*(.+)$/s);
+    if (header) machine.secret(header[1]);
+    const bearer = text.match(/\bBearer\s+(.+)$/i);
+    if (bearer) machine.secret(bearer[1]);
+  };
+  const command = manifest.command || [];
+  for (let i = 0; i < command.length; i++) {
+    const part = String(command[i]);
+    const assignment = part.match(/^([^=]+)=(.*)$/s);
+    // Legacy commands may use a named secret option (`--api-key=x`) or a
+    // generic carrier (`--header=Authorization: Bearer x`). Register both the
+    // complete credential-bearing argument and its useful value fragments so
+    // child prose cannot expose either representation.
+    if (secretName.test(part) || /^--?header(?:=|$)/i.test(part)) registerFragments(part);
+    if (!assignment && /^(?:--?)?(?:api[-_]?key|authorization|credential|password|secret|token|header)$/i.test(part)
+        && i + 1 < command.length) {
+      registerFragments(command[i + 1]);
+    }
+  }
+}
+
+function registerConfigProviderSecrets(config, overrideBackend = null) {
+  const backends = new Set(Object.values(config.voices || {}).map(voice => voice && voice.backend).filter(Boolean));
+  if (overrideBackend) backends.add(overrideBackend);
+  for (const backend of backends) {
+    const provider = getProvider(backend);
+    if (provider) registerProviderSecrets(provider);
+  }
+}
+
+/* Usage error (NAR-015-071 exit 2): the invocation is rejected before or
+ * during dispatch. Human wording is unchanged; only the exit code is refined. */
+function usageError(...lines) {
+  for (const line of lines) console.error(line);
+  mDiag('error', 'usage.invalid', lines.join('\n'));
+  process.exit(machine.EXIT.usage);
+}
+
+/* Preserve the historical top-level `error:` wording for argument validators
+ * that used to throw through main().catch, while classifying them as usage. */
+function thrownUsageError(error) {
+  console.error('error:', error.message);
+  mDiag('error', 'usage.invalid', error.message);
+  process.exit(machine.EXIT.usage);
+}
+
+class InvocationError extends Error {
+  constructor(message) {
+    super(message);
+    this.code = 'NAROVA_USAGE';
+  }
+}
+
+function invocationError(message) {
+  throw new InvocationError(message);
+}
+
+/* The operation name recorded in the machine envelope: the command plus its
+ * subcommand(s) when the command table defines them. */
+function operationName(cmd, positionals, flags = {}) {
+  if (flags.version) return 'version';
+  if (!cmd || cmd === 'help' || cmd === '-h' || flags.help || flags.h) return 'help';
+  const two = {
+    assets: ['import', 'download', 'providers', 'search', 'acquire', 'list', 'untrack', 'verify', 'credits'],
+    walkthrough: ['explore', 'capture', 'status'],
+    release: ['save', 'list', 'restore', 'remove'],
+    branch: ['save', 'list', 'set', 'show'],
+    history: ['list', 'annotate', 'compare'],
+    providers: ['add', 'list', 'remove', 'doctor'],
+    renderers: ['list', 'doctor'],
+    voices: ['list', 'get'],
+    karaoke: ['generate'],
+    review: [],
+  };
+  const defaults = {
+    walkthrough: 'status', release: 'list', branch: 'list', history: 'list',
+    providers: 'list', renderers: 'list', voices: 'list',
+  };
+  if (cmd === 'voice' && positionals[1] === 'sample'
+      && ['add', 'list', 'remove'].includes(positionals[2])) {
+    return `voice sample ${positionals[2]}`;
+  }
+  if (two[cmd] && two[cmd].includes(positionals[1])) return `${cmd} ${positionals[1]}`;
+  if (defaults[cmd] && positionals[1] == null) return `${cmd} ${defaults[cmd]}`;
+  return cmd;
+}
+
+const PUBLIC_COMMANDS = new Set([
+  'help', 'init', 'demo', 'ingest', 'assets', 'compile', 'check', 'critique',
+  'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
+  'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
+  'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
+  'generate',
+]);
+
+function preDispatchOperation(argv) {
+  if (argv.includes('--version') || argv.some(a => a.startsWith('--version='))) return 'version';
+  const positionals = [];
+  for (let i = 0; i < argv.length; i++) {
+    const token = argv[i];
+    if (token === '-h') continue;
+    if (!token.startsWith('--')) {
+      positionals.push(token);
+      continue;
+    }
+    if (token.includes('=')) continue;
+    const key = token.slice(2);
+    if ((VALUE_FLAGS.has(key) || BOOL_OR_VALUE.has(key))
+        && argv[i + 1] != null && !argv[i + 1].startsWith('--')) i++;
+  }
+  const cmd = positionals[0];
+  if (!cmd) return argv.includes('-h') ? 'help' : null;
+  return operationName(cmd, positionals);
+}
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+
+function validateInvocationFlags(flags, cmd) {
+  const positiveNumber = (name, max = Infinity) => {
+    if (flags[name] == null) return;
+    const value = Number(flags[name]);
+    if (!Number.isFinite(value) || value <= 0 || value > max) {
+      invocationError(`--${name} must be a positive number${Number.isFinite(max) ? ` no greater than ${max}` : ''}`);
+    }
+  };
+  positiveNumber('tempo');
+  positiveNumber('fps', 120);
+  positiveNumber('duration');
+  if (cmd === 'generate') {
+    const provider = String(flags.provider || 'sora');
+    if (!['sora', 'runway'].includes(provider)) invocationError('--provider must be one of sora|runway for generate');
+    if (provider === 'sora' && flags.duration != null && !['4', '8', '12'].includes(String(flags.duration))) {
+      invocationError('--duration must be 4, 8, or 12 for the Sora provider');
+    }
+  }
+  if (flags.size != null) {
+    const size = String(flags.size);
+    if (cmd === 'generate') {
+      if (!/^\d+x\d+$/i.test(size)) invocationError('--size must be WIDTHxHEIGHT for generate (for example 1280x720)');
+    } else if (!['16:9', '1:1', '9:16'].includes(size)) {
+      invocationError('--size must be one of 16:9|1:1|9:16');
+    }
+  }
+  if (flags['max-words'] != null
+      && (!Number.isInteger(Number(flags['max-words'])) || Number(flags['max-words']) <= 0)) {
+    invocationError('--max-words must be a positive integer');
+  }
+  const enumerated = {
+    platform: ['tiktok', 'reels', 'shorts', 'linkedin', 'x', 'youtube'],
+    renderer: ['hyperframes', 'no-browser'],
+    quality: ['draft', 'standard', 'high'],
+    pack: ['core', 'essential'],
+    kind: ['image', 'video', 'audio', 'model'],
+  };
+  for (const [name, choices] of Object.entries(enumerated)) {
+    if (flags[name] != null && !choices.includes(String(flags[name]))) {
+      invocationError(`--${name} must be one of ${choices.join('|')}`);
+    }
+  }
+}
 
 function parseArgs(argv) {
   const positionals = [];
@@ -66,9 +259,9 @@ function parseArgs(argv) {
       if (eq !== -1) {
         const key = a.slice(2, eq);
         if (!BOOL_FLAGS.has(key) && !BOOL_OR_VALUE.has(key) && !VALUE_FLAGS.has(key)) {
-          console.error(`unknown option --${key}`); process.exit(1);
+          throw new Error(`unknown option --${key}`);
         }
-        flags[key] = a.slice(eq + 1); continue;
+        flags[key] = BOOL_FLAGS.has(key) && !BOOL_OR_VALUE.has(key) ? true : a.slice(eq + 1); continue;
       }
       const key = a.slice(2);
       if (BOOL_OR_VALUE.has(key)) {
@@ -81,12 +274,12 @@ function parseArgs(argv) {
         continue;
       }
       if (BOOL_FLAGS.has(key)) { flags[key] = true; continue; }
-      if (!VALUE_FLAGS.has(key)) { console.error(`unknown option --${key}`); process.exit(1); }
+      if (!VALUE_FLAGS.has(key)) { throw new Error(`unknown option --${key}`); }
       // Every remaining flag expects a value; a bare `--tempo` must error, not
       // silently resolve to `true` (Number(true)===1, "true" -> hyperframes).
       const nxt = argv[i + 1];
       if (nxt != null && !nxt.startsWith('--')) { flags[key] = nxt; i++; }
-      else { console.error(`--${key} needs a value`); process.exit(1); }
+      else { throw new Error(`--${key} needs a value`); }
     } else positionals.push(a);
   }
   return { positionals, flags };
@@ -128,6 +321,14 @@ function assetRegistrationFromFlags(flags, defaults = {}) {
 async function loadResolved(flags, { readOnly = false } = {}) {
   const projectDir = flags.project || '.';
   const { raw, dir, file } = await loadProjectConfig(projectDir, flags.config);
+  if (flags.variant != null) {
+    const declared = Array.isArray(raw.variants)
+      ? raw.variants.map(item => item && item.id).filter(Boolean)
+      : [];
+    if (!declared.includes(flags.variant)) {
+      invocationError(`unknown variant ${JSON.stringify(flags.variant)} — declared variants: ${declared.join(', ') || '(none declared)'}`);
+    }
+  }
   const out = path.resolve(flags.out || path.join(dir, 'out'));
   const mayReadOutputEvidence = evidenceFile => {
     if (!readOnly) return true;
@@ -156,6 +357,7 @@ async function loadResolved(flags, { readOnly = false } = {}) {
   const effectiveOverrides = { ...restoredOverrides, ...overridesFrom(flags) };
   const cliOverrides = overridesFrom(flags);
   const config = resolveConfig(raw, effectiveOverrides, dir);
+  registerConfigProviderSecrets(config, effectiveOverrides.backend);
   const manifestFile = path.join(out, 'manifest.json');
   const markerFile = path.join(out, RESTORE_MARKER);
   if (fs.existsSync(markerFile) && fs.existsSync(manifestFile)
@@ -185,7 +387,11 @@ function verifyMotionIfRequested(built, flags) {
   if (!flags['verify-motion'] && !flags.release) return;
   const report = auditMotion(built.mp4);
   console.log(formatMotionAudit(report));
-  if (!report.ok) process.exitCode = 1;
+  mData({ motionAudit: { ok: report.ok } });
+  if (!report.ok) {
+    mDiag('error', 'audit.motion', 'rendered video contains frozen or black segments beyond tolerance', built.mp4);
+    process.exitCode = machine.EXIT.subjectNonPass;
+  }
 }
 
 /* Studio serves out/hf-<slug> from disk and does not hot-reload; compose deletes and
@@ -201,6 +407,16 @@ function findHfDir(out) {
     if (match) return path.join(out, match.name);
   } catch (_) { /* out doesn't exist yet — fall through to legacy */ }
   return path.join(out, 'hf');
+}
+
+function findNoBrowserDir(out) {
+  if (!fs.existsSync(out)) return path.join(out, 'no-browser');
+  try {
+    const entries = fs.readdirSync(out, { withFileTypes: true });
+    const match = entries.find(e => e.isDirectory() && e.name.startsWith('no-browser-'));
+    if (match) return path.join(out, match.name);
+  } catch (_) { /* out does not exist yet */ }
+  return path.join(out, 'no-browser');
 }
 
 function refreshPreviewIfLive(out) {
@@ -288,7 +504,7 @@ Commands:
                             --release: strict + fail on remote deps, missing
                               claims, unsupported HTML, black frames, stale
                               walkthrough captures, or an unapproved non-trivial
-                              creative brief (exit 1, for build gates)
+                              creative brief (exit 3, subject non-pass)
   critique [profiles]  opt-in craft review; comma-separate creative, cinematic,
                            social-short, explainer, presentation, accessibility
   plan                 compare current config against the last manifest;
@@ -400,13 +616,33 @@ Options:
 `;
 
 async function main() {
-  substrateGuard();
-  const { positionals, flags } = parseArgs(process.argv.slice(2));
+  const argv = process.argv.slice(2);
+  // Pre-scan for the machine-output request so even a parse failure can emit
+  // the minimal usage-error envelope (NAR-015-071).
+  const jsonRequested = argv.some(a => a === '--json' || a.startsWith('--json='));
+  let positionals;
+  let flags;
+  try {
+    ({ positionals, flags } = parseArgs(argv));
+  } catch (error) {
+    console.error(error.message);
+    if (jsonRequested) machine.emitUsageEnvelope(preDispatchOperation(argv), error.message);
+    process.exit(machine.EXIT.usage);
+  }
   const cmd = positionals[0];
+  if (flags.json) machine.begin(operationName(cmd, positionals, flags));
+  const helpRequested = !cmd || cmd === 'help' || cmd === '-h' || flags.help || flags.h;
+  if (!flags.version && !helpRequested) validateInvocationFlags(flags, cmd);
+  substrateGuard();
 
-  if (flags.version) { console.log(require('../package.json').version); return; }
+  if (flags.version) {
+    const version = require('../package.json').version;
+    console.log(version);
+    mData({ version });
+    return;
+  }
   if (!cmd || cmd === 'help' || cmd === '-h') {
-    if (!flags.help && !flags.h && !firstRunDone()
+    if (!machine.isActive() && !flags.help && !flags.h && !firstRunDone()
         && (isInteractive() || process.env.NAROVA_FIRST_RUN === '1')) {
       // First contact with the product (NAR-021-001/002/006): the welcome
       // wizard interactively, or the quiet checklist + commands when a
@@ -423,8 +659,15 @@ async function main() {
   switch (cmd) {
     case 'init': {
       const dir = positionals[1];
-      if (!dir) { console.error('usage: narova init <dir>'); process.exit(1); }
-      initProject(dir);
+      if (!dir) usageError('usage: narova init <dir>');
+      const result = initProject(dir);
+      mSetData({
+        dir: result.target, created: result.created, skipped: result.skipped,
+        projectCreated: result.targetCreated, assetDirectoryCreated: result.assetsCreated,
+      });
+      if (result.targetCreated) mArtifact(result.target, 'project');
+      if (result.assetsCreated) mArtifact(result.assets, 'asset-directory');
+      for (const file of result.created) mArtifact(file, 'authoring-source');
       return;
     }
 
@@ -432,10 +675,48 @@ async function main() {
       // The activation event (NAR-021-004): one command to a finished MP4
       // through the ordinary pipeline. No keys, no config, no questions.
       if (flags.help || flags.h) { console.log('usage: narova demo   # one command to a finished MP4: narova-demo/out/video.mp4'); return; }
+      const demoProjectDir = path.join(process.cwd(), DEMO_DIR_NAME);
+      const demoConfig = path.join(demoProjectDir, 'reel.config.mjs');
+      const demoConfigExisted = fs.existsSync(demoConfig);
       try {
-        await demo({ cwd: process.cwd(), renderer: flags.renderer });
+        const result = await demo({ cwd: process.cwd(), renderer: flags.renderer });
+        mData({
+          seconds: result.seconds,
+          elapsedMs: result.elapsed,
+          networkBytes: result.networkBytes,
+          projectDir: result.projectDir,
+          created: result.created,
+        });
+        const demoOut = path.join(result.projectDir, 'out');
+        if (result.created) {
+          mArtifact(result.projectDir, 'project');
+          mArtifact(path.join(result.projectDir, 'reel.config.mjs'), 'authoring-source');
+        }
+        mArtifact(result.mp4, 'video');
+        mArtifact(path.join(demoOut, 'captions.srt'), 'captions');
+        mArtifact(path.join(demoOut, 'captions.vtt'), 'captions');
+        mArtifact(path.join(demoOut, 'manifest.json'), 'manifest');
+        mArtifact(path.join(demoOut, 'timings.json'), 'timings');
+        mArtifact(path.join(demoOut, 'audio'), 'audio');
+        mArtifact(path.join(demoOut, 'revisions.jsonl'), 'revision-ledger');
+        mArtifact(findHfDir(demoOut), 'renderer-project');
+        mArtifact(findNoBrowserDir(demoOut), 'renderer-project');
       } catch (err) {
-        if (err.code === 'NAROVA_DEMO_BLOCKED') { process.exitCode = 1; return; }
+        if (!demoConfigExisted && fs.existsSync(demoConfig)) {
+          mData({ projectDir: demoProjectDir, created: true });
+          mArtifact(demoProjectDir, 'project');
+          mArtifact(demoConfig, 'authoring-source');
+        }
+        if (err.code === 'NAROVA_DEMO_BLOCKED') {
+          mDiag('error', 'health.demo', err.message);
+          process.exitCode = machine.EXIT.subjectNonPass;
+          return;
+        }
+        if (err.code === 'NAROVA_DEMO_OPERATION_FAILED') {
+          mDiag('error', 'operation.failed', err.message);
+          process.exitCode = machine.EXIT.failure;
+          return;
+        }
         throw err;
       }
       return;
@@ -443,42 +724,75 @@ async function main() {
 
     case 'ingest': {
       const url = positionals[1];
-      if (!url) { console.error('usage: narova ingest <url> [--project <dir>]'); process.exit(1); }
+      if (!url) usageError('usage: narova ingest <url> [--project <dir>]');
       const { dir: projectDir } = await loadProjectConfig(flags.project || '.', flags.config);
-      await ingest(url, { projectDir });
+      const result = await ingest(url, { projectDir });
+      if (result) {
+        mData({
+          url: result.finalUrl || url,
+          slug: result.slug,
+          images: result.images,
+          screenshot: result.screenshot && result.screenshot.ok ? result.screenshot.path : null,
+          claimsCreated: result.claimsCreated,
+        });
+        for (const file of result.files || []) mArtifact(path.join(projectDir, file), 'asset');
+        if ((result.files || []).length) mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
+        mArtifact(path.join(projectDir, 'sources.md'), 'source');
+        if (result.claimsCreated) mArtifact(path.join(projectDir, 'claims.md'), 'source');
+      }
       return;
     }
 
     case 'assets': {
       const action = positionals[1];
       if (!['import', 'download', 'providers', 'search', 'acquire', 'list', 'untrack', 'verify', 'credits'].includes(action)) {
-        console.error('usage: narova assets import <file> [metadata options]');
-        console.error('       narova assets download <url> --output <project-relative path> [metadata options]');
-        console.error('       narova assets providers');
-        console.error('       narova assets search <query> --provider <name> --kind <kind> [--limit N] [--json]');
-        console.error('       narova assets acquire <id> --provider <name> --kind <kind> --output <path>');
-        console.error('       narova assets list|untrack <file>|verify|credits');
-        process.exit(1);
+        usageError(
+          'usage: narova assets import <file> [metadata options]',
+          '       narova assets download <url> --output <project-relative path> [metadata options]',
+          '       narova assets providers',
+          '       narova assets search <query> --provider <name> --kind <kind> [--limit N] [--json]',
+          '       narova assets acquire <id> --provider <name> --kind <kind> --output <path>',
+          '       narova assets list|untrack <file>|verify|credits',
+        );
       }
       let projectDir;
       let rawConfig;
       try {
         if (action === 'providers') {
-          for (const provider of listStockProviders(process.env, { pack: flags.pack })) {
+          let providers;
+          try { providers = listStockProviders(process.env, { pack: flags.pack }); }
+          catch (error) { invocationError(error.message); }
+          for (const provider of providers) {
             const readiness = provider.ready ? 'ready' : `optional: needs ${provider.envKey}`;
             console.log(`${provider.id}\t${provider.kinds.join(',')}\t${readiness}`);
           }
+          mSetData({
+            pack: flags.pack || 'core',
+            providers: providers.map(p => ({ id: p.id, kinds: p.kinds, ready: p.ready, envKey: p.ready ? undefined : p.envKey })),
+          });
           return;
         }
         if (action === 'search') {
           const query = positionals.slice(2).join(' ');
           if (!query || !flags.provider) {
-            throw new Error('usage: narova assets search <query> --provider <name> --kind image|video|audio|model [--limit N] [--json]');
+            invocationError('usage: narova assets search <query> --provider <name> --kind image|video|audio|model [--limit N] [--json]');
           }
-          const results = await searchStock(flags.provider, query, {
-            kind: flags.kind, limit: flags.limit, pack: flags.pack,
-          });
-          if (flags.json) {
+          let results;
+          try {
+            results = await searchStock(flags.provider, query, {
+              kind: flags.kind, limit: flags.limit, pack: flags.pack,
+            });
+          } catch (error) {
+            if (/^(?:unknown stock provider|--limit |stock search query |\S+ does not support kind )/.test(error.message)) {
+              invocationError(error.message);
+            }
+            throw error;
+          }
+          // Under --json the standard envelope supersedes the legacy bare-JSON
+          // result list (NAR-015-012); the legacy print remains for humans.
+          if (machine.isActive()) {
+            mSetData({ provider: flags.provider, kind: flags.kind || null, query, results });
+          } else if (flags.json) {
             console.log(JSON.stringify(results, null, 2));
           } else if (!results.length) {
             console.log('no stock assets found');
@@ -500,6 +814,7 @@ async function main() {
           for (const asset of lock.assets) {
             console.log(`${asset.file}\t${asset.kind}\t${asset.origin?.mode || 'unknown'}\t${asset.rights?.status || 'unknown'}`);
           }
+          mSetData({ assets: lock.assets });
           return;
         }
         if (action === 'verify') {
@@ -507,36 +822,50 @@ async function main() {
           if (!report.count) console.log('ok: no tracked creative assets');
           for (const result of report.results) {
             console.log(`${result.ok ? 'ok' : 'fail'}: ${result.file}${result.ok ? '' : ` — ${result.issues.join('; ')}`}`);
+            if (!result.ok) mDiag('error', 'audit.assets.verify', result.issues.join('; '), result.file);
           }
-          if (!report.ok) process.exitCode = 1;
+          mSetData({ ok: report.ok, count: report.count, results: report.results });
+          if (!report.ok) process.exitCode = machine.EXIT.subjectNonPass;
           return;
         }
         if (action === 'credits') {
           if (flags.format && flags.format !== 'text') {
             const entries = creditEntries(projectDir);
-            const formatted = formatCredits(entries, flags.format);
+            let formatted;
+            try { formatted = formatCredits(entries, flags.format); }
+            catch (error) { invocationError(error.message); }
             if (formatted) console.log(formatted);
+            mSetData({ format: flags.format, entries });
             return;
           }
           const lines = creditLines(projectDir);
           if (!lines.length) console.log('no tracked attribution text');
           else for (const line of lines) console.log(`- ${line}`);
+          mSetData({ format: 'text', lines });
           return;
         }
         if (action === 'untrack') {
           const file = positionals[2];
-          if (!file) throw new Error('usage: narova assets untrack <project-relative file>');
+          if (!file) invocationError('usage: narova assets untrack <project-relative file>');
           const removed = unregisterAsset(projectDir, file);
           console.log(`untracked: ${removed} (file kept)`);
+          mData({ file: removed });
+          mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
           return;
         }
         if (action === 'import') {
           const file = positionals[2];
-          if (!file) throw new Error('usage: narova assets import <project-relative file> [metadata options]');
+          if (!file) invocationError('usage: narova assets import <project-relative file> [metadata options]');
           const resolved = resolveProjectFile(projectDir, file);
           const record = withAssetMutation(projectDir, () => {
             const previous = readAssetLock(projectDir).assets.find(asset => asset.file === resolved.relative);
-            const metadata = assetRegistrationFromFlags(flags);
+            let metadata;
+            try {
+              metadata = assetRegistrationFromFlags(flags);
+              normalizeRegistrationMetadata(metadata);
+            } catch (error) {
+              invocationError(error.message);
+            }
             if (previous && metadata.origin) {
               metadata.origin = { ...previous.origin, ...metadata.origin };
               // A URL digest describes the exact raw URL supplied with that
@@ -551,21 +880,23 @@ async function main() {
           });
           console.log(`tracked: ${record.file} (${record.kind}, ${record.bytes} bytes)`);
           console.log(`lock:    ${path.join(projectDir, 'assets.lock.json')}`);
+          mData({ file: record.file, kind: record.kind, bytes: record.bytes });
+          mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
           return;
         }
         const requestedId = positionals.slice(2).join(' ');
         if (!requestedId || !flags.output) {
-          throw new Error(action === 'acquire'
+          invocationError(action === 'acquire'
             ? 'usage: narova assets acquire <id> --provider <name> --kind <kind> --output <project-relative path>'
             : 'usage: narova assets download <url> --output <project-relative path> [metadata options]');
         }
         if (action === 'acquire' && !flags.provider) {
-          throw new Error('assets acquire requires --provider');
+          invocationError('assets acquire requires --provider');
         }
         if (action === 'acquire') {
           const forbidden = ['origin', 'item-id', 'source-page'].filter(flag => Object.hasOwn(flags, flag));
           if (forbidden.length) {
-            throw new Error(`assets acquire derives stock provenance; do not pass ${forbidden.map(flag => `--${flag}`).join(', ')}`);
+            invocationError(`assets acquire derives stock provenance; do not pass ${forbidden.map(flag => `--${flag}`).join(', ')}`);
           }
         }
         // Validate the existing registry and destination before mutating bytes.
@@ -591,11 +922,19 @@ async function main() {
           throw new Error(`asset destination is not a file: ${destination.relative}`);
         }
         // Reject malformed user overrides before any catalogue lookup.
-        normalizeRegistrationMetadata(assetRegistrationFromFlags(flags));
+        try { normalizeRegistrationMetadata(assetRegistrationFromFlags(flags)); }
+        catch (error) { invocationError(error.message); }
         let stock = null;
         let url = requestedId;
         if (action === 'acquire') {
-          stock = await resolveStock(flags.provider, requestedId, { kind: flags.kind, pack: flags.pack });
+          try {
+            stock = await resolveStock(flags.provider, requestedId, { kind: flags.kind, pack: flags.pack });
+          } catch (error) {
+            if (/^(?:unknown stock provider|stock asset id |\S+ does not support kind )/.test(error.message)) {
+              invocationError(error.message);
+            }
+            throw error;
+          }
           url = stock.download.url;
           const outputKind = inferKind(destination.relative);
           if (outputKind !== stock.kind) {
@@ -689,9 +1028,16 @@ async function main() {
         }
         console.log(`${stock ? 'acquired' : 'downloaded'}: ${record.file} (${record.kind}, ${record.bytes} bytes)`);
         console.log(`lock:       ${path.join(projectDir, 'assets.lock.json')}`);
+        mData({ file: record.file, kind: record.kind, bytes: record.bytes, ...(stock ? { provider: stock.provider, itemId: stock.id } : { url }) });
+        mArtifact(path.join(projectDir, record.file), 'asset');
+        mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
       } catch (error) {
         console.error(`assets ${action} failed: ${error.message}`);
-        process.exit(1);
+        // Usage-shaped rejections (missing query/provider/output arguments)
+        // surface through this catch as Errors; classify them as usage errors.
+        const usage = error instanceof InvocationError || error.message.startsWith('usage:');
+        mDiag('error', usage ? 'usage.invalid' : 'operation.failed', error.message);
+        process.exit(usage ? machine.EXIT.usage : machine.EXIT.failure);
       }
       return;
     }
@@ -699,8 +1045,13 @@ async function main() {
     case 'compile': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
-      compileTimeline(config, { out });
+      const compiled = compileTimeline(config, { out });
       console.log(`manifest -> ${path.join(out, 'manifest.json')}`);
+      mData({ manifest: path.join(out, 'manifest.json'), scenes: config.scenes.length });
+      mArtifact(path.join(out, 'manifest.json'), 'manifest');
+      mArtifact(compiled.files.narration, 'stage-input');
+      mArtifact(compiled.files.resolvedConfig, 'stage-input');
+      if (compiled.files.restoreMarker) mArtifact(compiled.files.restoreMarker, 'compatibility-state');
       return;
     }
 
@@ -708,24 +1059,40 @@ async function main() {
       let config;
       let projectDir;
       try { ({ config, projectDir } = await loadResolved(flags)); }
-      catch (e) { console.error(e.message); process.exit(1); }
+      catch (e) {
+        if (e.code === 'NAROVA_USAGE') throw e;
+        console.error(e.message); process.exit(1);
+      }
+      const diagnostics = [];
       const ok = check(config, {
         strict: flags.strict,
         release: flags.release,
         outDir: outDirOf(flags, projectDir),
         critiqueProfile: flags.critique || null,
         emitCreativeArtifact: !!flags['creative-identity'],
+        diagnostics,
       });
+      for (const d of diagnostics) mDiag(d.severity, d.code, d.message);
+      mData({
+        level: flags.release ? 'release' : flags.strict ? 'strict' : 'default',
+        warnings: diagnostics.filter(d => d.severity === 'warning').length,
+        errors: diagnostics.filter(d => d.severity === 'error').length,
+      });
+      if (flags['creative-identity']) {
+        const identityArtifact = path.join(outDirOf(flags, projectDir), 'creative-identity.json');
+        if (fs.existsSync(identityArtifact)) mArtifact(identityArtifact, 'report');
+      }
       // Run critique when requested via --critique flag or as a standalone command.
       if (flags.critique) {
         console.log('');
-        critique(config, {
+        const advice = critique(config, {
           profile: flags.critique === true ? 'all' : flags.critique,
           projectDir,
           outDir: outDirOf(flags, projectDir),
         });
+        mData({ critique: advice });
       }
-      if (!ok) process.exitCode = 1;
+      if (!ok) process.exitCode = machine.EXIT.subjectNonPass;
       return;
     }
 
@@ -733,24 +1100,26 @@ async function main() {
       let config;
       let projectDir;
       try { ({ config, projectDir } = await loadResolved(flags)); }
-      catch (e) { console.error(e.message); process.exit(1); }
+      catch (e) {
+        if (e.code === 'NAROVA_USAGE') throw e;
+        console.error(e.message); process.exit(1);
+      }
       const profile = positionals[1] || flags.profile || 'all';
-      critique(config, { profile, projectDir, outDir: outDirOf(flags, projectDir) });
+      const advice = critique(config, { profile, projectDir, outDir: outDirOf(flags, projectDir) });
+      mData({ profile, advice });
       return;
     }
 
     case 'walkthrough': {
       const action = positionals[1] || 'status';
       if (!['explore', 'capture', 'status'].includes(action)) {
-        console.error('usage: narova walkthrough explore|capture|status [id]');
-        process.exit(1);
+        usageError('usage: narova walkthrough explore|capture|status [id]');
       }
       const { config, projectDir } = await loadResolved(flags);
       const declared = Object.keys(config.walkthroughs || {});
       const requested = positionals[2];
       if (action === 'explore' && !requested && declared.length > 1) {
-        console.error(`walkthrough explore needs an id — declared: ${declared.join(', ')}`);
-        process.exit(1);
+        usageError(`walkthrough explore needs an id — declared: ${declared.join(', ')}`);
       }
       const ids = requested && requested !== 'all'
         ? [requested]
@@ -774,19 +1143,29 @@ async function main() {
         const result = exploreWalkthrough(config, ids[0]);
         console.log(result.snapshot || '(no interactive elements found)');
         console.log(`\nsession stays open: agent-browser --session ${result.session} snapshot -i`);
+        mData({ id: ids[0], session: result.session, snapshot: result.snapshot || null });
         return;
       }
       if (action === 'status') {
+        const statuses = [];
         for (const id of ids) {
           const status = captureStatus(config, id, timings, { outDir: out });
           console.log(`${status.ok ? '✓' : '○'} ${id}: ${status.ok ? 'fresh' : status.reason}${status.ok && status.manifest ? ` (${status.manifest.media.width}x${status.manifest.media.height}, ${status.manifest.media.duration.toFixed(1)}s)` : ''}`);
+          statuses.push({
+            id, fresh: status.ok, reason: status.ok ? null : status.reason,
+            media: status.ok && status.manifest ? status.manifest.media : null,
+          });
         }
+        // Inspection: stale/missing state is reported in the payload; the
+        // operation itself succeeds (NAR-015-013 retained behavior).
+        mSetData({ walkthroughs: statuses });
         return;
       }
       if (!timings) {
         console.error(`walkthrough capture needs ${timingsPath} — run \`narova synth\` first`);
         process.exit(1);
       }
+      const captures = [];
       for (const id of ids) {
         const flow = config.walkthroughs[id];
         console.log(`walkthrough "${id}" -> ${safeUrl(flow.url)}`);
@@ -795,7 +1174,12 @@ async function main() {
         }
         const result = captureWalkthrough(config, id, timings, { outDir: out });
         console.log(`captured -> ${result.recording} (${result.manifest.media.width}x${result.manifest.media.height}, ${result.manifest.media.duration.toFixed(1)}s, ${result.manifest.steps.length} actions)`);
+        captures.push({ id, media: result.manifest.media, steps: result.manifest.steps.length });
+        mArtifact(result.recording, 'recording');
+        mArtifact(path.join(result.dir, 'capture.json'), 'capture-manifest');
       }
+      mSetData({ captures });
+      mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
       return;
     }
 
@@ -810,6 +1194,7 @@ async function main() {
       }
       const result = plan(prev, config, { toolVersion: require('../package.json').version });
       console.log(formatPlan(result));
+      mSetData(result);
       return;
     }
 
@@ -829,7 +1214,10 @@ async function main() {
         ({ config, projectDir, raw, configFile, restoredOverrides, cliOverrides }
           = await loadResolved(flags, { readOnly: true }));
       }
-      catch (e) { console.error(e.message); process.exit(1); }
+      catch (e) {
+        if (e.code === 'NAROVA_USAGE') throw e;
+        console.error(e.message); process.exit(1);
+      }
       const report = collectProvenance(config, {
         outDir: outDirOf(flags, projectDir),
         configFile,
@@ -837,7 +1225,10 @@ async function main() {
         restoredOverrides,
         cliOverrides,
       });
-      if (flags.json) console.log(JSON.stringify(report, null, 2));
+      // Under --json the envelope supersedes the bare report print
+      // (NAR-015-012); the report moves into the envelope's data payload.
+      if (machine.isActive()) mSetData(report);
+      else if (flags.json) console.log(JSON.stringify(report, null, 2));
       else console.log(formatProvenance(report));
       return;
     }
@@ -883,10 +1274,12 @@ async function main() {
               audioIdentityChanged: prevNc != null && prevNc !== currentNc,
             });
             console.log(revisions.formatRevisionImpact(report, { baselineName: 'last build manifest (no recorded revision)' }));
+            mSetData({ baseline: 'last build manifest (no recorded revision)', ...report });
             return;
           } catch { /* fall through to the no-revision statement */ }
         }
         console.log('no revisions recorded yet — build once, then narova diff predicts the impact of your edits');
+        mSetData({ baseline: null, rows: [] });
         return;
       }
       const baseline = records[records.length - 1];
@@ -903,6 +1296,7 @@ async function main() {
         audioIdentityChanged: baseline.narrationContext != null && baseline.narrationContext !== currentNc,
       });
       console.log(revisions.formatRevisionImpact(report));
+      mSetData(report);
       const changed = report.rows.some(r => r.cls !== 'unchanged') || report.contextChanged || report.audioIdentityChanged;
       if (!changed) console.log('\nno changes since the last recorded revision — the next build records no new revision');
       return;
@@ -918,8 +1312,10 @@ async function main() {
       if (!sub || sub === 'list') {
         if (records.length === 0) {
           console.log('no revisions recorded yet — every state-changing build appends one to out/revisions.jsonl');
+          mSetData({ revisions: [] });
           return;
         }
+        const listed = [];
         for (const rec of records) {
           const parent = rec.parent != null ? records.find(r => r.ordinal === rec.parent) : null;
           const when = rec.recordedAt ? rec.recordedAt.slice(0, 16).replace('T', ' ') : '';
@@ -933,16 +1329,17 @@ async function main() {
           if (mr.spans && mr.spans.reusedCount != null) reuseBits.push(`${mr.spans.reusedCount}/${mr.spans.totalCount} spans`);
           const reuse = reuseBits.length ? `  [measured: ${reuseBits.join(', ')}]` : '';
           console.log(`  v${rec.ordinal}  ${when}  ${summary}${reuse}${label}`);
+          listed.push({ ordinal: rec.ordinal, recordedAt: rec.recordedAt || null, label: rec.label || null, summary });
         }
         console.log(`\ncompare: narova history compare <a>..<b>   annotate: narova history annotate <v> "label"`);
+        mSetData({ revisions: listed });
         return;
       }
       if (sub === 'annotate') {
         const ordinal = parseInt(positionals[2], 10);
         const label = positionals.slice(3).join(' ').trim();
         if (!Number.isInteger(ordinal) || !label) {
-          console.error('usage: narova history annotate <version> "label"');
-          process.exit(1);
+          usageError('usage: narova history annotate <version> "label"');
         }
         const r = revisions.annotateLedger(out, ordinal, label);
         if (!r.ok) {
@@ -950,6 +1347,8 @@ async function main() {
           process.exit(1);
         }
         console.log(`annotated v${ordinal} — "${label}" (label only; identities and evidence unchanged)`);
+        mData({ ordinal, label });
+        mArtifact(path.join(out, 'revisions.jsonl'), 'ledger');
         return;
       }
       if (sub === 'compare') {
@@ -962,14 +1361,13 @@ async function main() {
           b = parseInt(positionals[3], 10);
         }
         if (!Number.isInteger(a) || !Number.isInteger(b)) {
-          console.error('usage: narova history compare <a>..<b>  (or <a> <b>)');
-          process.exit(1);
+          usageError('usage: narova history compare <a>..<b>  (or <a> <b>)');
         }
         const recA = records.find(r => r.ordinal === a);
         const recB = records.find(r => r.ordinal === b);
         if (!recA) { console.error(`no revision v${a} recorded`); process.exit(1); }
         if (!recB) { console.error(`no revision v${b} recorded`); process.exit(1); }
-        if (a === b) { console.error('pick two different revisions'); process.exit(1); }
+        if (a === b) { usageError('pick two different revisions'); }
         const report = revisions.buildRevisionReport({
           baselineRecord: recA,
           afterRecord: recB,
@@ -977,10 +1375,10 @@ async function main() {
             && recA.narrationContext !== recB.narrationContext,
         });
         console.log(revisions.formatRevisionImpact(report));
+        mSetData({ from: a, to: b, ...report });
         return;
       }
-      console.error(`unknown history subcommand "${sub}" — use list, annotate, or compare`);
-      process.exit(1);
+      usageError(`unknown history subcommand "${sub}" — use list, annotate, or compare`);
     }
 
     case 'release': {
@@ -1007,19 +1405,23 @@ async function main() {
           }
           console.log(`\n${entries.length} release(s) in ${require('../src/releases').RELEASES_DIR}`);
         }
+        mSetData({ releases: entries });
         return;
       }
       if (sub === 'save') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova release save <name>'); process.exit(1); }
+        if (!name) usageError('usage: narova release save <name>');
         const projectDir = path.resolve(flags.project || '.');
         const r = await saveRelease(mp, name, { projectDir });
         console.log(`release "${r.name}" saved -> ${r.dir}  (${r.files.length} files: ${r.files.join(', ')})`);
+        mData({ name: r.name, files: r.files });
+        mArtifact(r.dir, 'archive');
         return;
       }
       if (sub === 'restore') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova release restore <name>'); process.exit(1); }
+        if (!name) usageError('usage: narova release restore <name>');
+        const restoreProjectDir = path.resolve(flags['new-project'] || flags.project || '.');
         const result = restoreRelease(name, out, {
           projectDir: path.resolve(flags.project || '.'),
           overwrite: flags.overwrite,
@@ -1028,18 +1430,26 @@ async function main() {
         console.log(`release "${name}" restored -> ${result.manifest}`);
         if (result.restored.length) console.log(`  restored: ${result.restored.join(', ')}`);
         if (result.conflicts.length) console.log(`  skipped (existing): ${result.conflicts.join(', ')}`);
+        mData({ name, restored: result.restored, conflicts: result.conflicts });
+        mArtifact(result.manifest, 'manifest');
+        const outputEntries = new Set(['.audio-fingerprint', '.timings-fingerprint', 'timings.json', RESTORE_OVERRIDES]);
+        for (const restored of result.restored) {
+          const restoredPath = outputEntries.has(restored)
+            ? path.join(path.dirname(result.manifest), restored)
+            : path.join(restoreProjectDir, restored);
+          mArtifact(restoredPath, restored === 'assets.lock.json' ? 'registry' : 'restored-source');
+        }
         return;
       }
       if (sub === 'remove') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova release remove <name>'); process.exit(1); }
+        if (!name) usageError('usage: narova release remove <name>');
         removeRelease(name);
         console.log(`release "${name}" removed`);
+        mData({ name });
         return;
       }
-      console.error('usage: narova release save|list|restore|remove [name]');
-      process.exit(1);
-      return;
+      usageError('usage: narova release save|list|restore|remove [name]');
     }
 
     case 'branch': {
@@ -1048,10 +1458,11 @@ async function main() {
         const name = positionals[2];
         const rationale = String(flags.rationale || '').trim();
         if (!name || !rationale) {
-          console.error('usage: narova branch save <name> --rationale "why this small proof may serve the brief" [--status candidate|exploring] [--parent <name>]');
-          process.exit(1);
+          usageError('usage: narova branch save <name> --rationale "why this small proof may serve the brief" [--status candidate|exploring] [--parent <name>]');
         }
-        const status = validBranchStatus(flags.status || 'candidate');
+        let status;
+        try { status = validBranchStatus(flags.status || 'candidate'); }
+        catch (error) { thrownUsageError(error); }
         const { config, projectDir, effectiveOverrides } = await loadResolved(flags);
         const out = outDirOf(flags, projectDir);
         const mp = path.join(out, 'manifest.json');
@@ -1062,7 +1473,8 @@ async function main() {
         const proof = verifyProofReceipt(config, out);
         if (!proof.ok) {
           console.error(`${proof.reason} — rerun narova shots --motion --proof before saving this branch`);
-          process.exit(1);
+          mDiag('error', 'gate.proof.receipt', proof.reason);
+          process.exit(machine.EXIT.subjectNonPass);
         }
         // Build the complete snapshot and external proof bundle under a unique
         // stage name. Only a complete pair can replace an existing branch.
@@ -1100,6 +1512,17 @@ async function main() {
         const branch = readBranch(published.name);
         console.log(`proof branch "${published.name}" saved: status=${branch.status} evidence=${branch.evidence.length} proof=${branch.proofIdentity} rationale="${branch.rationale}"`);
         console.log('keep this branch small; compare 2–3 proofs, approve one, then expand only the winner');
+        mData({
+          name: published.name,
+          status: branch.status,
+          rationale: branch.rationale,
+          parent: branch.parent || null,
+          proofIdentity: branch.proofIdentity,
+          snapshotIdentity: branch.snapshotIdentity,
+          evidence: branch.evidence,
+        });
+        mArtifact(published.dir, 'archive');
+        mArtifact(published.metadataDir, 'proof-metadata');
         return;
       }
       if (sub === 'list') {
@@ -1116,52 +1539,81 @@ async function main() {
           }
           console.log(`\n${entries.length} branch(es) in ${require('../src/releases').RELEASES_DIR}`);
         }
+        mSetData({
+          branches: entries.map(e => ({
+            name: e.name, title: e.title || null,
+            status: e.branch ? e.branch.status : null,
+            parent: e.branch && e.branch.parent ? e.branch.parent : null,
+            rationale: e.branch && e.branch.rationale ? e.branch.rationale : null,
+            proofIdentity: e.branch && e.branch.proofIdentity ? e.branch.proofIdentity : null,
+          })),
+        });
         return;
       }
       if (sub === 'set') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova branch set <name> [--status approved|rejected|archived|candidate] [--rationale "..."]'); process.exit(1); }
+        if (!name) usageError('usage: narova branch set <name> [--status approved|rejected|archived|candidate] [--rationale "..."]');
         const status = flags.status;
         const rationale = flags.rationale;
+        if (status) {
+          try { validBranchStatus(status); }
+          catch (error) { thrownUsageError(error); }
+        }
         let branch = readBranch(name);
+        let metadataWritten = false;
         if (!branch) {
           // Auto-create branch metadata for an existing release.
           branch = saveBranch(name, { rationale: rationale || '', status: status || 'exploring' });
+          metadataWritten = true;
         } else {
-          if (status) { setBranchStatus(name, status); branch.status = status; }
+          if (status) { setBranchStatus(name, status); branch.status = status; metadataWritten = true; }
           if (rationale) {
             branch = setBranchRationale(name, rationale);
+            metadataWritten = true;
           }
         }
         console.log(`branch "${name}": status=${branch.status}${branch.rationale ? ' rationale="' + branch.rationale + '"' : ''}`);
+        mData({ name, status: branch.status, rationale: branch.rationale || null });
+        if (metadataWritten) mArtifact(path.join(branchDir(name), 'branch.json'), 'branch-metadata');
         return;
       }
       if (sub === 'show') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova branch show <name>'); process.exit(1); }
+        if (!name) usageError('usage: narova branch show <name>');
         const branch = readBranch(name);
         if (!branch) { console.error(`branch "${name}" not found`); process.exit(1); }
-        console.log(JSON.stringify(branch, null, 2));
+        // Under --json the envelope supersedes the raw stored-object print
+        // (NAR-015-012); the branch object moves into the data payload.
+        if (machine.isActive()) mSetData(branch);
+        else console.log(JSON.stringify(branch, null, 2));
         return;
       }
-      console.error('usage: narova branch save|list|set|show [name]');
-      process.exit(1);
-      return;
+      usageError('usage: narova branch save|list|set|show [name]');
     }
 
     case 'render':
       console.error('narova render was removed in 0.3.0 — use "narova compose" (generate the HyperFrames project) or "narova build" (full mp4)');
-      process.exit(1);
+      mDiag('error', 'usage.invalid', 'narova render was removed in 0.3.0');
+      process.exit(machine.EXIT.usage);
       break;
 
     case 'synth': {
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const reuse = flags.force ? false : resolveReuse(config, out, flags.reuse);
-      writeStageInputs(config, out);
+      const inputs = writeStageInputs(config, out);
+      mArtifact(inputs.manifest, 'manifest');
+      mArtifact(inputs.narration, 'stage-input');
+      mArtifact(inputs.resolvedConfig, 'stage-input');
+      if (inputs.restoreMarker) mArtifact(inputs.restoreMarker, 'restore-metadata');
       synth(out, { backend: flags.backend, reuse, projectDir, config });
       enrichTimeline(out);   // merge measured timings into manifest.json
       console.log(`synth complete -> ${out}/audio (incl. full.wav), ${out}/timings.json`);
+      mData({ out, reused: !!reuse });
+      if (!reuse) {
+        mArtifact(path.join(out, 'audio'), 'audio');
+        mArtifact(path.join(out, 'timings.json'), 'timings');
+      }
       return;
     }
 
@@ -1170,12 +1622,17 @@ async function main() {
       const out = outDirOf(flags, projectDir);
       const renderer = getRenderer(config.renderer);
       const r = composeWithRenderer(config, out);
+      mArtifact(r.dir, 'renderer-project');
       console.log(`composed ${r.scenes} scenes (${r.total}s) with ${renderer.name} -> ${r.dir}`);
       const caps = writeCaptions(config, out);
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
       console.log(`  qa: narova shots --beats   ·   preview: narova preview --detach   ·   release: narova build --reuse --release`);
       if (renderer.name === 'hyperframes') refreshPreviewIfLive(out);
+      mData({ scenes: r.scenes, total: r.total, renderer: renderer.name, cues: caps.cues });
+      mArtifact(caps.srt, 'captions');
+      mArtifact(caps.vtt || path.join(out, 'captions.vtt'), 'captions');
+      if (caps.omissionPath) mArtifact(caps.omissionPath, 'caption-omission');
       return;
     }
 
@@ -1188,29 +1645,31 @@ async function main() {
       }
       const caps = writeCaptions(config, out);
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
+      mData({ cues: caps.cues });
+      mArtifact(caps.srt, 'captions');
+      mArtifact(caps.vtt || path.join(out, 'captions.vtt'), 'captions');
+      if (caps.omissionPath) mArtifact(caps.omissionPath, 'caption-omission');
       return;
     }
 
     case 'review': {
       const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt, flags.silences, flags.takes].filter(Boolean).length;
       if (modes === 0) {
-        console.error('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes');
-        process.exit(1);
+        usageError('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes');
       }
       if (modes > 1) {
-        console.error('review modes are mutually exclusive');
-        process.exit(1);
+        usageError('review modes are mutually exclusive');
       }
       if (flags.silences) {
         const threshold = flags.silences === true ? 1.0 : Number(flags.silences);
         if (!Number.isFinite(threshold) || threshold <= 0) {
-          console.error('--silences needs a positive threshold in seconds, e.g. --silences 0.8');
-          process.exit(1);
+          usageError('--silences needs a positive threshold in seconds, e.g. --silences 0.8');
         }
         const { config, projectDir } = await loadResolved(flags);
         const report = silenceGaps(outDirOf(flags, projectDir), { threshold });
         console.log(formatSilences(report));
         console.log('advisory evidence — a long silence may be intentional; nothing here gates or fails a build');
+        mSetData({ mode: 'silences', threshold, ...report });
         return;
       }
       if (flags.takes) {
@@ -1222,14 +1681,18 @@ async function main() {
           process.exit(1);
         }
         const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
-        console.log(formatTakes(takeIndex(config, out, timings)));
+        const index = takeIndex(config, out, timings);
+        console.log(formatTakes(index));
         console.log('advisory evidence — audition weak takes, then re-roll surgically with vo take: N or vary: true');
+        mSetData({ mode: 'takes', ...index });
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       if (flags.coverage) {
-        console.log(formatCoverage(clipCoverage(config)));
+        const report = clipCoverage(config);
+        console.log(formatCoverage(report));
+        mSetData({ mode: 'coverage', ...report });
         return;
       }
       const timingsPath = path.join(out, 'timings.json');
@@ -1244,18 +1707,21 @@ async function main() {
         if (sheet.sheet) console.log(`contact sheet -> ${sheet.sheet} (${sheet.tiles.length} scenes)`);
         if (sheet.missing.length) console.log(`no still for: ${sheet.missing.join(', ')}`);
         console.log('advisory evidence — look at it; nothing here gates or fails a build');
+        mSetData({ mode: 'contact-sheet', reason: sheet.reason || null, tiles: sheet.tiles, missing: sheet.missing });
+        if (sheet.sheet) mArtifact(sheet.sheet, 'contact-sheet');
         return;
       }
       const terms = String(flags.excerpt).split(',').map(s => s.trim()).filter(Boolean);
       if (terms.length === 0) {
-        console.error('review --excerpt needs comma-separated terms, e.g. --excerpt "Marjaiyyah,Ijtihad"');
-        process.exit(1);
+        usageError('review --excerpt needs comma-separated terms, e.g. --excerpt "Marjaiyyah,Ijtihad"');
       }
       const excerpts = termExcerpts(config, out, timings, terms);
       if (excerpts.reason) { console.error(excerpts.reason); process.exit(1); }
       for (const e of excerpts.excerpts) console.log(`excerpt -> ${e.file}  (${e.term})`);
       if (excerpts.notFound.length) console.log(`not found in timing evidence: ${excerpts.notFound.join(', ')}`);
       console.log('advisory evidence — listen before handing off; nothing here gates or fails a build');
+      mSetData({ mode: 'excerpt', excerpts: excerpts.excerpts, notFound: excerpts.notFound });
+      for (const e of excerpts.excerpts) mArtifact(e.file, 'excerpt');
       return;
     }
 
@@ -1278,8 +1744,7 @@ async function main() {
       // One QA frame per scene, mid-scene by default; --at t1,t2 overrides.
       const reviewModes = [flags.at, flags.motion, flags.beats].filter(Boolean).length;
       if (reviewModes > 1) {
-        console.error('--at, --motion, and --beats are mutually exclusive');
-        process.exit(1);
+        usageError('--at, --motion, and --beats are mutually exclusive');
       }
       const times = flags.at
         ? String(flags.at).split(',').map(Number)
@@ -1289,22 +1754,27 @@ async function main() {
           ? motionReviewTimes(data)
         : data.scenes.map(sc => Math.round((sc.start + sc.dur / 2) * 10) / 10);
       if (times.some(t => !Number.isFinite(t))) {
-        console.error('--at needs comma-separated seconds, e.g. --at 0.8,6.2,14');
-        process.exit(1);
+        usageError('--at needs comma-separated seconds, e.g. --at 0.8,6.2,14');
       }
       const rendered = shotsWithRenderer(config, out, times);
       console.log(`frames -> ${rendered.dir}  (${times.length} @ ${times.join(', ')})`);
+      mData({ times, frames: times.length, proof: !!flags.proof });
+      mArtifact(rendered.dir, 'frames');
       if (flags.proof) {
         const report = auditProofFrames(rendered.dir);
         console.log(formatProofAudit(report));
         if (!report.ok) {
-          process.exitCode = 1;
+          mDiag('error', 'audit.proof.frames', 'sampled pilot frames were near-black or no visual evidence was rendered');
+          process.exitCode = machine.EXIT.subjectNonPass;
         } else {
           try {
-            writeProofReceipt(config, out, proofContactSheets(rendered.dir), report.frames.map(frame => frame.file));
+            const receipt = writeProofReceipt(config, out, proofContactSheets(rendered.dir), report.frames.map(frame => frame.file));
             console.log('proof receipt: pass — evidence is bound to the current config, manifest, timings, and frames');
+            mData({ proofReceipt: receipt });
+            mArtifact(path.join(out, '.proof-receipt.json'), 'receipt');
           } catch (error) {
             console.error(`proof receipt: FAIL — ${error.message}`);
+            mDiag('error', 'gate.proof.receipt', error.message);
             process.exitCode = 1;
           }
         }
@@ -1315,9 +1785,20 @@ async function main() {
 
     case 'build': {
       if (flags.variant && flags.variants) {
-        console.error('--variant and --variants are mutually exclusive — pick one');
-        process.exit(1);
+        usageError('--variant and --variants are mutually exclusive — pick one');
       }
+      const buildArtifacts = (built, out) => {
+        if (!built) return;
+        if (built.mp4) mArtifact(built.mp4, 'video');
+        if (built.renderer === 'hyperframes') mArtifact(findHfDir(out), 'renderer-project');
+        if (built.renderer === 'no-browser') mArtifact(findNoBrowserDir(out), 'renderer-project');
+        if (built.revisions) mArtifact(path.join(out, 'revisions.jsonl'), 'revision-ledger');
+        if (built.companion && built.companion.mp4) mArtifact(built.companion.mp4, 'video-companion');
+        for (const item of built.deliverables || []) {
+          if (item.mp4) mArtifact(item.mp4, 'deliverable');
+          if (item.thumbnail) mArtifact(item.thumbnail, 'thumbnail');
+        }
+      };
       const buildOpts = {
         backend: flags.backend, reuse: flags.reuse,
         release: flags.release,
@@ -1328,8 +1809,10 @@ async function main() {
           : undefined,
         safeAreaGuides: flags['safe-area-guides'],
         companion: flags.companion,
+        artifact: mArtifact,
       };
       if (flags.variants) {
+        const builtResults = [];
         // One resolved config per pass: base first, then each declared variant.
         // The sentence-level TTS cache makes shared sentences free, so each
         // extra pass only pays for the variant's scene-1 lines.
@@ -1343,26 +1826,40 @@ async function main() {
           id: v.id,
           config: resolveConfig(fresh(), { ...overridesFrom(flags), variant: v.id }, dir),
         }));
+        registerConfigProviderSecrets(base, flags.backend);
+        for (const variant of variantConfigs) registerConfigProviderSecrets(variant.config, flags.backend);
         // Preflight every deliverable before rendering any of them. A broken
         // variant must not leave a misleading partial "release" on disk.
         if (flags.release) {
           for (const candidate of [base, ...variantConfigs.map(v => v.config)]) {
-            if (!check(candidate, { release: true, outDir: out })) {
-              process.exitCode = 1;
+            const gateDiagnostics = [];
+            if (!check(candidate, { release: true, outDir: out, diagnostics: gateDiagnostics })) {
+              for (const d of gateDiagnostics) mDiag(d.severity, d.code, d.message);
+              process.exitCode = machine.EXIT.subjectNonPass;
               return;
             }
           }
         }
         if (base.variants.length === 0) {
           console.log('no variants declared in config — building the base video only');
-          verifyMotionIfRequested(build(base, { ...buildOpts, out, projectDir: dir }), flags);
+          const builtBase = build(base, { ...buildOpts, out, projectDir: dir });
+          builtResults.push({ variant: null, ...builtBase });
+          buildArtifacts(builtBase, out);
+          verifyMotionIfRequested(builtBase, flags);
         } else {
-          verifyMotionIfRequested(build(base, { ...buildOpts, out, projectDir: dir }), flags);
+          const builtFirst = build(base, { ...buildOpts, out, projectDir: dir });
+          builtResults.push({ variant: null, ...builtFirst });
+          buildArtifacts(builtFirst, out);
+          verifyMotionIfRequested(builtFirst, flags);
           for (const variant of variantConfigs) {
             console.log(`\nvariant "${variant.id}": only its scene-1 sentences re-synthesize — the sentence cache covers the rest`);
-            verifyMotionIfRequested(build(variant.config, { ...buildOpts, out, projectDir: dir, name: `video-${variant.id}.mp4` }), flags);
+            const builtVariant = build(variant.config, { ...buildOpts, out, projectDir: dir, name: `video-${variant.id}.mp4` });
+            builtResults.push({ variant: variant.id, ...builtVariant });
+            buildArtifacts(builtVariant, out);
+            verifyMotionIfRequested(builtVariant, flags);
           }
         }
+        mSetData({ builds: builtResults });
         if (base.renderer === 'hyperframes') refreshPreviewIfLive(out);
         return;
       }
@@ -1378,8 +1875,10 @@ async function main() {
         }
         candidates.push(config);
         for (const candidate of candidates) {
-          if (!check(candidate, { release: true, outDir: out })) {
-            process.exitCode = 1;
+          const gateDiagnostics = [];
+          if (!check(candidate, { release: true, outDir: out, diagnostics: gateDiagnostics })) {
+            for (const d of gateDiagnostics) mDiag(d.severity, d.code, d.message);
+            process.exitCode = machine.EXIT.subjectNonPass;
             return;
           }
         }
@@ -1417,6 +1916,15 @@ async function main() {
         ...buildOpts, out, projectDir,
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
+      buildArtifacts(built, out);
+      mSetData({
+        mp4: built.mp4,
+        seconds: built.seconds,
+        renderer: built.renderer,
+        deliverables: built.deliverables || [],
+        companion: built.companion || null,
+        revision: built.revisions || null,
+      });
       verifyMotionIfRequested(built, flags);
       if (config.renderer === 'hyperframes') refreshPreviewIfLive(out);
       return;
@@ -1427,18 +1935,23 @@ async function main() {
       const previewOut = outDirOf(flags, project);
       const pidFile = path.join(previewOut, 'preview.pid');
       if (flags.stop) {
-        console.log(stopHfPreview(pidFile) ? `preview stopped (${pidFile})` : 'no detached preview is running');
+        const stopped = stopHfPreview(pidFile);
+        console.log(stopped ? `preview stopped (${pidFile})` : 'no detached preview is running');
+        mData({ stopped });
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
       const out = outDirOf(flags, projectDir);
       const renderer = getRenderer(config.renderer);
       if (renderer.name === 'no-browser') {
-        if (flags.detach) throw new Error('no-browser preview writes a draft MP4 and does not support --detach');
+        if (flags.detach) invocationError('no-browser preview writes a draft MP4 and does not support --detach');
         const rendered = renderWithRenderer(config, out, {
           name: 'preview-no-browser.mp4', fps: flags.fps || 15, quality: flags.quality || 'draft',
         });
         console.log(`no-browser preview -> ${rendered.mp4}`);
+        mData({ renderer: 'no-browser', detached: false });
+        mArtifact(rendered.dir, 'renderer-project');
+        mArtifact(rendered.mp4, 'video');
         return;
       }
       const webglScenes = config.scenes.filter(s => s.three || s._threeModuleContents).length;
@@ -1446,7 +1959,13 @@ async function main() {
         throw new Error(`${webglScenes} WebGL scenes exceed the safe full-preview context budget; use \`narova preview --scene <id>\`, \`narova shots --beats\`, or \`narova shots --motion\``);
       }
       if (flags.scene && flags.detach) {
-        throw new Error('isolated --scene preview currently runs in the foreground; omit --detach');
+        invocationError('isolated --scene preview currently runs in the foreground; omit --detach');
+      }
+      // Reject an explicit bad port before compose replaces a renderer project.
+      const explicitPort = flags.port == null ? null : Number(flags.port);
+      if (explicitPort != null
+          && (!Number.isInteger(explicitPort) || explicitPort < 1 || explicitPort > 65535)) {
+        invocationError('--port must be an integer from 1 to 65535');
       }
       const r = flags.scene
         ? renderer.composeScene(config, out, String(flags.scene))
@@ -1461,8 +1980,8 @@ async function main() {
           console.log(`restarting Studio (was pid ${stale}) — detached previews do not hot-reload`);
           stopHfPreview(pidFile);
         }
-        const port = Number(flags.port || rememberedPort || 3002);
-        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
+        const port = explicitPort || rememberedPort || 3002;
+        if (!Number.isInteger(port) || port < 1 || port > 65535) invocationError('--port must be an integer from 1 to 65535');
         const p = startHfPreview(r.dir, {
           port,
           logFile: path.join(out, 'preview.log'), pidFile,
@@ -1470,11 +1989,18 @@ async function main() {
         });
         console.log(`Studio running -> ${p.url}`);
         console.log(`  pid ${p.pid} · log ${p.logFile} · stop: narova preview --stop --project ${projectDir}`);
+        mSetData({ renderer: 'hyperframes', detached: true, url: p.url, pid: p.pid, port });
+        mArtifact(r.dir, 'renderer-project');
+        mArtifact(pidFile, 'preview-state');
+        mArtifact(p.portFile, 'preview-state');
+        mArtifact(p.logFile, 'preview-log');
       } else {
-        const port = Number(flags.port || 3002);
-        if (!Number.isInteger(port) || port < 1 || port > 65535) throw new Error('--port must be an integer from 1 to 65535');
+        const port = explicitPort || 3002;
+        if (!Number.isInteger(port) || port < 1 || port > 65535) invocationError('--port must be an integer from 1 to 65535');
         console.log(`composed -> ${r.dir}`);
         console.log(`Studio -> ${previewUrl(r.dir, port, projectSlug(config))} (Ctrl-C to stop)`);
+        mSetData({ renderer: 'hyperframes', detached: false, url: previewUrl(r.dir, port, projectSlug(config)), port });
+        mArtifact(r.dir, 'renderer-project');
         runHf(['preview', '--port', String(port)], r.dir);
       }
       return;
@@ -1483,37 +2009,67 @@ async function main() {
     case 'renderers': {
       const sub = positionals[1] || 'list';
       if (sub === 'list') {
-        for (const renderer of listRenderers()) {
+        const renderers = listRenderers();
+        for (const renderer of renderers) {
           const mode = renderer.browserless ? 'browserless' : 'browser';
           console.log(`${renderer.name}\t${renderer.providerVersion}\tlocal · ${mode}`);
         }
+        mSetData({ renderers });
         return;
       }
       if (sub === 'doctor') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova renderers doctor <hyperframes|no-browser>'); process.exit(1); }
-        const renderer = getRenderer(name);
+        if (!name) usageError('usage: narova renderers doctor <hyperframes|no-browser>');
+        let renderer;
+        try { renderer = getRenderer(name); }
+        catch (error) { thrownUsageError(error); }
         const report = renderer.doctor();
         for (const check of report.checks) {
           const mark = check.ok === null ? '·' : (check.ok ? '✓' : '✗');
           console.log(`${mark} ${check.name}: ${check.detail}`);
         }
-        if (!report.ok) process.exitCode = 1;
+        mSetData({ renderer: name, ...report });
+        if (!report.ok) {
+          mDiag('error', 'health.renderer', `renderer ${name} did not pass its local requirement checks`);
+          process.exitCode = machine.EXIT.subjectNonPass;
+        }
         return;
       }
-      console.error('usage: narova renderers list|doctor [name]');
-      process.exit(1);
+      usageError('usage: narova renderers list|doctor [name]');
       return;
     }
 
     case 'voices': {
       const sub = positionals[1] || 'list';
+      if (!['list', 'get'].includes(sub)) usageError('usage: narova voices list|get [voice]');
+      if (sub === 'get' && !positionals[2]) usageError('usage: voices get <name> --backend piper');
+      if (machine.isActive() && flags.backend) {
+        const external = getProvider(String(flags.backend));
+        if (external) registerProviderSecrets(external);
+      }
       const py = findPython(flags.project || '.');
       const args = ['-m', 'narova_tts', 'voices', sub, ...positionals.slice(2)];
       if (flags.backend) args.push('--backend', flags.backend);
-      const r = spawnSync(py, args, { stdio: 'inherit', env: { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') } });
+      const r = spawnSync(py, args, {
+        ...(machine.isActive()
+          ? { encoding: 'utf8', stdio: ['ignore', 'pipe', 'pipe'] }
+          : { stdio: 'inherit' }),
+        env: { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') },
+      });
       if (r.error) { console.error(`voices failed to launch (${py}): ${r.error.message}`); process.exit(1); }
-      process.exitCode = r.status || 0;
+      if (machine.isActive()) {
+        const stdout = machine.redact(String(r.stdout || ''));
+        const stderr = machine.redact(String(r.stderr || ''));
+        if (stdout) process.stderr.write(stdout);
+        if (stderr) process.stderr.write(stderr);
+        mSetData({ subcommand: sub, backend: flags.backend || null, output: stdout.trim() });
+        if (r.status === machine.EXIT.usage) {
+          mDiag('error', 'usage.invalid', stderr.trim() || stdout.trim() || 'invalid voices invocation');
+        }
+      }
+      process.exitCode = r.status === machine.EXIT.usage
+        ? machine.EXIT.usage
+        : (r.status === machine.EXIT.success ? machine.EXIT.success : machine.EXIT.failure);
       return;
     }
 
@@ -1547,38 +2103,51 @@ async function main() {
           console.log(`${name.padEnd(20)} ${BUILTIN_BACKENDS[name].displayName}  delivery: ${declared}`);
         }
         console.log('\ndelivery statuses are disclosures, not restrictions — they tell you what each backend honors before you burn a render');
+        mSetData({ providers: entries.map(publicProviderData), builtins: builtins.map(name => ({
+          name,
+          displayName: BUILTIN_BACKENDS[name].displayName,
+          deliveryCapabilities: deliveryCapabilitiesFor(name),
+        })) });
         return;
       }
       if (sub === 'add') {
         const manifest = positionals[2];
-        if (!manifest) { console.error('usage: narova providers add <provider-manifest.json>'); process.exit(1); }
-        const added = addProvider(manifest);
+        if (!manifest) usageError('usage: narova providers add <provider-manifest.json>');
+        const added = addProvider(manifest, { beforeHandshake: registerProviderSecrets });
         console.log(`provider "${added.name}" registered -> ${path.join(providersDir(), `${added.name}.json`)}`);
         if (added.missingEnvironment.length) {
           console.log(`  set before synthesis: ${added.missingEnvironment.join(', ')}`);
         }
+        mSetData({ provider: publicProviderData(added) });
+        mArtifact(path.join(providersDir(), `${added.name}.json`), 'provider-registry');
         return;
       }
       if (sub === 'remove') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova providers remove <name>'); process.exit(1); }
+        if (!name) usageError('usage: narova providers remove <name>');
         removeProvider(name);
         console.log(`provider "${name}" unregistered`);
+        mSetData({ name, removed: true });
         return;
       }
       if (sub === 'doctor') {
         const name = positionals[2];
-        if (!name) { console.error('usage: narova providers doctor <name>'); process.exit(1); }
-        const result = doctorProvider(name);
+        if (!name) usageError('usage: narova providers doctor <name>');
+        const result = doctorProvider(name, { beforeHandshake: registerProviderSecrets });
         console.log(`worker ok: ${name} ${result.hello.providerVersion} speaks ${result.hello.protocol}`);
         if (result.missingEnvironment.length) {
           console.error(`missing required environment: ${result.missingEnvironment.join(', ')}`);
-          process.exitCode = 1;
+          mDiag('error', 'health.provider', `provider ${name} is missing required environment`, name);
+          process.exitCode = machine.EXIT.subjectNonPass;
         }
+        mSetData({
+          name,
+          hello: publicProviderHello(result.hello),
+          missingEnvironment: result.missingEnvironment,
+        });
         return;
       }
-      console.error('usage: narova providers add|list|remove|doctor [manifest-or-name]');
-      process.exit(1);
+      usageError('usage: narova providers add|list|remove|doctor [manifest-or-name]');
       return;
     }
 
@@ -1594,18 +2163,20 @@ async function main() {
         console.log(`Samples live in ~/.narova/samples/`);
         return;
       }
-      if (sub !== 'sample') { console.error('unknown voice subcommand — use "voice sample"'); process.exit(1); }
+      if (sub !== 'sample') usageError('unknown voice subcommand — use "voice sample"');
       const action = positionals[2];
       try {
         switch (action) {
           case 'add': {
             const file = positionals[3];
             const name = positionals[4];
-            if (!file) { console.error('usage: narova voice sample add <file> <name>'); process.exit(1); }
+            if (!file) usageError('usage: narova voice sample add <file> <name>');
             const dest = addSample(file, name || path.basename(file, path.extname(file)));
             console.log(`sample "${path.basename(dest, path.extname(dest))}" saved -> ${dest}`);
             console.log('\nUse it in reel.config:');
             console.log(`  voices: { a: { backend: "chatterbox", speaker: "${path.basename(dest, path.extname(dest))}" } }`);
+            mSetData({ name: path.basename(dest, path.extname(dest)), path: dest });
+            mArtifact(dest, 'voice-sample');
             return;
           }
           case 'list': {
@@ -1621,18 +2192,19 @@ async function main() {
               }
               console.log(`\nUse by name: speaker: "${samples[0].name}"`);
             }
+            mSetData({ samples });
             return;
           }
           case 'remove': {
             const name = positionals[3];
-            if (!name) { console.error('usage: narova voice sample remove <name>'); process.exit(1); }
+            if (!name) usageError('usage: narova voice sample remove <name>');
             const removed = removeSample(name);
             console.log(`removed sample "${path.basename(removed, path.extname(removed))}"`);
+            mSetData({ name: path.basename(removed, path.extname(removed)), removed: true });
             return;
           }
           default:
-            console.error('unknown action — use add, list, or remove');
-            process.exit(1);
+            usageError('unknown action — use add, list, or remove');
         }
       } catch (e) {
         console.error(`error: ${e.message}`);
@@ -1641,21 +2213,24 @@ async function main() {
     }
 
     case 'doctor': {
-      const ok = doctor(flags.project || '.');
-      process.exitCode = ok ? 0 : 1;
+      const rows = [];
+      const ok = doctor(flags.project || '.', { collect: rows });
+      mSetData({ ok, checks: rows });
+      if (!ok) {
+        mDiag('error', 'health.doctor', 'one or more required tools are missing or unusable');
+        process.exitCode = machine.EXIT.subjectNonPass;
+      }
       return;
     }
 
     case 'karaoke': {
       const sub = positionals[1];
       if (sub !== 'generate') {
-        console.error('usage: narova karaoke generate <audio-file> [--transcript <file>]');
-        process.exit(1);
+        usageError('usage: narova karaoke generate <audio-file> [--transcript <file>]');
       }
       const audioFile = positionals[2];
       if (!audioFile) {
-        console.error('usage: narova karaoke generate <audio-file> [--transcript <file>]');
-        process.exit(1);
+        usageError('usage: narova karaoke generate <audio-file> [--transcript <file>]');
       }
       const audioPath = path.resolve(audioFile);
       if (!fs.existsSync(audioPath)) {
@@ -1663,13 +2238,16 @@ async function main() {
         process.exit(1);
       }
       try {
-        generateKaraoke(audioPath, {
+        const result = generateKaraoke(audioPath, {
           projectDir: flags.project || '.',
           transcript: flags.transcript,
           engine: flags.engine,
           outDir: flags.out || path.dirname(audioPath),
           maxWords: flags['max-words'] ? Number(flags['max-words']) : undefined,
         });
+        mSetData({ cues: result.cues });
+        mArtifact(result.karaokePath, 'captions');
+        mArtifact(result.srtPath, 'captions');
       } catch (e) {
         console.error(`error: ${e.message}`);
         process.exit(1);
@@ -1681,14 +2259,15 @@ async function main() {
       const configFile = positionals[1];
       const karaokeFile = positionals[2];
       if (!configFile || !karaokeFile) {
-        console.error('usage: narova retime <reel.config.mjs> <captions-karaoke.json> [--apply]');
-        process.exit(1);
+        usageError('usage: narova retime <reel.config.mjs> <captions-karaoke.json> [--apply]');
       }
       try {
-        retime(configFile, karaokeFile, {
+        const result = retime(configFile, karaokeFile, {
           log: console.log,
           apply: flags.apply,
         });
+        mSetData({ applied: !!flags.apply, scenes: result });
+        if (flags.apply) mArtifact(path.resolve(configFile), 'authoring-source');
       } catch (e) {
         console.error(`error: ${e.message}`);
         process.exit(1);
@@ -1699,14 +2278,16 @@ async function main() {
     case 'generate': {
       // Minimal early help: only when there is no prompt AND no --regenerate.
       if (!positionals[1] && !flags.regenerate) {
-        console.error('usage: narova generate <prompt> --provider sora|runway [--output <path>]');
-        console.error('       narova generate --regenerate <existing-clip.mp4> [new prompt] [overrides]');
-        console.error('');
-        console.error('Providers:');
+        const lines = [
+          'usage: narova generate <prompt> --provider sora|runway [--output <path>]',
+          '       narova generate --regenerate <existing-clip.mp4> [new prompt] [overrides]',
+          '',
+          'Providers:',
+        ];
         for (const [id, p] of Object.entries(PROVIDERS)) {
-          console.error(`  ${id.padEnd(8)} ${p.description}`);
+          lines.push(`  ${id.padEnd(8)} ${p.description}`);
         }
-        process.exit(1);
+        usageError(...lines);
       }
       try {
         const { dir: projectDir } = await loadProjectConfig(flags.project || '.', flags.config);
@@ -1736,14 +2317,14 @@ async function main() {
         const provider = flags.provider || (baseSpec && baseSpec.provider) || 'sora';
         const info = providerInfo(provider);
         if (!info) {
-          console.error(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
-          process.exit(1);
+          usageError(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
         }
         const prompt = positionals[1] || (baseSpec && baseSpec.prompt);
         if (!prompt) {
-          console.error('usage: narova generate <prompt> --provider sora|runway [--output <path>]');
-          console.error('       narova generate --regenerate <existing-clip.mp4> [--provider ..] [new prompt]');
-          process.exit(1);
+          usageError(
+            'usage: narova generate <prompt> --provider sora|runway [--output <path>]',
+            '       narova generate --regenerate <existing-clip.mp4> [--provider ..] [new prompt]',
+          );
         }
         const apiKey = process.env[info.envKey];
         if (!apiKey) {
@@ -1775,6 +2356,11 @@ async function main() {
         if (readSpec(output)) {
           console.log(`Generative spec:        assets/${path.basename(output).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json (edit/regenerate from here)`);
         }
+        const specPath = output.replace(/\.(mp4|webm|mov)$/i, '.gen.json');
+        mSetData({ provider, output, spec: fs.existsSync(specPath) ? specPath : null });
+        mArtifact(output, 'generated-media');
+        if (fs.existsSync(specPath)) mArtifact(specPath, 'generation-recipe');
+        mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
       } catch (e) {
         console.error(`generate failed: ${e.message}`);
         process.exit(1);
@@ -1785,8 +2371,22 @@ async function main() {
     default:
       console.error(`unknown command: ${cmd}\n`);
       console.log(HELP);
-      process.exit(1);
+      mDiag('error', 'usage.invalid', `unknown command: ${cmd}`);
+      process.exit(machine.EXIT.usage);
   }
 }
 
-main().catch(err => { console.error('error:', err.message); process.exit(1); });
+main().catch(err => {
+  if (err.code === 'NAROVA_USAGE') {
+    thrownUsageError(err);
+    return;
+  }
+  console.error('error:', err.message);
+  if (err.code === 'NAROVA_SUBJECT_NON_PASS') {
+    for (const diagnostic of err.diagnostics || []) {
+      mDiag(diagnostic.severity, diagnostic.code, diagnostic.message, diagnostic.subject);
+    }
+    process.exit(machine.EXIT.subjectNonPass);
+  }
+  process.exit(machine.EXIT.failure);
+});

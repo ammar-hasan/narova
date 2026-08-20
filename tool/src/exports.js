@@ -262,12 +262,14 @@ function renderDeliverable(hfDir, outDir, preset, opts = {}) {
 
   const mp4 = fs.existsSync(sourceMp4) ? sourceMp4 : (fs.existsSync(tempMp4) ? tempMp4 : null);
   if (!mp4) throw new Error(`deliverable ${outName} not found after render`);
+  if (typeof opts.artifact === 'function') opts.artifact(mp4, 'deliverable');
   const seconds = probe(mp4);
 
   // Step 3: Thumbnail.
   let thumbnail = null;
   if (preset.thumbnail) {
     thumbnail = generateThumbnail(mp4, preset, outDir);
+    if (thumbnail && typeof opts.artifact === 'function') opts.artifact(thumbnail, 'thumbnail');
     if (thumbnail) log(`thumbnail -> ${thumbnail}`);
   }
 
@@ -322,8 +324,10 @@ function buildDeliverablesFromSource(config, sourceMp4, outDir, opts = {}) {
       fs.renameSync(temporary, destination);
     }
     const mp4 = destination === sourceMp4 ? sourceMp4 : destination;
+    if (typeof opts.artifact === 'function') opts.artifact(mp4, 'deliverable');
     const seconds = probe(mp4);
     const thumbnail = preset.thumbnail ? generateThumbnail(mp4, preset, outDir) : null;
+    if (thumbnail && typeof opts.artifact === 'function') opts.artifact(thumbnail, 'thumbnail');
     if (thumbnail) log(`thumbnail -> ${thumbnail}`);
     log(`deliverable -> ${mp4}  (${seconds.toFixed(1)}s, ${preset.label})`);
     results.push({ id: preset.id, mp4, seconds, thumbnail });

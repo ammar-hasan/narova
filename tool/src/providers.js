@@ -184,6 +184,7 @@ function readManifestFile(filePath) {
 
 function addProvider(filePath, opts = {}) {
   const manifest = readManifestFile(filePath);
+  if (typeof opts.beforeHandshake === 'function') opts.beforeHandshake(manifest);
   const destination = providerPath(manifest.name);
   if (fs.existsSync(destination)) {
     throw new Error(`provider ${JSON.stringify(manifest.name)} is already registered`);
@@ -237,6 +238,7 @@ function missingEnvironment(manifest) {
 function doctorProvider(name, opts = {}) {
   const manifest = getProvider(name);
   if (!manifest) throw new Error(`provider ${JSON.stringify(name)} is not registered`);
+  if (typeof opts.beforeHandshake === 'function') opts.beforeHandshake(manifest);
   const missing = missingEnvironment(manifest);
   const hello = handshake(manifest, opts);
   return {

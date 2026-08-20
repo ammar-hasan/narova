@@ -224,7 +224,7 @@ async function demo({ cwd = process.cwd(), out = process.stdout, renderer } = {}
     view.itemFail('demo build', String(err.message || err),
       'run `narova doctor`; the demo project is ordinary — fix the named issue and run `narova demo` again');
     const e = new Error('demo build failed at a pipeline stage (see above)');
-    e.code = 'NAROVA_DEMO_BLOCKED';
+    e.code = 'NAROVA_DEMO_OPERATION_FAILED';
     throw e;
   }
 
@@ -241,7 +241,7 @@ async function demo({ cwd = process.cwd(), out = process.stdout, renderer } = {}
     '  renderer toolchain via npx and pip packages are managed by their own tools and not byte-counted)',
   ];
   for (const line of lines) out.write(`${line}\n`);
-  return { mp4: built.mp4, seconds: built.seconds, elapsed, networkBytes, projectDir };
+  return { mp4: built.mp4, seconds: built.seconds, elapsed, networkBytes, projectDir, created };
 }
 
 module.exports = { demo, writeDemoProject, DEMO_DIR_NAME };

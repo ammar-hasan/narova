@@ -89,15 +89,15 @@ test('walkthrough status reports a missing take; capture requires synth timings'
   assert.match(capture.stderr, /narova synth/);
 });
 
-test('render is gone with a pointer to compose/build', () => {
+test('render is gone with a usage-status pointer to compose/build', () => {
   const r = run(['render']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /removed in 0\.3\.0/);
 });
 
-test('unknown command exits 1', () => {
+test('unknown command exits with usage status', () => {
   const r = run(['frobnicate']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /unknown command/);
 });
 
@@ -171,7 +171,7 @@ test('assets import, list, verify, and credits use the project asset lock', () =
     'assets', 'download', 'https://127.0.0.1:1/unreachable', '--output', 'assets/kept.bin',
     '--source-page', 'file:///not-a-provider-page', '--project', proj,
   ]);
-  assert.equal(invalidMetadata.status, 1);
+  assert.equal(invalidMetadata.status, 2);
   assert.match(invalidMetadata.stderr, /source URL must use http\(s\)/);
   assert.equal(fs.readFileSync(kept, 'utf8'), 'previous bytes');
 
@@ -185,7 +185,7 @@ test('assets import, list, verify, and credits use the project asset lock', () =
     'assets', 'acquire', 'File:Example.jpg', '--provider', 'wikimedia', '--kind', 'image',
     '--output', 'assets/example.jpg', '--origin', 'manual', '--item-id', 'different-id', '--project', proj,
   ]);
-  assert.equal(forgedStockOrigin.status, 1);
+  assert.equal(forgedStockOrigin.status, 2);
   assert.match(forgedStockOrigin.stderr, /derives stock provenance.*--origin.*--item-id/);
   assert.doesNotMatch(forgedStockOrigin.stderr, /stock provider request/);
 
@@ -203,7 +203,7 @@ test('assets import, list, verify, and credits use the project asset lock', () =
 
   fs.writeFileSync(path.join(proj, 'assets', 'hero.jpg'), 'tampered');
   const stale = run(['assets', 'verify', '--project', proj]);
-  assert.equal(stale.status, 1);
+  assert.equal(stale.status, 3);
   assert.match(stale.stdout, /^fail: assets\/hero\.jpg — content hash changed/m);
 
   const untracked = run(['assets', 'untrack', 'assets/hero.jpg', '--project', proj]);
@@ -243,12 +243,12 @@ test('branch save snapshots a small proof with mandatory rationale', () => {
   const env = { ...process.env, NAROVA_RELEASES_DIR: releases };
 
   const missing = run(['branch', 'save', 'proof-a', '--project', dir], { env });
-  assert.equal(missing.status, 1);
+  assert.equal(missing.status, 2);
   assert.match(missing.stderr, /--rationale/);
 
   fs.writeFileSync(path.join(dir, 'reel.config.json'), JSON.stringify({ ...raw, title: 'Edited after proof' }));
   const stale = run(['branch', 'save', 'stale', '--rationale', 'This must not pair old frames with edited source.', '--project', dir], { env });
-  assert.equal(stale.status, 1);
+  assert.equal(stale.status, 3);
   assert.match(stale.stderr, /config changed after proof review/);
   fs.writeFileSync(path.join(dir, 'reel.config.json'), JSON.stringify(raw));
 
@@ -270,9 +270,21 @@ test('branch save snapshots a small proof with mandatory rationale', () => {
   assert.ok(fs.existsSync(path.join(metadataDir, 'proof', 'frames', 'frame-01.jpg')));
   assert.ok(fs.existsSync(path.join(metadataDir, meta.proofReceipt)));
 
+  const machineSaved = run([
+    'branch', 'save', 'proof-json', '--rationale', 'Machine consumers retain the accepted rationale.',
+    '--project', dir, '--json',
+  ], { env });
+  assert.equal(machineSaved.status, 0, machineSaved.stderr);
+  const machineEnvelope = JSON.parse(machineSaved.stdout);
+  assert.equal(machineEnvelope.data.rationale, 'Machine consumers retain the accepted rationale.');
+  assert.match(machineEnvelope.data.proofIdentity, /^[a-f0-9]{64}$/);
+  assert.match(machineEnvelope.data.snapshotIdentity, /^[a-f0-9]{64}$/);
+  assert.ok(machineEnvelope.artifacts.some(artifact => artifact.role === 'archive'));
+  assert.ok(machineEnvelope.artifacts.some(artifact => artifact.role === 'proof-metadata'));
+
   const beforeFailedOverwrite = fs.readFileSync(path.join(metadataDir, 'branch.json'), 'utf8');
   const invalid = run(['branch', 'save', 'proof-a', '--status', 'canddate', '--rationale', 'A typo must not destroy the approved proof.', '--project', dir], { env });
-  assert.equal(invalid.status, 1);
+  assert.equal(invalid.status, 2);
   assert.match(invalid.stderr, /invalid branch status/);
   assert.equal(fs.readFileSync(path.join(metadataDir, 'branch.json'), 'utf8'), beforeFailedOverwrite,
     'metadata validation must happen before replacing an existing snapshot');
@@ -281,7 +293,7 @@ test('branch save snapshots a small proof with mandatory rationale', () => {
   const beforeBundleFailure = fs.readFileSync(publishedManifest, 'utf8');
   fs.unlinkSync(path.join(dir, 'out', 'config.resolved.json'));
   const incomplete = run(['branch', 'save', 'proof-a', '--rationale', 'A publication failure must roll back.', '--project', dir], { env });
-  assert.equal(incomplete.status, 1);
+  assert.equal(incomplete.status, 3);
   assert.match(incomplete.stderr, /resolved config changed after proof review/);
   assert.equal(fs.readFileSync(path.join(metadataDir, 'branch.json'), 'utf8'), beforeFailedOverwrite);
   assert.equal(fs.readFileSync(publishedManifest, 'utf8'), beforeBundleFailure,
@@ -313,7 +325,7 @@ test('build --release runs the pre-build checker before synthesis', () => {
     scenes: [{ id: 'empty', body: '<div></div>', vo: [{ who: 'a', text: 'hello' }] }],
   }));
   const r = run(['build', '--release', '--project', dir]);
-  assert.equal(r.status, 1, r.stderr);
+  assert.equal(r.status, 3, r.stderr);
   assert.match(r.stdout, /black frame/);
   assert.match(r.stdout, /FAIL \(release\)/);
   assert.doesNotMatch(r.stdout + r.stderr, /synth complete/);
@@ -330,7 +342,7 @@ test('build --release --variant preflights the base before synthesis', () => {
     } }],
   }));
   const r = run(['build', '--release', '--variant', 'fixed', '--project', dir]);
-  assert.equal(r.status, 1, r.stderr);
+  assert.equal(r.status, 3, r.stderr);
   assert.match(r.stdout, /scene "opening".*black frame/);
   assert.doesNotMatch(r.stdout + r.stderr, /synth complete/);
 });
@@ -472,7 +484,7 @@ test('bare --out errors instead of resolving "true"', () => {
   const proj = path.join(dir, 'p');
   run(['init', proj]);
   const r = run(['compose', '--project', proj, '--out']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /--out needs a value/);
 });
 
@@ -481,13 +493,13 @@ test('any bare value-flag errors instead of resolving to true', () => {
   const proj = path.join(dir, 'p');
   run(['init', proj]);
   const r = run(['check', '--project', proj, '--tempo']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /--tempo needs a value/);
 });
 
 test('unknown options are rejected instead of pretending to need a value', () => {
   const r = run(['check', '--definitely-not-a-flag']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /unknown option --definitely-not-a-flag/);
 });
 
@@ -517,7 +529,7 @@ function projectWithTimings() {
 test('shots review modes are mutually exclusive', () => {
   const proj = projectWithTimings();
   const r = run(['shots', '--project', proj, '--at', '0.5', '--beats']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /--at, --motion, and --beats are mutually exclusive/);
 });
 
@@ -549,8 +561,8 @@ test('--platform sets a frame preset; an unknown platform fails check', () => {
   const ok = run(['check', '--project', proj, '--platform', 'tiktok']);
   assert.equal(ok.status, 0, ok.stderr);
   const bad = run(['check', '--project', proj, '--platform', 'myspace']);
-  assert.equal(bad.status, 1);
-  assert.match(bad.stderr, /unknown platform "myspace"/);
+  assert.equal(bad.status, 2);
+  assert.match(bad.stderr, /--platform must be one of/);
 });
 
 test('--variant with an undeclared id fails check naming the declared variants', () => {
@@ -558,7 +570,7 @@ test('--variant with an undeclared id fails check naming the declared variants',
   const proj = path.join(dir, 'p');
   run(['init', proj]);
   const r = run(['check', '--project', proj, '--variant', 'nope']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /unknown variant "nope"/);
 });
 
@@ -567,7 +579,7 @@ test('build --variant and --variants together are rejected before any synth', ()
   const proj = path.join(dir, 'p');
   run(['init', proj]);
   const r = run(['build', '--project', proj, '--variant', 'x', '--variants']);
-  assert.equal(r.status, 1);
+  assert.equal(r.status, 2);
   assert.match(r.stderr, /mutually exclusive/);
 });
 

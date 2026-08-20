@@ -71,6 +71,7 @@ const provider = {
 
   render(config, outDir, opts = {}) {
     const composed = this.compose(config, outDir);
+    if (typeof opts.artifact === 'function') opts.artifact(composed.dir, 'renderer-project');
     const name = opts.name || 'video.mp4';
     const args = ['render', '--output', path.join('..', name)];
     if (opts.videoFrameFormat) args.push('--video-frame-format', opts.videoFrameFormat);
@@ -95,7 +96,9 @@ const provider = {
       }
       throw error;
     }
-    return { ...composed, mp4: path.join(outDir, name), project: composed.dir };
+    const mp4 = path.join(outDir, name);
+    if (typeof opts.artifact === 'function') opts.artifact(mp4, 'video');
+    return { ...composed, mp4, project: composed.dir };
   },
 
   /* Render only the scene spans whose cache key changed. Each span gets its own
@@ -107,6 +110,7 @@ const provider = {
     // Ensure the full project is composed first (assets, style.css, etc.)
     const renderedConfig = materializeVisualBodies(config);
     const composed = compose(renderedConfig, outDir);
+    if (typeof opts.artifact === 'function') opts.artifact(composed.dir, 'renderer-project');
     const fps = Number(opts.fps || 30);
     for (const span of spans) {
       const sceneIdx = span.sceneIndex;

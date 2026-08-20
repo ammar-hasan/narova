@@ -8,6 +8,8 @@ Narova combines an agent skill for Claude Code, Codex, Cursor, and Kimi Code
 with a programmatic video CLI. Together they turn prompts, scene scripts,
 source material, and real product walkthroughs into narrated or silent 2D/3D
 video with local TTS, word-synced captions, and deterministic rendering.
+Agents calling the CLI directly can use the versioned
+[`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-0.31.14-4fd9e8.svg)](./package.json)
@@ -534,6 +536,7 @@ generated/narova-skill-reel/  flagship sample project (built from a plain-langua
 generated/         agent-created projects; source kept, out/ and build/ ignored
 CHANGELOG.md       every notable change, version by version
 SPEC.md            informative guide to the currently shipped public interface
+AGENT_PROTOCOL.md  versioned JSON envelopes, exit codes, and the agent loop
 VISION.md          the product vision, mapped to where each point is implemented
 LEARNINGS.md       non-normative implementation notes for public maintainers
 ```
@@ -547,7 +550,7 @@ The root `package.json` is the only canonical Narova version. Prepare a release
 on a branch with `npm version patch|minor|major --no-git-tag-version`; the npm
 version lifecycle runs `version:sync` and propagates that value to the CLI
 package, lockfile, skill metadata, exact npm compatibility pin, badge, spec,
-and website markers. Add the dated changelog entry, then require
+agent protocol, and website markers. Add the dated changelog entry, then require
 `npm run release:check` and CI before merging.
 
 After the release PR lands on `main`, tag that merge as `v<version>`. The tag

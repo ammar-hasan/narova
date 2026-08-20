@@ -835,6 +835,7 @@ function qualityOptions(quality) {
 
 function render(config, outDir, opts = {}) {
   const composed = compose(config, outDir);
+  if (typeof opts.artifact === 'function') opts.artifact(composed.dir, 'renderer-project');
   const project = readProject(composed.dir);
   const canvas = canvasModule();
   registerFonts(project, composed.dir, canvas);
@@ -862,6 +863,7 @@ function render(config, outDir, opts = {}) {
       '-pix_fmt', 'yuv420p', '-c:a', 'aac', '-b:a', '192k', '-ar', '48000',
       '-movflags', '+faststart', '-shortest', output,
     ]);
+    if (typeof opts.artifact === 'function') opts.artifact(output, 'video');
     return { ...composed, mp4: output, seconds: probe(output), frames: totalFrames };
   } finally {
     for (const descriptor of clipDirs.values()) fs.closeSync(descriptor.fd);
@@ -881,6 +883,7 @@ function render(config, outDir, opts = {}) {
  * progress bar, and scene transitions all see the full project timeline). */
 function renderSpans(config, outDir, spans, opts = {}) {
   const composed = compose(config, outDir);
+  if (typeof opts.artifact === 'function') opts.artifact(composed.dir, 'renderer-project');
   const project = readProject(composed.dir);
   const canvas = canvasModule();
   registerFonts(project, composed.dir, canvas);

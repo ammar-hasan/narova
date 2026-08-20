@@ -27,6 +27,8 @@ const { buildDeliverables } = require('./exports');
 const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
 const revisions = require('./revisions');
+const machine = require('./machine');
+const machineActive = machine.isActive;
 
 /* ---- Python (synth) handoff -------------------------------------------------
  * Contract: <venv-python> -m narova_tts --narration <out>/narration.json
@@ -53,12 +55,26 @@ function findPython(projectDir) {
   return findVenvPython(projectDir) || 'python3';
 }
 
+/* Under --json, capture child progress and replay it through the redactor.
+ * Connecting a child directly to fd 2 bypasses JavaScript's stderr wrapper. */
+const MACHINE_CHILD_STDIO = ['ignore', 'pipe', 'pipe'];
+
+function replayMachineChild(result) {
+  if (!machineActive()) return;
+  if (result.stdout) process.stderr.write(machine.redact(String(result.stdout)));
+  if (result.stderr) process.stderr.write(machine.redact(String(result.stderr)));
+}
+
 function ensureVenv(projectDir, log = console.log) {
   if (findVenvPython(projectDir)) return;
   log(`no TTS venv found — creating one at ${VENV_HOME} (one-time, piper backend)`);
   const r = spawnSync('bash', [path.join(TOOL_ROOT, 'setup.sh')], {
-    stdio: 'inherit', env: { ...process.env, NAROVA_VENV: VENV_HOME },
+    ...(machineActive()
+      ? { encoding: 'utf8', stdio: MACHINE_CHILD_STDIO, maxBuffer: 64 * 1024 * 1024 }
+      : { stdio: 'inherit' }),
+    env: { ...process.env, NAROVA_VENV: VENV_HOME },
   });
+  replayMachineChild(r);
   if (r.error || r.status !== 0) {
     throw new Error(`setup.sh failed — run it manually: bash ${path.join(TOOL_ROOT, 'setup.sh')}`);
   }
@@ -136,6 +152,7 @@ function writeStageInputs(config, outDir) {
   // repeated commands. Rebind the provenance marker to every regenerated
   // manifest; an explicitly authored safeLayout:false retires it permanently.
   const restoreMarker = path.join(outDir, '.restored-manifest.json');
+  let restoreMarkerWritten = false;
   if (config._retireLegacySafeLayout) {
     fs.rmSync(restoreMarker, { force: true });
   } else if (config._legacySafeLayout) {
@@ -143,6 +160,7 @@ function writeStageInputs(config, outDir) {
       manifestSha256: hashFile(manifestFile),
       legacySafeLayout: true,
     }, null, 2));
+    restoreMarkerWritten = true;
   }
   // narration.json — Python TTS contract (compatibility projection)
   fs.writeFileSync(path.join(outDir, 'narration.json'), JSON.stringify(narration(config), null, 2));
@@ -152,6 +170,12 @@ function writeStageInputs(config, outDir) {
   // invalidate a previously reviewed creative proof via this projection.
   const { assetsDir: _assetsDir, provenance: _provenance, ...serializableConfig } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
+  return {
+    manifest: manifestFile,
+    narration: path.join(outDir, 'narration.json'),
+    resolvedConfig: path.join(outDir, 'config.resolved.json'),
+    ...(restoreMarkerWritten ? { restoreMarker } : {}),
+  };
 }
 
 /* Commit the audio and timing fingerprints after successful synthesis.
@@ -258,7 +282,13 @@ function synth(outDir, opts = {}) {
       try { fs.unlinkSync(path.join(outDir, name)); } catch {}
     }
   }
-  const r = spawnSync(py, args, { stdio: 'inherit', cwd: TOOL_ROOT, env: { ...process.env, PYTHONPATH: pyPath } });
+  const r = spawnSync(py, args, {
+    ...(machineActive()
+      ? { encoding: 'utf8', stdio: MACHINE_CHILD_STDIO, maxBuffer: 64 * 1024 * 1024 }
+      : { stdio: 'inherit' }),
+    cwd: TOOL_ROOT, env: { ...process.env, PYTHONPATH: pyPath },
+  });
+  replayMachineChild(r);
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
   if (r.status !== 0) throw new Error(`synth (narova_tts) exited ${r.status}`);
   const timings = path.join(outDir, 'timings.json');
@@ -274,6 +304,13 @@ function build(config, opts = {}) {
   const outDir = path.resolve(opts.out || 'out');
   ensureDir(outDir);
   const log = opts.log || console.log;
+  const artifact = typeof opts.artifact === 'function' ? opts.artifact : () => {};
+  const stageInputs = files => {
+    artifact(files.manifest, 'manifest');
+    artifact(files.narration, 'stage-input');
+    artifact(files.resolvedConfig, 'stage-input');
+    if (files.restoreMarker) artifact(files.restoreMarker, 'restore-metadata');
+  };
 
   const hasExternalNarration = !!(config.narrationSource && config.narrationSource.file);
 
@@ -295,7 +332,7 @@ function build(config, opts = {}) {
 
   if (hasExternalNarration) {
     log('[1/3] synth (skip — external narration)');
-    writeStageInputs(config, outDir);
+    stageInputs(writeStageInputs(config, outDir));
     // Copy external narration into the output.
     const audioDir = ensureDir(path.join(outDir, 'audio'));
     const narrationPath = path.join(audioDir, 'full.wav');
@@ -332,16 +369,23 @@ function build(config, opts = {}) {
     }
     fs.writeFileSync(path.join(outDir, 'timings.json'),
       JSON.stringify({ total: Math.round(t * 1000) / 1000, ...sceneTimings }, null, 2));
+    artifact(audioDir, 'audio');
+    artifact(path.join(outDir, 'timings.json'), 'timings');
   } else {
     const reuse = resolveReuse(config, outDir, opts.reuse, log);
     log(`[1/3] synth${reuse ? ' (--reuse)' : ''}`);
-    writeStageInputs(config, outDir);
+    stageInputs(writeStageInputs(config, outDir));
     synth(outDir, {
       backend: opts.backend, reuse,
       projectDir: opts.projectDir, python: opts.python, log, config,
     });
+    if (!reuse) {
+      artifact(path.join(outDir, 'audio'), 'audio');
+      artifact(path.join(outDir, 'timings.json'), 'timings');
+    }
   }
   enrichTimeline(outDir);
+  artifact(path.join(outDir, 'manifest.json'), 'manifest');
   // Captions publish before the post-synth release gate (NAR-009-008): they
   // depend only on the enriched manifest and measured timing, both ready
   // here, and the caption presence rule must be satisfiable by a first-ever
@@ -351,6 +395,11 @@ function build(config, opts = {}) {
   // Preserve external narration source through the manifest bridge.
   if (hasExternalNarration && config.narrationSource) cc.narrationSource = config.narrationSource;
   const caps = writeCaptions(cc, outDir);
+  if (caps.omitted) artifact(caps.omissionPath, 'caption-omission');
+  else {
+    artifact(caps.srt, 'captions');
+    artifact(caps.vtt, 'captions');
+  }
   if (caps.omitted) {
     log(`captions omitted — ${caps.reason} (recorded in out/captions-omitted.json)`);
   } else {
@@ -361,8 +410,12 @@ function build(config, opts = {}) {
   // more here: after timings exist, before compose or rendering writes a video.
   if (opts.release) {
     const { check } = require('./check');
-    if (!check(config, { release: true, outDir })) {
-      throw new Error('release check failed after measured narration timing');
+    const diagnostics = [];
+    if (!check(config, { release: true, outDir, diagnostics })) {
+      const error = new Error('release check failed after measured narration timing');
+      error.code = 'NAROVA_SUBJECT_NON_PASS';
+      error.diagnostics = diagnostics;
+      throw error;
     }
   }
   markSynthDone();
@@ -383,6 +436,7 @@ function build(config, opts = {}) {
     if (selectedRenderer.name === 'hyperframes') {
       const composed = selectedRenderer.compose(cc, outDir);
       projectDir = composed.dir;
+      artifact(projectDir, 'renderer-project');
       results = buildDeliverables(cc, composed.dir, outDir, {
         ...opts,
         log,
@@ -395,6 +449,8 @@ function build(config, opts = {}) {
       // buildDeliverables above and are not cached at the base level.
       const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, { ...opts, name, log });
       projectDir = rendered.dir;
+      artifact(projectDir, 'renderer-project');
+      artifact(rendered.mp4, 'video');
       renderReuse = rendered.reuse || null;
       const { buildDeliverablesFromSource } = require('./exports');
       results = buildDeliverablesFromSource(cc, rendered.mp4, outDir, { ...opts, log });
@@ -410,6 +466,7 @@ function build(config, opts = {}) {
       companion = buildCompanion(standardResult.mp4, outDir,
         typeof opts.companion === 'string' ? { aim: opts.companion } : {},
         { log });
+      artifact(companion.mp4, 'video-companion');
     }
     // CHANGE-2026-026 / NAR-009-025: advisory revision recording. The build
     // has succeeded; a ledger problem is reported and never fails it.
@@ -435,6 +492,8 @@ function build(config, opts = {}) {
     ...opts, name, videoFrameFormat: hasWalkthroughs ? 'png' : null, log,
   });
   const mp4 = rendered.mp4;
+  artifact(rendered.dir, 'renderer-project');
+  artifact(mp4, 'video');
   // Optional compressed companion (NAR-017-058..060): an iteration lever the
   // requester opts into; the primary stays untouched; nothing is enforced.
   let companion = null;
@@ -443,6 +502,7 @@ function build(config, opts = {}) {
     companion = buildCompanion(mp4, outDir,
       typeof opts.companion === 'string' ? { aim: opts.companion } : {},
       { log });
+    artifact(companion.mp4, 'video-companion');
   }
   const seconds = rendered.seconds == null ? probe(mp4) : rendered.seconds;
   log(`done -> ${mp4}  (${seconds.toFixed(1)}s)`);
@@ -456,6 +516,7 @@ function build(config, opts = {}) {
   });
   return {
     mp4, seconds, project: rendered.dir, renderer: selectedRenderer.name,
+    ...(companion ? { companion } : {}),
     ...(revision ? { revisions: revision } : {}),
     ...(selectedRenderer.name === 'hyperframes' ? { hf: rendered.dir } : {}),
   };
@@ -466,9 +527,9 @@ function build(config, opts = {}) {
 function compileTimeline(config, opts = {}) {
   const outDir = path.resolve(opts.out || 'out');
   ensureDir(outDir);
-  writeStageInputs(config, outDir);
+  const files = writeStageInputs(config, outDir);
   const tl = JSON.parse(fs.readFileSync(path.join(outDir, 'manifest.json'), 'utf8'));
-  return { manifest: tl, outDir };
+  return { manifest: tl, outDir, files };
 }
 
 /* ---- external narration audio mixing --------------------------------------- */

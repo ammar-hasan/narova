@@ -201,6 +201,15 @@ function syncVersion(root = DEFAULT_ROOT, logger = console) {
       'SPEC.md public interface guide shipped status',
     ));
 
+  // AGENT_PROTOCOL.md — release identity for the shipped machine contract.
+  update(['AGENT_PROTOCOL.md', 'tool/AGENT_PROTOCOL.md'], (source, next) =>
+    replaceExactlyOne(
+      source,
+      /^(Narova release: \*\*)[0-9.]+(\*\*)/m,
+      `$1${next}$2`,
+      'AGENT_PROTOCOL.md release identity',
+    ));
+
   // Website — current-version markers on the landing page and changelog.
   // Only update the first occurrence (the current/latest release entry).
   update(['docs/index.html', 'docs/changelog/index.html'], (source, next) => {

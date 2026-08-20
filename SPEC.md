@@ -360,7 +360,7 @@ narova check          validate the config (fast, no side effects); prints an
                        --strict: verify every claim in the claims.md ledger
                        --release: strict + fail on remote deps, missing claims,
                        unsupported HTML, black frames, or stale walkthrough
-                       captures (exit 1)
+                       captures (exit 3)
                        --creative-identity: also emit out/creative-identity.json
                        (advisory identity fingerprint + rationale verification).
                        Projects with an authored creative.md maintain the local

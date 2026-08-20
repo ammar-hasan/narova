@@ -15,6 +15,7 @@ exact version before use.
 [Website](https://ammar-hasan.github.io/narova/) ·
 [npm package](https://www.npmjs.com/package/@narova/narova) ·
 [GitHub](https://github.com/ammar-hasan/narova) ·
+[Machine protocol](AGENT_PROTOCOL.md) ·
 [Agent skill](https://skills.sh/ammar-hasan/narova) ·
 [Issues](https://github.com/ammar-hasan/narova/issues)
 

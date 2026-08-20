@@ -45,6 +45,7 @@
     "prepublishOnly": "npm test && node ../scripts/check-package.js && node ../scripts/test-packed-package.js"
   },
   "files": [
+    "AGENT_PROTOCOL.md",
     "bin/",
     "src/",
     "vendor/",

@@ -71,7 +71,7 @@ function versionAtLeast(found, required) {
   return true;
 }
 
-function doctor(projectDir) {
+function doctor(projectDir, opts = {}) {
   const rows = [];
   const add = (name, ok, detail, optional = false) => rows.push({ name, ok, detail, optional });
 
@@ -156,6 +156,8 @@ function doctor(projectDir) {
   } else {
     console.log(`Missing required: ${missing.join(', ')}`);
   }
+  // Machine channel (opt-in): the same rows the prose table prints.
+  if (opts.collect) for (const r of rows) opts.collect.push(r);
   return allOk;
 }
 

@@ -271,7 +271,7 @@ test('provenance on a fully documented project grades every section and cites ar
     // The JSON form carries the same grades, buckets, and counts.
     const j = run(['provenance', '--project', dir, '--json']);
     assert.equal(j.status, 0, j.stderr);
-    const report = JSON.parse(j.stdout);
+    const report = JSON.parse(j.stdout).data;
     assert.equal(report.project.title, 'Doc Project');
     assert.deepEqual([report.claims.detected, report.claims.sourced, report.claims.unsupported], [2, 2, 0]);
     assert.equal(report.claims.rows.every(row => row.grade === 'verified'
@@ -329,7 +329,7 @@ test('provenance accepts a pre-version manifest and marks toolchain versions not
     assert.match(r.stdout, /✓ speech backend: piper \(out\/manifest\.json\); version not recorded/);
     assert.match(r.stdout, /backend version not recorded/);
 
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.equal(report.reproducibility.renderer.version, null);
     assert.equal(report.reproducibility.renderer.versionGrade, 'unknown');
     assert.equal(report.reproducibility.speech.version, null);
@@ -367,7 +367,7 @@ test('provenance reports invalid manifest evidence as unknown', () => {
   const r = run(['provenance', '--project', dir]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /\? manifest: not recorded \(manifest invalid:/);
-  const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+  const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
   assert.equal(report.reproducibility.manifest.grade, 'unknown');
   assert.match(report.reproducibility.manifest.note, /^manifest invalid:/);
 });
@@ -381,7 +381,7 @@ test('provenance degrades structurally invalid nested manifest evidence instead 
     fs.writeFileSync(manifestFile, JSON.stringify(manifest));
     const r = run(['provenance', '--project', dir, '--json']);
     assert.equal(r.status, 0, r.stderr);
-    const report = JSON.parse(r.stdout);
+    const report = JSON.parse(r.stdout).data;
     assert.equal(report.reproducibility.manifest.grade, 'unknown');
     assert.match(report.reproducibility.manifest.note, /^manifest invalid:/);
   } finally {
@@ -401,7 +401,7 @@ test('provenance does not attribute stale manifest toolchain evidence to the cur
 `);
     const r = run(['provenance', '--project', dir, '--json']);
     assert.equal(r.status, 0, r.stderr);
-    const report = JSON.parse(r.stdout);
+    const report = JSON.parse(r.stdout).data;
     assert.equal(report.reproducibility.manifest.grade, 'verified');
     assert.equal(report.reproducibility.manifest.currentConfig, false);
     assert.match(report.reproducibility.manifest.note, /does not match the current resolved project config/);
@@ -423,7 +423,7 @@ test('provenance reads a manifest from an explicit project-root output directory
     assert.equal(compiled.status, 0, compiled.stderr);
     const r = run(['provenance', '--project', dir, '--out', dir, '--json']);
     assert.equal(r.status, 0, r.stderr);
-    const report = JSON.parse(r.stdout);
+    const report = JSON.parse(r.stdout).data;
     assert.equal(report.reproducibility.manifest.grade, 'verified');
     assert.equal(report.reproducibility.manifest.currentConfig, true);
     assert.equal(report.reproducibility.manifest.path, 'manifest.json');
@@ -446,7 +446,7 @@ test('provenance rejects a manifest reached through an out-directory symlink esc
     fs.symlinkSync(path.join(outside, 'build'), path.join(dir, 'out'));
     const r = run(['provenance', '--project', dir, '--json']);
     assert.equal(r.status, 0, r.stderr);
-    const report = JSON.parse(r.stdout);
+    const report = JSON.parse(r.stdout).data;
     assert.equal(report.reproducibility.manifest.grade, 'unknown');
     assert.match(report.reproducibility.manifest.note, /manifest unreadable: .*resolves outside the project/);
   } finally {
@@ -467,7 +467,7 @@ test('provenance preserves claims-ledger read failures as unknown evidence', () 
   const r = run(['provenance', '--project', dir]);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /\? claims ledger unreadable:/);
-  const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+  const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
   assert.match(report.claims.ledgerNote, /^claims ledger unreadable:/);
   assert.equal(report.claims.rows[0].grade, 'unknown');
   assert.equal(report.claims.rows[0].status, 'unknown');
@@ -489,7 +489,7 @@ test('provenance rejects claims-ledger symlink escapes before reading', t => {
 `);
     fs.writeFileSync(path.join(outside, 'claims.md'), '- Ninety percent agree.\n');
     fs.symlinkSync(path.join(outside, 'claims.md'), path.join(dir, 'claims.md'));
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.match(report.claims.ledgerNote, /resolves outside the project/);
     assert.equal(report.claims.rows[0].grade, 'unknown');
     assert.equal(report.claims.rows[0].status, 'unknown');
@@ -510,7 +510,7 @@ test('provenance treats a dangling claims-ledger symlink as unreadable coverage'
 };
 `);
     fs.symlinkSync(path.join(dir, 'missing-ledger.md'), path.join(dir, 'claims.md'));
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.match(report.claims.ledgerNote, /claims ledger unreadable:/);
     assert.equal(report.claims.rows[0].status, 'unknown');
     assert.equal(report.claims.unsupported, null);
@@ -525,7 +525,7 @@ test('provenance marks AI-generation coverage incomplete when the registry is un
     fs.writeFileSync(path.join(dir, 'reel.config.mjs'), `export default ${JSON.stringify(silentRaw())};\n`);
     fs.mkdirSync(path.join(dir, 'assets'));
     fs.writeFileSync(path.join(dir, 'assets.lock.json'), '{broken\n');
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.match(report.media.registryNote, /^registry unreadable:/);
     assert.equal(report.aiGeneration.incomplete, true);
     assert.match(report.aiGeneration.incompleteNote, /asset registry could not be inspected/);
@@ -541,7 +541,7 @@ test('provenance reports a tampered registry record as failed verification and s
     const r = run(['provenance', '--project', dir]);
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /✗ assets\/hero\.jpg \[image\] — failed verification \(content hash changed/);
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     const row = report.media.rows.find(x => x.file === 'assets/hero.jpg');
     assert.equal(row.integrity.status, 'failed');
     assert.notEqual(row.integrity.status, 'verified');
@@ -573,7 +573,7 @@ test('provenance rejects tracked asset symlink escapes before hashing', t => {
         acquiredAt: '2026-08-19T00:00:00.000Z',
       }],
     }, null, 2));
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.equal(report.media.rows[0].integrity.status, 'failed');
     assert.match(report.media.rows[0].integrity.issues[0], /resolves outside the project/);
   } finally {
@@ -590,7 +590,7 @@ test('provenance marks missing generation recipes unknown and incomplete', () =>
     assert.equal(r.status, 0, r.stderr);
     assert.match(r.stdout, /\? recipe assets\/gen-clip\.gen\.json unavailable/);
     assert.match(r.stdout, /generation provenance is incomplete/);
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     const generated = report.aiGeneration.generatedMedia[0];
     assert.equal(generated.recipeGrade, 'unknown');
     assert.equal(generated.recipeStatus, 'unavailable');
@@ -604,7 +604,7 @@ test('provenance marks malformed generation recipes unknown and incomplete', () 
   const dir = documentedProject();
   try {
     fs.writeFileSync(path.join(dir, 'assets', 'gen-clip.gen.json'), '{broken');
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     const generated = report.aiGeneration.generatedMedia[0];
     assert.equal(generated.recipeGrade, 'unknown');
     assert.equal(generated.recipeStatus, 'unavailable');
@@ -619,7 +619,7 @@ test('provenance marks structurally invalid generation recipes unknown and incom
   const dir = documentedProject();
   try {
     fs.writeFileSync(path.join(dir, 'assets', 'gen-clip.gen.json'), '{}\n');
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     const generated = report.aiGeneration.generatedMedia[0];
     assert.equal(generated.recipeGrade, 'unknown');
     assert.equal(generated.recipeStatus, 'unavailable');
@@ -637,7 +637,7 @@ test('provenance marks a generation recipe bound to different bytes unknown and 
     const recipe = JSON.parse(fs.readFileSync(recipeFile, 'utf8'));
     recipe.artifactSha256 = '0'.repeat(64);
     fs.writeFileSync(recipeFile, JSON.stringify(recipe));
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.equal(report.aiGeneration.generatedMedia[0].recipeGrade, 'unknown');
     assert.match(report.aiGeneration.generatedMedia[0].recipeIssue, /artifact identity does not match/);
     assert.equal(report.aiGeneration.incomplete, true);
@@ -655,7 +655,7 @@ test('provenance counts untracked asset-directory files and disclaims used-asset
     assert.match(r.stdout, /untracked in the asset directory: 1 \(assets\/stray\.png\)/);
     assert.match(r.stdout, /exact used-asset closure is not established/);
     assert.match(r.stdout, /generation provenance is incomplete/);
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.deepEqual(report.media.untracked, { count: 1, files: ['assets/stray.png'] });
     assert.equal(report.aiGeneration.incomplete, true);
   } finally {
@@ -680,7 +680,7 @@ test('provenance refuses to scan an asset-directory symlink outside the project'
     assert.match(r.stdout, /untracked in the asset directory: \? not recorded/);
     assert.match(r.stdout, /could not be inspected safely/);
     assert.ok(!r.stdout.includes('secret.png'));
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     assert.equal(report.media.untracked.count, null);
     assert.match(report.media.untracked.note, /outside the project/);
     assert.equal(report.aiGeneration.incomplete, true);
@@ -756,7 +756,7 @@ test('rights buckets land per recorded license facts (NAR-005-021 scenario)', ()
     add('weird.jpg', ['--origin', 'download', '--license', 'some-unrecognized-string']);
     add('nolicense.jpg', ['--origin', 'stock', '--provider', 'example']);
     add('own.jpg', []);
-    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
     const bucketOf = file => report.media.rows.find(row => row.file === `assets/${file}`).rights.bucket;
     assert.equal(bucketOf('cc.jpg'), 'CC-BY');
     assert.equal(bucketOf('cc0.jpg'), 'public domain');
@@ -821,7 +821,7 @@ test('assets credits formats share selection; default output is unchanged', () =
   }]);
 
   const bad = run(['assets', 'credits', '--project', dir, '--format', 'pdf']);
-  assert.equal(bad.status, 1);
+  assert.equal(bad.status, 2);
   assert.match(bad.stderr, /unknown credits format/);
 });
 
@@ -840,7 +840,7 @@ test('credits json on an empty registry prints an empty list', () => {
   const def = run(['assets', 'credits', '--project', dir]);
   assert.match(def.stdout, /no tracked attribution text/);
   const bad = run(['assets', 'credits', '--project', dir, '--format', 'pdf']);
-  assert.equal(bad.status, 1);
+  assert.equal(bad.status, 2);
   assert.match(bad.stderr, /unknown credits format/);
 });
 
@@ -862,7 +862,7 @@ test('provenance cites command overrides instead of attributing them to the conf
     assert.equal(compiled.status, 0, compiled.stderr);
     const r = run(['provenance', ...args, '--json']);
     assert.equal(r.status, 0, r.stderr);
-    const report = JSON.parse(r.stdout);
+    const report = JSON.parse(r.stdout).data;
     assert.equal(report.reproducibility.renderer.source, 'out/manifest.json + command --renderer');
     assert.equal(report.reproducibility.speech.source, 'out/manifest.json + command --backend');
     assert.equal(report.aiGeneration.narration.status, 'configured');

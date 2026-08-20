@@ -4,10 +4,18 @@ const { execFileSync, spawnSync } = require('child_process');
 const fs = require('fs');
 const os = require('os');
 const path = require('path');
+const machine = require('./machine');
 
 /* Run a command, inheriting stderr, throwing on failure. */
 function sh(cmd, args, opts = {}) {
-  const r = spawnSync(cmd, args, { stdio: ['ignore', 'ignore', 'inherit'], ...opts });
+  const machineMode = machine.isActive();
+  const r = spawnSync(cmd, args, {
+    ...(machineMode
+      ? { encoding: 'utf8', stdio: ['ignore', 'ignore', 'pipe'], maxBuffer: 64 * 1024 * 1024 }
+      : { stdio: ['ignore', 'ignore', 'inherit'] }),
+    ...opts,
+  });
+  if (machineMode && r.stderr) process.stderr.write(machine.redact(String(r.stderr)));
   if (r.error) throw r.error;
   if (r.status !== 0) throw new Error(`${cmd} exited ${r.status}`);
   return r;

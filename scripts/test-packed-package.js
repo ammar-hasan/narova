@@ -33,6 +33,9 @@ try {
   const report = JSON.parse(packed.stdout)[0];
   const archive = path.join(scratch, report.filename);
   if (!fs.existsSync(archive)) throw new Error(`npm pack did not create ${archive}`);
+  if (!(report.files || []).some(file => file.path === 'AGENT_PROTOCOL.md')) {
+    throw new Error('packed CLI is missing AGENT_PROTOCOL.md');
+  }
 
   run('npm', [
     'install', '--global', '--prefix', prefix, '--omit=optional', '--ignore-scripts',

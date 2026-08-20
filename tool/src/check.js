@@ -6,7 +6,7 @@
  * Modes (second argument to check()):
  *   check(config)          — default: warnings only, exit 0
  *   check(config, {strict:true})  — stricter validation, still exit 0
- *   check(config, {release:true}) — all checks, errors fail the build (exit 1)
+ *   check(config, {release:true}) — all checks, non-pass findings exit 3
  *
  * Release mode elevates: remote assets, unresolved references, unsupported HTML,
  * missing claims, black frames, remote dependencies, and missing non-trivial
@@ -23,6 +23,7 @@ const { lockPath: assetLockPath, verifyAssets } = require('./asset-registry');
 const { isBuiltinBackend, MARKUP_FAMILIES, deliveryCapabilitiesFor } = require('./tts-backends');
 const { getProvider } = require('./providers');
 const creativeIdentity = require('./creative-identity');
+const { assertRegistered } = require('./diagnostic-codes');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -540,6 +541,45 @@ function checkHook(config, warnings) {
   }
 }
 
+/* Map a release-gate failure message to its stable diagnostic code
+ * (NAR-015-072). Human prose stays the contract for people; the code is the
+ * contract for machines. Both come from the same message at this construction
+ * site, so they cannot drift apart. Codes live in ./diagnostic-codes and are
+ * published in AGENT_PROTOCOL.md. */
+function releaseGateCode(message) {
+  const m = message;
+  if (m.startsWith('captions: narration audio')) return 'gate.release.captions-missing';
+  if (m.startsWith('asset provenance:')) return 'gate.release.asset-provenance';
+  if (m.startsWith('creative:')) return 'gate.release.creative-brief';
+  if (m.includes('no visible content')) return 'gate.release.black-frame';
+  if (m.includes('remote dependencies are not supported')) return 'gate.release.remote-dependency';
+  if (m.includes('unsupported HTML element')) return 'gate.release.unsupported-html';
+  if (m.includes('3D scene has no camera')) return 'gate.release.scene-camera-missing';
+  if (m.startsWith('walkthrough "')) return 'gate.release.walkthrough-stale';
+  if (m.startsWith('theme.css: remote url()') || m.startsWith('remote asset:')) return 'gate.release.remote-asset';
+  if (m.includes('must live under project assets/')) return 'gate.release.asset-location';
+  if (m.includes('has no assets directory')) return 'gate.release.assets-dir-missing';
+  if (m.includes('escapes project assets/')) return 'gate.release.asset-path-escape';
+  if (m.includes('asset not found')) return 'gate.release.asset-missing';
+  return 'gate.release.failure';
+}
+
+/* Machine diagnostics (NAR-015-011/072): when the caller passes an array via
+ * opts.diagnostics, every finding is appended as { severity, code, message }
+ * with the same message text the human output prints. Human output is
+ * unchanged; this is a parallel, opt-in channel. */
+function collectDiagnostics(opts, warnings, errors, release) {
+  if (!opts.diagnostics) return;
+  for (const w of warnings) {
+    opts.diagnostics.push({ severity: 'warning', code: assertRegistered('check.warning'), message: w });
+  }
+  for (const e of errors) {
+    opts.diagnostics.push(release
+      ? { severity: 'error', code: assertRegistered(releaseGateCode(e)), message: e }
+      : { severity: 'warning', code: assertRegistered('check.warning'), message: e });
+  }
+}
+
 /* Print warnings + a one-line summary. Returns true (warnings never fail).
  * Cue semantics (compose/runtime.js): data-cue="k" is coerced with +k and
  * looked up in turns[] (0-based) when it is a non-negative integer in range;
@@ -865,6 +905,9 @@ function check(config, opts = {}) {
   if (release) {
     releaseChecks(config, errors, opts);
   }
+
+  // Machine diagnostics (opt-in; no effect on human output below)
+  collectDiagnostics(opts, warnings, errors, release);
 
   // Print
   for (const w of warnings) console.log(`warn: ${w}`);

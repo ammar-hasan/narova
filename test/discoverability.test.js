@@ -84,6 +84,8 @@ test('READMEs lead with the product category and distribution links', () => {
     assert.match(content, new RegExp(npmUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(content, new RegExp(skillUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
   }
+  assert.match(repositoryReadme, /\[`--json` protocol\]\(AGENT_PROTOCOL\.md\)/);
+  assert.ok(fs.existsSync(path.join(root, 'AGENT_PROTOCOL.md')));
 });
 
 test('website metadata and hero present the skill without making people secondary', () => {

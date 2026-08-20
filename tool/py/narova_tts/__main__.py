@@ -82,7 +82,7 @@ def _voices(argv: list[str]) -> int:
                 print(f"{voice['id']}\t{voice['name']}")
         except (RuntimeError, ValueError) as exc:
             print(str(exc), file=sys.stderr)
-            return 2
+            return 1
         return 0
 
     # get

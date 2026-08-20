@@ -30,8 +30,13 @@ if (forbidden.length) {
 if (report.unpackedSize > 10 * 1024 * 1024) {
   throw new Error(`npm package is unexpectedly large: ${report.unpackedSize} unpacked bytes`);
 }
-for (const required of ['LICENSE', 'README.md', 'bin/narova.js', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
+for (const required of ['LICENSE', 'README.md', 'AGENT_PROTOCOL.md', 'bin/narova.js', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
   if (!names.includes(required)) throw new Error(`npm package is missing required standalone tool file: ${required}`);
+}
+const rootProtocol = fs.readFileSync(path.join(root, 'AGENT_PROTOCOL.md'), 'utf8');
+const packagedProtocol = fs.readFileSync(path.join(tool, 'AGENT_PROTOCOL.md'), 'utf8');
+if (packagedProtocol !== rootProtocol) {
+  throw new Error('tool/AGENT_PROTOCOL.md must stay byte-identical to the repository protocol guide');
 }
 if (names.includes('install.sh')) throw new Error('npm package must not reintroduce a remote shell installer');
 if (report.name !== '@narova/narova') throw new Error(`unexpected standalone package name: ${report.name}`);
