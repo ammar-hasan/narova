@@ -19,6 +19,7 @@ const SECRET_KEY_RE = /(?:api[-_]?key|authorization|credential|password|secret|t
 const narovaHome = () => path.resolve(process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'));
 const providersDir = () => path.join(narovaHome(), 'providers');
 const providerPath = name => path.join(providersDir(), `${name}.json`);
+const isProviderName = name => typeof name === 'string' && NAME_RE.test(name);
 
 function executableOnPath(name) {
   const search = String(process.env.PATH || '').split(path.delimiter);
@@ -71,7 +72,7 @@ function validateManifest(raw, baseDir = '.') {
   if (!raw || typeof raw !== 'object' || Array.isArray(raw)) {
     throw new Error('provider manifest: expected a JSON object');
   }
-  if (typeof raw.name !== 'string' || !NAME_RE.test(raw.name)) {
+  if (!isProviderName(raw.name)) {
     throw new Error(`provider.name: must match ${NAME_RE}`);
   }
   if (isBuiltinBackend(raw.name)) {
@@ -199,7 +200,7 @@ function addProvider(filePath, opts = {}) {
 }
 
 function getProvider(name) {
-  if (typeof name !== 'string' || !NAME_RE.test(name)) return null;
+  if (!isProviderName(name)) return null;
   const file = providerPath(name);
   if (!fs.existsSync(file)) return null;
   let raw;
@@ -222,7 +223,7 @@ function listProviders() {
 }
 
 function removeProvider(name) {
-  if (typeof name !== 'string' || !NAME_RE.test(name)) {
+  if (!isProviderName(name)) {
     throw new Error(`provider name must match ${NAME_RE}`);
   }
   const manifest = getProvider(name);
@@ -309,6 +310,7 @@ module.exports = {
   PROVIDER_PROTOCOL,
   providersDir,
   providerPath,
+  isProviderName,
   validateManifest,
   readManifestFile,
   handshake,

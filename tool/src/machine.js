@@ -174,23 +174,32 @@ function redactUrl(raw) {
 }
 
 function redactString(value) {
-  let redacted = String(value);
-  for (const [name, secret] of Object.entries(process.env)) {
-    if (!SECRET_ENV_NAME.test(name) || typeof secret !== 'string' || secret.length < 4) continue;
-    redacted = redacted.split(secret).join('[REDACTED]');
-  }
-  for (const registered of session?.secrets || []) {
-    if (registered.length >= 4) {
-      redacted = redacted.split(registered).join('[REDACTED]');
-    } else {
-      // Replacing every occurrence of a one-character credential would corrupt
-      // ordinary protocol words and paths. Short values are redacted when they
-      // appear as standalone prose/JSON tokens.
-      const escaped = registered.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-      redacted = redacted.replace(new RegExp(`(^|[^A-Za-z0-9])${escaped}(?=$|[^A-Za-z0-9])`, 'g'), '$1[REDACTED]');
+  // Sanitize structured URL credentials first. A later short-secret
+  // substitution can make a hostname unparsable (for example `a.example`),
+  // but must never prevent query/userinfo sanitization from running.
+  let redacted = String(value).replace(URL_IN_TEXT, redactUrl);
+  const redactKnownSecret = secret => {
+    if (typeof secret !== 'string' || secret.length === 0) return;
+    if (secret.length >= 4) {
+      redacted = redacted.split(secret).join('[REDACTED]');
+      return;
     }
+    // Replacing every occurrence of a one-character credential would corrupt
+    // ordinary protocol words and paths. Short values are redacted when they
+    // appear as standalone prose/JSON tokens.
+    const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    redacted = redacted.replace(new RegExp(`(^|[^A-Za-z0-9])${escaped}(?=$|[^A-Za-z0-9])`, 'g'), '$1[REDACTED]');
+  };
+  const knownSecrets = [];
+  for (const [name, secret] of Object.entries(process.env)) {
+    if (SECRET_ENV_NAME.test(name) && typeof secret === 'string' && secret.length > 0) knownSecrets.push(secret);
   }
-  return redacted.replace(URL_IN_TEXT, redactUrl);
+  for (const registered of session?.secrets || []) knownSecrets.push(registered);
+  // A shorter value can be a prefix of a longer credential. Replace longest
+  // first so redacting the prefix cannot destroy the longer match and expose
+  // its suffix.
+  for (const secret of [...new Set(knownSecrets)].sort((a, b) => b.length - a.length)) redactKnownSecret(secret);
+  return redacted;
 }
 
 /* Sanitize captured child-process prose before it is replayed to stderr.

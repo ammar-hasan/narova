@@ -205,10 +205,12 @@ test('provisionFile is idempotent: a matching artifact is never re-acquired (NAR
 });
 
 test('TTY view prints the plan first and confirms each item (NAR-021-008)', async () => {
-  // Hermetic TTY: CI runners export CI=true, which correctly forces the
-  // non-TTY renderer — this test is about the TTY path, so clear it.
+  // Hermetic TTY: CI and NO_COLOR correctly alter production rendering, but
+  // this test is specifically about the colored TTY path, so clear both.
   const savedCI = process.env.CI;
+  const savedNoColor = process.env.NO_COLOR;
   delete process.env.CI;
+  delete process.env.NO_COLOR;
   try {
     const sink = new Sink(true);
     const view = new ProgressView(sink, { heartbeatMs: 10 });
@@ -228,6 +230,7 @@ test('TTY view prints the plan first and confirms each item (NAR-021-008)', asyn
     assert.match(text, /✓ media tool \(ffmpeg\) — \/tools\/ffmpeg \(/);
   } finally {
     if (savedCI === undefined) delete process.env.CI; else process.env.CI = savedCI;
+    if (savedNoColor === undefined) delete process.env.NO_COLOR; else process.env.NO_COLOR = savedNoColor;
   }
 });
 

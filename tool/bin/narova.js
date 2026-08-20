@@ -12,7 +12,7 @@ const { resolveConfig } = require('../src/schema');
 const { synth, writeStageInputs, build, findPython, resolveReuse, compileTimeline, enrichTimeline } = require('../src/pipeline');
 const { composeData } = require('../src/compose/data');
 const { writeCaptions } = require('../src/captions');
-const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort } = require('../src/hf');
+const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previewPort, previewPortIntent } = require('../src/hf');
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
@@ -37,7 +37,7 @@ const revisions = require('../src/revisions');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, branchDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
 const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
-  addProvider, getProvider, listProviders, removeProvider, doctorProvider, providersDir,
+  addProvider, getProvider, isProviderName, listProviders, removeProvider, doctorProvider, providersDir,
 } = require('../src/providers');
 const {
   backendHint, builtinNames, BUILTIN_BACKENDS, deliveryCapabilitiesFor,
@@ -422,16 +422,18 @@ function findNoBrowserDir(out) {
   return path.join(out, 'no-browser');
 }
 
-function refreshPreviewIfLive(out) {
+async function refreshPreviewIfLive(out) {
   const hfDir = findHfDir(out);
   const pidFile = path.join(out, 'preview.pid');
   const pid = livePreviewPid(pidFile);
   if (!pid) return;
   const port = previewPort(pidFile) || 3002;
+  const portIntent = previewPortIntent(pidFile);
   try {
-    stopHfPreview(pidFile);
-    const p = startHfPreview(hfDir, {
-      port, logFile: path.join(out, 'preview.log'), pidFile,
+    await stopHfPreview(pidFile);
+    const p = await startHfPreview(hfDir, {
+      ...(portIntent === 'explicit' ? { port } : { startPort: port }),
+      logFile: path.join(out, 'preview.log'), pidFile,
     });
     console.log(`Studio restarted on the new build -> ${p.url}  (pid ${p.pid}; stop: narova preview --stop)`);
   } catch (e) {
@@ -1737,7 +1739,7 @@ async function main() {
       console.log(`captions -> ${caps.srt} (+ captions.vtt, ${caps.cues} cues)`);
       printSceneTable(config, out);
       console.log(`  qa: narova shots --beats   ·   preview: narova preview --detach   ·   release: narova build --reuse --release`);
-      if (renderer.name === 'hyperframes') refreshPreviewIfLive(out);
+      if (renderer.name === 'hyperframes') await refreshPreviewIfLive(out);
       mData({ scenes: r.scenes, total: r.total, renderer: renderer.name, cues: caps.cues });
       mArtifact(caps.srt, 'captions');
       mArtifact(caps.vtt || path.join(out, 'captions.vtt'), 'captions');
@@ -1969,7 +1971,7 @@ async function main() {
           }
         }
         mSetData({ builds: builtResults });
-        if (base.renderer === 'hyperframes') refreshPreviewIfLive(out);
+        if (base.renderer === 'hyperframes') await refreshPreviewIfLive(out);
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
@@ -2035,7 +2037,7 @@ async function main() {
         revision: built.revisions || null,
       });
       verifyMotionIfRequested(built, flags);
-      if (config.renderer === 'hyperframes') refreshPreviewIfLive(out);
+      if (config.renderer === 'hyperframes') await refreshPreviewIfLive(out);
       return;
     }
 
@@ -2044,7 +2046,7 @@ async function main() {
       const previewOut = outDirOf(flags, project);
       const pidFile = path.join(previewOut, 'preview.pid');
       if (flags.stop) {
-        const stopped = stopHfPreview(pidFile);
+        const stopped = await stopHfPreview(pidFile);
         console.log(stopped ? `preview stopped (${pidFile})` : 'no detached preview is running');
         mData({ stopped });
         return;
@@ -2085,23 +2087,28 @@ async function main() {
         // stale server and start fresh on its port (compose already ran above).
         const stale = livePreviewPid(pidFile);
         const rememberedPort = previewPort(pidFile);
+        const rememberedIntent = previewPortIntent(pidFile);
         if (stale) {
           console.log(`restarting Studio (was pid ${stale}) — detached previews do not hot-reload`);
-          stopHfPreview(pidFile);
+          await stopHfPreview(pidFile);
         }
-        const port = explicitPort || rememberedPort || 3002;
-        if (!Number.isInteger(port) || port < 1 || port > 65535) invocationError('--port must be an integer from 1 to 65535');
-        const p = startHfPreview(r.dir, {
-          port,
+        const p = await startHfPreview(r.dir, {
+          ...(explicitPort == null
+            ? (rememberedIntent === 'explicit' && rememberedPort != null
+              ? { port: rememberedPort }
+              : { startPort: rememberedPort ?? 3002 })
+            : { port: explicitPort }),
           logFile: path.join(out, 'preview.log'), pidFile,
           projectName: projectSlug(config),
         });
         console.log(`Studio running -> ${p.url}`);
         console.log(`  pid ${p.pid} · log ${p.logFile} · stop: narova preview --stop --project ${projectDir}`);
-        mSetData({ renderer: 'hyperframes', detached: true, url: p.url, pid: p.pid, port });
+        mSetData({ renderer: 'hyperframes', detached: true, url: p.url, pid: p.pid, port: p.port });
         mArtifact(r.dir, 'renderer-project');
         mArtifact(pidFile, 'preview-state');
         mArtifact(p.portFile, 'preview-state');
+        mArtifact(p.intentFile, 'preview-state');
+        mArtifact(p.stateFile, 'preview-state');
         mArtifact(p.logFile, 'preview-log');
       } else {
         const port = explicitPort || 3002;
@@ -2234,6 +2241,7 @@ async function main() {
       if (sub === 'remove') {
         const name = positionals[2];
         if (!name) usageError('usage: narova providers remove <name>');
+        if (!isProviderName(name)) invocationError('provider name must start with a lowercase letter and contain only lowercase letters, digits, and hyphens');
         removeProvider(name);
         console.log(`provider "${name}" unregistered`);
         mSetData({ name, removed: true });
@@ -2242,6 +2250,7 @@ async function main() {
       if (sub === 'doctor') {
         const name = positionals[2];
         if (!name) usageError('usage: narova providers doctor <name>');
+        if (!isProviderName(name)) invocationError('provider name must start with a lowercase letter and contain only lowercase letters, digits, and hyphens');
         const result = doctorProvider(name, { beforeHandshake: registerProviderSecrets });
         console.log(`worker ok: ${name} ${result.hello.providerVersion} speaks ${result.hello.protocol}`);
         if (result.missingEnvironment.length) {

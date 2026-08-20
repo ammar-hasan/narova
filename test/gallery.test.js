@@ -74,6 +74,17 @@ test('curation rejects missing release evidence, rights, and digest identity', (
   );
 });
 
+test('curation rejects archive basenames that are unsafe in the exact remix command', () => {
+  const original = index().entries[0];
+  for (const basename of ['unsafe archive.narova', 'unsafe;echo.narova', 'UPPER.narova']) {
+    const archive = path.posix.join(path.posix.dirname(original.archive), basename);
+    assert.throws(
+      () => validateEntry(root, { ...original, archive }, new Set()),
+      /archive basename must be a lowercase slug ending in \.narova/,
+    );
+  }
+});
+
 test('projection escapes curated text before writing static HTML', () => {
   const original = index().entries[0];
   const payload = '</h2><script>alert(1)</script>';

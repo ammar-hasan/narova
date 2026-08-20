@@ -4,6 +4,23 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.32.1] - 2026-08-20
+
+### Fixed
+
+- **Reliable detached preview lifecycle.** HyperFrames' post-bind readiness now
+  supplies the actual preview port instead of a speculative preflight probe.
+  Concurrent start/stop operations share one identity-bound state transaction;
+  explicit ports remain exact, automatic fallback remains supported, and
+  uncertain shutdown retains recoverable state instead of risking an orphan or
+  signaling a reused process identifier.
+- **Agent protocol boundary hardening.** Known provider credentials are redacted
+  even when short or overlapping, and malformed provider names consistently
+  return usage status `2` in both human and machine projections.
+- **Release-surface conformance.** Gallery admission rejects archive basenames
+  unsafe for its exact remix command, and the colored-TTY progress regression is
+  hermetic while production continues to honor `NO_COLOR`.
+
 ## [0.32.0] - 2026-08-20
 
 ### Added
