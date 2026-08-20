@@ -67,7 +67,53 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.31.14</span>
+        <span class="rel-version" data-narova-version>0.32.0</span>
+        <span class="rel-date">2026-08-20</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Versioned agent machine protocol.</strong> Every public operation honors an explicit machine-output request and emits exactly one versioned result envelope (<code>narova.result/1</code>) to standard output: operation, success, data, diagnostics, and committed artifacts. A closed exit-status vocabulary separates usage errors, operation failures, and subject non-passes from success; diagnostics carry fixed severities and stable dot-namespaced codes from a public registry; envelope evolution is additive within a major version. The shipped <code>AGENT_PROTOCOL.md</code> documents the inspect → modify → validate → preview → critique → build → verify loop for machine consumers.</li>
+          <li><strong>Shareable project archives.</strong> <code>narova pack</code> produces a deterministic byte-identical <code>.narova</code> archive (ZIP + <code>narova.archive.json</code> manifest) containing verified authoring closure. <code>narova open</code> verifies and safely materializes an archive — digest-checked, path-confined, non-executing, with a trust notice — and <code>narova inspect</code> validates without writing. <code>narova remix</code> materializes a local archive, directory, or bounded <code>github:</code> locator into a fresh project with its own identity, a recorded (not verified) provenance parent, and no inherited history.</li>
+          <li><strong>Explore gallery.</strong> The website gains a static <code>/explore/</code> route of curated project entries offering watch (rendered video with captions and poster), inspect (publication-time static projection of the archive), and remix (copyable <code>narova remix</code> command and archive download). No project content is executed in the browser; entries are admission-reviewed and checked in.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Public surface cleanup.</strong> The monolithic <code>SPEC.md</code> and checked-in agent-convention aliases are removed; the canonical core skill lives at one repository location and discoverability uses the documented skill-install mechanism.</li>
+          <li><strong>Relicensed to Apache-2.0.</strong> Narova's code and first-party companions move from MIT to the Apache License 2.0 with a <code>NOTICE</code>; previous releases remain MIT and third-party assets keep their own licenses.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.31.14</span>
+        <span class="rel-date">2026-08-19</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Living center visuals for the demo.</strong> The built-in demo project's scenes now animate a centered play-mark medallion (scene 1) and staggered popping dots (scene 2) over a subtle gradient, using only cross-renderer motion primitives so the browser and browserless profiles render identical geometry.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.31.13</span>
+        <span class="rel-date">2026-08-19</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>One-command activation: <code>narova demo</code>.</strong> A readiness checklist with live progress reconciles the machine first: find-what-exists, then digest-verified provisioning into <code>~/.narova</code> — a pinned piper voice on every platform and a pinned static ffmpeg on Linux (macOS and Windows fail closed to explicit install guidance). The demo then runs the ordinary build pipeline — real synthesis, measured timing, render, encode — finishing with a playable MP4, SRT/VTT captions, and the readable demo project left behind, reporting measured time-to-first-video and network bytes. Warm reruns reuse everything. A bare interactive <code>narova</code> runs the welcome flow, and <code>narova-uninstall --purge-tools</code> removes provisioned tooling on request. New clean-machine CI job proves the Linux path end to end.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.31.12</span>
         <span class="rel-date">2026-08-19</span>
       </div>
       <div class="rel-body">
@@ -457,7 +503,7 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version">0.24.0</span>
+        <span class="rel-version">0.23.0</span>
         <span class="rel-date">2026-08-07</span>
       </div>
       <div class="rel-body">
@@ -899,6 +945,153 @@
         <h4><span class="tag changed">Changed</span></h4>
         <ul>
           <li>Doctor command now reports mismatched tool versions and venv health.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.9</span>
+        <span class="rel-date">2026-07-27</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><code>captions.maxWords</code> config — limits words per caption line to prevent overcrowding.</li>
+          <li>CSS custom property tokens for caption zone spacing (<code>--cap-pad</code>, <code>--cap-gap</code>).</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.8</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Restored b-roll <code>data-duration</code> attribute for reliable HyperFrames seek and playback; scene-bounded clipping prevents b-roll from bleeding into the next scene.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.7</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>B-roll StaticGuard: removed <code>data-duration</code> + clip class to prevent b-roll clips from persisting across scene boundaries.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.6</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><code>gainDb</code> now works for all backends (was applied only to piper); now also applies to xtts, qwen, and chatterbox outputs.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.5</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Silent scenes</strong> — vo-less scenes with a fixed <code>dur</code> (seconds) for visual-only segments (title cards, separators, end cards).</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Caption end time capped at the scene boundary, preventing words from rendering into the next scene's visual space.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.4</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Per-voice gain control</strong> — <code>gainDb</code> on any voice, range −24 to +24 dB, applied in the synth stage after TTS before audio mixing.</li>
+          <li>B-roll clips are now root-level HyperFrames clip nodes, keeping them out of the scene DOM for cleaner composition.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.3</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Renamed config key <code>music</code> → <code>bed</code> (old key still accepted).</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Studio preview project naming: compose and build assign unique HyperFrames project names per narova project, preventing collision when multiple projects are open.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.2</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Partial word alignment for mixed-language scenes</strong> — alignment falls back gracefully on per-word mismatch, keeping estimates for words that cannot be measured.</li>
+          <li>B-roll videos are now HyperFrames-native clip nodes (seek-safe, no frame-dropping on timeline scrub).</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Per-turn language cache key now uses <code>sentence_cache_key()</code> for stable identity.</li>
+          <li>Arabic and Urdu captions now render right-to-left (RTL).</li>
+          <li>Unique Studio project names per narova project (prevents preview collision).</li>
+          <li>Generated CSS externalized to keep each scene's HTML body under HyperFrames' 500-line lint threshold.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.7.1</span>
+        <span class="rel-date">2026-07-26</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Per-turn language for multilingual TTS</strong> — <code>lang</code> on any turn selects the TTS language for chatterbox and qwen backends.</li>
+          <li>Voice sample management: <code>narova voice sample add/list/remove</code> for chatterbox voice cloning (validation, auto-normalization: mono, 24 kHz, voice-range EQ, peak-safe loudness).</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li>Agent intake: agents must ask before picking defaults; intake is a dynamic principle, not a fixed checklist.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li>Chatterbox voice samples auto-normalized on import (mono, 24 kHz, voice-range EQ, peak-safe loudness).</li>
+          <li>Force CPU on Apple Silicon for XTTS, Qwen, and Chatterbox — MPS has known conv1d breakage with these models.</li>
+          <li><code>narova check</code> warns when scene body HTML uses HyperFrames-reserved class names (e.g. <code>.scene</code>, <code>.container</code>).</li>
+          <li>Landing page redesigned around a video-first workflow; multi-speaker messaging corrected.</li>
         </ul>
       </div>
     </article>

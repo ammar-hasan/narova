@@ -4,6 +4,50 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [0.32.0] - 2026-08-20
+
+### Added
+
+- **Versioned agent machine protocol.** Every public operation honors an
+  explicit machine-output request (`--json`) and emits exactly one versioned
+  result envelope (`narova.result/1`) to standard output: operation name,
+  success, data, diagnostics, and committed artifacts. A closed exit-status
+  vocabulary separates usage errors (`2`), operation failures (`1`), and
+  subject non-passes (`3`) from success (`0`); diagnostics carry fixed
+  severities and stable dot-namespaced codes from a public registry; envelope
+  schema evolution is additive within a major version. The shipped
+  `AGENT_PROTOCOL.md` documents the inspect → modify → validate → preview →
+  critique → build → verify loop for machine consumers.
+- **Shareable project archives.** `narova pack` produces a deterministic
+  byte-identical `.narova` archive (ZIP + `narova.archive.json` manifest)
+  containing verified authoring closure and excluding outputs, history, and
+  machine-local state. `narova open` verifies and safely materializes an
+  archive — digest-checked, path-confined, non-executing, with a trust notice —
+  and `narova inspect` validates without writing. `narova remix` materializes a
+  local archive, directory, or bounded `github:` locator into a fresh project
+  with its own identity, a recorded (not verified) provenance parent, and no
+  inherited history. Fetched and archived bytes are never executed.
+- **Explore gallery.** The website gains a static `/explore/` route of curated
+  project entries, each offering **watch** (rendered video with captions and
+  poster), **inspect** (publication-time static projection of the archive:
+  manifest summary, authoring source, scene/narration inventory, provenance,
+  and declared rights/credits), and **remix** (copyable `narova remix` command
+  and archive download). No project content is executed or unpacked in the
+  browser; entries are admission-reviewed and checked in.
+
+### Changed
+
+- **Public surface cleanup.** The monolithic `SPEC.md` and the checked-in
+  `.claude`/`.agents` skill aliases are removed; the canonical core skill lives
+  at exactly one repository location and agent discoverability uses the
+  documented skill-install mechanism. Contributor-review tooling is private
+  control-plane material, not a shipped product surface.
+- **Relicensed to Apache-2.0.** Narova's code and first-party companion skills
+  move from MIT to the Apache License 2.0, adding an explicit patent grant and
+  retaliation clause for downstream adoption. A `NOTICE` file records third-
+  party components. Previous releases (through 0.31.14) remain MIT; vendored
+  Three.js and other third-party assets keep their own licenses.
+
 ## [0.31.14] - 2026-08-19
 
 ### Changed
