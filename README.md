@@ -20,7 +20,7 @@ Agents calling the CLI directly can use the versioned
   <img src="assets/narova-demo.gif" alt="narova demo — prompt, voice, motion" width="100%">
 </a>
 
-*This 30-second reel was made by Narova, about Narova. [Watch it with sound](assets/narova-skill-reel.mp4) · [Install from npm](https://www.npmjs.com/package/@narova/narova) · [View on skills.sh](https://skills.sh/ammar-hasan/narova) · [Live site](https://ammar-hasan.github.io/narova/)*
+*This 30-second reel was made by Narova, about Narova. [Watch it with sound](assets/narova-skill-reel.mp4) · [Explore the project](https://ammar-hasan.github.io/narova/explore/) · [Install from npm](https://www.npmjs.com/package/@narova/narova) · [View on skills.sh](https://skills.sh/ammar-hasan/narova) · [Live site](https://ammar-hasan.github.io/narova/)*
 
 </div>
 

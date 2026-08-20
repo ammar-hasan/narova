@@ -256,7 +256,7 @@
 
   /* ---------------- copy buttons ---------------- */
   function bindCopy(btnId, text, label) {
-    var btn = document.getElementById(btnId);
+    var btn = typeof btnId === "string" ? document.getElementById(btnId) : btnId;
     if (!btn) return;
     btn.addEventListener("click", function () {
       var copyText = typeof text === "function" ? text() : text;
@@ -295,6 +295,9 @@
     "npx skills add ammar-hasan/narova --skill narova-elevenlabs -g",
     document.getElementById("copyElevenLabel")
   );
+  document.querySelectorAll("[data-copy-command]").forEach(function (button) {
+    bindCopy(button, button.getAttribute("data-copy-command"), null);
+  });
 
   var PROMPT_EXAMPLES = {
     idea: {

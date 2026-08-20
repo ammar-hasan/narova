@@ -2,6 +2,7 @@
 
 const fs = require('node:fs');
 const path = require('node:path');
+const { buildGallery } = require('./build-gallery');
 
 function isStepRunBlock(lines, index, runIndent, directStep) {
   let stepIndex = index;
@@ -146,6 +147,8 @@ if (process.env.GITHUB_REF_TYPE === 'tag') {
     throw new Error(`release tag ${process.env.GITHUB_REF_NAME} does not match ${expectedTag}`);
   }
 }
+
+buildGallery({ root, check: true });
 
 process.stdout.write(`release metadata ok: @narova/narova@${version}\n`);
 }

@@ -10,6 +10,7 @@ const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf
 
 const homeUrl = 'https://ammar-hasan.github.io/narova/';
 const changelogUrl = `${homeUrl}changelog/`;
+const exploreUrl = `${homeUrl}explore/`;
 const npmUrl = 'https://www.npmjs.com/package/@narova/narova';
 const skillUrl = 'https://skills.sh/ammar-hasan/narova';
 const releaseDate = '2026-08-12';
@@ -91,8 +92,10 @@ test('READMEs lead with the product category and distribution links', () => {
 test('website metadata and hero present the skill without making people secondary', () => {
   const home = read('docs/index.html');
   const changelog = read('docs/changelog/index.html');
+  const explore = read('docs/explore/index.html');
   expectHeadMetadata(home, homeUrl);
   expectHeadMetadata(changelog, changelogUrl);
+  expectHeadMetadata(explore, exploreUrl);
   assert.match(home, /<title>[^<]*prompt-to-video skill and local CLI[^<]*<\/title>/i);
   assert.match(home, /<p class="kicker reveal-line">Open-source prompt-to-video<\/p>/);
   assert.match(home, /<h1[^>]*>[\s\S]*Prompt in\.[\s\S]*Directed video out\.[\s\S]*<\/h1>/);
@@ -103,6 +106,8 @@ test('website metadata and hero present the skill without making people secondar
   assert.match(home, new RegExp(`href="${skillUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(home, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/);
   assert.ok(fs.existsSync(path.join(root, 'docs/assets/favicon.svg')));
+  assert.match(home, /href="explore\/"[^>]*>Explore<\/a>/);
+  assert.match(changelog, /href="\.\.\/explore\/"[^>]*>Explore<\/a>/);
 });
 
 test('animated hero headline preserves word-level wrapping', () => {
@@ -155,6 +160,7 @@ test('sitemap lists canonical pages without ignored ranking hints', () => {
     [
       { location: homeUrl, lastmod: releaseDate },
       { location: changelogUrl, lastmod: releaseDate },
+      { location: exploreUrl, lastmod: '2026-08-20' },
     ],
   );
   assert.equal(wrapper[1].replace(/\s+/g, ''), entries.map(match => match[0]).join('').replace(/\s+/g, ''));

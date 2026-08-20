@@ -1,0 +1,811 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Narova Explore — watch, inspect, remix real video projects</title>
+<meta name="description" content="Watch finished Narova videos, inspect their verified authoring source and provenance, then download and remix the complete project.">
+<link rel="canonical" href="https://ammar-hasan.github.io/narova/explore/">
+<meta name="theme-color" content="#12061d">
+<meta property="og:title" content="Narova Explore — every video is a project">
+<meta property="og:description" content="Watch the render. Inspect the source. Remix the verified Narova project.">
+<meta property="og:type" content="website">
+<meta property="og:url" content="https://ammar-hasan.github.io/narova/explore/">
+<meta property="og:image" content="https://ammar-hasan.github.io/narova/explore/assets/narova-explore-share.png">
+<meta property="og:image:type" content="image/png">
+<meta property="og:image:width" content="1280">
+<meta property="og:image:height" content="720">
+<meta property="og:image:alt" content="Narova prompt-to-video workflow preview">
+<meta property="og:site_name" content="Narova">
+<meta property="og:locale" content="en_US">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="Narova Explore — every video is a project">
+<meta name="twitter:description" content="Watch the render. Inspect the source. Remix the verified Narova project.">
+<meta name="twitter:image" content="https://ammar-hasan.github.io/narova/explore/assets/narova-explore-share.png">
+<meta name="twitter:image:alt" content="Narova prompt-to-video workflow preview">
+<link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
+<script type="application/ld+json">
+{
+  "@context": "https://schema.org",
+  "@type": "CollectionPage",
+  "@id": "https://ammar-hasan.github.io/narova/explore/#collection",
+  "url": "https://ammar-hasan.github.io/narova/explore/",
+  "name": "Narova Explore",
+  "description": "Curated, verified Narova video projects to watch, inspect, and remix.",
+  "numberOfItems": 2
+}
+</script>
+<link rel="stylesheet" href="../style.css">
+<link rel="stylesheet" href="explore.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to content</a>
+<div class="cursor-dot" aria-hidden="true"></div>
+<div class="cursor-ring" aria-hidden="true"></div>
+<div class="progress" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
+<div class="grain" aria-hidden="true"></div>
+<header class="nav">
+  <a class="nav-logo" href="../" data-hover><span class="logo-mark" aria-hidden="true">▶</span>narova</a>
+  <nav class="nav-links" aria-label="Primary navigation">
+    <a href="../">Home</a><a href="./" aria-current="page">Explore</a><a href="../changelog/">Changelog</a>
+  </nav>
+  <a class="nav-gh" href="https://github.com/ammar-hasan/narova">GitHub</a>
+</header>
+<main id="main">
+  <section class="explore-hero">
+    <p class="kicker">THE PROJECT IS THE MEDIUM</p>
+    <h1>Watch it.<br><em>Open the source.</em><br>Make it yours.</h1>
+    <p>Each finished video below carries its verified authoring archive, readable source, provenance, credits, and one exact remix path. No account. No upload form. No hidden runtime.</p>
+    <div class="loop" aria-label="Gallery workflow"><span>01 Watch</span><i>→</i><span>02 Inspect</span><i>→</i><span>03 Remix</span></div>
+  </section>
+  <section class="gallery" aria-label="Curated Narova projects">
+    <article class="gallery-entry" id="narova-skill-reel">
+      <header class="entry-heading">
+        <p class="entry-count">PROJECT 01</p>
+        <h2>Prompt. Voice. Motion.</h2>
+        <p>The 30-second first-party reel that explains Narova through its own narrated, cue-driven pipeline.</p>
+      </header>
+
+      <section class="gallery-step watch" aria-labelledby="narova-skill-reel-watch">
+        <div class="step-label"><span>01</span><h3 id="narova-skill-reel-watch">Watch</h3></div>
+        <video controls preload="metadata" poster="../assets/poster.jpg">
+          <source src="../assets/narova-skill-reel.mp4" type="video/mp4">
+          <track kind="captions" src="../assets/narova-skill-reel.vtt" srclang="en" label="English" default>
+          Your browser cannot play this video. <a href="../assets/narova-skill-reel.mp4">Download the MP4</a>.
+        </video>
+      </section>
+
+      <section class="gallery-step inspect" aria-labelledby="narova-skill-reel-inspect">
+        <div class="step-label"><span>02</span><h3 id="narova-skill-reel-inspect">Inspect</h3></div>
+        <div class="inspect-grid">
+          <div class="fact-panel">
+            <h4>Verified archive</h4>
+            <dl>
+              <div><dt>Identity</dt><dd><code>24717f22f5e0eb4dac91f5b6949d7591b3eb4de11e2faf9b6a66c36e3a830b30</code></dd></div>
+              <div><dt>Format</dt><dd>narova.project/1</dd></div>
+              <div><dt>Packer version</dt><dd>Narova 0.31.14</dd></div>
+              <div><dt>Contents</dt><dd>5 members · 19,006 bytes</dd></div>
+              <div><dt>Release check</dt><dd>Release check passed with three documented performance/compatibility warnings and no errors.</dd></div>
+              <div><dt>Accessibility</dt><dd>Visible controls, English WebVTT captions, poster, text fallback, and script-free inspection are present.</dd></div>
+            </dl>
+            <ul class="manifest-members"><li><code>README.md</code><span>project-file · 590 bytes</span></li><li><code>claims.md</code><span>claims-ledger · 1,483 bytes</span></li><li><code>creative-brief.md</code><span>creative-brief · 723 bytes</span></li><li><code>reel.config.json</code><span>authoring-config · 7,612 bytes</span></li><li><code>theme.css</code><span>authored-module · 8,598 bytes</span></li></ul>
+          </div>
+          <div class="fact-panel">
+            <h4>Provenance &amp; rights</h4>
+            <p>First-party Narova project reconstructed from the published reel source, converted losslessly to static JSON authoring, and packed by the unreleased local tree reporting version 0.31.14.</p>
+            <p>No recorded remix parent.</p>
+            <p><strong>Hosting basis:</strong> First-party Narova source and rendered media; no embedded third-party visual or audio assets.</p>
+            <ul><li>Narova project and render — Ammar Hasan</li></ul>
+          </div>
+        </div>
+        <h4 class="subhead">Scene &amp; narration inventory</h4>
+        <ol class="scene-list">
+            <li>
+              <span class="scene-number">01</span>
+              <div><strong>hook</strong><ol class="turns"><li><b>narrator</b> Stop building narrated videos frame by frame.</li><li><b>narrator</b> Give Narova a prompt, and watch this.</li></ol></div>
+            </li>
+            <li>
+              <span class="scene-number">02</span>
+              <div><strong>sync</strong><ol class="turns"><li><b>narrator</b> It creates local voiceover, lights captions word by word,</li><li><b>narrator</b> and reveals graphics on the spoken beat.</li></ol></div>
+            </li>
+            <li>
+              <span class="scene-number">03</span>
+              <div><strong>workflow</strong><ol class="turns"><li><b>narrator</b> Initialize a project.</li><li><b>narrator</b> Write scenes.</li><li><b>narrator</b> Then synthesize, preview, and build.</li></ol></div>
+            </li>
+            <li>
+              <span class="scene-number">04</span>
+              <div><strong>pipeline</strong><ol class="turns"><li><b>narrator</b> Audio sets the timing.</li><li><b>narrator</b> HyperFrames turns your HTML visuals into a rendered MP4.</li></ol></div>
+            </li>
+            <li>
+              <span class="scene-number">05</span>
+              <div><strong>close</strong><ol class="turns"><li><b>narrator</b> No API keys.</li><li><b>narrator</b> No cloud.</li><li><b>narrator</b> Just invoke the Narova skill, describe your video, and let it roll.</li></ol></div>
+            </li>
+        </ol>
+        <h4 class="subhead">Authoring source</h4>
+        <div class="source-list">
+        <details class="source-file">
+          <summary><span>claims.md</span><small>claims-ledger · 1,483 bytes</small></summary>
+          <pre><code># Claims ledger
+
+Source of truth: repository [`README.md`](../../README.md) and the bundled [`SKILL.md`](../../skills/narova/SKILL.md), inspected 2026-07-22.
+
+| Spoken claim | Treatment | Source evidence |
+|---|---|---|
+| “Give Narova a prompt” | Paraphrase | `README.md` line 5: a prompt or scene script becomes a narrated video. |
+| “It creates local voiceover” | Paraphrase | `README.md` lines 9–12 and `SKILL.md` lines 7–9: neural TTS runs locally. |
+| “lights captions word by word” | Near-verbatim | `README.md` line 10; `SKILL.md` lines 23–24. |
+| “reveals graphics on the spoken beat” | Paraphrase | `README.md` line 11 and `SKILL.md` lines 23–24: elements appear when the voice reaches them. |
+| “Initialize a project…synthesize, preview, and build” | Paraphrase | `README.md` Quickstart and Commands sections. |
+| “Audio sets the timing” | Paraphrase | `README.md` line 86 and How it works: real audio decides scene duration and supplies word timings. |
+| “HyperFrames turns your HTML visuals into a rendered MP4” | Paraphrase | `README.md` lines 14–15 and 132–137; `SKILL.md` lines 21–23. |
+| “No API keys. No cloud.” | Verbatim | `README.md` line 12. |
+| “invoke the Narova skill” | Paraphrase | `README.md` lines 18–20: an AI agent reads the skill and can build videos. |
+
+Creative framing (“Stop building…frame by frame,” “watch this,” and “let it roll”) is promotional language, not a factual claim.
+</code></pre>
+        </details>
+        <details class="source-file">
+          <summary><span>creative-brief.md</span><small>creative-brief · 723 bytes</small></summary>
+          <pre><code># Creative brief — Narova skill reel
+
+Status: approved
+
+## Intent
+
+Explain Narova&#39;s prompt → voice → synchronized motion pipeline in one compact,
+first-party product reel. The purple field, lime/cyan/pink signals, large type,
+and diagram-like scene changes make each production stage visually distinct.
+
+## Approved pilot
+
+The rendered hook and speech-synchronization scenes establish the intended
+typography, palette, cue behavior, and diagram language. The published video is
+the reviewed result.
+
+## Rejection criteria
+
+Reject if narration and reveals visibly disagree, captions obscure the scene,
+the five stages become visually indistinguishable, text clips at 1280×720, or
+the final encode loses spoken audio.
+</code></pre>
+        </details>
+        <details class="source-file source-primary">
+          <summary><span>reel.config.json</span><small>authoring-config · 7,612 bytes</small></summary>
+          <pre><code>{
+  &quot;title&quot;: &quot;Narova — Prompt. Voice. Motion.&quot;,
+  &quot;size&quot;: &quot;16:9&quot;,
+  &quot;voices&quot;: {
+    &quot;narrator&quot;: {
+      &quot;backend&quot;: &quot;piper&quot;,
+      &quot;speaker&quot;: &quot;en_US-ryan-high&quot;,
+      &quot;color&quot;: &quot;#d9ff57&quot;,
+      &quot;label&quot;: &quot;NAROVA&quot;
+    }
+  },
+  &quot;theme&quot;: {
+    &quot;bg&quot;: &quot;#10072b&quot;,
+    &quot;stage&quot;: &quot;#170a3d&quot;,
+    &quot;panel&quot;: &quot;#21104c&quot;,
+    &quot;line&quot;: &quot;#5839a3&quot;,
+    &quot;ink&quot;: &quot;#fffdf7&quot;,
+    &quot;muted&quot;: &quot;#c8bfe7&quot;,
+    &quot;faint&quot;: &quot;#75699d&quot;,
+    &quot;accent&quot;: &quot;#d9ff57&quot;,
+    &quot;accent-dim&quot;: &quot;#7a9b17&quot;,
+    &quot;pink&quot;: &quot;#ff5a8c&quot;,
+    &quot;gold&quot;: &quot;#ffb84d&quot;,
+    &quot;green&quot;: &quot;#d9ff57&quot;,
+    &quot;red&quot;: &quot;#ff5a8c&quot;,
+    &quot;amber&quot;: &quot;#ffb84d&quot;,
+    &quot;deep&quot;: &quot;#10072b&quot;,
+    &quot;halo&quot;: &quot;rgba(217,255,87,.2)&quot;,
+    &quot;chip&quot;: &quot;#2b165d&quot;,
+    &quot;capidle&quot;: &quot;#8f85b0&quot;,
+    &quot;onaccent&quot;: &quot;#10072b&quot;,
+    &quot;track&quot;: &quot;rgba(255,255,255,.14)&quot;,
+    &quot;colw&quot;: &quot;1160px&quot;,
+    &quot;css&quot;: &quot;theme.css&quot;
+  },
+  &quot;chrome&quot;: {
+    &quot;topbar&quot;: false,
+    &quot;counter&quot;: false,
+    &quot;progress&quot;: true
+  },
+  &quot;timing&quot;: {
+    &quot;gapSentence&quot;: 0.12,
+    &quot;gapTurn&quot;: 0.18,
+    &quot;lead&quot;: 0.1,
+    &quot;tail&quot;: 0.32,
+    &quot;tempo&quot;: 0.99
+  },
+  &quot;scenes&quot;: [
+    {
+      &quot;id&quot;: &quot;hook&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Stop building narrated videos frame by frame.&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Give Narova a prompt, and watch this.&quot;
+        }
+      ],
+      &quot;body&quot;: &quot;&lt;div class=\&quot;hook-grid\&quot;&gt;\n        &lt;div class=\&quot;hook-copy\&quot;&gt;\n          &lt;div class=\&quot;kicker reveal\&quot;&gt;THE NARRATION-FIRST VIDEO SKILL&lt;/div&gt;\n          &lt;h1 class=\&quot;mega reveal\&quot;&gt;PROMPT.&lt;br&gt;&lt;span&gt;VOICE.&lt;/span&gt;&lt;br&gt;&lt;em&gt;MOTION.&lt;/em&gt;&lt;/h1&gt;\n        &lt;/div&gt;\n        &lt;div class=\&quot;prompt-machine cue\&quot; data-cue=\&quot;1\&quot;&gt;\n          &lt;div class=\&quot;prompt-card\&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;b&gt;Make me a video&lt;/b&gt;&lt;span&gt;↵&lt;/span&gt;&lt;/div&gt;\n          &lt;svg viewBox=\&quot;0 0 500 250\&quot; aria-hidden=\&quot;true\&quot;&gt;\n            &lt;defs&gt;&lt;linearGradient id=\&quot;beam\&quot; x1=\&quot;0\&quot; x2=\&quot;1\&quot;&gt;&lt;stop stop-color=\&quot;#d9ff57\&quot;/&gt;&lt;stop offset=\&quot;.52\&quot; stop-color=\&quot;#5ed7ff\&quot;/&gt;&lt;stop offset=\&quot;1\&quot; stop-color=\&quot;#ff5a8c\&quot;/&gt;&lt;/linearGradient&gt;&lt;/defs&gt;\n            &lt;path data-draw d=\&quot;M36 126 C130 30 204 220 290 126 S415 38 470 126\&quot; fill=\&quot;none\&quot; stroke=\&quot;url(#beam)\&quot; stroke-width=\&quot;14\&quot; stroke-linecap=\&quot;round\&quot;/&gt;\n            &lt;circle class=\&quot;pulse-dot\&quot; cx=\&quot;470\&quot; cy=\&quot;126\&quot; r=\&quot;22\&quot; fill=\&quot;#ff5a8c\&quot;/&gt;\n          &lt;/svg&gt;\n          &lt;div class=\&quot;machine-tags\&quot;&gt;&lt;span&gt;script&lt;/span&gt;&lt;span&gt;voice&lt;/span&gt;&lt;span&gt;timing&lt;/span&gt;&lt;span&gt;video&lt;/span&gt;&lt;/div&gt;\n        &lt;/div&gt;\n      &lt;/div&gt;&quot;
+    },
+    {
+      &quot;id&quot;: &quot;sync&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;It creates local voiceover, lights captions word by word,&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;and reveals graphics on the spoken beat.&quot;
+        }
+      ],
+      &quot;body&quot;: &quot;&lt;div class=\&quot;sync-stage\&quot;&gt;\n        &lt;div class=\&quot;kicker reveal\&quot;&gt;SPEECH DRIVES EVERYTHING&lt;/div&gt;\n        &lt;h2 class=\&quot;scene-title reveal\&quot;&gt;Every word becomes a &lt;span&gt;trigger.&lt;/span&gt;&lt;/h2&gt;\n        &lt;div class=\&quot;sync-layout\&quot;&gt;\n          &lt;div class=\&quot;wave-panel reveal\&quot;&gt;\n            &lt;div class=\&quot;wave-label\&quot;&gt;LOCAL VOICEOVER&lt;/div&gt;\n            &lt;div class=\&quot;wave-bars\&quot;&gt;\n              &lt;i style=\&quot;--h:30%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:70%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:48%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:92%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:60%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:34%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:80%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:52%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:96%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:42%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:68%\&quot;&gt;&lt;/i&gt;&lt;i style=\&quot;--h:36%\&quot;&gt;&lt;/i&gt;\n            &lt;/div&gt;\n            &lt;div class=\&quot;caption-demo\&quot;&gt;&lt;span&gt;captions&lt;/span&gt; &lt;b&gt;light&lt;/b&gt; &lt;span&gt;up&lt;/span&gt; &lt;span&gt;word&lt;/span&gt; &lt;span&gt;by&lt;/span&gt; &lt;span&gt;word&lt;/span&gt;&lt;/div&gt;\n          &lt;/div&gt;\n          &lt;div class=\&quot;beat-visual cue\&quot; data-cue=\&quot;1\&quot;&gt;\n            &lt;div class=\&quot;orbit o1\&quot;&gt;HTML&lt;/div&gt;&lt;div class=\&quot;orbit o2\&quot;&gt;SVG&lt;/div&gt;&lt;div class=\&quot;orbit o3\&quot;&gt;DATA&lt;/div&gt;\n            &lt;div class=\&quot;beat-core\&quot;&gt;ON&lt;br&gt;&lt;b&gt;BEAT&lt;/b&gt;&lt;/div&gt;\n            &lt;svg viewBox=\&quot;0 0 330 330\&quot; aria-hidden=\&quot;true\&quot;&gt;&lt;circle data-draw cx=\&quot;165\&quot; cy=\&quot;165\&quot; r=\&quot;132\&quot; fill=\&quot;none\&quot; stroke=\&quot;#5ed7ff\&quot; stroke-width=\&quot;5\&quot; stroke-dasharray=\&quot;10 15\&quot;/&gt;&lt;/svg&gt;\n          &lt;/div&gt;\n        &lt;/div&gt;\n      &lt;/div&gt;&quot;
+    },
+    {
+      &quot;id&quot;: &quot;workflow&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Initialize a project.&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Write scenes.&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Then synthesize, preview, and build.&quot;
+        }
+      ],
+      &quot;body&quot;: &quot;&lt;div class=\&quot;workflow-stage\&quot;&gt;\n        &lt;div class=\&quot;workflow-head reveal\&quot;&gt;&lt;div class=\&quot;kicker\&quot;&gt;FROM IDEA TO MP4&lt;/div&gt;&lt;h2 class=\&quot;scene-title\&quot;&gt;Three moves. &lt;span&gt;That’s it.&lt;/span&gt;&lt;/h2&gt;&lt;/div&gt;\n        &lt;div class=\&quot;steps-row\&quot;&gt;\n          &lt;div class=\&quot;step-card cue\&quot; data-cue=\&quot;0\&quot;&gt;&lt;div class=\&quot;step-no\&quot;&gt;01&lt;/div&gt;&lt;code&gt;narova init&lt;/code&gt;&lt;p&gt;start the project&lt;/p&gt;&lt;/div&gt;\n          &lt;div class=\&quot;step-arrow cue\&quot; data-cue=\&quot;1\&quot;&gt;→&lt;/div&gt;\n          &lt;div class=\&quot;step-card cue hot\&quot; data-cue=\&quot;1\&quot;&gt;&lt;div class=\&quot;step-no\&quot;&gt;02&lt;/div&gt;&lt;code&gt;reel.config.mjs&lt;/code&gt;&lt;p&gt;write voice + visuals&lt;/p&gt;&lt;/div&gt;\n          &lt;div class=\&quot;step-arrow cue\&quot; data-cue=\&quot;2\&quot;&gt;→&lt;/div&gt;\n          &lt;div class=\&quot;step-card cue\&quot; data-cue=\&quot;2\&quot;&gt;&lt;div class=\&quot;step-no\&quot;&gt;03&lt;/div&gt;&lt;code&gt;synth → preview → build&lt;/code&gt;&lt;p&gt;hear it · see it · ship it&lt;/p&gt;&lt;/div&gt;\n        &lt;/div&gt;\n        &lt;div class=\&quot;speed-line cue\&quot; data-cue=\&quot;2\&quot;&gt;&lt;i data-grow&gt;&lt;/i&gt;&lt;span&gt;prompt&lt;/span&gt;&lt;b&gt;finished video&lt;/b&gt;&lt;/div&gt;\n      &lt;/div&gt;&quot;
+    },
+    {
+      &quot;id&quot;: &quot;pipeline&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Audio sets the timing.&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;HyperFrames turns your HTML visuals into a rendered MP4.&quot;
+        }
+      ],
+      &quot;body&quot;: &quot;&lt;div class=\&quot;pipeline-stage\&quot;&gt;\n        &lt;div class=\&quot;kicker reveal\&quot;&gt;ONE TIMELINE · ZERO GUESSWORK&lt;/div&gt;\n        &lt;h2 class=\&quot;scene-title reveal\&quot;&gt;The voice is the &lt;span&gt;clock.&lt;/span&gt;&lt;/h2&gt;\n        &lt;div class=\&quot;pipeline\&quot;&gt;\n          &lt;div class=\&quot;pipe-node reveal\&quot;&gt;&lt;div class=\&quot;node-icon mic\&quot;&gt;●&lt;/div&gt;&lt;b&gt;AUDIO&lt;/b&gt;&lt;small&gt;real duration&lt;/small&gt;&lt;/div&gt;\n          &lt;div class=\&quot;pipe-link reveal\&quot;&gt;&lt;i data-grow&gt;&lt;/i&gt;&lt;span&gt;word timings&lt;/span&gt;&lt;/div&gt;\n          &lt;div class=\&quot;pipe-node reveal\&quot;&gt;&lt;div class=\&quot;node-icon clock\&quot;&gt;◷&lt;/div&gt;&lt;b&gt;TIMELINE&lt;/b&gt;&lt;small&gt;cues + captions&lt;/small&gt;&lt;/div&gt;\n          &lt;div class=\&quot;pipe-link cue\&quot; data-cue=\&quot;1\&quot;&gt;&lt;i data-grow&gt;&lt;/i&gt;&lt;span&gt;HyperFrames&lt;/span&gt;&lt;/div&gt;\n          &lt;div class=\&quot;pipe-node cue final-node\&quot; data-cue=\&quot;1\&quot;&gt;&lt;div class=\&quot;frame-stack\&quot;&gt;&lt;i&gt;&lt;/i&gt;&lt;i&gt;&lt;/i&gt;&lt;i&gt;&lt;/i&gt;&lt;strong&gt;▶&lt;/strong&gt;&lt;/div&gt;&lt;b&gt;VIDEO.MP4&lt;/b&gt;&lt;small&gt;1280 × 720&lt;/small&gt;&lt;/div&gt;\n        &lt;/div&gt;\n      &lt;/div&gt;&quot;
+    },
+    {
+      &quot;id&quot;: &quot;close&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;No API keys.&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;No cloud.&quot;
+        },
+        {
+          &quot;who&quot;: &quot;narrator&quot;,
+          &quot;text&quot;: &quot;Just invoke the Narova skill, describe your video, and let it roll.&quot;
+        }
+      ],
+      &quot;body&quot;: &quot;&lt;div class=\&quot;close-stage\&quot;&gt;\n        &lt;div class=\&quot;close-badges\&quot;&gt;\n          &lt;div class=\&quot;zero-badge cue\&quot; data-cue=\&quot;0\&quot;&gt;&lt;b&gt;0&lt;/b&gt;&lt;span&gt;API KEYS&lt;/span&gt;&lt;/div&gt;\n          &lt;div class=\&quot;zero-badge cue\&quot; data-cue=\&quot;1\&quot;&gt;&lt;b&gt;0&lt;/b&gt;&lt;span&gt;CLOUD CALLS&lt;/span&gt;&lt;/div&gt;\n        &lt;/div&gt;\n        &lt;div class=\&quot;close-main cue\&quot; data-cue=\&quot;2\&quot;&gt;\n          &lt;div class=\&quot;kicker\&quot;&gt;YOUR NEXT PROMPT COULD MOVE&lt;/div&gt;\n          &lt;h2&gt;TRY &lt;span&gt;NAROVA&lt;/span&gt;&lt;/h2&gt;\n          &lt;div class=\&quot;command-pill\&quot;&gt;&lt;i&gt;›&lt;/i&gt; Use the Narova skill to create…&lt;b&gt;↵&lt;/b&gt;&lt;/div&gt;\n          &lt;div class=\&quot;close-sign\&quot;&gt;prompt in &lt;em&gt;→&lt;/em&gt; narrated video out&lt;/div&gt;\n        &lt;/div&gt;\n      &lt;/div&gt;&quot;
+    }
+  ]
+}
+</code></pre>
+        </details>
+        <details class="source-file">
+          <summary><span>theme.css</span><small>authored-module · 8,598 bytes</small></summary>
+          <pre><code>:root { font-family: Inter, ui-sans-serif, system-ui, sans-serif; }
+#bg::before { content:&quot;&quot;; position:absolute; inset:-20%; background:radial-gradient(circle at 15% 20%,rgba(94,215,255,.18),transparent 28%),radial-gradient(circle at 85% 75%,rgba(255,90,140,.2),transparent 26%),linear-gradient(125deg,#10072b,#190a43 55%,#0b1940); transform:rotate(-2deg); }
+.scene { letter-spacing:-.015em; }
+.progress { height:8px; bottom:0; background:rgba(255,255,255,.11); }
+.progress-fill { box-shadow:0 0 24px var(--accent); }
+.kicker { color:var(--accent); font-size:16px; font-weight:900; letter-spacing:.2em; text-transform:uppercase; }
+.scene-title { margin:12px 0 0; font-size:56px; line-height:1.02; letter-spacing:-.055em; }
+.scene-title span { color:#5ed7ff; }
+
+.hook-grid { display:grid; grid-template-columns:1.02fr .98fr; align-items:center; gap:58px; width:100%; }
+.mega { margin:16px 0 0; font-size:82px; line-height:.88; letter-spacing:-.075em; font-weight:950; }
+.mega span { color:#5ed7ff; }
+.mega em { color:#ff5a8c; font-style:normal; }
+.prompt-machine { position:relative; padding:26px; border:1px solid rgba(255,255,255,.18); border-radius:32px; background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.035)); box-shadow:0 26px 80px rgba(0,0,0,.35),inset 0 1px rgba(255,255,255,.18); transform:rotate(2deg); }
+.prompt-card { height:68px; display:flex; align-items:center; gap:14px; padding:0 20px; border-radius:18px; background:#fff; color:#1a1035; font-size:18px; box-shadow:0 12px 34px rgba(0,0,0,.3); }
+.prompt-card i { width:11px; height:11px; border-radius:50%; background:#ff5a8c; box-shadow:20px 0 #ffb84d,40px 0 #d9ff57; margin-right:40px; }
+.prompt-card span { margin-left:auto; font-size:25px; color:#75699d; }
+.prompt-machine svg { display:block; width:100%; height:210px; margin:2px 0 -8px; overflow:visible; filter:drop-shadow(0 0 16px rgba(94,215,255,.26)); }
+.machine-tags { display:flex; justify-content:space-between; gap:8px; }
+.machine-tags span { flex:1; padding:9px 6px; border-radius:999px; background:#2b165d; color:#d8d1ef; text-align:center; text-transform:uppercase; font-size:12px; font-weight:800; letter-spacing:.08em; }
+
+.sync-stage { width:100%; }
+.sync-layout { display:grid; grid-template-columns:1.35fr .65fr; gap:28px; margin-top:34px; align-items:stretch; }
+.wave-panel { padding:30px 34px 26px; border-radius:30px; background:linear-gradient(145deg,#28135e,#1c1048); border:1px solid rgba(255,255,255,.15); box-shadow:0 24px 70px rgba(0,0,0,.3); }
+.wave-label { color:#c8bfe7; font-size:13px; letter-spacing:.18em; font-weight:850; }
+.wave-bars { height:145px; display:flex; align-items:center; gap:10px; margin:10px 0 12px; }
+.wave-bars i { display:block; flex:1; height:var(--h); min-height:18px; border-radius:99px; background:linear-gradient(180deg,#d9ff57,#5ed7ff); box-shadow:0 0 14px rgba(94,215,255,.24); }
+.caption-demo { font-size:27px; font-weight:750; word-spacing:7px; color:#8f85b0; }
+.caption-demo b { display:inline-block; padding:3px 11px 5px; border-radius:9px; background:#d9ff57; color:#10072b; box-shadow:0 0 22px rgba(217,255,87,.5); }
+.beat-visual { position:relative; min-height:290px; display:grid; place-items:center; border-radius:30px; background:radial-gradient(circle,#321f69,#170b3e 68%); border:1px solid rgba(94,215,255,.25); overflow:hidden; }
+.beat-visual svg { position:absolute; width:310px; height:310px; }
+.beat-core { z-index:2; width:126px; height:126px; display:grid; place-content:center; border-radius:50%; background:#fff; color:#170b3e; text-align:center; line-height:.95; font-size:18px; font-weight:900; box-shadow:0 0 0 14px rgba(217,255,87,.12),0 0 46px rgba(217,255,87,.25); }
+.beat-core b { font-size:31px; color:#ff3978; }
+.orbit { position:absolute; z-index:3; padding:7px 11px; border-radius:8px; background:#5ed7ff; color:#10072b; font-size:11px; font-weight:950; letter-spacing:.1em; }
+.o1 { top:34px; left:70px; }.o2 { right:26px; top:132px; background:#ff5a8c; color:#fff; }.o3 { bottom:30px; left:62px; background:#d9ff57; }
+
+.workflow-stage { width:100%; }
+.workflow-head { display:flex; justify-content:space-between; align-items:end; }
+.workflow-head .scene-title { text-align:right; }
+.steps-row { display:grid; grid-template-columns:1fr 46px 1fr 46px 1.2fr; gap:10px; align-items:center; margin-top:42px; }
+.step-card { min-height:185px; padding:24px; border-radius:24px; background:#241253; border:1px solid rgba(255,255,255,.15); box-shadow:0 18px 50px rgba(0,0,0,.24); }
+.step-card.hot { background:linear-gradient(145deg,#413177,#271451); border-color:#5ed7ff; transform:translateY(-10px); }
+.step-no { color:#ff759f; font-size:13px; font-weight:900; letter-spacing:.15em; margin-bottom:32px; }
+.step-card code { color:#fff; font-size:19px; font-weight:850; letter-spacing:-.04em; white-space:nowrap; }
+.step-card p { margin:12px 0 0; color:#c8bfe7; font-size:15px; }
+.step-arrow { text-align:center; color:#d9ff57; font-size:37px; font-weight:300; }
+.speed-line { position:relative; display:flex; justify-content:space-between; margin-top:32px; color:#c8bfe7; font-size:13px; text-transform:uppercase; letter-spacing:.12em; font-weight:800; }
+.speed-line i { position:absolute; left:0; right:0; top:-12px; height:5px; border-radius:5px; background:linear-gradient(90deg,#5ed7ff,#d9ff57,#ff5a8c); box-shadow:0 0 16px rgba(217,255,87,.45); }
+.speed-line b { color:#fff; }
+
+.pipeline-stage { width:100%; }
+.pipeline { display:grid; grid-template-columns:1fr .7fr 1fr .7fr 1fr; align-items:center; margin-top:54px; }
+.pipe-node { min-height:230px; display:flex; flex-direction:column; justify-content:center; align-items:center; padding:20px; border-radius:30px; background:#23104f; border:1px solid rgba(255,255,255,.15); text-align:center; box-shadow:0 22px 58px rgba(0,0,0,.28); }
+.pipe-node b { margin-top:15px; font-size:20px; letter-spacing:.08em; }
+.pipe-node small { margin-top:8px; color:#c8bfe7; font-size:13px; }
+.node-icon { width:78px; height:78px; display:grid; place-items:center; border-radius:24px; background:#d9ff57; color:#10072b; font-size:35px; box-shadow:0 0 28px rgba(217,255,87,.24); }
+.clock { background:#5ed7ff; font-size:48px; }
+.pipe-link { position:relative; padding:28px 8px 0; text-align:center; }
+.pipe-link i { position:absolute; left:3px; right:3px; top:14px; height:4px; border-radius:5px; background:linear-gradient(90deg,#d9ff57,#5ed7ff); }
+.pipe-link i::after { content:&quot;&quot;; position:absolute; right:-1px; top:-6px; border-left:12px solid #5ed7ff; border-top:8px solid transparent; border-bottom:8px solid transparent; }
+.pipe-link span { color:#c8bfe7; font-size:11px; text-transform:uppercase; letter-spacing:.08em; }
+.final-node { background:linear-gradient(150deg,#ff3978,#8130b7); }
+.final-node small { color:#f2eefb; }
+.frame-stack { position:relative; width:110px; height:76px; }
+.frame-stack i { position:absolute; inset:0; border:3px solid #fff; border-radius:11px; background:#241253; }
+.frame-stack i:nth-child(1){transform:translate(-13px,11px);opacity:.35}.frame-stack i:nth-child(2){transform:translate(-7px,6px);opacity:.65}
+.frame-stack strong { position:absolute; inset:0; display:grid; place-items:center; color:#d9ff57; font-size:31px; }
+
+.close-stage { width:100%; display:grid; grid-template-columns:.68fr 1.32fr; gap:45px; align-items:center; }
+.close-badges { display:grid; gap:20px; }
+.zero-badge { display:flex; align-items:center; gap:20px; padding:22px 28px; border-radius:24px; background:#22104e; border:1px solid rgba(255,255,255,.15); }
+.zero-badge b { font-size:65px; line-height:1; color:#d9ff57; letter-spacing:-.08em; }
+.zero-badge:nth-child(2) b { color:#5ed7ff; }
+.zero-badge span { font-size:15px; line-height:1.2; font-weight:900; letter-spacing:.1em; }
+.close-main { padding:38px 42px; border-radius:34px; background:linear-gradient(145deg,rgba(255,255,255,.12),rgba(255,255,255,.04)); border:1px solid rgba(255,255,255,.18); box-shadow:0 30px 90px rgba(0,0,0,.32); }
+.close-main h2 { margin:10px 0 23px; font-size:78px; line-height:.95; letter-spacing:-.07em; }
+.close-main h2 span { color:#ff5a8c; }
+.command-pill { display:flex; align-items:center; gap:15px; padding:18px 20px; border-radius:15px; background:#fff; color:#241253; font-size:18px; font-weight:750; }
+.command-pill i { color:#ff3978; font-size:30px; font-style:normal; }.command-pill b { margin-left:auto; color:#75699d; }
+.close-sign { margin-top:20px; color:#c8bfe7; font-size:13px; font-weight:850; letter-spacing:.12em; text-transform:uppercase; }
+.close-sign em { color:#d9ff57; padding:0 8px; font-style:normal; }
+</code></pre>
+        </details>
+        </div>
+      </section>
+
+      <section class="gallery-step remix" aria-labelledby="narova-skill-reel-remix">
+        <div class="step-label"><span>03</span><h3 id="narova-skill-reel-remix">Remix</h3></div>
+        <p>Download the verified project, then run the exact local archive command.</p>
+        <div class="remix-command"><code>narova remix narova-skill-reel.narova --dir narova-skill-reel-remix</code><button type="button" data-copy-command="narova remix narova-skill-reel.narova --dir narova-skill-reel-remix">Copy</button></div>
+        <a class="archive-download" href="projects/narova-skill-reel.narova" download>Download narova-skill-reel.narova <span aria-hidden="true">↓</span></a>
+        <p class="trust-note">Archives are untrusted input. Inspect first; building executes authored project source with your account's ambient authority.</p>
+      </section>
+    </article>
+    <article class="gallery-entry" id="narova-one-command-demo">
+      <header class="entry-heading">
+        <p class="entry-count">PROJECT 02</p>
+        <h2>One command, finished video</h2>
+        <p>The built-in two-scene activation demo, synthesized and rendered locally through the ordinary Narova pipeline.</p>
+      </header>
+
+      <section class="gallery-step watch" aria-labelledby="narova-one-command-demo-watch">
+        <div class="step-label"><span>01</span><h3 id="narova-one-command-demo-watch">Watch</h3></div>
+        <video controls preload="metadata" poster="assets/narova-one-command-demo-poster.jpg">
+          <source src="assets/narova-one-command-demo.mp4" type="video/mp4">
+          <track kind="captions" src="assets/narova-one-command-demo.vtt" srclang="en" label="English" default>
+          Your browser cannot play this video. <a href="assets/narova-one-command-demo.mp4">Download the MP4</a>.
+        </video>
+      </section>
+
+      <section class="gallery-step inspect" aria-labelledby="narova-one-command-demo-inspect">
+        <div class="step-label"><span>02</span><h3 id="narova-one-command-demo-inspect">Inspect</h3></div>
+        <div class="inspect-grid">
+          <div class="fact-panel">
+            <h4>Verified archive</h4>
+            <dl>
+              <div><dt>Identity</dt><dd><code>25c25fa256a3a1d01b0c7e460bb608854a2eb0cc61c24c954d9bc708aaa4baa9</code></dd></div>
+              <div><dt>Format</dt><dd>narova.project/1</dd></div>
+              <div><dt>Packer version</dt><dd>Narova 0.31.14</dd></div>
+              <div><dt>Contents</dt><dd>2 members · 8,170 bytes</dd></div>
+              <div><dt>Release check</dt><dd>Release check passed with no warnings.</dd></div>
+              <div><dt>Accessibility</dt><dd>Visible controls, English WebVTT captions, poster, text fallback, and script-free inspection are present.</dd></div>
+            </dl>
+            <ul class="manifest-members"><li><code>creative-brief.md</code><span>creative-brief · 682 bytes</span></li><li><code>reel.config.json</code><span>authoring-config · 7,488 bytes</span></li></ul>
+          </div>
+          <div class="fact-panel">
+            <h4>Provenance &amp; rights</h4>
+            <p>First-party built-in demo produced by a real local Piper synthesis and Narova No-Browser render on 2026-08-20, then packed from equivalent static JSON authoring by the unreleased local tree reporting version 0.31.14.</p>
+            <p>No recorded remix parent.</p>
+            <p><strong>Hosting basis:</strong> First-party Narova source and rendered media; no embedded third-party visual or audio assets.</p>
+            <ul><li>Narova project and render — Ammar Hasan</li></ul>
+          </div>
+        </div>
+        <h4 class="subhead">Scene &amp; narration inventory</h4>
+        <ol class="scene-list">
+            <li>
+              <span class="scene-number">01</span>
+              <div><strong>hello</strong><ol class="turns"><li><b>a</b> This video was made by Narova, on this machine, from one command.</li></ol></div>
+            </li>
+            <li>
+              <span class="scene-number">02</span>
+              <div><strong>yours</strong><ol class="turns"><li><b>a</b> Your story goes here. Edit this file and build again.</li></ol></div>
+            </li>
+        </ol>
+        <h4 class="subhead">Authoring source</h4>
+        <div class="source-list">
+        <details class="source-file">
+          <summary><span>creative-brief.md</span><small>creative-brief · 682 bytes</small></summary>
+          <pre><code># Creative brief — one-command Narova demo
+
+Status: approved
+
+## Intent
+
+Show the smallest honest Narova activation: one locally synthesized narrator,
+two portable scenes, and restrained geometric motion that renders consistently
+without browser-only effects.
+
+## Approved pilot
+
+The complete two-scene build is the pilot. Its centered play mark and staggered
+dots demonstrate the portable visual vocabulary while keeping attention on the
+editable command and project file.
+
+## Rejection criteria
+
+Reject if either renderer clips or misaligns the centered geometry, narration
+or captions are absent, the dots do not reveal in sequence, or the output is
+not a valid H.264/AAC MP4.
+</code></pre>
+        </details>
+        <details class="source-file source-primary">
+          <summary><span>reel.config.json</span><small>authoring-config · 7,488 bytes</small></summary>
+          <pre><code>{
+  &quot;title&quot;: &quot;Made with Narova&quot;,
+  &quot;size&quot;: &quot;16:9&quot;,
+  &quot;voices&quot;: {
+    &quot;a&quot;: {
+      &quot;backend&quot;: &quot;piper&quot;,
+      &quot;speaker&quot;: &quot;en_US-ryan-medium&quot;,
+      &quot;label&quot;: &quot;Narrator&quot;
+    }
+  },
+  &quot;timing&quot;: {
+    &quot;gapSentence&quot;: 0.24,
+    &quot;gapTurn&quot;: 0.44,
+    &quot;lead&quot;: 0.16,
+    &quot;tail&quot;: 0.58
+  },
+  &quot;scenes&quot;: [
+    {
+      &quot;id&quot;: &quot;hello&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;a&quot;,
+          &quot;text&quot;: &quot;This video was made by Narova, on this machine, from one command.&quot;
+        }
+      ],
+      &quot;visual&quot;: {
+        &quot;type&quot;: &quot;stack&quot;,
+        &quot;style&quot;: {
+          &quot;direction&quot;: &quot;column&quot;,
+          &quot;align&quot;: &quot;center&quot;,
+          &quot;background&quot;: {
+            &quot;type&quot;: &quot;linear&quot;,
+            &quot;angle&quot;: 160,
+            &quot;stops&quot;: [
+              {
+                &quot;color&quot;: &quot;#0e0e13&quot;,
+                &quot;at&quot;: 0
+              },
+              {
+                &quot;color&quot;: &quot;#17171f&quot;,
+                &quot;at&quot;: 1
+              }
+            ]
+          }
+        },
+        &quot;children&quot;: [
+          {
+            &quot;type&quot;: &quot;rect&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 116,
+              &quot;background&quot;: &quot;transparent&quot;
+            }
+          },
+          {
+            &quot;type&quot;: &quot;text&quot;,
+            &quot;text&quot;: &quot;npx narova demo&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 54,
+              &quot;fontSize&quot;: 44,
+              &quot;fontWeight&quot;: 800,
+              &quot;color&quot;: &quot;#f5f5f5&quot;,
+              &quot;textAlign&quot;: &quot;center&quot;
+            },
+            &quot;enter&quot;: {
+              &quot;type&quot;: &quot;rise&quot;,
+              &quot;duration&quot;: 0.6
+            }
+          },
+          {
+            &quot;type&quot;: &quot;rect&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 30,
+              &quot;background&quot;: &quot;transparent&quot;
+            }
+          },
+          {
+            &quot;type&quot;: &quot;group&quot;,
+            &quot;style&quot;: {
+              &quot;width&quot;: 180,
+              &quot;height&quot;: 180
+            },
+            &quot;enter&quot;: {
+              &quot;type&quot;: &quot;pop&quot;,
+              &quot;duration&quot;: 0.55
+            },
+            &quot;drift&quot;: &quot;in&quot;,
+            &quot;children&quot;: [
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;width&quot;: 180,
+                  &quot;height&quot;: 180,
+                  &quot;fill&quot;: &quot;transparent&quot;,
+                  &quot;borderWidth&quot;: 3,
+                  &quot;borderColor&quot;: &quot;#2ee6d6&quot;
+                }
+              },
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;position&quot;: &quot;absolute&quot;,
+                  &quot;x&quot;: 84,
+                  &quot;y&quot;: -6,
+                  &quot;width&quot;: 12,
+                  &quot;height&quot;: 12,
+                  &quot;fill&quot;: &quot;#2ee6d6&quot;
+                }
+              },
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;position&quot;: &quot;absolute&quot;,
+                  &quot;x&quot;: 156,
+                  &quot;y&quot;: 120,
+                  &quot;width&quot;: 12,
+                  &quot;height&quot;: 12,
+                  &quot;fill&quot;: &quot;#a0a0a8&quot;
+                }
+              },
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;position&quot;: &quot;absolute&quot;,
+                  &quot;x&quot;: 12,
+                  &quot;y&quot;: 120,
+                  &quot;width&quot;: 12,
+                  &quot;height&quot;: 12,
+                  &quot;fill&quot;: &quot;#a0a0a8&quot;
+                }
+              },
+              {
+                &quot;type&quot;: &quot;path&quot;,
+                &quot;d&quot;: &quot;M38 30 L74 50 L38 70 Z&quot;,
+                &quot;viewBox&quot;: &quot;0 0 100 100&quot;,
+                &quot;style&quot;: {
+                  &quot;position&quot;: &quot;absolute&quot;,
+                  &quot;x&quot;: 48,
+                  &quot;y&quot;: 48,
+                  &quot;width&quot;: 84,
+                  &quot;height&quot;: 84,
+                  &quot;fill&quot;: &quot;#f5f5f5&quot;
+                }
+              }
+            ]
+          },
+          {
+            &quot;type&quot;: &quot;rect&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 30,
+              &quot;background&quot;: &quot;transparent&quot;
+            }
+          },
+          {
+            &quot;type&quot;: &quot;text&quot;,
+            &quot;text&quot;: &quot;scene-scripted video, synthesized locally&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 30,
+              &quot;fontSize&quot;: 20,
+              &quot;color&quot;: &quot;#a0a0a8&quot;,
+              &quot;textAlign&quot;: &quot;center&quot;
+            },
+            &quot;enter&quot;: {
+              &quot;type&quot;: &quot;fade&quot;,
+              &quot;at&quot;: 0.5,
+              &quot;duration&quot;: 0.5
+            }
+          }
+        ]
+      }
+    },
+    {
+      &quot;id&quot;: &quot;yours&quot;,
+      &quot;vo&quot;: [
+        {
+          &quot;who&quot;: &quot;a&quot;,
+          &quot;text&quot;: &quot;Your story goes here. Edit this file and build again.&quot;
+        }
+      ],
+      &quot;visual&quot;: {
+        &quot;type&quot;: &quot;stack&quot;,
+        &quot;style&quot;: {
+          &quot;direction&quot;: &quot;column&quot;,
+          &quot;align&quot;: &quot;center&quot;,
+          &quot;background&quot;: {
+            &quot;type&quot;: &quot;linear&quot;,
+            &quot;angle&quot;: 160,
+            &quot;stops&quot;: [
+              {
+                &quot;color&quot;: &quot;#0e0e13&quot;,
+                &quot;at&quot;: 0
+              },
+              {
+                &quot;color&quot;: &quot;#17171f&quot;,
+                &quot;at&quot;: 1
+              }
+            ]
+          }
+        },
+        &quot;children&quot;: [
+          {
+            &quot;type&quot;: &quot;rect&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 140,
+              &quot;background&quot;: &quot;transparent&quot;
+            }
+          },
+          {
+            &quot;type&quot;: &quot;text&quot;,
+            &quot;text&quot;: &quot;What would you like to make?&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 50,
+              &quot;fontSize&quot;: 38,
+              &quot;fontWeight&quot;: 800,
+              &quot;color&quot;: &quot;#f5f5f5&quot;,
+              &quot;textAlign&quot;: &quot;center&quot;
+            },
+            &quot;enter&quot;: {
+              &quot;type&quot;: &quot;rise&quot;,
+              &quot;duration&quot;: 0.6
+            }
+          },
+          {
+            &quot;type&quot;: &quot;rect&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 44,
+              &quot;background&quot;: &quot;transparent&quot;
+            }
+          },
+          {
+            &quot;type&quot;: &quot;stack&quot;,
+            &quot;style&quot;: {
+              &quot;direction&quot;: &quot;row&quot;,
+              &quot;width&quot;: 120,
+              &quot;height&quot;: 24,
+              &quot;align&quot;: &quot;center&quot;,
+              &quot;gap&quot;: 24
+            },
+            &quot;children&quot;: [
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;width&quot;: 14,
+                  &quot;height&quot;: 14,
+                  &quot;fill&quot;: &quot;#a0a0a8&quot;
+                },
+                &quot;enter&quot;: {
+                  &quot;type&quot;: &quot;pop&quot;,
+                  &quot;at&quot;: 0.15,
+                  &quot;duration&quot;: 0.4
+                }
+              },
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;width&quot;: 18,
+                  &quot;height&quot;: 18,
+                  &quot;fill&quot;: &quot;#2ee6d6&quot;
+                },
+                &quot;enter&quot;: {
+                  &quot;type&quot;: &quot;pop&quot;,
+                  &quot;at&quot;: 0.4,
+                  &quot;duration&quot;: 0.4
+                }
+              },
+              {
+                &quot;type&quot;: &quot;circle&quot;,
+                &quot;style&quot;: {
+                  &quot;width&quot;: 14,
+                  &quot;height&quot;: 14,
+                  &quot;fill&quot;: &quot;#a0a0a8&quot;
+                },
+                &quot;enter&quot;: {
+                  &quot;type&quot;: &quot;pop&quot;,
+                  &quot;at&quot;: 0.65,
+                  &quot;duration&quot;: 0.4
+                }
+              }
+            ]
+          },
+          {
+            &quot;type&quot;: &quot;rect&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 44,
+              &quot;background&quot;: &quot;transparent&quot;
+            }
+          },
+          {
+            &quot;type&quot;: &quot;text&quot;,
+            &quot;text&quot;: &quot;narova-demo/reel.config.mjs — this text, this voice, this render&quot;,
+            &quot;style&quot;: {
+              &quot;height&quot;: 30,
+              &quot;fontSize&quot;: 19,
+              &quot;color&quot;: &quot;#a0a0a8&quot;,
+              &quot;textAlign&quot;: &quot;center&quot;
+            },
+            &quot;enter&quot;: {
+              &quot;type&quot;: &quot;fade&quot;,
+              &quot;at&quot;: 0.6,
+              &quot;duration&quot;: 0.5
+            }
+          }
+        ]
+      }
+    }
+  ]
+}
+</code></pre>
+        </details>
+        </div>
+      </section>
+
+      <section class="gallery-step remix" aria-labelledby="narova-one-command-demo-remix">
+        <div class="step-label"><span>03</span><h3 id="narova-one-command-demo-remix">Remix</h3></div>
+        <p>Download the verified project, then run the exact local archive command.</p>
+        <div class="remix-command"><code>narova remix narova-one-command-demo.narova --dir narova-one-command-demo-remix</code><button type="button" data-copy-command="narova remix narova-one-command-demo.narova --dir narova-one-command-demo-remix">Copy</button></div>
+        <a class="archive-download" href="projects/narova-one-command-demo.narova" download>Download narova-one-command-demo.narova <span aria-hidden="true">↓</span></a>
+        <p class="trust-note">Archives are untrusted input. Inspect first; building executes authored project source with your account's ambient authority.</p>
+      </section>
+    </article>
+  </section>
+  <section class="curation-note">
+    <p class="kicker">CURATED, NOT INGESTED</p>
+    <h2>Static by design.</h2>
+    <p>This page is generated from a checked-in, human-reviewed index. Archives are verified before publication; browsers never unpack or execute project content. Gallery update: 2026-08-20.</p>
+  </section>
+</main>
+<footer class="footer"><span>© 2026 Narova · MIT</span><span><a href="../">Home</a> · <a href="../changelog/">Changelog</a> · <a href="https://github.com/ammar-hasan/narova">GitHub</a></span></footer>
+<script src="../vendor/gsap.min.js"></script>
+<script src="../vendor/ScrollTrigger.min.js"></script>
+<script src="../vendor/lenis.min.js"></script>
+<script src="../app.js"></script>
+</body>
+</html>

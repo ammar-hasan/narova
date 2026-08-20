@@ -1,0 +1,66 @@
+{
+  "format": "narova.gallery/1",
+  "updated": "2026-08-20",
+  "entries": [
+    {
+      "id": "narova-skill-reel",
+      "title": "Prompt. Voice. Motion.",
+      "summary": "The 30-second first-party reel that explains Narova through its own narrated, cue-driven pipeline.",
+      "archive": "docs/explore/projects/narova-skill-reel.narova",
+      "archiveSha256": "24717f22f5e0eb4dac91f5b6949d7591b3eb4de11e2faf9b6a66c36e3a830b30",
+      "producingVersion": "0.31.14",
+      "video": "docs/assets/narova-skill-reel.mp4",
+      "videoSha256": "e9223eca17df65f84eacbbe546712eb244735e7fc76f9296a86baae8aacbb027",
+      "captions": "docs/assets/narova-skill-reel.vtt",
+      "poster": "docs/assets/poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "Release check passed with three documented performance/compatibility warnings and no errors."
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "First-party Narova project reconstructed from the published reel source, converted losslessly to static JSON authoring, and packed by the unreleased local tree reporting version 0.31.14.",
+        "lineage": "No recorded remix parent."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, English WebVTT captions, poster, text fallback, and script-free inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party Narova source and rendered media; no embedded third-party visual or audio assets.",
+        "credits": ["Narova project and render — Ammar Hasan"]
+      }
+    },
+    {
+      "id": "narova-one-command-demo",
+      "title": "One command, finished video",
+      "summary": "The built-in two-scene activation demo, synthesized and rendered locally through the ordinary Narova pipeline.",
+      "archive": "docs/explore/projects/narova-one-command-demo.narova",
+      "archiveSha256": "25c25fa256a3a1d01b0c7e460bb608854a2eb0cc61c24c954d9bc708aaa4baa9",
+      "producingVersion": "0.31.14",
+      "video": "docs/explore/assets/narova-one-command-demo.mp4",
+      "videoSha256": "7e955f927568902de76105196da3ea69acdc2b4de2bed79971f5bac144c862b1",
+      "captions": "docs/explore/assets/narova-one-command-demo.vtt",
+      "poster": "docs/explore/assets/narova-one-command-demo-poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "Release check passed with no warnings."
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "First-party built-in demo produced by a real local Piper synthesis and Narova No-Browser render on 2026-08-20, then packed from equivalent static JSON authoring by the unreleased local tree reporting version 0.31.14.",
+        "lineage": "No recorded remix parent."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, English WebVTT captions, poster, text fallback, and script-free inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party Narova source and rendered media; no embedded third-party visual or audio assets.",
+        "credits": ["Narova project and render — Ammar Hasan"]
+      }
+    }
+  ]
+}
