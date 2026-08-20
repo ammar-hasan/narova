@@ -49,8 +49,13 @@ async function loadProjectConfig(projectDir, explicitFile) {
   if (!file || !fs.existsSync(file)) {
     throw new Error(`No config found. Expected one of ${CANDIDATES.join(', ')} in ${path.resolve(projectDir || '.')} or any parent directory`);
   }
+  const sourceBytes = fs.readFileSync(file);
   const raw = await loadConfigFile(file);
-  return { raw, file, dir: path.dirname(file) };
+  const afterLoad = fs.readFileSync(file);
+  if (!sourceBytes.equals(afterLoad)) {
+    throw new Error(`Config changed while it was being loaded: ${file}`);
+  }
+  return { raw, file, dir: path.dirname(file), sourceBytes };
 }
 
 module.exports = { findConfig, loadConfigFile, loadProjectConfig, CANDIDATES };

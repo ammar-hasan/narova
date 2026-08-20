@@ -73,8 +73,10 @@ absent optional keys are reported as skips.
 | `narova release restore <name>` | copy a saved release back to `out/manifest.json`. | instant |
 | `narova release remove <name>` | delete a saved release. | instant |
 | `narova branch save <name> --rationale "…"` | require a current passing `shots --proof` receipt, then transactionally publish the editable snapshot plus a durable, project-bound proof bundle containing byte-hashed resolved config, manifest, timings, contact sheets, every audited frame, candidate status, rationale, stable semantic identities, and proof-time CLI overrides. Another project's same-named branch cannot satisfy the release gate. Ambitious release requires 2–3 content-distinct branches, one approved selection, and exact expansion lineage in the brief. Later added/edited snapshot files, timing, frame, receipt, or evidence changes invalidate selection; locked compare-and-swap replacement preserves the prior branch on failure or a concurrent stale save. | instant |
+| `narova branch save <name> --rationale "…" --judge-assertion <id> [--video <file>]` | focused Video CI proof save: additionally judge one receipt-bound encoded artifact and preserve its actual bytes plus the assertion-linked observation in the same branch transaction. The rationale is the creator's hypothesis. Missing/stale binding, unknown focus, or changed evidence fails before replacement. | bounded local decode + copy |
+| `narova branch compare <a> <b> [c]` | verify and display 2–3 unique current-project proof branches focused on one assertion. Preserves requested order and exposes each hypothesis, status, artifact identity, observation, evidence, interpretation, confidence, classification, and production mapping. Read-only and offline: no judgement rerun, render, score, ranking, recommendation, selection, restore, or mutation. Rejected/archived attempts remain comparable. | instant + stored-byte hashing |
 | `narova branch set <name> --status approved|rejected|archived` | record the proof decision before expanding one selected branch. | instant |
-| `narova branch list|show` | compare saved proof directions, rationale, status, and parentage. | instant |
+| `narova branch list|show` | inspect saved proof directions, rationale, status, parentage, and stored focused experiment metadata when present. | instant |
 
 `narova render` was removed in 0.3.0. Use `compose` or `build`.
 Walkthrough config, auth, semantic locator, security, timing, and layout details:
@@ -94,10 +96,10 @@ Renderer providers are different: both are bundled, local, and free. See
   path to a clean 10–20s recording (install once: `narova-setup --chatterbox`).
 - `--renderer hyperframes|no-browser` — renderer provider. HyperFrames is the
   default; no-browser is browserless and requires `scene.visual` on every scene.
-- `--video <file>` — `judge` only: inspect this local, self-contained encoded
-  video instead of `<project>/out/video.mp4`. Indirect playlists are not video
-  artifacts; optional shared output context is used only when a matching build
-  evidence receipt binds it to the selected bytes.
+- `--video <file>` — `judge` or focused `branch save`: inspect this local,
+  self-contained encoded video instead of `<project>/out/video.mp4`. Indirect
+  playlists are not video artifacts; optional shared output context is used
+  only when a matching build evidence receipt binds it to the selected bytes.
 - `--reuse` — skip TTS, reuse `out/audio` + `out/timings.json`.
   Meant for visual-only edits; if spoken text, scene topology, or silent runtime
   changed since the last synth, `--reuse` is ignored with a note and the needed

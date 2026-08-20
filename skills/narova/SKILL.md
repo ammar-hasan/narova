@@ -170,7 +170,7 @@ user's approval before any consequential external mutation.
    fill `creative-brief.md` around creative intent rather than a default film
    grammar. Build 2–3 *small* visual proofs, save each with `branch save <name>
    --rationale "..."`, compare their rendered evidence, approve one, and expand
-   only that winner. Restore the winner (its saved CLI overrides are reapplied),
+   only the creator-selected proof. Restore that proof (its saved CLI overrides are reapplied),
    then copy the branch and exact `proofIdentity` from `branch show <name>` into
    the brief's `Expanded from proof branch` and `Expanded proof identity` fields.
    Proof selection is project-bound; never reuse another
@@ -216,6 +216,13 @@ user's approval before any consequential external mutation.
    When a finding needs exploration, `narova judge --plan` adds plural,
    unranked options—including keeping the work unchanged—without selecting,
    branching, rendering, repairing, or mutating anything.
+   To preserve a real attempt, run `narova shots --motion --proof`, then
+   `narova branch save <name> --rationale "<hypothesis>" --judge-assertion <id>`.
+   After separately authoring/rendering/saving two or three attempts for that
+   assertion, use `narova branch compare <a> <b> [c]`. It verifies stored proof
+   and encoded evidence but does not rerun judgement, rank, recommend, select,
+   restore, render, or mutate. Rejected/archived attempts remain creative memory;
+   choose explicitly with the existing branch lifecycle.
    Verify the encoded contact sheet against the approved brief.
 11. When delivery needs attribution or an evidence summary, run `provenance`
    (or `provenance --json`) and `assets credits --format

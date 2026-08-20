@@ -35,6 +35,10 @@ const PROCESS_DIR = path.join(INTERNAL_DIR, 'processes');
 const PUBLICATION_BACKUPS_DIR = path.join(INTERNAL_DIR, 'publication-backups');
 const RESTORE_MARKER = '.restored-manifest.json';
 const RESTORE_OVERRIDES = '.restored-overrides.json';
+const SNAPSHOT_RESERVED_NAMES = new Set([
+  'manifest.json', 'timings.json', '.audio-fingerprint', '.timings-fingerprint',
+  RESTORE_OVERRIDES, 'theme.css', 'assets', 'claims.md', 'sources.md', 'assets.lock.json',
+]);
 
 function ensureDir() {
   if (!fs.existsSync(RELEASES_DIR)) fs.mkdirSync(RELEASES_DIR, { recursive: true });
@@ -98,10 +102,8 @@ function findConfigInDir(dir) {
  * the given directory to find reel.config.*. Falls back to the directory
  * itself when no config file is found. */
 function resolveProjectDir(fromDir) {
-  // Dynamic require to avoid circular deps at module load time.
-  const { loadConfigFile } = require('./config');
   let dir = path.resolve(fromDir);
-  for (let i = 0; i < 16; i++) {
+  for (;;) {
     for (const name of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
       if (fs.existsSync(path.join(dir, name))) return dir;
     }
@@ -285,9 +287,14 @@ async function save(manifestPath, name, opts = {}) {
   }
 
   // Resolve the project root properly.
-  const projectDir = opts.projectDir
-    ? resolveProjectDir(opts.projectDir)
-    : resolveProjectDir(path.resolve(path.dirname(manifestPath), '..'));
+  // A pinned explicit config defines its own source root. Walking upward here
+  // could silently pair its raw data with another ancestor reel.config.* and
+  // omit relative scene files from the proof snapshot.
+  const projectDir = opts.configSource && opts.configSource.file
+    ? path.dirname(path.resolve(opts.configSource.file))
+    : opts.projectDir
+      ? resolveProjectDir(opts.projectDir)
+      : resolveProjectDir(path.resolve(path.dirname(manifestPath), '..'));
 
   if (projectDir && fs.existsSync(projectDir)) {
     let assetLock = null;
@@ -300,13 +307,23 @@ async function save(manifestPath, name, opts = {}) {
           .map(result => `${result.file} (${result.issues.join('; ')})`).join(', ')}`);
       }
     }
-    // Preserve original config filename.
-    for (const fname of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
-      const cf = path.join(projectDir, fname);
-      if (fs.existsSync(cf)) {
-        fs.copyFileSync(cf, path.join(releaseDir, fname));
-        saved.push(fname);
-        break;
+    // Preserve the exact config bytes resolved by a focused caller when they
+    // are supplied; otherwise retain ordinary discovery behavior.
+    if (opts.configSource && Buffer.isBuffer(opts.configSource.bytes)) {
+      const fname = path.basename(opts.configSource.file);
+      if (SNAPSHOT_RESERVED_NAMES.has(fname)) {
+        throw new Error(`focused proof config name "${fname}" conflicts with Narova snapshot metadata`);
+      }
+      fs.writeFileSync(path.join(releaseDir, fname), opts.configSource.bytes);
+      saved.push(fname);
+    } else {
+      for (const fname of ['reel.config.mjs', 'reel.config.js', 'reel.config.json', 'reel.config.cjs']) {
+        const cf = path.join(projectDir, fname);
+        if (fs.existsSync(cf)) {
+          fs.copyFileSync(cf, path.join(releaseDir, fname));
+          saved.push(fname);
+          break;
+        }
       }
     }
     // theme.css
@@ -358,10 +375,12 @@ async function save(manifestPath, name, opts = {}) {
     // entry back to the project root, so the project-relative path round-trips
     // exactly and the restored config can resolve its file refs again.
     try {
-      const configFile = findConfigInDir(projectDir);
+      const configFile = opts.configSource && opts.configSource.file
+        ? opts.configSource.file : findConfigInDir(projectDir);
       if (configFile) {
         const { loadConfigFile } = require('./config');
-        const raw = await loadConfigFile(configFile);
+        const raw = opts.configSource && opts.configSource.raw
+          ? opts.configSource.raw : await loadConfigFile(configFile);
         const snapshotRef = ref => {
           if (typeof ref !== 'string' || !ref.trim() || /^(?:https?:)?\/\//i.test(ref) || path.isAbsolute(ref)) return;
           const refPath = path.resolve(projectDir, ref);
@@ -462,7 +481,7 @@ async function save(manifestPath, name, opts = {}) {
  * branch.json shape:
  *   { rationale, status, parent, evidence, evidenceHashes, proofReceipt,
  *     proofReceiptSha256, proofIdentity, snapshotIdentity, snapshotHashes, snapshotManifestSha256,
- *     projectIdentity, created }
+ *     projectIdentity, videoCi?, videoCiIdentity?, created }
  *   status: exploring | candidate | approved | rejected | archived
  *   parent: optional branch name this was derived from */
 const BRANCH_STATUSES = new Set(['exploring', 'candidate', 'approved', 'rejected', 'archived']);
@@ -503,6 +522,8 @@ function saveBranch(name, meta = {}) {
     snapshotHashes: meta.snapshotHashes && typeof meta.snapshotHashes === 'object' ? meta.snapshotHashes : {},
     snapshotManifestSha256: meta.snapshotManifestSha256 || '',
     projectIdentity: meta.projectIdentity || '',
+    ...(meta.videoCi ? { videoCi: meta.videoCi } : {}),
+    ...(meta.videoCiIdentity ? { videoCiIdentity: meta.videoCiIdentity } : {}),
     ...(meta.parent ? { parent: meta.parent } : {}),
     };
     return writeBranch(name, branch);

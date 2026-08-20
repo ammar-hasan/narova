@@ -18,6 +18,10 @@ const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
 const { judge, formatJudgement } = require('../src/judge');
 const { interventionPlan, formatInterventionPlan } = require('../src/intervention-plan');
+const {
+  captureBranchExperiment, branchExperimentIdentity, verifyBranchExperiment,
+  branchComparison, formatBranchComparison,
+} = require('../src/branch-experiment');
 const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = require('../src/motion-audit');
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
@@ -36,7 +40,7 @@ const { retime } = require('../src/retime');
 const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const revisions = require('../src/revisions');
-const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, branchDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
+const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, releasePath, branchDir, resolveProjectDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RELEASES_DIR, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
 const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
 const {
   addProvider, getProvider, isProviderName, listProviders, removeProvider, doctorProvider, providersDir,
@@ -157,7 +161,7 @@ function operationName(cmd, positionals, flags = {}) {
     assets: ['import', 'download', 'providers', 'search', 'acquire', 'list', 'untrack', 'verify', 'credits'],
     walkthrough: ['explore', 'capture', 'status'],
     release: ['save', 'list', 'restore', 'remove'],
-    branch: ['save', 'list', 'set', 'show'],
+    branch: ['save', 'compare', 'list', 'set', 'show'],
     history: ['list', 'annotate', 'compare'],
     providers: ['add', 'list', 'remove', 'doctor'],
     renderers: ['list', 'doctor'],
@@ -208,11 +212,14 @@ function preDispatchOperation(argv) {
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
 
 function validateInvocationFlags(flags, cmd) {
   if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
-  if (flags.video != null && cmd !== 'judge') invocationError('--video is only valid with narova judge');
+  if (flags['judge-assertion'] != null && cmd !== 'branch') invocationError('--judge-assertion is only valid with narova branch save');
+  if (flags.video != null && cmd !== 'judge' && !(cmd === 'branch' && flags['judge-assertion'])) {
+    invocationError('--video is only valid with narova judge or focused narova branch save');
+  }
   const positiveNumber = (name, max = Infinity) => {
     if (flags[name] == null) return;
     const value = Number(flags[name]);
@@ -327,7 +334,7 @@ function assetRegistrationFromFlags(flags, defaults = {}) {
 
 async function loadResolved(flags, { readOnly = false, ignoreRestore = false } = {}) {
   const projectDir = flags.project || '.';
-  const { raw, dir, file } = await loadProjectConfig(projectDir, flags.config);
+  const { raw, dir, file, sourceBytes } = await loadProjectConfig(projectDir, flags.config);
   if (flags.variant != null) {
     const declared = Array.isArray(raw.variants)
       ? raw.variants.map(item => item && item.id).filter(Boolean)
@@ -384,7 +391,10 @@ async function loadResolved(flags, { readOnly = false, ignoreRestore = false } =
       }
     } catch { /* malformed or stale restore metadata cannot change layout */ }
   }
-  return { config, projectDir: dir, effectiveOverrides, restoredOverrides, cliOverrides, raw, configFile: file };
+  return {
+    config, projectDir: dir, effectiveOverrides, restoredOverrides, cliOverrides,
+    raw, configFile: file, configSourceBytes: sourceBytes,
+  };
 }
 
 const outDirOf = (flags, projectDir) =>
@@ -545,8 +555,12 @@ Commands:
   release remove <n>   delete a saved release
   branch save <name>   snapshot the current small proof as a candidate branch
                            --rationale "why this direction may serve the brief"
+                           --judge-assertion <id> preserves the receipt-bound
+                             encoded proof and its focused observation
+  branch compare <a> <b> [c]  compare 2–3 intact proofs for one assertion
+                           read-only; no score, ranking, recommendation, or selection
   branch set <name>    approve/reject/archive a proof branch with --status
-  branch list|show     compare saved proof directions and their rationale
+  branch list|show     inspect saved proof directions and their rationale
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> selected renderer project + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
@@ -636,7 +650,8 @@ Options:
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
-  --video <file>           judge: self-contained encoded artifact (default: <project>/out/video.mp4)
+  --video <file>           judge/focused branch save: selected encoded artifact
+                           (default: <project>/out/video.mp4)
   --dir <dir>              open/remix target directory
   --inspect                open: verify and summarize without extraction
   --overwrite              open/remix: replace an occupied target atomically
@@ -1602,16 +1617,23 @@ async function main() {
 
     case 'branch': {
       const sub = positionals[1] || 'list';
+      if (sub !== 'save' && (flags['judge-assertion'] != null || flags.video != null)) {
+        usageError('--judge-assertion and --video are only valid with narova branch save');
+      }
       if (sub === 'save') {
         const name = positionals[2];
         const rationale = String(flags.rationale || '').trim();
+        const focusAssertion = String(flags['judge-assertion'] || '').trim();
         if (!name || !rationale) {
-          usageError('usage: narova branch save <name> --rationale "why this small proof may serve the brief" [--status candidate|exploring] [--parent <name>]');
+          usageError('usage: narova branch save <name> --rationale "why this small proof may serve the brief" [--judge-assertion <id>] [--video <file>] [--status candidate|exploring] [--parent <name>]');
         }
+        if (flags.video && !focusAssertion) usageError('--video on branch save requires --judge-assertion <id>');
         let status;
         try { status = validBranchStatus(flags.status || 'candidate'); }
         catch (error) { thrownUsageError(error); }
-        const { config, projectDir, effectiveOverrides } = await loadResolved(flags);
+        const {
+          config, projectDir, configFile, configSourceBytes, raw, effectiveOverrides,
+        } = await loadResolved(flags);
         const out = outDirOf(flags, projectDir);
         const mp = path.join(out, 'manifest.json');
         if (!fs.existsSync(mp)) {
@@ -1631,13 +1653,35 @@ async function main() {
         let staged = null;
         let published;
         try {
-          staged = await saveRelease(mp, stagedName, { projectDir, resolvedOverrides: effectiveOverrides });
+          staged = await saveRelease(mp, stagedName, {
+            projectDir,
+            resolvedOverrides: effectiveOverrides,
+            ...(focusAssertion ? { configSource: { file: configFile, bytes: configSourceBytes, raw } } : {}),
+          });
+          let experimentReport = null;
+          if (focusAssertion) {
+            const stagedConfig = path.join(staged.dir, path.basename(configFile));
+            if (!configSourceBytes || !fs.readFileSync(stagedConfig).equals(configSourceBytes)) {
+              throw new Error('focused Video CI proof config changed before its snapshot was captured');
+            }
+            const defaultVideo = config.variant ? `video-${config.variant}.mp4` : 'video.mp4';
+            experimentReport = judge(config, {
+              projectDir,
+              outDir: out,
+              configFile,
+              video: flags.video ? path.resolve(projectDir, flags.video) : path.join(out, defaultVideo),
+            });
+          }
           const currentProof = verifyProofReceipt(config, out);
           if (!currentProof.ok) throw new Error(currentProof.reason);
           const metadataDir = branchDir(staged.name);
           fs.mkdirSync(metadataDir, { recursive: true });
           const identity = projectIdentity(projectDir);
           const bundle = writeProofBundle(out, currentProof, metadataDir, staged.dir);
+          const videoCi = experimentReport
+            ? captureBranchExperiment(experimentReport, focusAssertion, metadataDir, projectDir)
+            : null;
+          const videoCiIdentity = videoCi ? branchExperimentIdentity(videoCi) : null;
           const stagedBranch = saveBranch(staged.name, {
             rationale,
             status,
@@ -1645,9 +1689,13 @@ async function main() {
             ...bundle,
             snapshotManifestSha256: hashFile(path.join(staged.dir, 'manifest.json')),
             projectIdentity: identity,
+            ...(videoCi ? { videoCi, videoCiIdentity } : {}),
           });
           if (!verifyProofBundle(metadataDir, staged.dir, stagedBranch, identity)) {
             throw new Error('staged proof bundle failed integrity verification');
+          }
+          if (videoCi && !verifyBranchExperiment(metadataDir, stagedBranch.videoCi, stagedBranch.videoCiIdentity)) {
+            throw new Error('staged Video CI experiment failed integrity verification');
           }
           const expectedStagedRevision = branchRevision(staged.name);
           published = publishStagedBranch(staged.name, name, { expectedRevision, expectedStagedRevision });
@@ -1659,7 +1707,12 @@ async function main() {
         }
         const branch = readBranch(published.name);
         console.log(`proof branch "${published.name}" saved: status=${branch.status} evidence=${branch.evidence.length} proof=${branch.proofIdentity} rationale="${branch.rationale}"`);
-        console.log('keep this branch small; compare 2–3 proofs, approve one, then expand only the winner');
+        if (branch.videoCi) {
+          console.log(`focused Video CI proof preserved: assertion=${branch.videoCi.focusAssertion} artifact=${branch.videoCi.artifact.sha256}`);
+          console.log('compare 2–3 focused proofs; Narova will not rank or select among them');
+        } else {
+          console.log('keep this branch small; compare 2–3 proofs, then let the creator choose');
+        }
         mData({
           name: published.name,
           status: branch.status,
@@ -1668,9 +1721,53 @@ async function main() {
           proofIdentity: branch.proofIdentity,
           snapshotIdentity: branch.snapshotIdentity,
           evidence: branch.evidence,
+          videoCi: branch.videoCi || null,
+          videoCiIdentity: branch.videoCiIdentity || null,
         });
         mArtifact(published.dir, 'archive');
         mArtifact(published.metadataDir, 'proof-metadata');
+        return;
+      }
+      if (sub === 'compare') {
+        const requestedNames = positionals.slice(2);
+        if (requestedNames.length < 2 || requestedNames.length > 3) {
+          usageError('usage: narova branch compare <name> <name> [name]');
+        }
+        if (!fs.existsSync(RELEASES_DIR)) throw new Error('no proof branch store exists');
+        const names = requestedNames.map(name => path.basename(releasePath(name)));
+        const nameKeys = names.map(name => name.toLowerCase().replace(/[. ]+$/g, ''));
+        if (new Set(nameKeys).size !== names.length) {
+          usageError('branch comparison needs two or three unique branch names');
+        }
+        const projectDir = resolveProjectDir(flags.config ? path.dirname(path.resolve(flags.config)) : (flags.project || '.'));
+        const identity = projectIdentity(projectDir);
+        const entries = names.map(name => {
+          const revision = branchRevision(name);
+          const branch = readBranch(name);
+          if (!branch) throw new Error(`branch "${name}" not found`);
+          validBranchStatus(branch.status);
+          if (typeof branch.rationale !== 'string' || !branch.rationale.trim()) {
+            throw new Error(`branch "${name}" has no creator rationale`);
+          }
+          if (!verifyProofBundle(branchDir(name), releasePath(name), branch, identity)) {
+            throw new Error(`branch "${name}" has invalid, stale, or other-project proof evidence`);
+          }
+          const metadataDir = branchDir(name);
+          if (!verifyBranchExperiment(metadataDir, branch.videoCi, branch.videoCiIdentity)) {
+            throw new Error(`branch "${name}" has no intact focused Video CI experiment`);
+          }
+          return { name, branch, metadataDir, revision };
+        });
+        const focusAssertion = entries[0].branch.videoCi.focusAssertion;
+        const mismatch = entries.find(entry => entry.branch.videoCi.focusAssertion !== focusAssertion);
+        if (mismatch) {
+          throw new Error(`branch "${mismatch.name}" focuses on a different assertion`);
+        }
+        const comparison = branchComparison(entries);
+        const changed = entries.find(entry => branchRevision(entry.name) !== entry.revision);
+        if (changed) throw new Error(`branch "${changed.name}" changed during comparison`);
+        console.log(formatBranchComparison(comparison));
+        mSetData({ comparison });
         return;
       }
       if (sub === 'list') {
@@ -1736,7 +1833,7 @@ async function main() {
         else console.log(JSON.stringify(branch, null, 2));
         return;
       }
-      usageError('usage: narova branch save|list|set|show [name]');
+      usageError('usage: narova branch save|compare|list|set|show [name]');
     }
 
     case 'render':

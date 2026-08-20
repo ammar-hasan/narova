@@ -31,7 +31,8 @@ Agents calling the CLI directly can use the versioned
 - **Cue-timed reveals** — elements stay hidden until the voice reaches them. Visuals land on the beat.
 - **Creative confidence before render cost** — ambitious projects save 2–3
   small, orthogonal proof branches with rationale, select one against explicit
-  rejection criteria, and expand only the winner—not three complete videos.
+  rejection criteria, and expand only the creator-selected proof—not three
+  complete videos.
 - **A genuinely raw canvas** — zero-style scenes own the full frame with no
   implicit centering, max-width, gutter, or caption reserve. Patterns, chrome,
   and `safeLayout` are independent opt-ins; captions remain a default-on overlay
@@ -43,7 +44,9 @@ Agents calling the CLI directly can use the versioned
   timing, spatial hierarchy, and uncertainty, and maps observations back to
   production state. `narova judge --plan` adds plural, unranked intervention
   options—including keeping the work unchanged—without selecting or executing
-  one. Neither mode emits a universal quality score or changes the work.
+  one. Focused proof branches can preserve the actual encoded attempts and
+  compare their evidence without naming a winner. None of these surfaces emits
+  a universal quality score or quietly changes the work.
 - **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
   HyperFrames, or select Narova No-Browser for deterministic Skia + FFmpeg output
   on machines where no browser is available. No render service or fee.
@@ -244,6 +247,11 @@ narova preview --detach   # direct the film in HyperFrames Studio
 narova build --reuse --release  # fail-before-render final gate → out/video.mp4
 narova judge          # inspect intent vs the encoded result; read-only, scoreless
 narova judge --plan   # expand next-step options; unranked, no selection or mutation
+# for a risky assertion: run shots --motion --proof, then preserve this exact render
+narova branch save proof-a --rationale "what this attempt is testing" \
+  --judge-assertion silent-opening
+# author/render/save proof-b, then compare actual evidence; Narova chooses nothing
+narova branch compare proof-a proof-b
 ```
 
 You need: **Node 18+**, plus **ffmpeg** and **Python 3.10+** (the published
@@ -353,6 +361,17 @@ unchanged. Creative findings can also align to intent, embrace the rendered
 surprise, or compare a reversible branch; uncertain findings can clarify
 intent, gather evidence, or propose a cheap proof. Narova ranks, selects, and
 executes none of them. `--repair` remains unavailable.
+
+For a focused experiment, first build the attempt and create a current proof
+receipt with `narova shots --motion --proof`. Then save it with
+`narova branch save <name> --rationale "<hypothesis>" --judge-assertion <id>`;
+`--video <file>` may select a non-default receipt-bound render. Narova preserves
+the actual encoded bytes and that assertion's observation with the existing
+proof branch. After saving two or three attempts for the same assertion, run
+`narova branch compare <a> <b> [c]`. Comparison verifies and displays the
+stored evidence in requested order, but does not rank, recommend, select,
+restore, render, or mutate anything. Rejected and archived attempts remain
+inspectable creative memory; branch status is the creator's explicit decision.
 
 ### Two local renderer providers
 
@@ -533,6 +552,8 @@ narova remix <source> copy a local project/archive or public github: locator
 narova check          validate the config (fast, no side effects)
 narova judge          inspect the encoded result against creative assertions
 narova judge --plan   add plural, unranked intervention options; change nothing
+narova branch save    optionally preserve a rendered proof for one assertion
+narova branch compare compare 2–3 preserved proofs; no ranking or selection
 narova synth          make the audio + word timings
 narova compose        make the selected renderer project
 narova walkthrough    explore/capture/status narrated product demos

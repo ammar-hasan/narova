@@ -8,6 +8,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Video CI focused proof experiments.** Existing proof branches can now
+  preserve the actual receipt-bound encoded attempt and one assertion-linked
+  observation with `branch save --judge-assertion`. `branch compare` verifies
+  two or three same-focus proofs and presents their hypotheses and evidence in
+  requested order without scoring, ranking, recommending, selecting, restoring,
+  rendering, or mutating. Rejected and archived attempts remain creative memory.
 - **Video CI intervention planning.** `narova judge --plan` retains the full
   rendered-evidence judgement and adds deterministic, plural, unranked options
   for assertion-linked divergence and uncertainty. Every option set includes

@@ -109,7 +109,8 @@ operation may add fields in a later schema-1 release.
 | `release remove` | `{ name }` | none |
 | `branch list` | `{ branches[] }` | none |
 | `branch show` | the stored branch object | none |
-| `branch save` | branch identity, status, rationale, and proof fields | `archive` |
+| `branch save` | branch identity, status, rationale, proof fields, and optional `videoCi` focused experiment | `archive`, `proof-metadata` |
+| `branch compare` | `{ comparison }`; schema is `narova.branch-comparison/1` | none |
 | `branch set` | branch identity, status, and rationale | `branch-metadata` |
 | `renderers list` | `{ renderers[] }` | none |
 | `renderers doctor` | `{ renderer, ok, checks[] }` | none |
@@ -173,6 +174,25 @@ reduction. Options are deterministic and unranked; `selection` is null,
 `mutation` is `none`, and the command invokes no branch, proof, model, network,
 render, or repair work.
 
+### Focused Video CI proof experiments
+
+`narova branch save <name> --rationale <hypothesis> --judge-assertion <id>
+--json` extends the existing proof save transaction. It requires the current
+`shots --proof` receipt and a matching build-created Video CI evidence receipt,
+judges the selected `--video` (default `out/video.mp4`), and preserves the
+actual encoded bytes plus the one assertion-linked observation outside the
+restorable authored snapshot. A missing/stale binding, unknown assertion, or
+changed artifact is an operation failure and cannot replace the prior branch.
+
+`narova branch compare <a> <b> [c] --json` accepts exactly two or three unique,
+intact branches from the current project that focus on the same assertion. The
+`comparison` payload retains requested order and contains `score: null`,
+`ranking: null`, `selection: null`, and `mutation: "none"`, followed by each
+branch's creator rationale, lifecycle status, proof/artifact identities, and
+focused evidence. It does not rerun judgement, restore, render, call a model or
+network, rank, recommend, select, or write state. Rejected and archived proofs
+remain comparable; `branch set` is the creator's separate explicit decision.
+
 The removed `render` spelling is a usage error and directs callers to
 `compose` or `build`.
 
@@ -229,7 +249,11 @@ within `narova.result/1`.
 7. Perceive the encoded result: `narova judge --json`. Compare observations to
    authored assertions; preserve intentional surprises and resolve uncertainty
    with direct review or a more capable explicit perceiver.
-8. Verify: inspect build artifacts, run `narova review --contact-sheet --json`
+8. For a risky assertion, create a current `shots --motion --proof` receipt,
+   save each rendered attempt with `branch save --judge-assertion`, and compare
+   two or three with `branch compare --json`. Treat the output as evidence, not
+   a ranking; keep rejected attempts as creative memory and choose explicitly.
+9. Verify: inspect build artifacts, run `narova review --contact-sheet --json`
    and/or `narova shots --beats --json`, and use `--verify-motion` for the
    encoded audit. Treat exit 3 as a completed audit whose subject failed.
 
