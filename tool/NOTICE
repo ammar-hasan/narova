@@ -1,0 +1,16 @@
+Narova
+Copyright 2026 Ammar Hasan
+
+This product includes software and other components distributed under
+their own licenses. Notable third-party components:
+
+- Three.js (tool/vendor/three/*) is licensed under the MIT License.
+- @napi-rs/canvas (optional no-browser render dependency) is licensed under
+  the MIT License.
+- FFmpeg and FFprobe are invoked as external tools and are not linked into
+  Narova; their licenses apply to their own distribution.
+- Stock, icon, font, and media assets referenced by Narova retain their
+  respective third-party licenses as recorded in the asset registry.
+
+Apache License 2.0 applies to Narova's own source and first-party companion
+skills. See LICENSE for the full license text.

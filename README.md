@@ -11,7 +11,7 @@ video with local TTS, word-synced captions, and deterministic rendering.
 Agents calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
-[![License: MIT](https://img.shields.io/badge/license-MIT-d6f94c.svg)](./LICENSE)
+[![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
 [![Version](https://img.shields.io/badge/version-0.31.14-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
@@ -566,4 +566,4 @@ reconciles the CLI to its exact pinned npm release before use.
 
 ## License
 
-MIT — see [LICENSE](./LICENSE). Changes are tracked in [CHANGELOG.md](./CHANGELOG.md) and on the [changelog page](https://ammar-hasan.github.io/narova/changelog/).
+Apache-2.0 — see [LICENSE](./LICENSE). Changes are tracked in [CHANGELOG.md](./CHANGELOG.md) and on the [changelog page](https://ammar-hasan.github.io/narova/changelog/).

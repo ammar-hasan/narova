@@ -308,7 +308,7 @@ ${JSON.stringify({
     <p>This page is generated from a checked-in, human-reviewed index. Archives are verified before publication; browsers never unpack or execute project content. Gallery update: ${escapeHtml(index.updated)}.</p>
   </section>
 </main>
-<footer class="footer"><span>© 2026 Narova · MIT</span><span><a href="../">Home</a> · <a href="../changelog/">Changelog</a> · <a href="https://github.com/ammar-hasan/narova">GitHub</a></span></footer>
+<footer class="footer"><span>© 2026 Narova · Apache-2.0</span><span><a href="../">Home</a> · <a href="../changelog/">Changelog</a> · <a href="https://github.com/ammar-hasan/narova">GitHub</a></span></footer>
 <script src="../vendor/gsap.min.js"></script>
 <script src="../vendor/ScrollTrigger.min.js"></script>
 <script src="../vendor/lenis.min.js"></script>

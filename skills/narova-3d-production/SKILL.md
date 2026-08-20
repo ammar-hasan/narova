@@ -10,7 +10,7 @@ description: >
   a request says animation, cinematic, explainer, product video, Three.js, or
   render; ordinary 2D motion, browser walkthroughs, AI-generated clips, and
   direct render commands remain core Narova work.
-license: MIT
+license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.2.0"

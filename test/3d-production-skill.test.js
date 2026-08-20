@@ -22,7 +22,7 @@ test('3D-production companion is small, independent, and progressively disclosed
 
   const skill = read('skills/narova-3d-production/SKILL.md');
   assert.match(skill, /^name: narova-3d-production$/m);
-  assert.match(skill, /^license: MIT$/m);
+  assert.match(skill, /^license: Apache-2.0$/m);
   assert.match(skill, /^  version: "0\.2\.0"$/m);
   assert.match(skill, /A straightforward scene may need none\./);
   assert.match(skill, /Do not perform a full-manual pass\./);

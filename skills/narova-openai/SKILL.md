@@ -7,7 +7,7 @@ description: >
   installs and registers a separate OpenAI provider worker without adding
   cloud dependencies or credentials to the main Narova skill. Do not use it
   for ordinary local narrated-video requests; Narova remains local-first.
-license: MIT
+license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "1.0.1"

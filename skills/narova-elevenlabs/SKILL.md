@@ -7,7 +7,7 @@ description: >
   worker without adding cloud dependencies or credentials to the main Narova
   skill. Do not use it for ordinary local narrated-video requests; Narova
   remains local-first.
-license: MIT
+license: Apache-2.0
 compatibility: >
   Requires the standalone narova CLI, the narova skill, Python 3.10+, ffmpeg, network access, an
   ElevenLabs account, and ELEVENLABS_API_KEY.

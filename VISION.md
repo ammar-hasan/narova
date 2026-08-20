@@ -5,7 +5,7 @@
 Give every person and every intelligence the creative power to make remarkable
 video—regardless of expertise, budget, hardware, or model sophistication.
 
-Narova is MIT-licensed open-source software. It should transfer capability:
+Narova is Apache-2.0-licensed open-source software. It should transfer capability:
 someone with an idea, limited production knowledge, and even a simple LLM
 should be able to make work far beyond what their tools or skills previously
 allowed.

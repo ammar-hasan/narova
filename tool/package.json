@@ -72,5 +72,5 @@
     "@napi-rs/canvas": "1.0.3",
     "fontkit": "2.0.4"
   },
-  "license": "MIT"
+  "license": "Apache-2.0"
 }

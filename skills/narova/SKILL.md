@@ -11,7 +11,7 @@ description: >
   marker-driven work. It turns a scene script into MP4 through HyperFrames or
   the browserless Skia/FFmpeg provider; scene.threeModule is the raw 3D escape
   hatch. Use plain HyperFrames for unrelated silent motion graphics.
-license: MIT
+license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.31.14"
