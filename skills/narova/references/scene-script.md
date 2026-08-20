@@ -1,8 +1,8 @@
 # Writing the scene script (`reel.config.mjs`)
 
 A project is a folder with one config file: `reel.config.mjs` (also accepted:
-`.js`, `.json`, `.cjs`). It exports one object. The full shipped public
-interface guide is `SPEC.md` in the repo. Full example:
+`.js`, `.json`, `.cjs`). It exports one object. The repository README and this
+skill's references describe the public interface. Full example:
 `generated/us-iran-standoff/` (11 scenes;
 `generated/narova-skill-reel/` is the flagship demo).
 

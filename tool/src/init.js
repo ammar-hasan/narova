@@ -5,7 +5,7 @@ const fs = require('fs');
 const path = require('path');
 const { ensureDir } = require('./util');
 
-const CONFIG = `// narova project — see the public interface guide in SPEC.md for the full scene API.
+const CONFIG = `// narova project — see README.md and the installed narova skill for the scene API.
 // This scaffold is production infrastructure only. Narova is zero-style by
 // default — no visual identity, no chrome, no built-in layout classes.
 // Every aesthetic choice is yours to make explicitly.

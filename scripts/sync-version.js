@@ -192,15 +192,6 @@ function syncVersion(root = DEFAULT_ROOT, logger = console) {
       'README.md version badge',
     ));
 
-  // SPEC.md public interface guide — shipped status line
-  update(['SPEC.md'], (source, next) =>
-    replaceExactlyOne(
-      source,
-      /^(## Status: +)[0-9.]+( +shipped)/m,
-      `$1${next}$2`,
-      'SPEC.md public interface guide shipped status',
-    ));
-
   // AGENT_PROTOCOL.md — release identity for the shipped machine contract.
   update(['AGENT_PROTOCOL.md', 'tool/AGENT_PROTOCOL.md'], (source, next) =>
     replaceExactlyOne(

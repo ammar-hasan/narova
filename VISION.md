@@ -39,8 +39,8 @@ strengthening · `[ ]` gap.
 - [x] **A skill plus a standalone tool** — `skills/narova/` contains only the
   agent-readable direction, while independently installed `tool/` owns all
   executable code and dependencies. The skill detects and bootstraps the CLI
-  without making executable code part of skill installation. See `README.md`
-  and the public interface guide in `SPEC.md` §Layout.
+  without making executable code part of skill installation. See the public
+  command and pipeline overview in `README.md`.
 - [x] **Framework-neutral** — SKILL.md and references/ contain no
   framework-specific assumptions; works for any agent that reads skills
   (Kimi Code, Codex, Claude Code, opencode, agentic SDKs). Verified: only
@@ -61,8 +61,8 @@ strengthening · `[ ]` gap.
 - [x] **Prompt → engaging video with voiceover + word-synced text
   highlighting** — scene script (`reel.config.mjs`) → synth → compose →
   render. Word-by-word karaoke captions per speaker color; `data-cue`
-  elements appear exactly when the voice reaches them. Public interface guide
-  `SPEC.md`,
+  elements appear exactly when the voice reaches them. Public interface
+  documentation: `README.md`,
   `tool/src/compose/`.
 - [x] **One or more voices; zero voices for silent** — schema accepts
   any number of voices; the `init` scaffold defaults to a single neutral

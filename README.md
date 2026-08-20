@@ -541,7 +541,6 @@ docs/              the marketing site (GitHub Pages) + /changelog
 generated/narova-skill-reel/  flagship sample project (built from a plain-language prompt; more in generated/)
 generated/         agent-created projects; source kept, out/ and build/ ignored
 CHANGELOG.md       every notable change, version by version
-SPEC.md            informative guide to the currently shipped public interface
 AGENT_PROTOCOL.md  versioned JSON envelopes, exit codes, and the agent loop
 VISION.md          the product vision, mapped to where each point is implemented
 LEARNINGS.md       non-normative implementation notes for public maintainers

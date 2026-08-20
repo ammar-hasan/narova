@@ -245,16 +245,9 @@ test('repository version sources agree with the standalone tool package', () => 
   assert.match(skillMd, /npm install --global "\$narova_required"/);
   assert.match(skillMd, /narova_candidate.*--version/);
 
-  const publicGuide = fs.readFileSync(path.join(ROOT, 'SPEC.md'), 'utf8');
-  const specMatch = publicGuide.match(/^## Status: ([0-9.]+) shipped$/m);
-  assert.ok(specMatch, 'SPEC.md must have a shipped status version');
-  assert.equal(specMatch[1], rootVer, 'SPEC.md status version must match root');
-  assert.match(publicGuide, /<!-- narova-document-role: shipped-interface-guide; authority: non-normative -->/);
-  const prohibitedGuideHeading = /^#{1,6} .*\b(?:future work|product roadmap|research store|product strategy|project memory|agent (?:instructions|guidance|context|memory))\b/im;
-  assert.doesNotMatch(publicGuide, prohibitedGuideHeading);
-  assert.match('### Future work', prohibitedGuideHeading);
-  assert.doesNotMatch('## Memory requirements', prohibitedGuideHeading);
-  assert.doesNotMatch(publicGuide, /docs\/experiments\//);
+  for (const removed of ['SPEC.md', '.claude', '.agents']) {
+    assert.equal(fs.existsSync(path.join(ROOT, removed)), false, `${removed} must not be public product surface`);
+  }
 
   const agentProtocol = fs.readFileSync(path.join(ROOT, 'AGENT_PROTOCOL.md'), 'utf8');
   const protocolMatch = agentProtocol.match(/^Narova release: \*\*([0-9.]+)\*\*$/m);
@@ -304,7 +297,6 @@ test('version sync updates skill metadata and its exact npm bootstrap pin', t =>
     '',
   ].join('\n'));
   write('README.md', 'https://img.shields.io/badge/version-0.0.1-blue.svg\n');
-  write('SPEC.md', '## Status: 0.0.1 shipped\n');
   write('AGENT_PROTOCOL.md', 'Narova release: **0.0.1**\n');
   write('tool/AGENT_PROTOCOL.md', 'Narova release: **0.0.1**\n');
   write('docs/index.html', '<span data-narova-version>v0.0.1</span>\n');
@@ -320,7 +312,6 @@ test('version sync updates skill metadata and its exact npm bootstrap pin', t =>
   assert.equal(lock.version, '9.8.7');
   assert.equal(lock.packages[''].version, '9.8.7');
   assert.match(fs.readFileSync(path.join(tmp, 'README.md'), 'utf8'), /version-9\.8\.7-/);
-  assert.match(fs.readFileSync(path.join(tmp, 'SPEC.md'), 'utf8'), /Status: 9\.8\.7 shipped/);
   assert.match(fs.readFileSync(path.join(tmp, 'AGENT_PROTOCOL.md'), 'utf8'), /release: \*\*9\.8\.7\*\*/);
   assert.match(fs.readFileSync(path.join(tmp, 'tool/AGENT_PROTOCOL.md'), 'utf8'), /release: \*\*9\.8\.7\*\*/);
   assert.match(fs.readFileSync(path.join(tmp, 'docs/index.html'), 'utf8'), />v9\.8\.7</);
