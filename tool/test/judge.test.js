@@ -1,5 +1,5 @@
 'use strict';
-/* Video CI rendered-evidence mirror (CHANGE-2026-036 / NAR-SPEC-023). */
+/* Video CI rendered-evidence mirror and option expansion (NAR-SPEC-023). */
 const { test, before, after } = require('node:test');
 const assert = require('node:assert/strict');
 const crypto = require('node:crypto');
@@ -10,6 +10,7 @@ const path = require('node:path');
 const { parseCaptionCues, compareProbe, captionEvidence } = require('../src/judge');
 const { hashConfig } = require('../src/manifest');
 const { writeVideoCiBinding } = require('../src/video-ci-binding');
+const { interventionPlan } = require('../src/intervention-plan');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const BIN = path.join(ROOT, 'tool', 'bin', 'narova.js');
@@ -122,6 +123,15 @@ before(() => {
         expect: 'The opening should contain clearly audible sound.',
         scope: { start: 0, end: 0.9 },
         observe: [{ metric: 'audio.silence_ratio', operator: 'lte', value: 0.1 }],
+        related: { source: 'scenes/opening.html', protected: ['camera rhythm'] },
+      },
+      {
+        id: 'audible-discomfort',
+        class: 'creative-intent',
+        expect: 'Audible texture should make the silent opening uncomfortable.',
+        scope: { scene: 'opening', start: 0, end: 0.9 },
+        observe: [{ metric: 'audio.silence_ratio', operator: 'lte', value: 0.1 }],
+        related: { component: 'ambient-texture', protected: ['static composition'] },
       },
       {
         id: 'unreadable-material',
@@ -269,7 +279,7 @@ test('human judgement leads with evidence and preserves creator authority', { sk
   assert.doesNotMatch(result.stdout, /Video quality:\s*\d|BAD VIDEO|FIX THIS/);
 });
 
-test('judge rejects unavailable artifacts and future mutation phases without writes', { skip: !MEDIA_AVAILABLE }, () => {
+test('judge rejects unavailable artifacts and repair without writes', { skip: !MEDIA_AVAILABLE }, () => {
   const beforeState = treeState(project);
   const missing = run(['judge', '--project', project, '--video', 'missing.mp4', '--json']);
   assert.equal(missing.status, 1);
@@ -285,14 +295,104 @@ test('judge rejects unavailable artifacts and future mutation phases without wri
   assert.equal(unavailableAnalyzer.status, 1);
   assert.equal(machineResult(unavailableAnalyzer).exit.class, 'operation-failure');
 
-  for (const flag of ['--plan', '--repair']) {
-    const result = run(['judge', '--project', project, flag, '--json']);
-    assert.equal(result.status, 2, `${flag}: ${result.stderr}`);
-    const envelope = machineResult(result);
-    assert.equal(envelope.exit.class, 'usage-error');
-    assert.match(envelope.diagnostics[0].message, /observation-only/);
-  }
+  const repair = run(['judge', '--project', project, '--repair', '--json']);
+  assert.equal(repair.status, 2, repair.stderr);
+  const envelope = machineResult(repair);
+  assert.equal(envelope.exit.class, 'usage-error');
+  assert.match(envelope.diagnostics[0].message, /repair is not available/);
   assert.deepEqual(treeState(project), beforeState);
+});
+
+test('intervention planning expands creative divergence without ranking or execution', () => {
+  const judgement = {
+    schema: 'narova.judgement/1',
+    artifact: { path: '/tmp/proof.mp4', sha256: 'a'.repeat(64) },
+    observations: [{
+      id: 'intent-001', outcome: 'DIVERGED',
+      timeRange: { start: 0, end: 8, scope: 'authored-global-time' },
+      assertion: { id: 'uncomfortable-opening', class: 'creative-intent', expect: 'Hold an uncomfortable static opening.' },
+      relatedProductionState: {
+        scene: 'opening', source: { value: 'scenes/opening.html', basis: 'AUTHORED' },
+        protected: ['silence', 'camera rhythm'], mappingBasis: 'AUTHORED', causality: 'not-established',
+      },
+    }, {
+      id: 'intent-002', outcome: 'ALIGNED', timeRange: { start: 8, end: 9 },
+      assertion: { id: 'transition', class: 'creative-intent', expect: 'Transition at eight seconds.' },
+      relatedProductionState: {},
+    }, {
+      id: 'temporal-001', outcome: 'OBSERVED', timeRange: { start: 0, end: 8 },
+      assertion: null, relatedProductionState: {},
+    }],
+  };
+  const plan = interventionPlan(judgement);
+  assert.equal(plan.schema, 'narova.intervention-plan/1');
+  assert.equal(plan.authority, 'creator');
+  assert.equal(plan.mutation, 'none');
+  assert.equal(plan.selection, null);
+  assert.equal(plan.optionSets.length, 1);
+  assert.deepEqual(plan.optionSets[0].options.map(item => item.stance), [
+    'keep-unchanged', 'align-to-intent', 'embrace-result', 'compare-branch',
+  ]);
+  assert.deepEqual(plan.optionSets[0].relatedProductionState.targets, [
+    { kind: 'scene', value: 'opening', basis: 'AUTHORED' },
+    { kind: 'source', value: 'scenes/opening.html', basis: 'AUTHORED' },
+  ]);
+  assert.deepEqual(plan.optionSets[0].relatedProductionState.protectedConcerns, ['silence', 'camera rhythm']);
+  assert.ok(plan.optionSets[0].options.every(item => item.authority === 'creator-choice' && item.mutation === 'none'));
+  assert.deepEqual(interventionPlan(judgement), plan);
+  assert.doesNotMatch(JSON.stringify(plan), /recommended|preferred|ranking|score/i);
+});
+
+test('judge --plan returns the full judgement and deterministic plural options without writes', { skip: !MEDIA_AVAILABLE }, () => {
+  const beforeState = treeState(project);
+  const first = run(['judge', '--project', project, '--plan', '--json']);
+  assert.equal(first.status, 0, first.stderr);
+  const envelope = machineResult(first);
+  assert.equal(envelope.data.judgement.schema, 'narova.judgement/1');
+  const plan = envelope.data.interventionPlan;
+  assert.equal(plan.schema, 'narova.intervention-plan/1');
+  assert.equal(plan.selection, null);
+  assert.ok(plan.optionSets.length >= 2);
+  assert.ok(plan.optionSets.every(set => ['DIVERGED', 'UNCERTAIN'].includes(set.outcome)));
+  assert.ok(plan.optionSets.every(set => set.options.length >= 3 && set.options[0].stance === 'keep-unchanged'));
+  assert.equal(plan.optionSets.some(set => set.assertion.id === 'silent-opening'), false);
+  assert.equal(plan.optionSets.some(set => set.observationId.startsWith('temporal-')), false);
+
+  const mechanical = plan.optionSets.find(set => set.assertion.id === 'unexpected-audio');
+  assert.deepEqual(mechanical.options.map(item => item.stance), [
+    'keep-unchanged', 'inspect-source', 'align-to-intent', 'compare-branch',
+  ]);
+  assert.deepEqual(mechanical.relatedProductionState.protectedConcerns, ['camera rhythm']);
+  assert.deepEqual(mechanical.relatedProductionState.targets, [
+    { kind: 'scene', value: 'opening', basis: 'INFERRED_FROM_TIME' },
+    { kind: 'source', value: 'scenes/opening.html', basis: 'AUTHORED' },
+  ]);
+  const uncertain = plan.optionSets.find(set => set.assertion.id === 'unreadable-material');
+  assert.deepEqual(uncertain.options.map(item => item.stance), [
+    'keep-unchanged', 'clarify-intent', 'gather-evidence', 'cheap-proof',
+  ]);
+  const creative = plan.optionSets.find(set => set.assertion.id === 'audible-discomfort');
+  assert.deepEqual(creative.options.map(item => item.stance), [
+    'keep-unchanged', 'align-to-intent', 'embrace-result', 'compare-branch',
+  ]);
+  assert.deepEqual(creative.relatedProductionState.protectedConcerns, ['static composition']);
+
+  const second = run(['judge', '--project', project, '--plan', '--json']);
+  assert.equal(second.status, 0, second.stderr);
+  assert.deepEqual(machineResult(second).data, envelope.data);
+  assert.deepEqual(treeState(project), beforeState);
+});
+
+test('human judge planning follows evidence and states the agency boundary', { skip: !MEDIA_AVAILABLE }, () => {
+  const result = run(['judge', '--project', project, '--plan']);
+  assert.equal(result.status, 0, result.stderr);
+  const judgementIndex = result.stdout.indexOf('Narova Video CI — rendered-evidence mirror');
+  const planningIndex = result.stdout.indexOf('Narova Video CI — intervention options');
+  assert.ok(judgementIndex >= 0 && planningIndex > judgementIndex);
+  assert.match(result.stdout, /Options are unranked/);
+  assert.match(result.stdout, /No option selected or executed/);
+  assert.match(result.stdout, /Keep the rendered result unchanged/);
+  assert.doesNotMatch(result.stdout, /recommended option|preferred option|best option/i);
 });
 
 test('malformed captions stay unavailable and a measured contradiction still diverges', { skip: !MEDIA_AVAILABLE }, () => {

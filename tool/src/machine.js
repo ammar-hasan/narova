@@ -246,13 +246,29 @@ function envelopeFor(exitCode) {
   });
 }
 
+function writeEnvelope(envelope) {
+  const bytes = Buffer.from(`${JSON.stringify(envelope, null, 2)}\n`);
+  // stdout can be a non-blocking pipe. A single synchronous write may accept
+  // only the pipe-sized prefix, so make the descriptor blocking while the
+  // terminal envelope is flushed.
+  if (process.stdout._handle && typeof process.stdout._handle.setBlocking === 'function') {
+    process.stdout._handle.setBlocking(true);
+  }
+  let offset = 0;
+  while (offset < bytes.length) {
+    const written = fs.writeSync(1, bytes, offset, bytes.length - offset);
+    if (written <= 0) throw new Error('machine envelope write made no progress');
+    offset += written;
+  }
+}
+
 /* Write the envelope as the complete stdout content. Idempotent: whichever
  * exit path fires first (process.exit interception or normal return) wins. */
 function emit(exitCode) {
   if (!session || session.emitted) return;
   session.emitted = true;
   try {
-    fs.writeSync(1, `${JSON.stringify(envelopeFor(exitCode), null, 2)}\n`);
+    writeEnvelope(envelopeFor(exitCode));
   } catch (error) {
     // Envelope emission must never undo a completed operation: report on
     // stderr and let the original exit status stand (NAR-009-025 precedent).
@@ -273,7 +289,7 @@ function emitUsageEnvelope(operation, message) {
     artifacts: [],
   });
   try {
-    fs.writeSync(1, `${JSON.stringify(envelope, null, 2)}\n`);
+    writeEnvelope(envelope);
   } catch { /* stderr already carries the usage message */ }
 }
 

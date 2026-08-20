@@ -17,6 +17,7 @@ const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
 const { judge, formatJudgement } = require('../src/judge');
+const { interventionPlan, formatInterventionPlan } = require('../src/intervention-plan');
 const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = require('../src/motion-audit');
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
@@ -534,7 +535,8 @@ Commands:
   judge                inspect the encoded artifact as an evidence mirror
                            --video <file> selects a self-contained local video (default: out/video.mp4)
                            --json returns narova.judgement/1 in narova.result/1
-                           read-only; no score, validity gate, taste lens, or repair
+                           --plan adds plural unranked intervention options
+                           read-only; no score, validity gate, taste lens, selection, or repair
   plan                 compare current config against the last manifest;
                            classify what changed and which stages will rebuild
   release save <name>  save out/manifest.json as a named release
@@ -1231,10 +1233,10 @@ async function main() {
 
     case 'judge': {
       if (positionals[1] != null) {
-        invocationError('usage: narova judge [--video <file>] [--json]');
+        invocationError('usage: narova judge [--video <file>] [--plan] [--json]');
       }
-      if (flags.plan || flags.repair) {
-        invocationError('narova judge Phase 1 is observation-only; --plan and --repair are not available');
+      if (flags.repair) {
+        invocationError('narova judge --repair is not available; use --plan to inspect options without mutation');
       }
       const { config, projectDir, configFile } = await loadResolved(flags, { readOnly: true });
       const out = outDirOf(flags, projectDir);
@@ -1246,7 +1248,13 @@ async function main() {
         video: flags.video ? path.resolve(projectDir, flags.video) : path.join(out, defaultVideo),
       });
       console.log(formatJudgement(report));
-      mSetData({ judgement: report });
+      if (flags.plan) {
+        const planned = interventionPlan(report);
+        console.log(formatInterventionPlan(planned));
+        mSetData({ judgement: report, interventionPlan: planned });
+      } else {
+        mSetData({ judgement: report });
+      }
       return;
     }
 

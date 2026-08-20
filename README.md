@@ -41,7 +41,9 @@ Agents calling the CLI directly can use the versioned
 - **Video CI as a creative mirror** — `narova judge` compares authored
   assertions with the encoded artifact, exposes measured motion, silence,
   timing, spatial hierarchy, and uncertainty, and maps observations back to
-  production state. It never emits a universal quality score or changes the work.
+  production state. `narova judge --plan` adds plural, unranked intervention
+  options—including keeping the work unchanged—without selecting or executing
+  one. Neither mode emits a universal quality score or changes the work.
 - **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
   HyperFrames, or select Narova No-Browser for deterministic Skia + FFmpeg output
   on machines where no browser is available. No render service or fee.
@@ -241,6 +243,7 @@ narova branch save proof-a --rationale "why this direction may serve the brief"
 narova preview --detach   # direct the film in HyperFrames Studio
 narova build --reuse --release  # fail-before-render final gate → out/video.mp4
 narova judge          # inspect intent vs the encoded result; read-only, scoreless
+narova judge --plan   # expand next-step options; unranked, no selection or mutation
 ```
 
 You need: **Node 18+**, plus **ffmpeg** and **Python 3.10+** (the published
@@ -343,6 +346,13 @@ shared `out/` context. `judge` uses embedded evidence directly and uses sidecar
 or derived timing evidence only through a matching receipt. Any artifact
 without one remains judgeable, with unbound
 optional context reported unavailable.
+
+Add `--plan` to receive a read-only option set for each assertion-linked
+`DIVERGED` or `UNCERTAIN` observation. Every set includes keeping the render
+unchanged. Creative findings can also align to intent, embrace the rendered
+surprise, or compare a reversible branch; uncertain findings can clarify
+intent, gather evidence, or propose a cheap proof. Narova ranks, selects, and
+executes none of them. `--repair` remains unavailable.
 
 ### Two local renderer providers
 
@@ -522,6 +532,7 @@ narova open <archive> verify, inspect, or materialize an untrusted archive
 narova remix <source> copy a local project/archive or public github: locator
 narova check          validate the config (fast, no side effects)
 narova judge          inspect the encoded result against creative assertions
+narova judge --plan   add plural, unranked intervention options; change nothing
 narova synth          make the audio + word timings
 narova compose        make the selected renderer project
 narova walkthrough    explore/capture/status narrated product demos

@@ -213,6 +213,9 @@ user's approval before any consequential external mutation.
    build receipts bind timing/caption context to each rendered video's digest,
    and unbound optional context stays unavailable rather than being guessed;
    preserve intentional surprises and make the directing decision yourself.
+   When a finding needs exploration, `narova judge --plan` adds plural,
+   unranked options—including keeping the work unchanged—without selecting,
+   branching, rendering, repairing, or mutating anything.
    Verify the encoded contact sheet against the approved brief.
 11. When delivery needs attribution or an evidence summary, run `provenance`
    (or `provenance --json`) and `assets credits --format

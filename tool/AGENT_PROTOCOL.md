@@ -74,7 +74,7 @@ operation may add fields in a later schema-1 release.
 | `compile` | `{ manifest, scenes }` | `manifest`, `stage-input`, `compatibility-state` |
 | `check` | `{ level, warnings, errors, critique? }` | `report` when creative identity is requested |
 | `critique` | `{ profile, advice }` | none |
-| `judge` | `{ judgement }`, where `judgement.schema` is `narova.judgement/1` | none |
+| `judge` | `{ judgement }`, plus `{ interventionPlan }` when `--plan` is requested; schemas are `narova.judgement/1` and `narova.intervention-plan/1` | none |
 | `plan` | the stage plan object | none |
 | `provenance` | the provenance report object | none |
 | `diff` | the revision-impact report, plus its named baseline when applicable | none |
@@ -137,8 +137,8 @@ context is reported unavailable instead of being joined to an arbitrary video.
 Receipt context sources use one shape: `path`, `bytes`, `sha256`, `available`,
 optional `format`, optional `content`, and optional `reason`.
 Observation outcomes do not affect exit success. Missing or undecodable video
-and analysis failures are operation failures; `--plan` and `--repair` are not
-available in this phase and are usage errors.
+and analysis failures are operation failures. `--repair` is not available and
+is a usage error.
 
 The `judgement` object contains:
 
@@ -163,6 +163,15 @@ relationships to evidence, never artistic pass/fail states. Evidence records
 keep their source, metric, value, unit, basis, and availability. Missing
 semantic perception is explicit `UNCERTAIN`, not a guessed defect. Consumers
 must not derive a universal quality score from these independent observations.
+
+`narova judge --plan --json` retains the complete `judgement` and adds an
+`interventionPlan`. It contains one option set for every assertion-linked
+`DIVERGED` or `UNCERTAIN` observation. Sets preserve their time range and
+production mapping, and every set includes `keep-unchanged`. Other stances
+expand creative divergence, constraint inspection/alignment, or uncertainty
+reduction. Options are deterministic and unranked; `selection` is null,
+`mutation` is `none`, and the command invokes no branch, proof, model, network,
+render, or repair work.
 
 The removed `render` spelling is a usage error and directs callers to
 `compose` or `build`.

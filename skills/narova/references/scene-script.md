@@ -170,6 +170,11 @@ matching receipt is still inspected, but unbound
 optional context remains unavailable rather than being guessed from current
 shared output files.
 
+Use `narova judge --plan` when a `DIVERGED` or `UNCERTAIN` assertion needs a
+wider option space. Each unranked set includes keeping the render unchanged;
+Narova selects, branches, renders, and repairs nothing. The plan is evidence for
+the directing decision, not a direction.
+
 ## 3D scenes and the element model
 
 narova renders 3D through HyperFrames' browser WebGL (Three.js). There are two

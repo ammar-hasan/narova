@@ -4,6 +4,22 @@ All notable changes to narova are documented here.
 Format follows [Keep a Changelog](https://keepachangelog.com/en/1.1.0/),
 versions follow [Semantic Versioning](https://semver.org/).
 
+## [Unreleased]
+
+### Added
+
+- **Video CI intervention planning.** `narova judge --plan` retains the full
+  rendered-evidence judgement and adds deterministic, plural, unranked options
+  for assertion-linked divergence and uncertainty. Every option set includes
+  keeping the render unchanged; no option is selected or executed, and the
+  operation remains offline and read-only. Machine mode exposes
+  `narova.intervention-plan/1` beside `narova.judgement/1`.
+
+### Fixed
+
+- **Complete large machine envelopes.** Machine JSON output now writes all
+  bytes when an envelope exceeds a single pipe write.
+
 ## [0.32.1] - 2026-08-20
 
 ### Fixed
