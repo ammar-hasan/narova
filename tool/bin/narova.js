@@ -51,6 +51,9 @@ const {
 } = require('../src/walkthrough');
 const { substrateGuard, welcomeWizard, firstRunQuiet, firstRunDone, isInteractive } = require('../src/first-run');
 const { demo, DEMO_DIR_NAME } = require('../src/demo');
+const {
+  packProject, inspectArchive, openArchive, remix: remixProject, trustNotice,
+} = require('../src/project-archive');
 const machine = require('../src/machine');
 
 /* Machine protocol conveniences: no-ops unless this invocation passed --json. */
@@ -174,7 +177,7 @@ function operationName(cmd, positionals, flags = {}) {
 }
 
 const PUBLIC_COMMANDS = new Set([
-  'help', 'init', 'demo', 'ingest', 'assets', 'compile', 'check', 'critique',
+  'help', 'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique',
   'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
   'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
   'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
@@ -201,9 +204,9 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'voice-a', 'voice-b']);
 
 function validateInvocationFlags(flags, cmd) {
   const positiveNumber = (name, max = Infinity) => {
@@ -318,7 +321,7 @@ function assetRegistrationFromFlags(flags, defaults = {}) {
   };
 }
 
-async function loadResolved(flags, { readOnly = false } = {}) {
+async function loadResolved(flags, { readOnly = false, ignoreRestore = false } = {}) {
   const projectDir = flags.project || '.';
   const { raw, dir, file } = await loadProjectConfig(projectDir, flags.config);
   if (flags.variant != null) {
@@ -347,7 +350,7 @@ async function loadResolved(flags, { readOnly = false } = {}) {
   };
   let restoredOverrides = {};
   const restoredOverridesFile = path.join(out, RESTORE_OVERRIDES);
-  if (fs.existsSync(restoredOverridesFile) && mayReadOutputEvidence(restoredOverridesFile)) {
+  if (!ignoreRestore && fs.existsSync(restoredOverridesFile) && mayReadOutputEvidence(restoredOverridesFile)) {
     try {
       const parsed = JSON.parse(fs.readFileSync(restoredOverridesFile, 'utf8'));
       const allowed = new Set(['backend', 'size', 'platform', 'variant', 'renderer', 'tempo', 'voiceA', 'voiceB']);
@@ -467,6 +470,16 @@ function printSceneTable(config, out) {
   console.log(`  ${fmtTime(data.total)}  end`);
 }
 
+function fileSlug(value) {
+  return String(value || 'narova-project').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '') || 'narova-project';
+}
+
+const displayPath = value => JSON.stringify(String(value));
+const terminalSafe = value => String(value).replace(/[\u0000-\u001f\u007f-\u009f]/g, character => {
+  const escaped = JSON.stringify(character);
+  return escaped.slice(1, -1);
+});
+
 const HELP = `narova — a scene script becomes a narrated, captioned video
 (HyperFrames for full browser rendering; no-browser for local browserless rendering)
 
@@ -474,6 +487,12 @@ Usage: narova <command> [options]
 
 Commands:
   init <dir>            scaffold a project (config + one example scene)
+  pack                  write a deterministic, digest-manifested .narova project archive
+                           --output <file> (default: <title-or-directory>.narova)
+  open <archive>        verify and materialize an untrusted .narova archive
+                           --dir <target>; --inspect validates without writing
+  remix <source>        copy a local project/archive or github:<owner>/<repo>[#ref]
+                           into a fresh project with recorded parent lineage
   ingest <url>          fetch a source page: download images into assets/,
                            screenshot it (if Chrome), append sources.md,
                            seed claims.md — the mechanical pass of url-to-source
@@ -606,6 +625,9 @@ Options:
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
+  --dir <dir>              open/remix target directory
+  --inspect                open: verify and summarize without extraction
+  --overwrite              open/remix: replace an occupied target atomically
   --voice-a <s> --voice-b <s>   override the first two voices (add more in config)
   Asset metadata flags (assets import/download):
   --origin <mode> --provider <name> --item-id <id> --source-page <url>
@@ -719,6 +741,93 @@ async function main() {
         }
         throw err;
       }
+      return;
+    }
+
+    case 'pack': {
+      for (const name of ['backend', 'out', 'platform', 'renderer', 'size', 'tempo', 'variant', 'voice-a', 'voice-b']) {
+        if (flags[name] != null) invocationError(`--${name} is not portable authoring state and cannot be applied by pack`);
+      }
+      const resolved = await loadResolved(flags, { readOnly: true, ignoreRestore: true });
+      const diagnostics = [];
+      if (!check(resolved.config, { diagnostics })) {
+        const error = new Error('project does not pass ordinary validation; archive was not written');
+        error.code = 'NAROVA_SUBJECT_NON_PASS';
+        error.diagnostics = diagnostics;
+        throw error;
+      }
+      const assetLock = path.join(resolved.projectDir, 'assets.lock.json');
+      if (fs.existsSync(assetLock)) {
+        const assetReport = verifyAssets(resolved.projectDir);
+        if (!assetReport.ok) {
+          const error = new Error(`tracked project assets do not verify: ${assetReport.results.filter(item => !item.ok).map(item => `${item.file}: ${item.issues.join('; ')}`).join(', ')}`);
+          error.code = 'NAROVA_SUBJECT_NON_PASS';
+          error.diagnostics = assetReport.results
+            .filter(item => !item.ok)
+            .map(item => ({ severity: 'error', code: 'audit.assets.verify', message: item.issues.join('; '), subject: item.file }));
+          throw error;
+        }
+      }
+      const destination = flags.output
+        ? path.resolve(flags.output)
+        : path.resolve(`${fileSlug(resolved.configFile.endsWith('.json') ? resolved.config.title : path.basename(resolved.projectDir))}.narova`);
+      const result = packProject({
+        projectDir: resolved.projectDir,
+        config: resolved.config,
+        raw: resolved.raw,
+        configFile: resolved.configFile,
+        output: destination,
+        productVersion: require('../package.json').version,
+      });
+      console.log(`packed ${result.members} members (${result.bytes} bytes) -> ${displayPath(result.path)}`);
+      mSetData(result);
+      mArtifact(result.path, 'project-archive');
+      return;
+    }
+
+    case 'open': {
+      const archive = positionals[1];
+      if (!archive) usageError('usage: narova open <archive.narova> [--dir <target> | --inspect]');
+      if (flags.inspect) {
+        const result = inspectArchive(archive);
+        console.log(`archive: ${displayPath(result.path)}`);
+        console.log(`title: ${result.source && result.source.title ? result.source.title : 'not recorded'}`);
+        console.log(`format: ${result.format}; packed by narova ${result.packer && result.packer.version ? result.packer.version : 'not recorded'}`);
+        console.log(`members: ${result.members.length}`);
+        for (const member of result.members) console.log(`  ${member.role.padEnd(18)} ${String(member.bytes).padStart(10)}  ${member.path}`);
+        mSetData(result);
+        return;
+      }
+      const target = path.resolve(flags.dir || path.basename(archive).replace(/\.narova$/i, '') || 'narova-project');
+      const result = openArchive(archive, target, { overwrite: !!flags.overwrite });
+      console.log(`opened ${result.manifest.members.length} members -> ${displayPath(result.target)}`);
+      console.log(trustNotice(result.target));
+      console.log(`next: narova check --project ${JSON.stringify(result.target)}`);
+      console.log(`then: narova build --project ${JSON.stringify(result.target)}`);
+      mSetData({
+        target: result.target, archive: result.archive, archiveSha256: result.sha256,
+        members: result.manifest.members.length, source: result.manifest.source,
+        trust: 'building executes the project authored source with ambient authority',
+      });
+      mArtifact(result.target, 'project');
+      return;
+    }
+
+    case 'remix': {
+      const source = positionals[1];
+      if (!source) usageError('usage: narova remix <archive|project-dir|github:owner/repo[#ref]> [--dir <target>]');
+      const sourceBase = source.startsWith('github:')
+        ? source.slice('github:'.length).split(/[\/#]/).pop()
+        : path.basename(source).replace(/\.narova$/i, '');
+      const target = path.resolve(flags.dir || `${fileSlug(sourceBase)}-remix`);
+      const result = await remixProject(source, target, { overwrite: !!flags.overwrite });
+      console.log(`remixed ${result.members} members -> ${displayPath(result.target)}`);
+      console.log(`parent: ${result.origin.kind} ${result.origin.identity || result.origin.locator}`);
+      console.log(trustNotice(result.target));
+      console.log(`next: narova check --project ${JSON.stringify(result.target)}`);
+      mSetData({ ...result, trust: 'building executes the project authored source with ambient authority' });
+      mArtifact(result.target, 'project');
+      mArtifact(path.join(result.target, '.narova-remix.json'), 'remix-lineage');
       return;
     }
 
@@ -2381,7 +2490,7 @@ main().catch(err => {
     thrownUsageError(err);
     return;
   }
-  console.error('error:', err.message);
+  console.error('error:', terminalSafe(err.message));
   if (err.code === 'NAROVA_SUBJECT_NON_PASS') {
     for (const diagnostic of err.diagnostics || []) {
       mDiag(diagnostic.severity, diagnostic.code, diagnostic.message, diagnostic.subject);

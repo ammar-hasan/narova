@@ -49,6 +49,17 @@ narova build --release
 narova provenance
 ```
 
+Projects can be exchanged as deterministic, digest-verified `.narova` files:
+
+```bash
+narova pack --project my-video --output my-video.narova
+narova open my-video.narova --inspect
+narova remix github:owner/repository#main --dir my-remix
+```
+
+See the [archive compatibility profile](https://github.com/ammar-hasan/narova/blob/main/PROJECT_ARCHIVES.md)
+for the format, bounds, trust notice, and extraction rules.
+
 ## What it makes
 
 - Prompt-to-video and script-to-video explainers
@@ -56,6 +67,7 @@ narova provenance
 - Deterministic 2D HTML/CSS/SVG and Three.js/WebGL scenes
 - Real product walkthrough videos with timed browser actions
 - Local MP4, SRT, and VTT deliverables without a render service
+- Deterministic shareable project archives with safe inspection and remix lineage
 - Read-only evidence-graded provenance reports and text, YouTube, web, or JSON
   credit output
 

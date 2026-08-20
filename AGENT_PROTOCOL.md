@@ -67,6 +67,9 @@ operation may add fields in a later schema-1 release.
 | `version` | `{ version }` | none |
 | `init` | `{ dir, created[], skipped[], projectCreated, assetDirectoryCreated }` | `project`, `asset-directory`, `authoring-source` when created |
 | `demo` | `{ seconds, elapsedMs, networkBytes, projectDir, created }` | `project`, `authoring-source` when first created, `video`, `captions`, `manifest`, `timings`, `audio`, `revision-ledger`, `renderer-project` |
+| `pack` | `{ path, members, bytes, sha256, manifest }` | `project-archive` |
+| `open` | inspection: the archive manifest plus archive path and digest; extraction: `{ target, archive, archiveSha256, members, source, trust }` | `project` when extracted |
+| `remix` | `{ target, origin, members, trust }` | `project`, `remix-lineage` |
 | `ingest` | `{ url, slug, images, screenshot, claimsCreated }` | `asset`, `registry`, `source` |
 | `compile` | `{ manifest, scenes }` | `manifest`, `stage-input`, `compatibility-state` |
 | `check` | `{ level, warnings, errors, critique? }` | `report` when creative identity is requested |

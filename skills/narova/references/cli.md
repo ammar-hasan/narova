@@ -18,6 +18,10 @@ folder, `--config <file>` an exact config. Output goes to `<project>/out`, or
 | Command | Does | Cost |
 |---------|------|------|
 | `narova init <dir>` | new project: config + assets/ + one scene + README + .gitignore. Never overwrites; replacing the scaffold wholesale is the normal flow. | instant |
+| `narova pack [--output <file.narova>]` | validate and write a byte-deterministic, digest-manifested project archive without synthesis, rendering, or network access. The default filename is derived from the title or directory. | instant, local I/O |
+| `narova open <file.narova> --inspect` | verify and summarize an untrusted archive without extracting or executing it. | instant, local I/O |
+| `narova open <file.narova> [--dir <target>]` | fully verify, then atomically materialize a project and print the execution-trust notice plus exact `check`/`build` next steps. Occupied targets require `--overwrite`. | instant, local I/O |
+| `narova remix <source> [--dir <target>]` | copy a local project/archive or bounded `github:<owner>/<repo>[#ref]` source into a fresh project with `.narova-remix.json` lineage and no build history. Never executes fetched content. | local I/O; network only for `github:` |
 | `narova ingest <url>` | fetch page metadata, save up to five useful images and a screenshot, update `sources.md`/`claims.md`, and register acquired files in `assets.lock.json`. | network + optional browser screenshot |
 | `narova assets import <file>` | register an existing project-local file with its content hash and optional origin/license/attribution metadata. | instant |
 | `narova assets download <url> --output assets/<file>` | bounded atomic HTTP(S) download into the configured asset directory, followed by provenance registration. Existing bytes survive failed downloads. | network |

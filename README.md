@@ -478,6 +478,9 @@ npx skills add ammar-hasan/narova --skill narova-openai -g
 
 ```
 narova init <dir>     new project
+narova pack           write a deterministic .narova project archive
+narova open <archive> verify, inspect, or materialize an untrusted archive
+narova remix <source> copy a local project/archive or public github: locator
 narova check          validate the config (fast, no side effects)
 narova synth          make the audio + word timings
 narova compose        make the selected renderer project
@@ -495,6 +498,9 @@ narova doctor         check your machine
 Commands find the project from any folder inside it (they walk up to the
 nearest `reel.config.*`). `check` also prints an estimated narration length,
 so a target duration can be tuned before any audio exists.
+
+See [Narova project archives](PROJECT_ARCHIVES.md) for the public archive
+format, safety boundary, deterministic normalization, and remote locator grammar.
 
 Useful flags: `--backend <built-in-or-registered-provider>`,
 `--renderer hyperframes|no-browser`, `--reuse` (keep old audio),

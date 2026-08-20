@@ -22,6 +22,29 @@ const {
 const { hashConfig, validate: validateManifest } = require('./manifest');
 
 const GRADE_MARK = { verified: '✓', declared: '○', unknown: '?' };
+const REMIX_LINEAGE_FILE = '.narova-remix.json';
+const CONTROL_RE = /[\u0000-\u001f\u007f-\u009f]/;
+
+function lineageText(value, label, max = 512) {
+  if (typeof value !== 'string' || !value || value.length > max || CONTROL_RE.test(value)) {
+    throw new Error(`${label} must be a bounded non-empty string without control characters`);
+  }
+  return value;
+}
+
+function validateLineageParent(parent) {
+  if (!parent || typeof parent !== 'object' || Array.isArray(parent)) throw new Error('expected a parent record');
+  const kind = lineageText(parent.kind, 'parent kind', 16);
+  if (!['project', 'archive', 'github'].includes(kind)) throw new Error(`unsupported parent kind: ${kind}`);
+  if (kind === 'project' || kind === 'archive') {
+    if (!/^[a-f0-9]{64}$/.test(parent.identity || '')) throw new Error(`${kind} parent identity must be a lowercase SHA-256 digest`);
+    return { kind, identity: parent.identity };
+  }
+  const locator = lineageText(parent.locator, 'GitHub parent locator');
+  if (!/^github:[A-Za-z0-9_.-]+\/[A-Za-z0-9_.-]+(?:#[^\s]+)?$/.test(locator)) throw new Error('GitHub parent locator is invalid');
+  if (!/^[a-f0-9]{40}$/i.test(parent.commit || '')) throw new Error('GitHub parent commit must be a 40-character digest');
+  return { kind, locator, commit: parent.commit.toLowerCase() };
+}
 
 /* Origin modes recorded in the registry, grouped into display classes. */
 const ORIGIN_CLASSES = [
@@ -507,6 +530,23 @@ function collectReproducibility(config, registry, media, opts, manifest) {
   };
 }
 
+function collectLineage(projectDir) {
+  const file = path.join(projectDir, REMIX_LINEAGE_FILE);
+  if (!fs.existsSync(file)) return { parent: null, grade: 'unknown', source: null };
+  try {
+    const stat = fs.lstatSync(file);
+    if (!stat.isFile() || stat.isSymbolicLink()) throw new Error('expected a regular project file');
+    const parsed = JSON.parse(fs.readFileSync(file, 'utf8'));
+    if (!parsed || parsed.schema !== 'narova.remix/1' || !parsed.parent
+        || typeof parsed.parent !== 'object') {
+      throw new Error('expected schema narova.remix/1 with a parent record');
+    }
+    return { parent: validateLineageParent(parsed.parent), grade: 'declared', source: REMIX_LINEAGE_FILE };
+  } catch (error) {
+    return { parent: null, grade: 'unknown', source: REMIX_LINEAGE_FILE, note: `remix lineage unreadable: ${error.message}` };
+  }
+}
+
 /* Compose the full graded report from existing project evidence. */
 function collectProvenance(config, opts = {}) {
   const projectDir = config.projectDir || '.';
@@ -518,6 +558,7 @@ function collectProvenance(config, opts = {}) {
   const reproducibility = collectReproducibility(config, registry, media, opts, manifest);
   return {
     project: { title: config.title || 'narova', dir: path.resolve(projectDir) },
+    lineage: collectLineage(path.resolve(projectDir)),
     claims,
     media,
     aiGeneration,
@@ -661,9 +702,13 @@ function formatReproducibility(repro) {
 }
 
 function formatProvenance(report) {
+  const lineage = report.lineage && report.lineage.parent
+    ? `remix parent: ${GRADE_MARK.declared} recorded ${report.lineage.parent.kind} ${report.lineage.parent.identity || report.lineage.parent.locator || report.lineage.parent.path || ''} (${report.lineage.source}) — lineage, not verified ownership or permission`
+    : `remix parent: ? not recorded${report.lineage && report.lineage.note ? ` (${report.lineage.note})` : ''}`;
   return [
     `provenance: ${report.project.title}`,
     `project: ${report.project.dir}`,
+    lineage,
     '',
     ...formatClaims(report.claims),
     '',

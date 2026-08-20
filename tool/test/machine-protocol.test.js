@@ -135,7 +135,7 @@ test('successful project operations expose data and created artifacts without st
 
 test('every public command can return a pre-dispatch usage envelope and is documented', () => {
   const commands = [
-    'init', 'demo', 'ingest', 'assets', 'compile', 'check', 'critique',
+    'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique',
     'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
     'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
     'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
@@ -166,6 +166,9 @@ test('public operation handlers preserve stdout purity under controlled dispatch
     { operation: 'help', args: ['help'] },
     { operation: 'version', args: ['--version'] },
     { operation: 'init', args: ['init'] },
+    { operation: 'pack', args: ['pack', '--project', project, '--output', path.join(root, 'project.narova')] },
+    { operation: 'open', args: ['open'] },
+    { operation: 'remix', args: ['remix'] },
     { operation: 'ingest', args: ['ingest'] },
     { operation: 'assets providers', args: ['assets', 'providers'] },
     { operation: 'assets search', args: ['assets', 'search', 'x', '--provider', 'wikimedia', '--limit', '0'] },
