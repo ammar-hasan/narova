@@ -123,6 +123,10 @@ function validateEntry(root, entry, ids) {
   const title = plainString(entry.title, `${id} title`, 120);
   const description = plainString(entry.summary, `${id} summary`, 500);
   const producingVersion = plainString(entry.producingVersion, `${id} producingVersion`, 50);
+  const archiveName = path.posix.basename(plainString(entry.archive, `${id} archive`, 500).replace(/\\/g, '/'));
+  if (!/^[a-z0-9]+(?:-[a-z0-9]+)*\.narova$/.test(archiveName)) {
+    throw new Error(`${id} archive basename must be a lowercase slug ending in .narova`);
+  }
   const archive = regularFile(root, entry.archive, `${id} archive`, ['.narova']);
   const video = regularFile(root, entry.video, `${id} video`, ['.mp4']);
   const captions = regularFile(root, entry.captions, `${id} captions`, ['.vtt']);

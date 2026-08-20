@@ -263,6 +263,29 @@ test('machine envelopes redact secret-shaped environment values', () => {
   assert.doesNotMatch(result.stdout, new RegExp(secret));
   assert.match(result.stdout, /\[REDACTED\]/);
 
+  const shortEnvSecret = 'q7z';
+  const shortDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-short-secret-'));
+  fs.writeFileSync(path.join(shortDir, 'reel.config.mjs'), `throw new Error('short token ${shortEnvSecret}')\n`);
+  const shortResult = run(['check', '--project', shortDir, '--json'], {
+    env: { ...process.env, NAROVA_TEST_SECRET: shortEnvSecret, NAROVA_FIRST_RUN: '0' },
+  });
+  assert.equal(shortResult.status, 1);
+  envelope(shortResult);
+  assert.doesNotMatch(shortResult.stdout + shortResult.stderr, new RegExp(shortEnvSecret));
+  assert.match(shortResult.stdout + shortResult.stderr, /\[REDACTED\]/);
+
+  const overlappingDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-overlapping-secrets-'));
+  fs.writeFileSync(path.join(overlappingDir, 'reel.config.mjs'), "throw new Error('credential abc-verylong')\n");
+  const overlappingResult = run(['check', '--project', overlappingDir, '--json'], {
+    env: {
+      ...process.env,
+      NAROVA_SHORT_SECRET: 'abc', NAROVA_LONG_SECRET: 'abc-verylong', NAROVA_FIRST_RUN: '0',
+    },
+  });
+  assert.equal(overlappingResult.status, 1);
+  envelope(overlappingResult);
+  assert.doesNotMatch(overlappingResult.stdout + overlappingResult.stderr, /abc-verylong|verylong/);
+
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-machine-provider-'));
   const worker = path.join(dir, 'worker.js');
   fs.writeFileSync(worker, [
@@ -366,6 +389,13 @@ test('machine envelopes redact secret-shaped environment values', () => {
   const oauthResult = run([oauthUrl, '--json']);
   assert.equal(oauthResult.status, 2);
   assert.doesNotMatch(oauthResult.stdout, /oauth-secret|session-state/);
+  const shortHostUrl = 'https://a.example/callback?code=short-host-oauth-secret&state=short-host-state';
+  const shortHostResult = run([shortHostUrl, '--json'], {
+    env: { ...process.env, NAROVA_TEST_SECRET: 'a' },
+  });
+  assert.equal(shortHostResult.status, 2);
+  assert.doesNotMatch(shortHostResult.stdout, /short-host-oauth-secret|short-host-state/);
+  assert.match(shortHostResult.stdout, /\[REDACTED\]/);
   const fragmentUrl = 'https://example.test/callback#access_token=fragment-secret&state=session-state';
   const fragmentResult = run([fragmentUrl, '--json']);
   assert.equal(fragmentResult.status, 2);
@@ -389,6 +419,20 @@ test('machine envelopes redact secret-shaped environment values', () => {
   assert.equal(envelope(shortSecret).schema, 'narova.result/1');
   assert.doesNotMatch(shortSecret.stdout + shortSecret.stderr, /bad license a(?:\s|"|$)/);
   assert.match(shortSecret.stdout + shortSecret.stderr, /\[REDACTED\]/);
+});
+
+test('malformed provider names are usage errors while missing valid providers are operation failures', () => {
+  for (const subcommand of ['remove', 'doctor']) {
+    const malformed = run(['providers', subcommand, '../bad', '--json']);
+    assert.equal(malformed.status, 2, malformed.stderr);
+    assert.equal(envelope(malformed).exit.class, 'usage-error');
+
+    const missing = run(['providers', subcommand, 'valid-but-missing', '--json'], {
+      env: { ...process.env, NAROVA_HOME: fs.mkdtempSync(path.join(os.tmpdir(), 'narova-provider-home-')) },
+    });
+    assert.equal(missing.status, 1, missing.stderr);
+    assert.equal(envelope(missing).exit.class, 'operation-failure');
+  }
 });
 
 (process.platform === 'win32' ? test.skip : test)('machine synthesis redacts inherited child stderr', () => {
