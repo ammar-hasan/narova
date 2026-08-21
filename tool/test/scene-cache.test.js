@@ -374,6 +374,7 @@ test('unrecognized mount-path references fall back conservatively', () => {
 // build. The local-time decision is placement-independent; the global-time
 // decision re-renders on a phase shift. (Adversarial review finding.)
 test('global-time reuse rejects a non-frame-aligned placement shift', () => {
+  if (!HAS_FFMPEG) return; // needs a real span file for the reuse decision
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-frames-'));
   try {
     const ctx = 'ctx';
