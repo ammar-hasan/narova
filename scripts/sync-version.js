@@ -218,6 +218,15 @@ function syncVersion(root = DEFAULT_ROOT, logger = console) {
   });
 
   logger.log('Done.');
+  // Skill content identity (CHANGE-2026-042 / NAR-020-034): version fields
+  // change on every release, so refresh each skill's content checksum after
+  // the version sync to keep release verification green.
+  try {
+    const { syncAllSkills } = require('./sync-skill-checksums');
+    syncAllSkills(root, logger);
+  } catch (e) {
+    throw new Error(`skill checksum sync failed: ${e.message}`);
+  }
   return version;
 }
 

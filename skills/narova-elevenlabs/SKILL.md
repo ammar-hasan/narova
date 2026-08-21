@@ -14,6 +14,7 @@ compatibility: >
 metadata:
   author: ammar-hasan
   version: "1.1.0"
+checksum: 7589cbb434b90dddfe3900dce0deb37c9c532a9958581131d3c56d6ee81a0542
 ---
 
 # Narova + ElevenLabs

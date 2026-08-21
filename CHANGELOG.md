@@ -6,6 +6,18 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Skill content identity.** Every first-party skill (`skills/*/SKILL.md`) now
+  declares `license` (Apache-2.0) and a `checksum` over the file's canonical
+  content (the file with the `checksum:`/`signature:` lines removed). The
+  checksum is recomputed whenever skill content changes — including release
+  version synchronization — and `release:check` fails on a missing license or
+  a stale checksum, so distributed skills carry a verified content identity.
+  The checksum detects accidental edits and corruption; it is not a signature.
+  The cryptographic signing process is documented as the next step but is not
+  yet implemented.
+
 ## [0.34.0] - 2026-08-21
 
 ## [Unreleased]

@@ -11,6 +11,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "1.0.1"
+checksum: 34ace4f4b687e1cdbe42acb61e36808c20ac4ed2039d52a8e6be6051209ebacd
 ---
 
 # Narova + OpenAI

@@ -15,6 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.34.0"
+checksum: a411de8fd32abc2bad73e10c9b229972e8573b6bd61539ed353cb5150b2a9af0
 ---
 # narova — video from scene scripts
 

@@ -106,6 +106,16 @@ for (const required of [
   }
 }
 
+// Skill content identity (CHANGE-2026-042 / NAR-020-034): every first-party
+// skill declares a license and a checksum equal to the digest of its canonical
+// content (file minus `checksum:`/`signature:` whole lines). A stale or missing
+// checksum fails the release rather than shipping silently.
+const { verifyAllSkills } = require('./sync-skill-checksums');
+const skillIntegrityFailures = verifyAllSkills(root);
+if (skillIntegrityFailures.length) {
+  throw new Error(`skill content identity verification failed:\n  - ${skillIntegrityFailures.join('\n  - ')}`);
+}
+
 const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
 if (!new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{2}$`, 'm').test(changelog)) {
   throw new Error(`CHANGELOG.md has no dated ${version} release entry`);

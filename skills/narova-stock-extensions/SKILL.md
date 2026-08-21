@@ -1,6 +1,8 @@
 ---
 name: narova-stock-extensions
 description: Use this optional Narova companion for broad, creative internet sourcing when the built-in stock adapters do not produce a suitable photo, video, audio file, font, 2D asset, 3D asset, texture, HDRI, map, scientific visual, or cultural object. Use it when the user requests exhaustive provider exploration, browser-sourced media, or an LLM-led search across changing websites. Work with the available web search, HTTP, or interactive browser capability; do not require a browser. Keep discovery flexible, inspect the selected item and rights, and return downloaded bytes through Narova's core asset lifecycle.
+license: Apache-2.0
+checksum: 726a2629de3246ffdccf4485fa783024f6cdb46b6e5dfc02681a272a7db47487
 ---
 
 # Narova Stock Extensions

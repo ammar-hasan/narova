@@ -14,6 +14,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.2.0"
+checksum: 6683f95a2793860a44a85a64ff3138f04c229704fb837592f922d1f6c843f7cb
 ---
 
 # Narova 3D Production
