@@ -1,6 +1,6 @@
 # Narova agent protocol
 
-Narova release: **0.33.0**
+Narova release: **0.34.0**
 Machine schema: **`narova.result/1`**
 
 This is the shipped machine-interface guide for agents and integrations. It is
