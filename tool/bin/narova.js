@@ -22,6 +22,9 @@ const {
   captureBranchExperiment, branchExperimentIdentity, verifyBranchExperiment,
   branchComparison, formatBranchComparison,
 } = require('../src/branch-experiment');
+const {
+  prepareCaptionRepair, verifyCaptionRepair, formatCaptionRepair,
+} = require('../src/caption-repair');
 const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = require('../src/motion-audit');
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
@@ -212,11 +215,16 @@ function preDispatchOperation(argv) {
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
 
 function validateInvocationFlags(flags, cmd) {
   if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
-  if (flags['judge-assertion'] != null && cmd !== 'branch') invocationError('--judge-assertion is only valid with narova branch save');
+  if (flags['judge-assertion'] != null && cmd !== 'branch' && !(cmd === 'judge' && flags.repair)) {
+    invocationError('--judge-assertion is only valid with focused branch save or judge --repair');
+  }
+  if (flags['repair-branch'] != null && !(cmd === 'judge' && flags.repair)) {
+    invocationError('--repair-branch is only valid with narova judge --repair');
+  }
   if (flags.video != null && cmd !== 'judge' && !(cmd === 'branch' && flags['judge-assertion'])) {
     invocationError('--video is only valid with narova judge or focused narova branch save');
   }
@@ -546,7 +554,9 @@ Commands:
                            --video <file> selects a self-contained local video (default: out/video.mp4)
                            --json returns narova.judgement/1 in narova.result/1
                            --plan adds plural unranked intervention options
-                           read-only; no score, validity gate, taste lens, selection, or repair
+                           --repair --judge-assertion <id> --repair-branch <name>
+                           creates only an unapproved caption-sidecar candidate
+                           no score, validity gate, hidden taste lens, or creative repair
   plan                 compare current config against the last manifest;
                            classify what changed and which stages will rebuild
   release save <name>  save out/manifest.json as a named release
@@ -652,6 +662,8 @@ Options:
   --config <file>          explicit config path
   --video <file>           judge/focused branch save: selected encoded artifact
                            (default: <project>/out/video.mp4)
+  --judge-assertion <id>   focused branch save or delegated caption repair
+  --repair-branch <name>   judge --repair destination proof branch
   --dir <dir>              open/remix target directory
   --inspect                open: verify and summarize without extraction
   --overwrite              open/remix: replace an occupied target atomically
@@ -1248,12 +1260,16 @@ async function main() {
 
     case 'judge': {
       if (positionals[1] != null) {
-        invocationError('usage: narova judge [--video <file>] [--plan] [--json]');
+        invocationError('usage: narova judge [--video <file>] [--plan] [--json] [--repair --judge-assertion <id> --repair-branch <name>]');
       }
-      if (flags.repair) {
-        invocationError('narova judge --repair is not available; use --plan to inspect options without mutation');
+      if (flags.plan && flags.repair) invocationError('--plan and --repair cannot be combined');
+      if (flags.repair && (!String(flags['judge-assertion'] || '').trim()
+          || !String(flags['repair-branch'] || '').trim())) {
+        invocationError('narova judge --repair requires --judge-assertion <id> and --repair-branch <name>');
       }
-      const { config, projectDir, configFile } = await loadResolved(flags, { readOnly: true });
+      const {
+        config, projectDir, configFile, configSourceBytes, raw, effectiveOverrides,
+      } = await loadResolved(flags, { readOnly: true });
       const out = outDirOf(flags, projectDir);
       const defaultVideo = config.variant ? `video-${config.variant}.mp4` : 'video.mp4';
       const report = judge(config, {
@@ -1262,6 +1278,84 @@ async function main() {
         configFile,
         video: flags.video ? path.resolve(projectDir, flags.video) : path.join(out, defaultVideo),
       });
+      if (flags.repair) {
+        const assertionId = String(flags['judge-assertion']).trim();
+        const targetName = String(flags['repair-branch']).trim();
+        const proof = verifyProofReceipt(config, out);
+        if (!proof.ok) throw new Error(`${proof.reason} — rerun narova shots --motion --proof before repair`);
+        const proofReceiptSha256 = hashFile(path.join(out, '.proof-receipt.json'));
+        const expectedRevision = branchRevision(targetName);
+        const stagedName = `branch-stage-${process.pid}-${Date.now()}`;
+        let staged = null;
+        let published;
+        try {
+          staged = await saveRelease(path.join(out, 'manifest.json'), stagedName, {
+            projectDir,
+            resolvedOverrides: effectiveOverrides,
+            configSource: { file: configFile, bytes: configSourceBytes, raw },
+          });
+          const metadataDir = branchDir(staged.name);
+          fs.mkdirSync(metadataDir, { recursive: true });
+          const identity = projectIdentity(projectDir);
+          const bundle = writeProofBundle(out, proof, metadataDir, staged.dir);
+          const prepared = prepareCaptionRepair({
+            config, baselineJudgement: report, assertionId, verifiedProof: proof,
+            proofBundle: bundle, metadataDir, snapshotDir: staged.dir,
+            projectDir, outDir: out, configFile,
+          });
+          const currentProof = verifyProofReceipt(config, out);
+          if (!currentProof.ok || hashFile(path.join(out, '.proof-receipt.json')) !== proofReceiptSha256) {
+            throw new Error('proof evidence changed during caption repair');
+          }
+          const rationale = `Unapproved ${prepared.repairCandidate.policy} candidate for assertion "${assertionId}".`;
+          const stagedBranch = saveBranch(staged.name, {
+            rationale,
+            status: 'candidate',
+            ...bundle,
+            snapshotManifestSha256: hashFile(path.join(staged.dir, 'manifest.json')),
+            projectIdentity: identity,
+            videoCi: prepared.videoCi,
+            videoCiIdentity: prepared.videoCiIdentity,
+            repairCandidate: prepared.repairCandidate,
+            repairCandidateIdentity: prepared.repairCandidateIdentity,
+          });
+          if (!verifyProofBundle(metadataDir, staged.dir, stagedBranch, identity)) {
+            throw new Error('staged repair proof bundle failed integrity verification');
+          }
+          if (!verifyBranchExperiment(metadataDir, stagedBranch.videoCi, stagedBranch.videoCiIdentity)) {
+            throw new Error('staged repair Video CI evidence failed integrity verification');
+          }
+          if (!verifyCaptionRepair(metadataDir, stagedBranch.repairCandidate,
+            stagedBranch.repairCandidateIdentity, stagedBranch, staged.dir)) {
+            throw new Error('staged caption repair candidate failed integrity verification');
+          }
+          const expectedStagedRevision = branchRevision(staged.name);
+          published = publishStagedBranch(staged.name, targetName, {
+            expectedRevision, expectedStagedRevision,
+          });
+        } catch (error) {
+          if (staged) {
+            try { removeRelease(staged.name); } catch { /* published or already cleaned */ }
+          }
+          throw error;
+        }
+        const branch = readBranch(published.name);
+        console.log(formatJudgement(report));
+        console.log('');
+        console.log(formatCaptionRepair(branch.repairCandidate, published.name));
+        mSetData({
+          judgement: report,
+          repairCandidate: branch.repairCandidate,
+          repairCandidateIdentity: branch.repairCandidateIdentity,
+          branch: {
+            name: published.name, status: branch.status, rationale: branch.rationale,
+            proofIdentity: branch.proofIdentity, snapshotIdentity: branch.snapshotIdentity,
+          },
+        });
+        mArtifact(published.dir, 'archive');
+        mArtifact(published.metadataDir, 'proof-metadata');
+        return;
+      }
       console.log(formatJudgement(report));
       if (flags.plan) {
         const planned = interventionPlan(report);
@@ -1755,6 +1849,12 @@ async function main() {
           const metadataDir = branchDir(name);
           if (!verifyBranchExperiment(metadataDir, branch.videoCi, branch.videoCiIdentity)) {
             throw new Error(`branch "${name}" has no intact focused Video CI experiment`);
+          }
+          if (branch.repairCandidate && !verifyCaptionRepair(
+            metadataDir, branch.repairCandidate, branch.repairCandidateIdentity, branch,
+            releasePath(name),
+          )) {
+            throw new Error(`branch "${name}" has no intact caption repair evidence`);
           }
           return { name, branch, metadataDir, revision };
         });

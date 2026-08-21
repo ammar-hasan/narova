@@ -8,6 +8,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Added
 
+- **Delegated Video CI caption repair.** `narova judge --repair` can create one
+  unapproved, branch-isolated `caption-sidecar-rebuild/v1` candidate for an
+  explicit mechanical/accessibility caption-word-count uncertainty. It derives
+  only SRT/VTT from proof-bound measured timings, preserves the encoded video
+  and all non-caption identities, requires the candidate to re-judge aligned,
+  and leaves current production unchanged. Creative and general repair remain
+  unsupported.
 - **Video CI focused proof experiments.** Existing proof branches can now
   preserve the actual receipt-bound encoded attempt and one assertion-linked
   observation with `branch save --judge-assertion`. `branch compare` verifies

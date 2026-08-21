@@ -223,6 +223,15 @@ user's approval before any consequential external mutation.
    and encoded evidence but does not rerun judgement, rank, recommend, select,
    restore, render, or mutate. Rejected/archived attempts remain creative memory;
    choose explicitly with the existing branch lifecycle.
+   The only automatic repair policy is explicitly delegated caption-sidecar
+   rebuilding: `narova judge --repair --judge-assertion <id> --repair-branch
+   <name>`. Use it only for a mechanical/accessibility `caption.word_count`
+   uncertainty with current receipt-bound video, proof, and measured timings.
+   It copies the video unchanged, derives SRT/VTT in isolation, re-judges, and
+   publishes an unapproved candidate only when the assertion becomes `ALIGNED`
+   and protected identities remain exact. Current production is unchanged.
+   Creative, factual, narrative, continuity, brand, experimental, deliberate,
+   or otherwise uncertain findings stay in the plan/proof/compare workflow.
    Verify the encoded contact sheet against the approved brief.
 11. When delivery needs attribution or an evidence summary, run `provenance`
    (or `provenance --json`) and `assets credits --format

@@ -481,7 +481,8 @@ async function save(manifestPath, name, opts = {}) {
  * branch.json shape:
  *   { rationale, status, parent, evidence, evidenceHashes, proofReceipt,
  *     proofReceiptSha256, proofIdentity, snapshotIdentity, snapshotHashes, snapshotManifestSha256,
- *     projectIdentity, videoCi?, videoCiIdentity?, created }
+ *     projectIdentity, videoCi?, videoCiIdentity?, repairCandidate?,
+ *     repairCandidateIdentity?, created }
  *   status: exploring | candidate | approved | rejected | archived
  *   parent: optional branch name this was derived from */
 const BRANCH_STATUSES = new Set(['exploring', 'candidate', 'approved', 'rejected', 'archived']);
@@ -524,6 +525,8 @@ function saveBranch(name, meta = {}) {
     projectIdentity: meta.projectIdentity || '',
     ...(meta.videoCi ? { videoCi: meta.videoCi } : {}),
     ...(meta.videoCiIdentity ? { videoCiIdentity: meta.videoCiIdentity } : {}),
+    ...(meta.repairCandidate ? { repairCandidate: meta.repairCandidate } : {}),
+    ...(meta.repairCandidateIdentity ? { repairCandidateIdentity: meta.repairCandidateIdentity } : {}),
     ...(meta.parent ? { parent: meta.parent } : {}),
     };
     return writeBranch(name, branch);

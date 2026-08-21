@@ -74,7 +74,7 @@ operation may add fields in a later schema-1 release.
 | `compile` | `{ manifest, scenes }` | `manifest`, `stage-input`, `compatibility-state` |
 | `check` | `{ level, warnings, errors, critique? }` | `report` when creative identity is requested |
 | `critique` | `{ profile, advice }` | none |
-| `judge` | `{ judgement }`, plus `{ interventionPlan }` when `--plan` is requested; schemas are `narova.judgement/1` and `narova.intervention-plan/1` | none |
+| `judge` | `{ judgement }`; plus `{ interventionPlan }` for `--plan`, or `{ repairCandidate, repairCandidateIdentity, branch }` for successful caption repair | repair success: `archive`, `proof-metadata`; otherwise none |
 | `plan` | the stage plan object | none |
 | `provenance` | the provenance report object | none |
 | `diff` | the revision-impact report, plus its named baseline when applicable | none |
@@ -138,8 +138,8 @@ context is reported unavailable instead of being joined to an arbitrary video.
 Receipt context sources use one shape: `path`, `bytes`, `sha256`, `available`,
 optional `format`, optional `content`, and optional `reason`.
 Observation outcomes do not affect exit success. Missing or undecodable video
-and analysis failures are operation failures. `--repair` is not available and
-is a usage error.
+and analysis failures are operation failures. Repair is limited to the explicit
+caption candidate described below; every other repair remains unsupported.
 
 The `judgement` object contains:
 
@@ -173,6 +173,32 @@ expand creative divergence, constraint inspection/alignment, or uncertainty
 reduction. Options are deterministic and unranked; `selection` is null,
 `mutation` is `none`, and the command invokes no branch, proof, model, network,
 render, or repair work.
+
+### Delegated caption repair candidate
+
+`narova judge --repair --judge-assertion <id> --repair-branch <name> --json`
+is the only supported repair invocation. Both value options are required. Its
+only policy is `caption-sidecar-rebuild/v1`: the assertion must be mechanical
+or accessibility intent with a `caption.word_count` probe; captions must be
+enabled; the baseline observation must be `UNCERTAIN` only because captions are
+missing or invalid; and the selected video, canonical evidence receipt, current
+proof, and measured timing evidence must agree.
+
+Narova stages the current proof snapshot, an exact video copy, derived SRT/VTT,
+and a new artifact binding. It re-judges that candidate and publishes the named
+proof branch only when the focused observation is `ALIGNED` and video, config,
+manifest, timings, proof, snapshot source, and non-caption evidence identities
+are unchanged. The current project and output are never edited. Failure removes
+staging and preserves any prior destination branch.
+
+Machine success retains the baseline `judgement` and adds a
+`narova.repair-candidate/1` record with before/after observations, caption
+artifact identities, protected-identity comparisons, and null approval and
+selection. The result is an unapproved candidate; branch status remains the
+creator's separate decision. Creative, narrative, continuity, experimental,
+deliberate, brand, and factual findings cannot enter this policy. No source or
+media repair, provider/model call, network work, ranking, approval, restoration,
+or delivery occurs.
 
 ### Focused Video CI proof experiments
 

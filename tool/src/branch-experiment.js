@@ -74,7 +74,7 @@ function normalizeObservation(observation, projectDir, artifactPath) {
   };
 }
 
-function captureBranchExperiment(report, assertionId, metadataDir, projectDir) {
+function captureBranchExperiment(report, assertionId, metadataDir, projectDir, opts = {}) {
   const focusAssertion = String(assertionId || '').trim();
   if (!focusAssertion) throw new Error('focused Video CI proof needs an assertion id');
   if (!report || report.schema !== 'narova.judgement/1') {
@@ -117,6 +117,30 @@ function captureBranchExperiment(report, assertionId, metadataDir, projectDir) {
     if (hashFile(copied) !== report.artifact.sha256 || fs.statSync(copied).size !== report.artifact.bytes) {
       throw new Error('focused Video CI artifact changed while being preserved');
     }
+    const contextArtifacts = [];
+    for (const item of opts.contextFiles || []) {
+      if (!item || typeof item.file !== 'string' || typeof item.name !== 'string'
+          || !/^[a-zA-Z0-9._-]+$/.test(item.name)) {
+        throw new Error('focused Video CI context artifact is invalid');
+      }
+      const source = path.resolve(item.file);
+      const stat = fs.lstatSync(source);
+      if (!stat.isFile() || stat.isSymbolicLink()) {
+        throw new Error(`focused Video CI context artifact must be a regular file: ${item.name}`);
+      }
+      const relative = path.posix.join('video-ci', item.name);
+      const destination = path.join(metadataDir, ...relative.split('/'));
+      fs.copyFileSync(source, destination, fs.constants.COPYFILE_EXCL);
+      contextArtifacts.push({
+        role: String(item.role || 'context'),
+        path: relative,
+        bytes: stat.size,
+        sha256: hashFile(source),
+      });
+      if (fs.statSync(destination).size !== stat.size || hashFile(destination) !== hashFile(source)) {
+        throw new Error(`focused Video CI context artifact changed while being preserved: ${item.name}`);
+      }
+    }
     return {
       schema: RECORD_SCHEMA,
       focusAssertion,
@@ -129,6 +153,7 @@ function captureBranchExperiment(report, assertionId, metadataDir, projectDir) {
       },
       evidenceBinding: { sha256: binding.sha256 },
       observation: normalizeObservation(observations[0], path.resolve(projectDir), artifactPath),
+      ...(contextArtifacts.length ? { contextArtifacts } : {}),
     };
   } catch (error) {
     fs.rmSync(experimentDir, { recursive: true, force: true });
@@ -179,7 +204,24 @@ function verifyBranchExperiment(metadataDir, record, expectedIdentity) {
     if (record.artifact.path !== path.posix.join('video-ci', path.basename(file))) return false;
     if (stat.size !== record.artifact.bytes || hashFile(file) !== record.artifact.sha256) return false;
     if (path.dirname(file) !== experimentDir) return false;
-    if (JSON.stringify(inventory(experimentDir)) !== JSON.stringify([path.basename(file)])) return false;
+    const contextArtifacts = record.contextArtifacts || [];
+    if (!Array.isArray(contextArtifacts)) return false;
+    const contextNames = [];
+    for (const item of contextArtifacts) {
+      if (!item || typeof item.role !== 'string' || !item.role
+          || !Number.isInteger(item.bytes) || item.bytes < 0
+          || !SHA256.test(String(item.sha256 || ''))) return false;
+      const contextFile = within(metadataDir, item.path);
+      if (!contextFile || path.dirname(contextFile) !== experimentDir
+          || item.path !== path.posix.join('video-ci', path.basename(contextFile))) return false;
+      const contextStat = fs.lstatSync(contextFile);
+      if (!contextStat.isFile() || contextStat.isSymbolicLink()
+          || contextStat.size !== item.bytes || hashFile(contextFile) !== item.sha256) return false;
+      contextNames.push(path.basename(contextFile));
+    }
+    if (new Set(contextNames).size !== contextNames.length) return false;
+    const expectedInventory = [path.basename(file), ...contextNames].sort();
+    if (JSON.stringify(inventory(experimentDir)) !== JSON.stringify(expectedInventory)) return false;
     const observation = record.observation;
     if (!observation || !observation.assertion || observation.assertion.id !== record.focusAssertion) return false;
     if (!['MEASURED', 'INFERRED', 'INTERPRETIVE'].includes(observation.classification)) return false;
@@ -254,6 +296,7 @@ module.exports = {
   RECORD_SCHEMA,
   COMPARISON_SCHEMA,
   branchExperimentIdentity,
+  normalizeObservation,
   captureBranchExperiment,
   verifyBranchExperiment,
   branchComparison,

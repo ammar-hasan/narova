@@ -299,7 +299,7 @@ test('judge rejects unavailable artifacts and repair without writes', { skip: !M
   assert.equal(repair.status, 2, repair.stderr);
   const envelope = machineResult(repair);
   assert.equal(envelope.exit.class, 'usage-error');
-  assert.match(envelope.diagnostics[0].message, /repair is not available/);
+  assert.match(envelope.diagnostics[0].message, /requires --judge-assertion/);
   assert.deepEqual(treeState(project), beforeState);
 });
 

@@ -45,8 +45,10 @@ Agents calling the CLI directly can use the versioned
   production state. `narova judge --plan` adds plural, unranked intervention
   options—including keeping the work unchanged—without selecting or executing
   one. Focused proof branches can preserve the actual encoded attempts and
-  compare their evidence without naming a winner. None of these surfaces emits
-  a universal quality score or quietly changes the work.
+  compare their evidence without naming a winner. One explicitly delegated
+  caption-sidecar policy can create an isolated, unapproved repair candidate;
+  creative findings remain creator decisions. None of these surfaces emits a
+  universal quality score or quietly changes current production.
 - **Two free local renderers** — keep unrestricted HTML/CSS and Studio in
   HyperFrames, or select Narova No-Browser for deterministic Skia + FFmpeg output
   on machines where no browser is available. No render service or fee.
@@ -247,6 +249,8 @@ narova preview --detach   # direct the film in HyperFrames Studio
 narova build --reuse --release  # fail-before-render final gate → out/video.mp4
 narova judge          # inspect intent vs the encoded result; read-only, scoreless
 narova judge --plan   # expand next-step options; unranked, no selection or mutation
+# objective caption uncertainty only: create an unapproved, isolated candidate
+narova judge --repair --judge-assertion captions-present --repair-branch captions-a
 # for a risky assertion: run shots --motion --proof, then preserve this exact render
 narova branch save proof-a --rationale "what this attempt is testing" \
   --judge-assertion silent-opening
@@ -360,7 +364,27 @@ Add `--plan` to receive a read-only option set for each assertion-linked
 unchanged. Creative findings can also align to intent, embrace the rendered
 surprise, or compare a reversible branch; uncertain findings can clarify
 intent, gather evidence, or propose a cheap proof. Narova ranks, selects, and
-executes none of them. `--repair` remains unavailable.
+executes none of them.
+
+One deliberately bounded repair is available for missing or invalid caption
+sidecars:
+
+```bash
+narova judge --repair \
+  --judge-assertion captions-present \
+  --repair-branch captions-candidate
+```
+
+The assertion must be `mechanical` or `accessibility`, contain a
+`caption.word_count` probe, and be `UNCERTAIN` only because receipt-bound
+captions are unavailable or invalid. A current proof and measured timings are
+required. Narova copies the encoded video unchanged, derives SRT/VTT in isolated
+staging, re-judges the candidate, and publishes only an `ALIGNED`, unapproved
+proof branch. Config, manifest, timings, proof, source snapshot, non-caption
+evidence, video, audio, and current production remain unchanged. Creative,
+narrative, factual, brand, continuity, experimental, or otherwise uncertain
+findings stay in the plan/proof/compare workflow; no general repair engine,
+model call, network work, approval, or selection is implied.
 
 For a focused experiment, first build the attempt and create a current proof
 receipt with `narova shots --motion --proof`. Then save it with
@@ -552,6 +576,7 @@ narova remix <source> copy a local project/archive or public github: locator
 narova check          validate the config (fast, no side effects)
 narova judge          inspect the encoded result against creative assertions
 narova judge --plan   add plural, unranked intervention options; change nothing
+narova judge --repair create only a delegated caption-sidecar proof candidate
 narova branch save    optionally preserve a rendered proof for one assertion
 narova branch compare compare 2–3 preserved proofs; no ranking or selection
 narova synth          make the audio + word timings
