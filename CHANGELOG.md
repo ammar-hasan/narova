@@ -6,8 +6,17 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.33.0] - 2026-08-21
+
 ### Added
 
+- **Video CI rendered-evidence judgement.** `narova judge` and `narova judge
+  --json` compare creator-owned assertions with the actual encoded artifact
+  across intent correspondence, visual/narrative correspondence, entity
+  continuity, attention hierarchy, and temporal behavior. Observations expose
+  timestamps, evidence, confidence, measured/inferred/interpretive basis, and
+  related production state without a universal quality score, taste gate,
+  mutation, or network access; unavailable semantics remain `UNCERTAIN`.
 - **Delegated Video CI caption repair.** `narova judge --repair` can create one
   unapproved, branch-isolated `caption-sidecar-rebuild/v1` candidate for an
   explicit mechanical/accessibility caption-word-count uncertainty. It derives
