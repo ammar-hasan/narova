@@ -14,7 +14,7 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.33.0"
+  version: "0.34.0"
 ---
 # narova — video from scene scripts
 
@@ -83,7 +83,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.33.0"
+narova_required="@narova/narova@0.34.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -307,6 +307,18 @@ byte-identical. Edit surgically. Visual-only edit → `build --reuse`.
 Spoken-text edit → plain `build` (sentence cache re-synthesizes only changed
 sentences; untouched scenes are byte-identical). See
 `references/prompt-to-video.md` §Iterating.
+
+Rebuilds are incremental and dependency-aware: `narova build` re-renders only
+the scenes whose audiovisual work actually changed and reuses the rest. A scene
+whose visuals are local-time stays reusable when an earlier scene's duration
+shifts it (the build re-places it and prints `placement changed; local visuals
+unchanged`); one scene-referenced asset edit invalidates only the referencing
+scenes; an unused asset edit invalidates none; audio-only changes (bed/SFX or a
+voice with unchanged timing) re-mux audio over reused spans. Read the build's
+reuse lines to know what rebuilt, what reused, and why (`guidance: visual
+content changed`), plus dirty-unit seconds and renderer invocation counts.
+Unproven reuse falls back conservatively with an attributed reason — never a
+stale frame.
 
 ## Read it to…
 

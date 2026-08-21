@@ -12,7 +12,7 @@ Agents calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.33.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.34.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -629,6 +629,21 @@ out/video.mp4
 `out/`, `out/hf-*`, and `out/no-browser-*` are build folders. Never edit them.
 The config remains the render source of truth; the approved brief records why the
 creative direction is ready to scale.
+
+Rebuilds are incremental and dependency-aware: `narova build` (and
+`--release`) re-renders only the scenes whose audiovisual work actually
+changed, reuses the rest, and re-places reused scenes when an earlier scene's
+duration shifts them. Unchanged scenes cause zero renderer frame evaluation;
+one scene-referenced asset edit invalidates only the scenes that reference it;
+an unused asset edit invalidates nothing. The build prints what rebuilt, what
+reused, and why (for example `guidance: visual content changed` or
+`reveal: placement changed; local visuals unchanged`), plus dirty-unit seconds
+and renderer invocation counts. Audio-only changes (bed/SFX or a voice with
+unchanged timing) re-mux audio over reused spans without re-rendering. If safe
+reuse cannot be proven, Narova rebuilds conservatively and says why — it never
+serves a stale frame. The incremental result is audiovisually equivalent to a
+forced-clean build (decoded frames, frame count/boundaries, audio/sync,
+captions, duration).
 
 ## Repo layout
 

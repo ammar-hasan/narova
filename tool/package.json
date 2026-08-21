@@ -1,6 +1,6 @@
 {
   "name": "@narova/narova",
-  "version": "0.33.0",
+  "version": "0.34.0",
   "description": "Local-first prompt-to-video CLI for AI agents, with deterministic scene scripts, TTS, word-synced captions, product walkthroughs, and 2D/3D rendering.",
   "keywords": [
     "video",

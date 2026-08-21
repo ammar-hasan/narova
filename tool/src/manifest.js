@@ -69,8 +69,51 @@ function hashConfig(config) {
 function buildHashes(config, projectDir) {
   const h = {};
   h.config = hashConfig(config);
-  // Theme CSS
-  if (config.themeCss) h.themeCss = sha256(config.themeCss);
+  // Theme CSS (string contents) and the asset files it references. Theme assets
+  // are GLOBAL visual inputs: every scene renders under them, so a change
+  // invalidates all spans (scene-cache keeps only `globalasset:*` keys in the
+  // shared context). The composed global stylesheet merges CSS imports and
+  // inlines local @import rules recursively; url() references resolve against
+  // the renderer project's `assets/` mount (the configured assets directory's
+  // contents). An unresolved reference or unclosable import makes the whole
+  // asset tree global (any asset edit invalidates all scenes).
+  const pd = projectDir || '.';
+  const adCss = config.assetsDir ? path.resolve(pd, config.assetsDir) : path.join(pd, 'assets');
+  let globalCss = [config.themeCss || '', ...(config.imports
+    ? Object.values(config.imports).map(i => (i && /\.css$/i.test(i.file || '') ? i.contents || '' : ''))
+    : [])].filter(Boolean).join('\n');
+  let unresolvedCssRef = false;
+  const cssImportRe = /@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?/gi;
+  for (let depth = 0; depth < 8; depth++) {
+    cssImportRe.lastIndex = 0;
+    const imp = cssImportRe.exec(globalCss);
+    if (!imp) break;
+    const ref = imp[1].trim();
+    if (/^(data:|https?:|\/\/)/i.test(ref)) break; // external import: not hashable here
+    let impFile = null;
+    for (const c of [path.resolve(adCss, ref.startsWith('assets/') ? ref.slice('assets/'.length) : ref), path.resolve(pd, ref)]) {
+      if (fs.existsSync(c) && fs.statSync(c).isFile()) { impFile = c; break; }
+    }
+    if (!impFile) { unresolvedCssRef = true; break; } // cannot close the import → conservative
+    globalCss = globalCss.replace(imp[0], fs.readFileSync(impFile, 'utf8'));
+  }
+  if (globalCss) {
+    h.themeCss = sha256(globalCss);
+    const urlRe = /url\(\s*("([^"]*)"|'([^']*)'|([^)\s]+))\s*\)/gi;
+    let mm;
+    while ((mm = urlRe.exec(globalCss))) {
+      const u = (mm[2] || mm[3] || mm[4] || '').trim();
+      if (!u || /^(data:|https?:|\/\/|#)/i.test(u)) continue;
+      let resolved = null;
+      for (const c of [path.resolve(adCss, u.startsWith('assets/') ? u.slice('assets/'.length) : u), path.resolve(pd, u)]) {
+        if (fs.existsSync(c) && fs.statSync(c).isFile()) { resolved = c; break; }
+      }
+      if (resolved == null) { unresolvedCssRef = true; continue; }
+      const rel = path.relative(pd, resolved) || u;
+      h[`globalasset:${rel}`] = hashFile(resolved);
+    }
+    if (unresolvedCssRef) h['globalasset:__all__'] = assetTreeHash(config, projectDir);
+  }
   // Project choreography: inlined into the composition like theme.css, so an
   // edit to it has to invalidate the build the same way.
   if (config.choreography) h.choreography = sha256(config.choreography);
@@ -105,15 +148,17 @@ function buildHashes(config, projectDir) {
     }
     walk(assetsRoot, '');
   }
-  // Bed / sfx / clip files — hash by relative path (portable).
-  const pd = projectDir || '.';
+  // Bed / sfx / clip files — hash by relative path (portable). Bed/SFX are
+  // audio-only inputs: they never enter the per-scene pixel context, but they
+  // MUST enter the whole-video cache identity because a whole-video cache entry
+  // is an MP4 with audio already muxed in (scene-cache wholeVideoKey).
   if (config.bed && config.bed.file) {
     const rel = path.relative(pd, config.bed.file) || config.bed.file;
-    h[rel] = hashFile(config.bed.file);
+    h[`bed:${rel}`] = hashFile(config.bed.file);
   }
-  if (config.sfx) config.sfx.forEach(s => {
+  if (config.sfx) config.sfx.forEach((s, i) => {
     const rel = path.relative(pd, s.file) || s.file;
-    h[rel] = hashFile(s.file);
+    h[`sfx:${i}:${rel}`] = hashFile(s.file);
   });
   config.scenes.forEach(s => {
     if (s.clip) {
@@ -219,7 +264,12 @@ function compile(config, opts = {}) {
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
     walkthroughs: compileWalkthroughs(walkthroughs, projectDir),
-    scenes: compileScenes(scenes || []),
+    scenes: compileScenes(scenes || [], projectDir, config.assetsDir),
+    // Whole non-audio asset tree hash: the conservative dependency cover for
+    // scenes that embed executable JavaScript or carry an unresolved local
+    // asset reference, and for whole-video cache mode (project JS can load any
+    // asset dynamically) (CHANGE-2026-041 / NAR-007-044).
+    assetTreeHash: assetTreeHash(config, projectDir),
     variants: compileVariants(variants || []),
     series: series || null,
     variant: variant || null,
@@ -349,8 +399,10 @@ function compileVoices(voices) {
   return out;
 }
 
-function compileScenes(scenes) {
-  return (scenes || []).map((s, i) => ({
+function compileScenes(scenes, projectDir, assetsDir) {
+  return (scenes || []).map((s, i) => {
+    const assetRefs = sceneAssetRefs(s, projectDir, assetsDir);
+    return {
     id:         s.id,
     index:      i,
     start:      0,          // filled after synth
@@ -378,8 +430,139 @@ function compileScenes(scenes) {
     _threeModuleContents: s._threeModuleContents || '',
     _cssFileContents: s._cssFileContents || '',
     sfx:  [],              // per-scene SFX anchors (filled by audio.sfx resolution)
+    // Per-scene asset references: project-relative path -> content hash for
+    // every asset this scene can cause to load during its render. The scene
+    // span cache keys on these so one asset edit invalidates only the scenes
+    // that reference it (CHANGE-2026-041 / NAR-007-044). An unresolved local
+    // reference makes the scene conservatively depend on the whole asset tree.
+    assets: assetRefs.refs,
+    _unresolvedAssetRefs: assetRefs.unresolved,
     hash: sceneHash(s),    // scene-level content fingerprint for selective rebuild
-  }));
+    };
+  });
+}
+
+/* Extract the asset files a single scene can cause to load: its clip, image
+ * references in the scene body and scene CSS (both url(...) and <img src=...>),
+ * Three.js model/texture/environment files, and portable-visual image/font
+ * files. Remote/data/hash references are ignored (they do not participate in
+ * local cache identity). A scene whose authored content embeds executable
+ * JavaScript is handled conservatively by the scene cache (it may reference
+ * any asset dynamically), so this extraction only needs to be exact for
+ * declarative scenes.
+ *
+ * References are resolved against the configured assets directory (scene HTML
+ * uses the renderer project's `assets/` mount, which holds the contents of
+ * that directory) and against the project root. Explicit fields (clip, Three.js
+ * files) are validated and rendered relative to the project root, so they
+ * resolve project-root-first; body/CSS/portable-visual references resolve
+ * mount-first. Any local reference that cannot be resolved to an existing file
+ * marks the scene as having an unresolved asset dependency, so the scene cache
+ * falls back conservatively to the whole asset tree instead of silently
+ * tracking a null hash (an edit would otherwise never invalidate it). */
+function sceneAssetRefs(scene, projectDir, assetsDir) {
+  const refs = {};
+  let unresolved = false;
+  let htmlMountResolved = 0; // resolved refs that came from an `assets/` mention
+  const pd = projectDir || '.';
+  const ad = assetsDir ? path.resolve(projectDir, assetsDir) : null;
+  // mountFirst=false → explicit authored fields (project-root-relative).
+  // mountFirst=true → scene HTML/CSS/visual refs (assets/ mount first).
+  const add = (p, mountFirst, fromHtml) => {
+    if (!p || typeof p !== 'string') return;
+    const t = p.trim();
+    if (!t || /^(data:|https?:|\/\/|#|blob:)/i.test(t)) return;
+    const candidates = [];
+    if (ad && mountFirst) {
+      const mountRel = t.startsWith('assets/') ? t.slice('assets/'.length) : t;
+      candidates.push(path.resolve(ad, mountRel));
+    }
+    candidates.push(path.resolve(pd, t));
+    if (ad && !mountFirst) candidates.push(path.resolve(ad, t.startsWith('assets/') ? t.slice('assets/'.length) : t));
+    let resolved = null;
+    for (const c of candidates) {
+      try {
+        if (fs.existsSync(c) && fs.statSync(c).isFile()) { resolved = c; break; }
+      } catch {}
+    }
+    if (resolved == null) {
+      // Unresolved local reference: can't prove which file this scene uses, so
+      // the whole asset tree becomes the conservative dependency cover.
+      unresolved = true;
+      return;
+    }
+    refs[path.relative(pd, resolved) || t] = hashFile(resolved);
+    if (fromHtml && t.includes('assets/')) htmlMountResolved++;
+  };
+  if (scene && scene.clip) add(scene.clip, false);
+  const html = [scene && scene.body, scene && scene._cssFileContents].filter(Boolean).join('\n');
+  const urlRe = /url\(\s*("([^"]*)"|'([^']*)'|([^)\s]+))\s*\)/gi;
+  let mm;
+  while ((mm = urlRe.exec(html))) add(mm[2] || mm[3] || mm[4], true, true);
+  // src, poster, href, and data attribute values (quoted or unquoted) on any
+  // element, plus srcset candidate URLs.
+  const attrRe = /\b(?:src|poster|href|data)\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+  while ((mm = attrRe.exec(html))) add(mm[2] || mm[3] || mm[4], true, true);
+  const srcsetRe = /\bsrcset\s*=\s*("([^"]*)"|'([^']*)'|([^\s"'=<>`]+))/gi;
+  while ((mm = srcsetRe.exec(html))) {
+    for (const cand of (mm[2] || mm[3] || mm[4] || '').split(',')) {
+      add(cand.trim().split(/\s+/)[0], true, true);
+    }
+  }
+  // Conservative closure (NAR-007-044): if the scene HTML mentions the renderer
+  // `assets/` mount in ANY form the analyzer did not resolve to a file — an
+  // unrecognized attribute name, a dynamically-built path, a data-*/bind
+  // surface — the dependency set is not provably closed, so the scene falls
+  // back to the whole asset tree instead of risking stale reuse on an edit.
+  // This bounds the open class of HTML resource-reference forms without
+  // enumerating attribute names forever.
+  const mountMentions = (html.match(/assets\//g) || []).length;
+  if (mountMentions > htmlMountResolved) unresolved = true;
+  if (scene && scene.three) {
+    const visit = (obj) => {
+      if (!obj || typeof obj !== 'object') return;
+      if (typeof obj.src === 'string' && ['model', 'texture', 'particleTexture'].includes(obj.type)) add(obj.src, false);
+      for (const key of ['envMap', 'map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emissiveMap', 'aoMap', 'texture']) {
+        if (typeof obj[key] === 'string') add(obj[key], false);
+      }
+      for (const c of (obj.children || [])) visit(c);
+    };
+    if (typeof scene.three.envMap === 'string') add(scene.three.envMap, false);
+    else if (scene.three.envMap && typeof scene.three.envMap.src === 'string') add(scene.three.envMap.src, false);
+    else visit(scene.three.envMap);
+    for (const o of (scene.three.objects || [])) visit(o);
+  }
+  const visitVisual = (node) => {
+    if (!node || typeof node !== 'object') return;
+    // Both image and svg visual nodes load their pixels from `src` (svg with
+    // an external file; inline markup is not a file reference).
+    if ((node.type === 'image' || node.type === 'svg') && typeof node.src === 'string') add(node.src, true);
+    if (node.style && typeof node.style.fontFile === 'string') add(node.style.fontFile, true);
+    for (const c of (node.children || [])) visitVisual(c);
+  };
+  visitVisual(scene && scene.visual);
+  return { refs, unresolved };
+}
+
+/* Conservative dependency cover for scenes that embed executable JavaScript or
+ * carry an unresolved asset reference, and for whole-video cache mode: the span
+ * may reference any asset dynamically, so its identity covers the whole
+ * non-audio asset tree (excluding bed/SFX, which only affect the mix).
+ * Collected asset entries carry either project-relative or assets-root-relative
+ * paths, so each file is resolved against both bases and keyed by its ABSOLUTE
+ * source path — a root file and a mounted file with the same relative name stay
+ * distinct (an edit to either must change the hash). */
+function assetTreeHash(config, projectDir) {
+  const entries = collectAssets(config, projectDir).filter(a => a.type !== 'audio');
+  const pd = projectDir || '.';
+  const ad = config.assetsDir ? path.resolve(pd, config.assetsDir) : path.join(pd, 'assets');
+  const map = {};
+  for (const a of entries) {
+    for (const c of [path.resolve(pd, a.file), path.resolve(ad, a.file)]) {
+      if (fs.existsSync(c) && fs.statSync(c).isFile()) map[c] = hashFile(c);
+    }
+  }
+  return sha256(JSON.stringify(map, Object.keys(map).sort()));
 }
 
 /* Per-scene content hash: covers every datum that would change the rendered
@@ -731,6 +914,8 @@ module.exports = {
   hashFile,
   hashConfig,
   buildHashes,
+  sceneAssetRefs,
+  assetTreeHash,
   withoutToolchainVersionEvidence,
   read,
   write,

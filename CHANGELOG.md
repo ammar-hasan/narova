@@ -6,6 +6,33 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.34.0] - 2026-08-21
+
+## [Unreleased]
+
+## [0.34.0] - 2026-08-21
+
+### Added
+
+- **Instant trustworthy revisions.** `narova build` and `narova build
+  --release` now rebuild only the audiovisual work that actually needs to
+  change, and reuse the rest. Scene spans key on a scene-local visual identity
+  (content, the asset files the scene references, and scene-local measured
+  timing) plus renderer/provider and global render context; absolute placement
+  is assembly metadata, so a scene whose visuals are local-time stays reusable
+  when an earlier scene's duration changes. One scene-referenced asset edit
+  invalidates only the referencing scenes; an unused asset edit invalidates
+  none; theme-CSS assets stay global; audio-only changes (bed/SFX or a voice
+  with unchanged timing) re-mux over reused spans. Global-time renderers keep
+  placement a dependency where an absolute-time visual exists, and any
+  unprovable reuse falls back conservatively with an attributed reason. Builds
+  print what rebuilt, what reused, and why (for example `guidance: visual
+  content changed`, `reveal: placement changed; local visuals unchanged`),
+  plus dirty-unit seconds and renderer invocation counts, and the measured
+  reuse record gains the same reasons. Incremental output is audiovisually
+  equivalent to a forced-clean build (decoded frames, frame count/boundaries,
+  audio/sync, captions, duration).
+
 ## [0.33.0] - 2026-08-21
 
 ### Added
