@@ -1092,6 +1092,48 @@ Keep `claims.md` exclusively for factual assertions in the narration. Asset
 rights and attribution belong in `assets.lock.json`; content-source bibliography
 belongs in `sources.md`.
 
+### Import metadata flags and license vocabulary
+
+The full set of metadata flags accepted by `assets import` and
+`assets download`:
+
+```bash
+--origin <mode> --provider <name> --item-id <id> --source-page <url>
+--license <id> --license-url <url> --creator <name> --attribution <text>
+```
+
+`--license` is free text — any nonempty value is stored exactly as supplied —
+but the command prints an advisory warning when the value is not a recognized
+form. Recognized forms:
+
+- `public domain` spellings, e.g. `Public Domain (NASA)`
+- `cc0`, e.g. `CC0-1.0`
+- Familiar Creative Commons identifiers: `CC-BY`, `CC-BY-SA`, `CC-BY-NC`,
+  `CC-BY-ND` (and combinations such as `CC-BY-NC-SA`), with an optional
+  version suffix (`CC-BY-SA-4.0`) or `creativecommons.org` URL form
+
+An unrecognized value such as `NASA-PD` is still stored verbatim; it simply
+reports under the `unknown` rights bucket until restated in a recognized form.
+
+### Re-importing a modified file
+
+Re-importing a modified file at the same project-relative path retains the
+prior structured `origin` and `rights` records and the original acquisition
+time when no explicit origin/rights flags are supplied. Grading or otherwise
+transforming an acquired file and re-importing it therefore keeps the
+provider, item ID, source page, and license, and the refreshed bytes pass
+`narova assets verify` — no hand-typed restatement is needed:
+
+```bash
+# Grade assets/glacier.jpg in place, then re-register the new bytes:
+narova assets import assets/glacier.jpg
+```
+
+Supplying a flag replaces only that field. Note that an explicit
+transform-of-record (`derivedFrom`) concept is not part of the current
+ledger — the retained origin record continues to describe the source the
+file was acquired from.
+
 ### Auto-reject when
 
 - Rights field is missing or ambiguous

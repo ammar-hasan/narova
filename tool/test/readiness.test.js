@@ -260,6 +260,20 @@ test('readiness matrix classifies every item with a stable shape', () => {
   assert.equal(text.split('\n').length, items.length + 1);
 });
 
+test('auto-provisionable rows name a provisioning surface, never "set up automatically" (NAR-021-002)', () => {
+  const items = readinessMatrix();
+  for (const i of items) {
+    const line = formatMatrix([i]);
+    if (i.status === 'auto-provisionable') {
+      assert.ok(!line.includes('will be set up automatically'), i.label);
+      assert.ok(!line.includes('doctor'), 'readiness wording must not imply doctor provisions');
+      // A concrete provisioning surface is named: either the generic first-run
+      // wording or the item's own specific trigger.
+      assert.match(line, /provisioned on first run \/ `narova demo`|provisioned|fetched on first build/, i.label);
+    }
+  }
+});
+
 test('environment overrides are honored: a wrong binary never satisfies media', () => {
   // Point overrides at node: runnable, exits 0 for `-version` — but it is
   // not ffmpeg, so the probe must never report satisfied. The recovery

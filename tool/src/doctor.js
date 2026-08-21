@@ -20,6 +20,20 @@ const PY_ENV = { ...process.env, PYTHONPATH: path.join(__dirname, '..', 'py') };
 const NAROVA_HOME = process.env.NAROVA_HOME || path.join(os.homedir(), '.narova');
 const TOOL_DIR = path.resolve(__dirname, '..');
 const { readinessMatrix } = require('./readiness');
+const { mediaGuidance, mediaPinFor } = require('./acquisition');
+
+/* Missing media-tool detail: platform-appropriate install guidance
+ * (NAR-009-018). Where a digest-pinned static build exists for the platform,
+ * name the surface that provisions it — doctor itself is a read-only probe
+ * and never provisions (NAR-021-007). Platform/arch are injectable so the
+ * hint can be exercised for machines other than this one. */
+function mediaToolMissing(platform = process.platform, arch = process.arch) {
+  const pin = mediaPinFor(platform, arch);
+  const guidance = mediaGuidance(platform);
+  return pin
+    ? `not found — provisioned on first run / \`narova demo\` (pinned ${pin.id}); or ${guidance}`
+    : `not found — ${guidance}`;
+}
 
 function sourceFingerprint(toolDir) {
   const files = ['bin/narova.js', 'src/compose/three.js', 'src/pipeline.js'];
@@ -80,8 +94,9 @@ function doctor(projectDir, opts = {}) {
   add('narova source', true, `${TOOL_DIR} (${version}+${fingerprint})`);
 
   const ffmpeg = which('ffmpeg');
-  add('ffmpeg', !!ffmpeg, ffmpeg || 'not found — install via `brew install ffmpeg`');
-  add('ffprobe', !!which('ffprobe'), which('ffprobe') || 'not found');
+  const ffprobe = which('ffprobe');
+  add('ffmpeg', !!ffmpeg, ffmpeg || mediaToolMissing());
+  add('ffprobe', !!ffprobe, ffprobe || mediaToolMissing());
 
   const py = findPython(projectDir);
   const ver = pyOk(py);
@@ -161,4 +176,4 @@ function doctor(projectDir, opts = {}) {
   return allOk;
 }
 
-module.exports = { doctor, sourceFingerprint };
+module.exports = { doctor, sourceFingerprint, mediaToolMissing };

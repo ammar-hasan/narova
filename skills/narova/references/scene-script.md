@@ -543,6 +543,18 @@ seeks through) — never wall-clock CSS. The vocabulary:
 - `class="reveal"` — fade + small slide-up at scene entry. Elements without
   `data-cue` stagger in DOM order, 0.1s apart.
 - `class="cue" data-cue="k"` — fade + slide + scale when turn `k` starts.
+- **`data-cue` hides until its trigger.** An element carrying `data-cue`
+  starts the scene at `opacity: 0` and appears when its turn starts — whether
+  or not it also has a `reveal`/`cue` class. `data-cue` is an entrance
+  animation, not a pure timing modifier: it never leaves the element visible
+  and animates an annotation on top of it. To keep content visible and still
+  animate an annotation at a spoken beat, put the annotation on a separate
+  wrapper element and cue the wrapper instead:
+
+```html
+<span class="token" data-cue="1">if</span>           <!-- hmm: token hidden until turn 1 -->
+<span class="wrap"><span class="token">if</span><span data-mark="underline" data-cue="1"></span></span>
+```
 - `data-delay="0.3"` — seconds added to either trigger, for ordering within a
   turn or a tighter/looser stagger.
 - `data-grow` — the element scales horizontally 0→full (transform origin left)
@@ -710,8 +722,10 @@ Give each host a `color` that fits the palette.
 
 The generated page furniture — topbar wordmark, `NN / NN` counter, progress
 bar — is identical across every narova video. It is plain CSS (`.topbar`,
-`.wordmark`, `.counter`, `.progress`), so `theme.css` can restyle it. Or cut
-it in the config:
+`.wordmark`, `.counter`, `.progress`), so `theme.css` can restyle it. These
+four class names are the documented restylable chrome surface: `narova check`
+does not warn about styling them, since restyling them is the supported
+pattern. Or cut it in the config:
 
 ```js
 chrome: false,                              // no topbar, no counter, no progress bar

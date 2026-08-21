@@ -23,12 +23,14 @@ import json
 import math
 import os
 import queue
+import re
 import subprocess
-import sys
 import threading
 import wave
+from http.client import IncompleteRead
 from pathlib import Path
 from typing import Callable, Protocol
+from urllib.request import urlopen
 
 from .providers import PROVIDER_PROTOCOL, load_provider
 
@@ -390,12 +392,114 @@ class ExternalProviderBackend:
         self.close()
 
 
+# Piper voice catalog coordinates — the same URLs piper.download_voices
+# builds (verified against the installed piper-tts package source).
+PIPER_URL_FORMAT = (
+    "https://huggingface.co/rhasspy/piper-voices/resolve/main/"
+    "{lang_family}/{lang_code}/{voice_name}/{voice_quality}/"
+    "{lang_code}-{voice_name}-{voice_quality}{extension}?download=true"
+)
+PIPER_VOICE_PATTERN = re.compile(
+    r"^(?P<lang_family>[^-]+)_(?P<lang_region>[^-]+)"
+    r"-(?P<voice_name>[^-]+)-(?P<voice_quality>.+)$"
+)
+
+
+class _ShortDownload(Exception):
+    """Received bytes did not match the source's declared content length."""
+
+
+def _fetch_verified(url: str, dest: Path) -> None:
+    """Stream `url` to `dest` through a temporary sibling; the file only
+    lands when the received bytes match the source's declared content-length
+    (the final response header after redirects). NAR-018-073."""
+    tmp = dest.with_name(dest.name + ".part")
+    try:
+        with urlopen(url) as response:
+            declared = response.headers.get("Content-Length")
+            if declared is None:
+                raise _ShortDownload(
+                    f"source did not declare a content length for {dest.name}")
+            expected = int(declared)
+            received = 0
+            with open(tmp, "wb") as out:
+                try:
+                    while True:
+                        chunk = response.read(1 << 20)
+                        if not chunk:
+                            break
+                        out.write(chunk)
+                        received += len(chunk)
+                except IncompleteRead as exc:
+                    out.write(exc.partial)
+                    received += len(exc.partial)
+        if received != expected:
+            raise _ShortDownload(
+                f"{dest.name}: received {received} of {expected} declared bytes")
+        os.replace(tmp, dest)
+    finally:
+        tmp.unlink(missing_ok=True)
+
+
+def download_piper_voice(name: str, data_dir: Path) -> Path:
+    """Download a Piper voice (.onnx model + .onnx.json sidecar) as one
+    verified acquisition unit (NAR-018-073).
+
+    A short or length-less download deletes the partial pair and retries
+    once; a second failure fails closed with no partial file left behind."""
+    match = PIPER_VOICE_PATTERN.match(name.strip())
+    if not match:
+        raise ValueError(
+            f"voice {name!r} did not match pattern "
+            "<language>-<name>-<quality> like 'en_US-lessac-medium'")
+    lang_family = match.group("lang_family")
+    lang_code = f"{lang_family}_{match.group('lang_region')}"
+    voice_name = match.group("voice_name")
+    voice_quality = match.group("voice_quality")
+    fmt = {
+        "lang_family": lang_family,
+        "lang_code": lang_code,
+        "voice_name": voice_name,
+        "voice_quality": voice_quality,
+    }
+    model_path = data_dir / f"{lang_code}-{voice_name}-{voice_quality}.onnx"
+    config_path = data_dir / f"{lang_code}-{voice_name}-{voice_quality}.onnx.json"
+    pair = [
+        (PIPER_URL_FORMAT.format(extension=".onnx", **fmt), model_path),
+        (PIPER_URL_FORMAT.format(extension=".onnx.json", **fmt), config_path),
+    ]
+    data_dir.mkdir(parents=True, exist_ok=True)
+    last_error = None
+    for _ in range(2):
+        try:
+            for url, dest in pair:
+                _fetch_verified(url, dest)
+            return model_path
+        except _ShortDownload as exc:
+            last_error = exc
+            # One acquisition unit: drop both halves so nothing partial is
+            # resolvable on the retry or after failing closed.
+            model_path.unlink(missing_ok=True)
+            config_path.unlink(missing_ok=True)
+    raise RuntimeError(
+        f"piper voice download failed verification: {model_path}\n"
+        f"{last_error} (retried once).\n"
+        f"delete {model_path} and re-run to fetch a fresh copy."
+    ) from last_error
+
+
+def _voice_pair_present(onnx: Path, sidecar: Path) -> bool:
+    """Both halves of the pair exist and are non-empty (mirrors piper's
+    empty-file rule)."""
+    return all(p.exists() and p.stat().st_size > 0 for p in (onnx, sidecar))
+
+
 class PiperBackend:
     """Local Piper ONNX voices. `speaker` in config is a Piper voice name
     (e.g. "en_US-ryan-high"); the model is downloaded on first use."""
 
     def __init__(self, speakers: dict[str, str], data_dir: Path | None = None):
-        from piper import PiperVoice, SynthesisConfig  # lazy
+        from piper import SynthesisConfig  # lazy
 
         self._cfg = SynthesisConfig(length_scale=1.06)
         self._data_dir = data_dir or Path(
@@ -405,17 +509,29 @@ class PiperBackend:
         self._voices = {}
         for who, name in speakers.items():
             onnx = self._ensure_voice(name)
-            self._voices[who] = PiperVoice.load(str(onnx))
+            self._voices[who] = self._load(onnx)
 
     def _ensure_voice(self, name: str) -> Path:
         onnx = self._data_dir / f"{name}.onnx"
-        if not onnx.exists():
+        sidecar = self._data_dir / f"{name}.onnx.json"
+        if not _voice_pair_present(onnx, sidecar):
             print(f"[piper] downloading voice {name} -> {self._data_dir}", flush=True)
-            subprocess.run(
-                [sys.executable, "-m", "piper.download_voices", name, "--data-dir", str(self._data_dir)],
-                check=True,
-            )
+            return download_piper_voice(name, self._data_dir)
         return onnx
+
+    def _load(self, onnx: Path):
+        """Load a voice, converting parser/decoder failures into an
+        actionable corrupt-or-incomplete diagnostic (NAR-018-074)."""
+        from piper import PiperVoice  # lazy
+
+        try:
+            return PiperVoice.load(str(onnx))
+        except Exception as exc:
+            raise RuntimeError(
+                f"piper voice model failed to load: {onnx}\n"
+                "the file is likely corrupt or an incomplete download — "
+                f"delete {onnx} and re-run to fetch a fresh copy"
+            ) from exc
 
     def synthesize(self, who: str, text: str, out_path: Path, lang: str | None = None,
                    seed: int | None = None) -> Path:

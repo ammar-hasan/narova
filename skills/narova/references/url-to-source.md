@@ -123,6 +123,36 @@ Rules:
 - `narova check` sniffs `vo` for stats and superlatives and warns when no
   `claims.md` exists. Heuristic only — the ledger is the real gate.
 
+### The ledger's machine shape
+
+`narova check` parses `claims.md` (or `CLAIMS.md`) with three collectors:
+
+- **`## claim:` headings** — the heading text after `## claim:` is one claim.
+- **Bullets** (`- ...`) anywhere in the file count as claim lines.
+- **Table rows** count only under a `## Claims` heading. The claim text is
+  read from the column whose header names the claim — a header matching
+  "claim" or "as spoken", case-insensitively. If no header names the claim,
+  the second column is used. Empty cells never shift a row's columns.
+
+`narova ingest` writes the canonical shape, a three-column table under
+`## Claims` whose first column is named `Claim (as spoken in vo)`:
+
+```markdown
+## Claims
+
+| Claim (as spoken in vo) | Tag | Source |
+|---|---|---|
+| Over 2,000+ products. | verbatim | https://example.com |
+| Leading platform in the region. | paraphrase | https://example.com |
+```
+
+A table placed under any other heading (for example `## Sources`) is not
+collected as claims, and a ledger that yields zero claim lines warns at every
+`check` level — it never fails a run, it just means check could not read your
+claims from the file. Keep each claim's exact wording (or its digit/word
+equivalent) somewhere the ledger can match it: a claim that check detects in
+the `vo` but cannot find in the ledger fails release.
+
 ### Sourcing is checkable; balance is not
 
 A ledger full of accurate-but-one-sided claims passes every check and still

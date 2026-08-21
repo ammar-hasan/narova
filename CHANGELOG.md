@@ -6,7 +6,50 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
-## [0.36.0] - 2026-08-21
+## [0.37.0] - 2026-08-22
+
+### Added
+
+- **Zero-claims ledger advisory.** When a `claims.md`/`CLAIMS.md` exists but
+  parses to zero claim lines, `narova check` warns at every level naming the
+  file; it never changes the result and stays separate from the coverage
+  statement.
+- **Verified local voice acquisition.** Piper voice downloads verify received
+  bytes against the source's declared content length (one retry, fail-closed
+  cleanup), treat the model + `.onnx.json` pair as one unit, and surface a
+  corrupt-or-incomplete diagnostic at load time. `narova voices get` shares
+  the verified download.
+- **Action-scoped `--help`.** `narova assets|walkthrough|branch <action>
+  --help` prints that action's usage and accepted options instead of global
+  help.
+
+### Changed
+
+- **Claims ledger parsing by named column.** `check` reads `## Claims` tables
+  by the column whose header names the claim ("claim"/"as spoken"), falling
+  back to the second column; empty cells never shift columns; multiple tables
+  under `## Claims` each resolve their own header; bullets collect regardless
+  of position. The authoring reference documents the required ledger shape.
+- **Chrome classes are restylable, not reserved.** `progress`, `topbar`,
+  `wordmark`, and `counter` no longer trigger check's reserved-class warning in
+  body HTML or `theme.css`, matching the documented chrome-restyle guidance;
+  still-runtime classes keep warning.
+- **Doctor/readiness honesty.** ffmpeg/ffprobe guidance is platform-
+  appropriate, and auto-provisionable readiness rows name the surface that
+  provisions them (first run / `narova demo`) instead of "will be set up
+  automatically".
+- **License vocabulary advisory.** `assets import`/`download`/`acquire` warn
+  (advisory only) when a supplied `--license` is not a recognized form
+  (`public domain`, `cc0`, familiar Creative Commons identifiers), storing the
+  value verbatim and leaving it `unknown` in display buckets.
+
+### Fixed
+
+- **Multi-table claims ledgers.** A second table under the same `## Claims`
+  heading no longer reads its header row as data.
+- **Bullet collection after tables.** Bullets following a `## Claims` table
+  still count toward the ledger.
+
 
 ### Added
 
