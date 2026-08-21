@@ -891,6 +891,7 @@ function renderSpans(config, outDir, spans, opts = {}) {
   if (!Number.isFinite(fps) || fps <= 0 || fps > 120) throw new Error('no-browser renderer fps must be between 1 and 120');
   const frameRoot = path.join(composed.dir, '.frames');
   fs.rmSync(frameRoot, { recursive: true, force: true });
+  ensureDir(frameRoot);
   let clipDirs = new Map();
   try {
     clipDirs = extractClipFrames(project, composed.dir, frameRoot, fps);

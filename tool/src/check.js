@@ -21,7 +21,7 @@ const { verifyProofBundle } = require('./proof-receipt');
 const { projectIdentity } = require('./releases');
 const { lockPath: assetLockPath, verifyAssets } = require('./asset-registry');
 const { isBuiltinBackend, MARKUP_FAMILIES, deliveryCapabilitiesFor } = require('./tts-backends');
-const { getProvider } = require('./providers');
+const { getSpeechProvider } = require('./providers');
 const creativeIdentity = require('./creative-identity');
 const { assertRegistered } = require('./diagnostic-codes');
 
@@ -770,7 +770,7 @@ function check(config, opts = {}) {
   // drifting declarations). Advisory only: text is sent unaltered either way.
   const backendsInUse = [...new Set(Object.values(config.voices || {}).map(v => v.backend).filter(Boolean))];
   for (const backend of backendsInUse) {
-    const capabilities = deliveryCapabilitiesFor(backend, name => (isBuiltinBackend(name) ? null : getProvider(name)));
+    const capabilities = deliveryCapabilitiesFor(backend, name => (isBuiltinBackend(name) ? null : getSpeechProvider(name)));
     if (!capabilities) continue; // undeclared/unknown backend — stay silent
     for (const s of config.scenes) {
       for (const [ti, turn] of (s.vo || []).entries()) {
@@ -1217,7 +1217,7 @@ function critique(config, opts = {}) {
       byBackend.get(v.backend).push(v);
     }
     for (const [backend, vs] of byBackend) {
-      const caps = deliveryCapabilitiesFor(backend, name => (isBuiltinBackend(name) ? null : getProvider(name)));
+      const caps = deliveryCapabilitiesFor(backend, name => (isBuiltinBackend(name) ? null : getSpeechProvider(name)));
       if (!caps || caps['delivery-instruct'] !== 'honored') continue;
       if (!vs.some(v => v.instruct && String(v.instruct).trim())) {
         note(`narration: backend ${backend} honors delivery direction (per-voice \`instruct\`) but no voice using it configures one — a free performance surface, e.g. instruct: "warm, measured storyteller; never flat"`);

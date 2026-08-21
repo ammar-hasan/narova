@@ -5,7 +5,7 @@ const path = require('path');
 const { resolveSize, PLATFORMS, resolveVoiceSample } = require('./util');
 const { isBuiltinBackend, backendHint } = require('./tts-backends');
 const {
-  getProvider, jsonCompatibilityError, containsRequiredEnvironmentValue,
+  getSpeechProvider, jsonCompatibilityError, containsRequiredEnvironmentValue,
 } = require('./providers');
 const { resolveWalkthroughs } = require('./walkthrough');
 const { validateVisual, validateThreeConfig } = require('./renderers/visual');
@@ -263,7 +263,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
     if (!isBuiltinBackend(v.backend)) {
       let provider = null;
-      try { provider = getProvider(v.backend); }
+      try { provider = getSpeechProvider(v.backend); }
       catch (e) { errs.push(`${at}.backend: registered provider is invalid: ${e.message}`); }
       if (!provider) {
         errs.push(`${at}.backend: unknown backend ${JSON.stringify(v.backend)} (unregistered external provider; built-ins: ${backendHint()}; register with "narova providers add <manifest>")`);

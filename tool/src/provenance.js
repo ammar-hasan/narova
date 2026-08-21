@@ -295,11 +295,18 @@ function recipeEvidence(projectDir, record) {
   try {
     const { absolute } = resolveProjectFile(projectDir, record.recipe);
     const parsed = JSON.parse(fs.readFileSync(absolute, 'utf8'));
+    const supportedVersion = parsed && (parsed.version === 1 || parsed.version === 2);
+    const currentIdentity = parsed && parsed.version === 2
+      && typeof parsed.providerName === 'string' && parsed.providerName.trim()
+      && parsed.providerProtocol === 'narova-video-provider/v1'
+      && typeof parsed.providerVersion === 'string' && parsed.providerVersion.trim()
+      && parsed.params && typeof parsed.params === 'object' && !Array.isArray(parsed.params);
     if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)
-        || parsed.kind !== 'narova-generate-spec' || parsed.version !== 1
+        || parsed.kind !== 'narova-generate-spec' || !supportedVersion
         || typeof parsed.provider !== 'string' || !parsed.provider.trim()
-        || typeof parsed.prompt !== 'string' || !parsed.prompt.trim()) {
-      throw new Error('generation recipe is not a narova-generate-spec v1 record with provider and prompt');
+        || typeof parsed.prompt !== 'string' || !parsed.prompt.trim()
+        || (parsed.version === 2 && !currentIdentity)) {
+      throw new Error('generation recipe is not a supported narova-generate-spec version 1 or 2 record with provider identity and prompt');
     }
     const expectedArtifact = path.basename(record.file);
     if (parsed.artifact !== expectedArtifact

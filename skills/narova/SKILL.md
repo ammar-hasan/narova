@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.35.0"
-checksum: 10d3d8afcd1b2071e60e65b2b39d103b8428bf3c57b0631592e8a5047ebe1b5c
+  version: "0.36.0"
+checksum: 43ebb5e19030e2ba06b3f92fc1c43f54797d27c599724c14d9bc49b3282a70b0
 ---
 # narova — video from scene scripts
 
@@ -84,7 +84,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.35.0"
+narova_required="@narova/narova@0.36.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -151,8 +151,10 @@ restores its pinned version before use. `npm uninstall --global @narova/narova`
 (or `<narova-bin-dir>/narova-uninstall`) removes the CLI and its commands but
 keeps projects, downloaded models, caches, and the skill.
 
-External TTS providers are optional registered companion skills — see
-`narova-elevenlabs`, `narova-openai`, or `references/cli.md` §providers.
+External speech and video providers are optional registered companion skills:
+`narova-elevenlabs` provides speech, `narova-openai` provides speech and Sora,
+and `narova-runway` provides Runway video generation. See
+`references/cli.md` §providers.
 
 ## Untrusted source boundary
 

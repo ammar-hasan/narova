@@ -1,190 +1,348 @@
 'use strict';
-/* AI video clip generation for narova.
+/* Provider-neutral AI video clip generation for Narova.
  *
- * Generates video clips via external AI providers (Sora, Runway) and saves
- * them to the project's assets directory for use as scene.clip sources.
- * Generated clips are first-class assets that can be reused across scenes. */
+ * Hosted API details live in explicitly registered companion workers speaking
+ * narova-video-provider/v1. Core owns the project boundary, staging, recipe,
+ * hashing, asset registry, and rollback transaction. */
 
 const fs = require('fs');
 const path = require('path');
-const https = require('https');
-const http = require('http');
+const { createHash } = require('crypto');
+const { spawn, spawnSync } = require('child_process');
 const {
-  downloadAsset, readAssetLock, registerAsset, resolveProjectFile,
+  readAssetLock, registerAsset, resolveProjectFile,
   sanitizeUrl, sha256, withAssetMutation,
 } = require('./asset-registry');
+const {
+  VIDEO_PROVIDER_PROTOCOL, getVideoProvider, missingEnvironment,
+  jsonCompatibilityError, containsRequiredEnvironmentValue, redactProviderText,
+} = require('./providers');
 
-const PROVIDERS = {
-  sora: {
-    name: 'OpenAI Sora',
-    api: 'https://api.openai.com/v1/videos',
-    envKey: 'OPENAI_API_KEY',
-    description: 'OpenAI Sora — text-to-video generation (requires OPENAI_API_KEY)',
-  },
-  runway: {
-    name: 'Runway',
-    api: 'https://api.dev.runwayml.com/v1/text_to_video',
-    envKey: 'RUNWAYML_API_SECRET',
-    description: 'Runway Gen-4.5 — text-to-video generation (requires RUNWAYML_API_SECRET)',
-  },
-};
+const HANDSHAKE_TIMEOUT_MS = 10000;
+const GENERATION_TIMEOUT_MS = 20 * 60 * 1000;
+const MEDIA_PROBE_TIMEOUT_MS = 10000;
+const MAX_GENERATED_VIDEO_BYTES = 1024 * 1024 * 1024;
+const MAX_WORKER_RESPONSE_BYTES = 1024 * 1024;
+const MAX_WORKER_STDERR_BYTES = 64 * 1024;
+const MAX_WORKER_DIAGNOSTIC_DISPLAY_BYTES = 4 * 1024;
 
-function providerInfo(name) {
-  return PROVIDERS[name] || null;
+function providerResponseError(response, fallback, manifest = { requiredEnvironment: [] }) {
+  const error = response && response.error;
+  if (typeof error === 'string') return redactProviderText(error, manifest);
+  if (error && typeof error.message === 'string') return redactProviderText(error.message, manifest);
+  return redactProviderText(fallback, manifest);
 }
 
-/* Simple HTTP POST helper (zero-dependency, no external client needed for MVP). */
-function postJson(url, data, headers = {}) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const mod = u.protocol === 'https:' ? https : http;
-    const body = JSON.stringify(data);
-    const opts = {
-      hostname: u.hostname, port: u.port, path: u.pathname + u.search,
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'Content-Length': Buffer.byteLength(body), ...headers },
-    };
-    const req = mod.request(opts, res => {
-      let chunks = '';
-      res.on('data', d => chunks += d);
-      res.on('end', () => {
-        try { resolve({ status: res.statusCode, body: JSON.parse(chunks) }); }
-        catch { resolve({ status: res.statusCode, body: chunks }); }
+class JsonLineWorker {
+  constructor(manifest) {
+    this.manifest = manifest;
+    this.child = null;
+    this.pending = null;
+    this.exited = null;
+    this.fatalError = null;
+    this.stderrBuffer = Buffer.alloc(0);
+    this.stderrBytes = 0;
+  }
+
+  async start() {
+    let child;
+    try {
+      child = spawn(this.manifest.command[0], this.manifest.command.slice(1), {
+        stdio: ['pipe', 'pipe', 'pipe'],
+        windowsHide: true,
+        shell: false,
+      });
+    } catch (error) {
+      throw new Error(`provider ${this.manifest.name} failed to start: ${redactProviderText(error.message, this.manifest)}`);
+    }
+    this.child = child;
+    child.stderr.on('data', chunk => this.onStderrChunk(chunk));
+    child.stdout.on('data', chunk => this.onStdoutChunk(chunk));
+    child.on('error', error => this.onExit(null, error));
+    child.on('exit', (code, signal) => this.onExit(code, null, signal));
+
+    const hello = await this.exchange(
+      { operation: 'hello', protocol: VIDEO_PROVIDER_PROTOCOL },
+      HANDSHAKE_TIMEOUT_MS,
+      'handshake',
+    );
+    if (hello.ok !== true) {
+      throw new Error(`provider ${this.manifest.name} handshake failed: ${providerResponseError(hello, 'unknown worker error', this.manifest)}`);
+    }
+    if (hello.protocol !== VIDEO_PROVIDER_PROTOCOL) {
+      throw new Error(`provider ${this.manifest.name} uses unsupported protocol ${JSON.stringify(hello.protocol)}; expected ${VIDEO_PROVIDER_PROTOCOL}`);
+    }
+    if (hello.provider !== this.manifest.name) {
+      throw new Error(`provider handshake name mismatch: manifest=${this.manifest.name}, worker=${JSON.stringify(hello.provider)}`);
+    }
+    if (typeof hello.providerVersion !== 'string' || !hello.providerVersion.trim()) {
+      throw new Error(`provider ${this.manifest.name} handshake omitted providerVersion`);
+    }
+    return hello;
+  }
+
+  failWorker(message) {
+    const pending = this.pending;
+    const error = new Error(message);
+    this.fatalError = error;
+    if (pending) {
+      this.pending = null;
+      clearTimeout(pending.timer);
+      pending.reject(error);
+    }
+    this.terminate();
+  }
+
+  onStdoutChunk(chunk) {
+    const pending = this.pending;
+    if (!pending) return;
+    const bytes = Buffer.from(chunk);
+    pending.outputBytes += bytes.length;
+    if (pending.outputBytes > MAX_WORKER_RESPONSE_BYTES) {
+      this.failWorker(`provider ${this.manifest.name} exceeded the ${MAX_WORKER_RESPONSE_BYTES}-byte response limit during ${pending.operation}`);
+      return;
+    }
+    pending.outputBuffer = Buffer.concat([pending.outputBuffer, bytes]);
+    const newline = pending.outputBuffer.indexOf(0x0a);
+    if (newline < 0) return;
+    const line = pending.outputBuffer.subarray(0, newline).toString('utf8').replace(/\r$/, '');
+    this.pending = null;
+    clearTimeout(pending.timer);
+    let response;
+    try { response = JSON.parse(line); }
+    catch {
+      pending.reject(new Error(`provider ${this.manifest.name} returned invalid JSON during ${pending.operation}`));
+      return;
+    }
+    if (!response || typeof response !== 'object' || Array.isArray(response)) {
+      pending.reject(new Error(`provider ${this.manifest.name} returned a non-object response during ${pending.operation}`));
+      return;
+    }
+    pending.resolve(response);
+  }
+
+  onStderrChunk(chunk) {
+    const bytes = Buffer.from(chunk);
+    this.stderrBytes += bytes.length;
+    if (this.stderrBytes > MAX_WORKER_STDERR_BYTES) {
+      this.failWorker(`provider ${this.manifest.name} exceeded the ${MAX_WORKER_STDERR_BYTES}-byte diagnostic limit`);
+      return;
+    }
+    this.stderrBuffer = Buffer.concat([this.stderrBuffer, bytes]);
+    while (true) {
+      const newline = this.stderrBuffer.indexOf(0x0a);
+      if (newline < 0) break;
+      const line = this.stderrBuffer.subarray(0, newline).toString('utf8').replace(/\r$/, '');
+      this.stderrBuffer = this.stderrBuffer.subarray(newline + 1);
+      this.writeDiagnostic(line, true);
+    }
+  }
+
+  writeDiagnostic(value, newline = false) {
+    const bytes = Buffer.from(String(value));
+    const clipped = bytes.length > MAX_WORKER_DIAGNOSTIC_DISPLAY_BYTES
+      ? `${bytes.subarray(0, MAX_WORKER_DIAGNOSTIC_DISPLAY_BYTES).toString('utf8')}… [provider diagnostic truncated]`
+      : bytes.toString('utf8');
+    process.stderr.write(`${redactProviderText(clipped, this.manifest)}${newline ? '\n' : ''}`);
+  }
+
+  onExit(code, error = null, signal = null) {
+    if (this.exited) return;
+    this.exited = { code, error, signal };
+    if (this.stderrBuffer.length && !this.fatalError) {
+      this.writeDiagnostic(this.stderrBuffer.toString('utf8'));
+      this.stderrBuffer = Buffer.alloc(0);
+    }
+    if (this.pending) {
+      const pending = this.pending;
+      this.pending = null;
+      clearTimeout(pending.timer);
+      const detail = redactProviderText(
+        error ? error.message : (signal ? `signal ${signal}` : `status ${code}`),
+        this.manifest,
+      );
+      pending.reject(new Error(`provider ${this.manifest.name} exited during ${pending.operation} (${detail})`));
+    }
+  }
+
+  exchange(request, timeoutMs, operation) {
+    if (this.fatalError) return Promise.reject(this.fatalError);
+    if (!this.child || this.exited) {
+      return Promise.reject(new Error(`provider ${this.manifest.name} worker is not running`));
+    }
+    if (this.pending) {
+      return Promise.reject(new Error(`provider ${this.manifest.name} already has a pending request`));
+    }
+    return new Promise((resolve, reject) => {
+      const timer = setTimeout(() => {
+        if (!this.pending) return;
+        this.pending = null;
+        reject(new Error(`provider ${this.manifest.name} ${operation} timed out`));
+        this.terminate();
+      }, timeoutMs);
+      this.pending = {
+        resolve, reject, timer, operation,
+        outputBytes: 0,
+        outputBuffer: Buffer.alloc(0),
+      };
+      this.child.stdin.write(`${JSON.stringify(request)}\n`, error => {
+        if (!error || !this.pending) return;
+        const pending = this.pending;
+        this.pending = null;
+        clearTimeout(pending.timer);
+        pending.reject(new Error(`provider ${this.manifest.name} failed while sending ${operation}: ${error.message}`));
       });
     });
-    req.on('error', reject);
-    req.write(body);
-    req.end();
-  });
-}
-
-function postMultipartFields(url, fields, headers = {}) {
-  const boundary = `narova-${require('crypto').randomBytes(12).toString('hex')}`;
-  const chunks = [];
-  for (const [name, value] of Object.entries(fields)) {
-    if (value == null) continue;
-    chunks.push(Buffer.from(`--${boundary}\r\nContent-Disposition: form-data; name="${name}"\r\n\r\n${value}\r\n`));
   }
-  chunks.push(Buffer.from(`--${boundary}--\r\n`));
-  const body = Buffer.concat(chunks);
-  return requestBuffer('POST', url, body, {
-    'Content-Type': `multipart/form-data; boundary=${boundary}`,
-    'Content-Length': body.length,
-    ...headers,
-  }).then(res => {
-    let parsed;
-    try { parsed = JSON.parse(res.body.toString('utf8')); } catch { parsed = res.body.toString('utf8'); }
-    return { status: res.status, body: parsed };
-  });
-}
 
-function requestBuffer(method, url, body = null, headers = {}) {
-  return new Promise((resolve, reject) => {
-    const u = new URL(url);
-    const mod = u.protocol === 'https:' ? https : http;
-    const req = mod.request({
-      hostname: u.hostname, port: u.port, path: u.pathname + u.search,
-      method, headers,
-    }, res => {
-      const chunks = [];
-      res.on('data', chunk => chunks.push(chunk));
-      res.on('end', () => resolve({ status: res.statusCode, headers: res.headers, body: Buffer.concat(chunks) }));
+  terminate() {
+    const child = this.child;
+    if (!child || this.exited) return;
+    try { child.kill('SIGTERM'); } catch {}
+  }
+
+  async close() {
+    const child = this.child;
+    if (!child || this.exited) return;
+    try { child.stdin.end(); } catch {}
+    await new Promise(resolve => {
+      if (this.exited) { resolve(); return; }
+      const timer = setTimeout(() => {
+        try { child.kill('SIGTERM'); } catch {}
+        setTimeout(() => { try { child.kill('SIGKILL'); } catch {} }, 500).unref();
+      }, 1000);
+      child.once('exit', () => { clearTimeout(timer); resolve(); });
     });
-    req.on('error', reject);
-    if (body) req.write(body);
-    req.end();
+  }
+}
+
+function probeVideo(file, opts = {}) {
+  if (typeof opts.probeVideo === 'function') return opts.probeVideo(file);
+  const probe = spawnSync('ffprobe', [
+    '-v', 'error', '-select_streams', 'v:0',
+    '-show_entries', 'stream=codec_type', '-of', 'default=nw=1:nk=1', file,
+  ], {
+    encoding: 'utf8',
+    timeout: opts.probeTimeoutMs == null ? MEDIA_PROBE_TIMEOUT_MS : opts.probeTimeoutMs,
+    maxBuffer: 64 * 1024,
+    windowsHide: true,
   });
-}
-
-async function getJson(url, headers = {}) {
-  const res = await requestBuffer('GET', url, null, headers);
-  let body;
-  try { body = JSON.parse(res.body.toString('utf8')); } catch { body = res.body.toString('utf8'); }
-  if (res.status < 200 || res.status >= 300) throw new Error(`HTTP ${res.status}: ${JSON.stringify(body)}`);
-  return body;
-}
-
-function downloadFile(url, dest, opts = {}) {
-  return downloadAsset(url, dest, {
-    headers: opts.headers || {},
-    maxBytes: opts.maxBytes,
-    timeoutMs: opts.timeoutMs,
-    validateContentType(contentType) {
-      if (contentType && !/^(video\/|application\/(?:octet-stream|mp4))/.test(contentType)) {
-        throw new Error(`download returned unexpected content-type: ${contentType}`);
-      }
-    },
-  }).then(() => dest);
-}
-
-/* Poll until the OpenAI video job reaches a terminal state. */
-async function pollSora(jobId, apiKey, timeoutMs = 300000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const res = await getJson(`https://api.openai.com/v1/videos/${encodeURIComponent(jobId)}`, { Authorization: `Bearer ${apiKey}` });
-    if (res.status === 'completed') return res;
-    if (res.status === 'failed') throw new Error(`Sora generation failed: ${JSON.stringify(res)}`);
-    await new Promise(r => setTimeout(r, 3000));
+  if (probe.error && probe.error.code === 'ETIMEDOUT') {
+    throw new Error(`generated video validation timed out after ${opts.probeTimeoutMs || MEDIA_PROBE_TIMEOUT_MS}ms`);
   }
-  throw new Error('Sora generation timed out');
+  if (probe.error) throw new Error(`cannot validate generated video: ${probe.error.message}`);
+  if (probe.status !== 0 || !String(probe.stdout || '').split(/\r?\n/).includes('video')) {
+    throw new Error(`generated output is not a decodable video${probe.stderr ? `: ${String(probe.stderr).trim()}` : ''}`);
+  }
 }
 
-async function generateSora(prompt, apiKey, params = {}) {
-  const seconds = String(params.seconds || params.duration || 4);
-  if (!['4', '8', '12'].includes(seconds)) throw new Error('Sora duration must be 4, 8, or 12 seconds');
-  const submit = await postMultipartFields(
-    'https://api.openai.com/v1/videos',
-    { model: params.model || 'sora-2', prompt, size: params.size || '1280x720', seconds },
-    { Authorization: `Bearer ${apiKey}` },
-  );
-  if (submit.status !== 200 && submit.status !== 201) {
-    throw new Error(`Sora API error: ${JSON.stringify(submit.body)}`);
+function validateStagedVideo(file, manifest, opts = {}) {
+  let stats;
+  try {
+    const link = fs.lstatSync(file);
+    if (link.isSymbolicLink() || !link.isFile()) throw new Error('not a regular file');
+    stats = fs.statSync(file);
+  } catch {
+    throw new Error(`provider ${manifest.name} did not produce a regular output file at ${file}`);
   }
-  const jobId = submit.body.id;
-  await pollSora(jobId, apiKey, params.timeoutMs);
+  if (stats.size <= 0) throw new Error(`provider ${manifest.name} produced an empty output file`);
+  const maxBytes = opts.maxVideoBytes == null ? MAX_GENERATED_VIDEO_BYTES : opts.maxVideoBytes;
+  if (!Number.isInteger(maxBytes) || maxBytes <= 0) throw new Error('generated-video byte limit must be a positive integer');
+  if (stats.size > maxBytes) {
+    throw new Error(`provider ${manifest.name} output exceeds the ${maxBytes}-byte generated-video limit`);
+  }
+  const fd = fs.openSync(file, 'r');
+  let prefix;
+  try {
+    prefix = Buffer.alloc(Math.min(1024, stats.size));
+    fs.readSync(fd, prefix, 0, prefix.length, 0);
+  } finally {
+    fs.closeSync(fd);
+  }
+  const text = prefix.toString('utf8').replace(/^\uFEFF/, '').trimStart();
+  if (/^(?:<!doctype\s+html\b|<html\b|<head\b|<body\b)/i.test(text) || /^[{[]/.test(text)) {
+    throw new Error(`provider ${manifest.name} returned an error document instead of video`);
+  }
+  probeVideo(file, opts);
+  return stats;
+}
+
+function validateProviderResult(manifest, request, result, opts = {}) {
+  if (!result || typeof result !== 'object' || Array.isArray(result)) {
+    throw new Error(`provider ${manifest.name} returned an invalid generation result`);
+  }
+  if (result.id !== request.id) {
+    throw new Error(`provider ${manifest.name} response id mismatch: expected ${request.id}, got ${JSON.stringify(result.id)}`);
+  }
+  if (result.ok !== true) {
+    throw new Error(`provider ${manifest.name} generation failed: ${providerResponseError(result, 'unknown worker error', manifest)}`);
+  }
+  if (typeof result.output !== 'string' || result.output !== request.output) {
+    throw new Error(`provider ${manifest.name} returned unexpected output path`);
+  }
+  const metadata = result.metadata;
+  if (!metadata || typeof metadata !== 'object' || Array.isArray(metadata)) {
+    throw new Error(`provider ${manifest.name} generation response omitted metadata`);
+  }
+  if (metadata.model != null && (typeof metadata.model !== 'string' || !metadata.model.trim())) {
+    throw new Error(`provider ${manifest.name} metadata.model must be a non-empty string or null`);
+  }
+  if (!metadata.params || typeof metadata.params !== 'object' || Array.isArray(metadata.params)) {
+    throw new Error(`provider ${manifest.name} metadata.params must be a JSON object`);
+  }
+  const jsonError = jsonCompatibilityError(metadata.params, 'provider metadata.params');
+  if (jsonError) throw new Error(jsonError);
+  if (containsRequiredEnvironmentValue(metadata, manifest)) {
+    throw new Error(`provider ${manifest.name} metadata contains a required environment secret`);
+  }
+  if (metadata.model != null && metadata.params.model != null && metadata.model !== metadata.params.model) {
+    throw new Error(`provider ${manifest.name} metadata model does not match params.model`);
+  }
+  if (metadata.sourceVideoUrl != null) sanitizeUrl(metadata.sourceVideoUrl);
+
+  const stats = validateStagedVideo(request.output, manifest, opts);
   return {
-    url: `https://api.openai.com/v1/videos/${encodeURIComponent(jobId)}/content`,
-    headers: { Authorization: `Bearer ${apiKey}` },
+    output: path.resolve(result.output),
+    metadata: {
+      model: metadata.model == null ? null : metadata.model,
+      params: metadata.params,
+      ...(metadata.sourceVideoUrl != null ? { sourceVideoUrl: metadata.sourceVideoUrl } : {}),
+    },
+    stats,
   };
 }
 
-async function pollRunway(taskId, apiKey, timeoutMs = 600000) {
-  const deadline = Date.now() + timeoutMs;
-  while (Date.now() < deadline) {
-    const task = await getJson(`https://api.dev.runwayml.com/v1/tasks/${encodeURIComponent(taskId)}`, {
-      Authorization: `Bearer ${apiKey}`,
-      'X-Runway-Version': '2024-11-06',
-    });
-    if (task.status === 'SUCCEEDED') return task;
-    if (task.status === 'FAILED' || task.status === 'CANCELED') throw new Error(`Runway generation ${task.status.toLowerCase()}: ${JSON.stringify(task)}`);
-    await new Promise(r => setTimeout(r, 5000 + Math.floor(Math.random() * 500)));
+async function invokeGenerationProvider(manifest, request, opts = {}) {
+  const worker = new JsonLineWorker(manifest);
+  try {
+    const hello = await worker.start();
+    const response = await worker.exchange(
+      request,
+      opts.timeoutMs == null ? GENERATION_TIMEOUT_MS : opts.timeoutMs,
+      'generation',
+    );
+    return { providerVersion: hello.providerVersion, response };
+  } finally {
+    await worker.close();
   }
-  throw new Error('Runway generation timed out');
 }
 
-async function generateRunway(prompt, apiKey, params = {}) {
-  const res = await postJson(
-    'https://api.dev.runwayml.com/v1/text_to_video',
-    {
-      model: params.model || 'gen4.5',
-      promptText: prompt,
-      ratio: params.ratio || String(params.size || '1280x720').replace('x', ':'),
-      duration: params.duration || 5,
-    },
-    { Authorization: `Bearer ${apiKey}`, 'X-Runway-Version': '2024-11-06' },
-  );
-  if (res.status !== 200 && res.status !== 201) {
-    throw new Error(`Runway API error: ${JSON.stringify(res.body)}`);
+async function generate(providerName, prompt, outputPath, _assetsDir, opts = {}) {
+  const manifest = opts.providerManifest || getVideoProvider(providerName);
+  if (!manifest || manifest.protocol !== VIDEO_PROVIDER_PROTOCOL || manifest.name !== providerName) {
+    throw new Error(`video provider ${JSON.stringify(providerName)} is not registered; install its companion and run \`narova providers add <manifest>\``);
   }
-  if (!res.body || !res.body.id) throw new Error('Runway result missing task id');
-  const task = await pollRunway(res.body.id, apiKey, params.timeoutMs);
-  if (!Array.isArray(task.output) || !task.output[0]) throw new Error('Runway result missing output URL');
-  return { url: task.output[0], headers: {} };
-}
-
-async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = {}) {
-  const info = PROVIDERS[provider];
-  if (!info) throw new Error(`Unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
+  if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('generation prompt must be a non-empty string');
+  const params = { ...(opts.params || {}) };
+  const jsonError = jsonCompatibilityError(params, 'generation options');
+  if (jsonError) throw new Error(jsonError);
+  if (containsRequiredEnvironmentValue({ prompt, options: params, artifact: path.basename(outputPath) }, manifest)) {
+    throw new Error('generation intent contains a required environment secret');
+  }
+  const missing = missingEnvironment(manifest);
+  if (missing.length) {
+    throw new Error(`${manifest.displayName} requires ${missing.join(', ')} in the Narova process environment`);
+  }
 
   const specPath = specPathFor(outputPath);
   for (const [label, target] of [['generation output', outputPath], ['generation recipe', specPath]]) {
@@ -201,8 +359,6 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
     const file = path.relative(opts.projectDir, outputPath);
     const insideProject = file && file !== '..' && !file.startsWith(`..${path.sep}`) && !path.isAbsolute(file);
     if (insideProject) {
-      // Validate the lock and both publication paths before consuming paid
-      // provider work or writing through an escaping symlink.
       readAssetLock(opts.projectDir);
       const artifact = resolveProjectFile(opts.projectDir, file, { mustExist: false });
       const recipe = resolveProjectFile(opts.projectDir, path.relative(opts.projectDir, specPath), { mustExist: false });
@@ -210,37 +366,18 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
     }
   }
 
-  console.log(`Generating video with ${info.name}...`);
+  console.log(`Generating video with ${manifest.displayName}...`);
   console.log(`Prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
 
-  let download;
-  const params = { ...(opts.params || {}) };
-  if (provider === 'sora') {
-    // Capture the exact generation parameters so the shot can be regenerated
-    // or revised ("make it rainy", "same composition, different seed").
-    params.model = params.model || 'sora-2';
-    params.size = params.size || '1280x720';
-    params.duration = params.duration || 4;
-    download = await (opts.generateSora || generateSora)(prompt, apiKey, params);
-  } else if (provider === 'runway') {
-    params.model = params.model || 'gen4.5';
-    params.ratio = params.ratio || String(params.size || '1280x720').replace('x', ':');
-    params.duration = params.duration || 5;
-    download = await (opts.generateRunway || generateRunway)(prompt, apiKey, params);
-  } else throw new Error(`Provider ${provider} not yet implemented`);
-
-  // Validate provider URLs before replacing an existing artifact. buildSpec
-  // also strips signed queries before persisting the recipe.
-  sanitizeUrl(download.url);
-  console.log(`Downloading video...`);
   const destDir = path.dirname(outputPath);
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
-
-  const token = `${process.pid}-${Date.now()}`;
+  const token = `${process.pid}-${Date.now()}-${require('crypto').randomBytes(4).toString('hex')}`;
   const outputExt = path.extname(outputPath);
   const outputStem = path.basename(outputPath, outputExt);
-  const stagedOutput = path.join(destDir, `.${outputStem}.generate-${token}${outputExt}`);
-  const stagedSpec = path.join(path.dirname(specPath), `.${path.basename(specPath)}.generate-${token}`);
+  const stagingDir = fs.mkdtempSync(path.join(path.resolve(destDir), '.narova-generate-'));
+  fs.chmodSync(stagingDir, 0o700);
+  const stagedOutput = path.join(stagingDir, `${outputStem}${outputExt}`);
+  const stagedSpec = path.join(stagingDir, path.basename(specPath));
   const outputBackup = path.join(destDir, `.${outputStem}.previous-${token}${outputExt}`);
   const specBackup = path.join(path.dirname(specPath), `.${path.basename(specPath)}.previous-${token}`);
   let outputBackedUp = false;
@@ -252,8 +389,7 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
     if (committed) return;
     let rollbackError = null;
     try {
-      fs.rmSync(stagedOutput, { force: true });
-      fs.rmSync(stagedSpec, { force: true });
+      fs.rmSync(stagingDir, { recursive: true, force: true });
       if (specPublished) fs.rmSync(specPath, { force: true });
       if (specBackedUp && fs.existsSync(specBackup)) fs.renameSync(specBackup, specPath);
       if (outputPublished) fs.rmSync(outputPath, { force: true });
@@ -265,9 +401,28 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
     } catch (failure) { rollbackError = failure; }
     if (rollbackError && error) error.message += `; generated asset rollback failed: ${rollbackError.message}`;
   };
+
+  const request = {
+    id: 'generation-1',
+    operation: 'generate',
+    prompt,
+    output: path.resolve(stagedOutput),
+    options: params,
+  };
   try {
-    await (opts.downloadFile || downloadFile)(download.url, stagedOutput, { headers: download.headers });
-    const stats = fs.statSync(stagedOutput);
+    const invoke = opts.invokeProvider || invokeGenerationProvider;
+    const invoked = await invoke(manifest, request, { timeoutMs: opts.timeoutMs });
+    const result = validateProviderResult(manifest, request, invoked.response || invoked, opts);
+    const runtimeVersion = invoked.providerVersion || manifest.providerVersion;
+    if (typeof runtimeVersion !== 'string' || !runtimeVersion.trim()) {
+      throw new Error(`provider ${manifest.name} runtime version is missing`);
+    }
+    const spec = buildSpec(manifest, runtimeVersion, prompt, result.metadata, stagedOutput, result.stats.size, {
+      artifactName: path.basename(outputPath),
+    });
+    if (containsRequiredEnvironmentValue(spec, manifest)) {
+      throw new Error(`provider ${manifest.name} generation recipe contains a required environment secret`);
+    }
     const publish = () => {
       try {
         if (projectPaths) {
@@ -285,13 +440,10 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
         if (fs.existsSync(outputPath)) { fs.renameSync(outputPath, outputBackup); outputBackedUp = true; }
         fs.renameSync(stagedOutput, outputPath);
         outputPublished = true;
-        console.log(`Saved: ${outputPath} (${(stats.size / 1024 / 1024).toFixed(1)} MB)`);
+        console.log(`Saved: ${outputPath} (${(result.stats.size / 1024 / 1024).toFixed(1)} MB)`);
 
-        // Persist the editable generation recipe without retaining signed query
-        // strings. A digest still pins the exact provider URL used at acquisition.
-        const spec = buildSpec(provider, info, prompt, params, download.url, outputPath, stats.size);
         fs.mkdirSync(path.dirname(specPath), { recursive: true });
-        fs.writeFileSync(stagedSpec, JSON.stringify(spec, null, 2) + '\n', { flag: 'wx' });
+        fs.writeFileSync(stagedSpec, JSON.stringify(spec, null, 2) + '\n', { flag: 'wx', mode: 0o600 });
         if (fs.existsSync(specPath)) { fs.renameSync(specPath, specBackup); specBackedUp = true; }
         fs.renameSync(stagedSpec, specPath);
         specPublished = true;
@@ -302,9 +454,9 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
             file: projectPaths.artifact.relative,
             origin: {
               mode: 'generated',
-              provider,
-              model: params.model || null,
-              sourceUrl: download.url,
+              provider: manifest.name,
+              model: result.metadata.model,
+              ...(result.metadata.sourceVideoUrl ? { sourceUrl: result.metadata.sourceVideoUrl } : {}),
             },
             recipe: projectPaths.recipe.relative,
             acquiredAt: spec.generatedAt,
@@ -314,6 +466,7 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
           console.log('note: generated clip is outside the project and was not added to assets.lock.json');
         }
         committed = true;
+        fs.rmSync(stagingDir, { recursive: true, force: true });
         for (const backup of [outputBackup, specBackup]) {
           try { fs.rmSync(backup, { force: true }); } catch { /* committed files win */ }
         }
@@ -332,43 +485,49 @@ async function generate(provider, prompt, apiKey, outputPath, assetsDir, opts = 
   return outputPath;
 }
 
-/* Build the generative specification object for a generated clip. Pure so it
- * can be tested without network access. The artifact hash pins the bytes; the
- * prompt/model/params carry the creative intent that survives regeneration. */
-function buildSpec(provider, info, prompt, params, sourceVideoUrl, outputPath, artifactBytes) {
-  const cleanSourceUrl = sanitizeUrl(sourceVideoUrl, { stripQuery: true });
+function buildSpec(manifest, providerVersion, prompt, metadata, outputPath, artifactBytes, opts = {}) {
+  const sourceVideoUrl = metadata.sourceVideoUrl;
   return {
     kind: 'narova-generate-spec',
-    version: 1,
-    provider,
-    providerName: info.name,
-    model: params.model || null,
+    version: 2,
+    provider: manifest.name,
+    providerName: manifest.displayName,
+    providerProtocol: VIDEO_PROVIDER_PROTOCOL,
+    providerVersion,
+    model: metadata.model,
     prompt,
-    params,
-    sourceVideoUrl: cleanSourceUrl,
-    sourceVideoUrlHash: sha256(sourceVideoUrl),
-    artifact: path.basename(outputPath),
+    params: metadata.params,
+    ...(sourceVideoUrl ? {
+      sourceVideoUrl: sanitizeUrl(sourceVideoUrl, { stripQuery: true }),
+      sourceVideoUrlHash: sha256(sourceVideoUrl),
+    } : {}),
+    artifact: opts.artifactName || path.basename(outputPath),
     artifactBytes,
     artifactSha256: sha256File(outputPath),
     generatedAt: new Date().toISOString(),
   };
 }
 
-/* The sidecar path that accompanies a generated clip artifact. */
 function specPathFor(artifactPath) {
   return String(artifactPath).replace(/\.(mp4|webm|mov)$/i, '') + '.gen.json';
 }
 
 function sha256File(file) {
+  const h = createHash('sha256');
+  const buffer = Buffer.allocUnsafe(64 * 1024);
+  const fd = fs.openSync(file, 'r');
   try {
-    const { createHash } = require('crypto');
-    const h = createHash('sha256');
-    h.update(fs.readFileSync(file));
-    return h.digest('hex');
-  } catch { return null; }
+    while (true) {
+      const bytes = fs.readSync(fd, buffer, 0, buffer.length, null);
+      if (bytes === 0) break;
+      h.update(buffer.subarray(0, bytes));
+    }
+  } finally {
+    fs.closeSync(fd);
+  }
+  return h.digest('hex');
 }
 
-/* Read a generative spec sidecar for a generated asset (or null if none). */
 function readSpec(artifactPath) {
   const specPath = specPathFor(artifactPath);
   if (!fs.existsSync(specPath)) return null;
@@ -377,7 +536,10 @@ function readSpec(artifactPath) {
 }
 
 module.exports = {
-  PROVIDERS, providerInfo, generate, buildSpec, readSpec, specPathFor,
-  generateSora, generateRunway, pollSora, pollRunway, downloadFile,
-  _internals: { postJson, postMultipartFields, requestBuffer, getJson },
+  generate, buildSpec, readSpec, specPathFor,
+  invokeGenerationProvider, validateProviderResult, validateStagedVideo,
+  HANDSHAKE_TIMEOUT_MS, GENERATION_TIMEOUT_MS, MEDIA_PROBE_TIMEOUT_MS,
+  MAX_GENERATED_VIDEO_BYTES, MAX_WORKER_RESPONSE_BYTES, MAX_WORKER_STDERR_BYTES,
+  MAX_WORKER_DIAGNOSTIC_DISPLAY_BYTES,
+  _internals: { JsonLineWorker, providerResponseError, probeVideo, sha256File },
 };

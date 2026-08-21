@@ -6,6 +6,6 @@ if ! command -v python3 >/dev/null 2>&1; then
   exit 1
 fi
 
-python3 -c 'import json, pathlib, urllib.request, wave'
-echo "ok: Narova OpenAI provider is ready (stdlib HTTP client; no packages installed)"
-echo "next: set OPENAI_API_KEY, then register tool/provider.json with Narova"
+python3 -c 'import json, pathlib, tempfile, urllib.request, wave'
+echo "ok: Narova OpenAI speech and Sora workers are ready (stdlib HTTP client; no packages installed)"
+echo "next: set OPENAI_API_KEY, then register tool/provider.json and/or tool/video-provider.json with Narova"

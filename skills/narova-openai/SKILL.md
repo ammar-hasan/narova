@@ -3,26 +3,27 @@ name: narova-openai
 description: >
   Use this optional Narova companion when the user explicitly requests OpenAI
   text-to-speech, an OpenAI voice such as marin or cedar, a custom OpenAI voice
-  ID, gpt-4o-mini-tts, or steerable cloud narration through the OpenAI API. It
-  installs and registers a separate OpenAI provider worker without adding
-  cloud dependencies or credentials to the main Narova skill. Do not use it
-  for ordinary local narrated-video requests; Narova remains local-first.
+  ID, gpt-4o-mini-tts, steerable cloud narration, or Sora video generation
+  through the OpenAI API. It registers separate speech and video workers
+  without adding cloud dependencies or credentials to the main Narova skill.
+  Do not use it for ordinary local narrated-video requests; Narova remains
+  local-first.
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "1.0.1"
-checksum: 34ace4f4b687e1cdbe42acb61e36808c20ac4ed2039d52a8e6be6051209ebacd
+  version: "1.1.0"
+checksum: c3a0e354616100b6751fcbd49dbdb1a86e594637364de7afe0ab13ff1157e619
 ---
 
 # Narova + OpenAI
 
-Use this skill as an optional external TTS provider for Narova. Keep every
-OpenAI API detail in this companion and communicate with Narova through the
-generic `narova-tts-provider/v1` JSONL protocol. Let Narova own sentence
-caching and every downstream audio/video stage.
+Use this skill for optional OpenAI speech or Sora video generation. Keep every
+OpenAI API detail in this companion and communicate through Narova's generic
+speech or video JSONL protocol. Let Narova own caching, staging, provenance,
+captions, rendering, and every downstream media stage.
 
 Requires the standalone Narova CLI, the Narova skill, Python 3.10+, network
-access, an OpenAI Platform project with speech-model access, and
+access, an OpenAI Platform project with the requested model access, and
 `OPENAI_API_KEY`.
 
 ## Setup
@@ -45,18 +46,21 @@ access, an OpenAI Platform project with speech-model access, and
    export OPENAI_API_KEY="..."
    ```
 
-5. Explicitly register and verify the worker:
+5. Explicitly register and verify only the workers you need:
 
    ```bash
    narova providers add \
      <narova-openai-skill-dir>/tool/provider.json
    narova providers doctor openai
    narova voices list --backend openai
+   narova providers add \
+     <narova-openai-skill-dir>/tool/video-provider.json
+   narova providers doctor sora
    ```
 
 Read [references/configuration.md](references/configuration.md) before writing
-the voice block. It documents current models, voices, instructions, custom
-voices, errors, security, disclosure, billing, and removal.
+a voice block. Read [references/video-generation.md](references/video-generation.md)
+before using Sora, including its announced API shutdown date.
 
 ## Operating rules
 
@@ -77,3 +81,7 @@ voices, errors, security, disclosure, billing, and removal.
 - Let Narova's sentence cache avoid repeat billing. Text, voice, language,
   tempo, gain, provider version, model, speed, or instructions changes
   invalidate the relevant cache entry.
+- Treat Sora generation as an explicit, billed network operation. Do not retry
+  a submission automatically; the remote job may already exist.
+- Keep Sora's lifecycle warning visible. Its API is currently deprecated and
+  scheduled to shut down on September 24, 2026.

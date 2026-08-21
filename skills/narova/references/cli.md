@@ -46,6 +46,7 @@ absent optional keys are reported as skips.
 | `narova diff` | per-scene revision impact vs the latest recorded revision: each scene `unchanged` / `script changed` / `visual changed` / `timing changed` / `structural`, derived impacts (narration regenerated, captions retimed, spans reused/re-rendered), predicted reuse with basis and unit, and an estimated render time scaled from recorded measured stage durations (omitted with a plain statement before any measurement exists). No ledger: may compare against the last build manifest, naming that baseline; states plainly when nothing is recorded. Pass the same `--fps`/`--quality`/`--renderer` flags as the build so the render-context comparison matches. | instant |
 | `narova history` | `list` recorded revisions (ordinal, timestamp, change summary, measured reuse, optional label); `annotate <v> "label"` (metadata only); `compare <a>..<b>` — the same impact report computed from the records alone. Missing/empty ledger states so plainly and exits 0. | instant |
 | `narova synth` | Python TTS → `out/audio/*.wav`, `out/audio/full.wav`, `out/timings.json`. Creates the venv on first run. Writes and enriches `manifest.json` with measured word timings. **Skipped automatically when `config.narration.file` is set** — external audio is copied directly and mixed with bed/sfx. | built-ins are local; external-provider cost depends on its service |
+| `narova generate "<prompt>" [--provider <name>]` | ask one explicitly registered `narova-video-provider/v1` worker to create a staged clip, then transactionally publish the validated media, versioned generation recipe, hashes, and asset-registry entry. Defaults to provider name `sora`; a missing registration fails before network use. | provider-defined billed network operation |
 | `narova walkthrough explore <id>` | open a declared URL in an isolated agent-browser session and print its interactive accessibility snapshot. The session stays open so an author/agent can inspect real roles, labels, text, and test ids before scripting. | browser startup |
 | `narova walkthrough capture [id]` | execute declared semantic actions on measured narration anchors and write a WebM, capture manifest, and evidence PNGs under project assets. Omit id (or use `all`) for every declaration. Explicit only; build never runs actions. | live walkthrough duration + browser startup |
 | `narova walkthrough status [id]` | report whether each capture is fresh, missing, recipe-stale, timing-stale, or modified. | instant |
@@ -57,8 +58,8 @@ absent optional keys are reported as skips.
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
 | `narova preview --scene <id>` | preview one isolated scene; required instead of a full Studio document when a film exceeds the safe WebGL context budget. | Studio until Ctrl-C |
 | `narova voices list\|get` | list or download TTS voices. piper `list` shows a spread of starter voices; `get <name>` downloads any voice from the piper catalog. | network on `get` |
-| `narova providers add <manifest>` | validate, handshake with, and explicitly register an external TTS worker under `~/.narova/providers/`. | instant; starts the worker for its handshake |
-| `narova providers list` | list explicitly registered external TTS providers. | instant |
+| `narova providers add <manifest>` | validate, handshake with, and explicitly register an external speech or video worker under `~/.narova/providers/`. Provider names are globally unique across protocol kinds. | instant; starts the worker for its handshake |
+| `narova providers list` | list explicitly registered external providers and their speech/video kind. | instant |
 | `narova providers doctor <name>` | verify manifest, executable, required environment, and protocol handshake. | provider startup |
 | `narova providers remove <name>` | unregister a provider; does not delete its companion skill. | instant |
 | `narova renderers list` | list the bundled local `hyperframes` and `no-browser` renderer providers. | instant |
@@ -83,9 +84,11 @@ absent optional keys are reported as skips.
 Walkthrough config, auth, semantic locator, security, timing, and layout details:
 [`product-walkthroughs.md`](product-walkthroughs.md).
 
-Optional cloud TTS companions are installed and registered separately. Use
-`narova-elevenlabs` for ElevenLabs or `narova-openai` for OpenAI Speech API
-voices; neither provider is a dependency of the main Narova skill.
+Optional cloud companions are installed and registered separately. Use
+`narova-elevenlabs` for ElevenLabs speech, `narova-openai` for OpenAI speech
+and Sora, or `narova-runway` for Runway video generation; none is a dependency
+of the main Narova skill. Sora and Runway use `narova-video-provider/v1`; the
+core owns staging and provenance while each companion owns its vendor API.
 Renderer providers are different: both are bundled, local, and free. See
 [`renderers.md`](renderers.md) for the portable scene tree and capability matrix.
 

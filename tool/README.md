@@ -42,9 +42,10 @@ narova-setup
 ```
 
 Optional `--xtts`, `--qwen`, and `--chatterbox` flags install larger local
-voice backends into Narova-owned virtual environments. Optional hosted voices
-(ElevenLabs, OpenAI) are separate companion skills registered explicitly; the
-core package stays local-first.
+voice backends into Narova-owned virtual environments. Optional hosted speech
+(ElevenLabs, OpenAI) and video generation (Sora through OpenAI, Runway) are
+separate companion skills registered explicitly; the core package stays
+local-first and contains no vendor API adapter.
 
 ## Quick start
 
