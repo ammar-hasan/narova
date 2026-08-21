@@ -1,14 +1,3 @@
-.logo-mark {
-  display: grid;
-  place-items: center;
-  width: 28px;
-  height: 28px;
-  border: 2px solid currentColor;
-  border-radius: 8px;
-  color: var(--lime);
-  font-size: 11px;
-}
-
 .explore-hero {
   min-height: 92svh;
   display: grid;

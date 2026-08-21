@@ -290,7 +290,10 @@ ${JSON.stringify({
 <div class="progress" aria-hidden="true"><div class="progress-bar" id="progressBar"></div></div>
 <div class="grain" aria-hidden="true"></div>
 <header class="nav">
-  <a class="nav-logo" href="../" data-hover><span class="logo-mark" aria-hidden="true">▶</span>narova</a>
+  <a class="nav-logo" href="../" data-hover>
+    <svg viewBox="0 0 64 64" width="28" height="28" aria-hidden="true"><rect x="2.5" y="2.5" width="59" height="59" rx="14" fill="none" stroke="currentColor" stroke-width="5"/><path d="M24 18 46 32 24 46Z" fill="#d6f94c"/></svg>
+    narova
+  </a>
   <nav class="nav-links" aria-label="Primary navigation">
     <a href="../">Home</a><a href="./" aria-current="page">Explore</a><a href="../changelog/">Changelog</a>
   </nav>

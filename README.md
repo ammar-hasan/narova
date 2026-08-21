@@ -1,5 +1,10 @@
 <div align="center">
 
+<picture>
+  <source media="(prefers-color-scheme: dark)" srcset="docs/assets/logo.svg">
+  <img src="docs/assets/logo.svg" alt="Narova" width="84" height="84">
+</picture>
+
 # Narova — open video production system for humans and agents
 
 **Turn an idea, script, source, repository, or real product flow into video you

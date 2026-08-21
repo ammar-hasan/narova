@@ -1,5 +1,7 @@
 # Narova — open video production system for humans and agents
 
+<p align="center"><img src="logo.svg" alt="Narova" width="84" height="84"></p>
+
 Narova is an open, local-first video production system for humans and agents.
 It turns creative intent — a prompt, script, scene file, source, repository, or
 real product flow — into directable, reproducible video: structured scenes,
