@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.35.0] - 2026-08-21
+
 ### Added
 
 - **Skill content identity.** Every first-party skill (`skills/*/SKILL.md`) now
@@ -21,6 +23,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ## [0.34.0] - 2026-08-21
 
 ## [Unreleased]
+
+## [0.35.0] - 2026-08-21
 
 ## [0.34.0] - 2026-08-21
 
