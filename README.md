@@ -630,6 +630,21 @@ out/video.mp4
 The config remains the render source of truth; the approved brief records why the
 creative direction is ready to scale.
 
+Rebuilds are incremental and dependency-aware: `narova build` (and
+`--release`) re-renders only the scenes whose audiovisual work actually
+changed, reuses the rest, and re-places reused scenes when an earlier scene's
+duration shifts them. Unchanged scenes cause zero renderer frame evaluation;
+one scene-referenced asset edit invalidates only the scenes that reference it;
+an unused asset edit invalidates nothing. The build prints what rebuilt, what
+reused, and why (for example `guidance: visual content changed` or
+`reveal: placement changed; local visuals unchanged`), plus dirty-unit seconds
+and renderer invocation counts. Audio-only changes (bed/SFX or a voice with
+unchanged timing) re-mux audio over reused spans without re-rendering. If safe
+reuse cannot be proven, Narova rebuilds conservatively and says why — it never
+serves a stale frame. The incremental result is audiovisually equivalent to a
+forced-clean build (decoded frames, frame count/boundaries, audio/sync,
+captions, duration).
+
 ## Repo layout
 
 ```

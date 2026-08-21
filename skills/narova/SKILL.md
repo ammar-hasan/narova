@@ -308,6 +308,18 @@ Spoken-text edit → plain `build` (sentence cache re-synthesizes only changed
 sentences; untouched scenes are byte-identical). See
 `references/prompt-to-video.md` §Iterating.
 
+Rebuilds are incremental and dependency-aware: `narova build` re-renders only
+the scenes whose audiovisual work actually changed and reuses the rest. A scene
+whose visuals are local-time stays reusable when an earlier scene's duration
+shifts it (the build re-places it and prints `placement changed; local visuals
+unchanged`); one scene-referenced asset edit invalidates only the referencing
+scenes; an unused asset edit invalidates none; audio-only changes (bed/SFX or a
+voice with unchanged timing) re-mux audio over reused spans. Read the build's
+reuse lines to know what rebuilt, what reused, and why (`guidance: visual
+content changed`), plus dirty-unit seconds and renderer invocation counts.
+Unproven reuse falls back conservatively with an attributed reason — never a
+stale frame.
+
 ## Read it to…
 
 | Read…                          | to…                                                          |

@@ -226,6 +226,8 @@ function measuredReuseRecord({ outDir, manifest, previous, renderReuse, delivera
             basis: 'measured',
             mode: 'whole-video',
             wholeVideoReused: renderReuse.wholeVideoReused === true,
+            dirtySeconds: renderReuse.dirtySeconds == null ? null : renderReuse.dirtySeconds,
+            invocations: renderReuse.invocations || null,
             note: renderReuse.wholeVideoReused === true
               ? 'whole-video render reused — render skipped'
               : (renderReuse.selectiveSkipped
@@ -238,10 +240,17 @@ function measuredReuseRecord({ outDir, manifest, previous, renderReuse, delivera
             mode: renderReuse.mode || null,
             fallback: renderReuse.fallback || null,
             selectiveSkipped: renderReuse.selectiveSkipped || null,
+            placementSensitive: renderReuse.placementSensitive == null ? null : !!renderReuse.placementSensitive,
+            // CHANGE-2026-041 / NAR-007-048: dirty-unit elapsed seconds and
+            // renderer/provider invocation counts.
+            dirtySeconds: renderReuse.dirtySeconds == null ? null : renderReuse.dirtySeconds,
+            invocations: renderReuse.invocations || null,
+            reasons: renderReuse.reasons || null,
             perScene: renderReuse.spans
               ? renderReuse.spans.map(sp => ({
                 sceneId: sp.sceneId,
                 status: sp.status, // 'reused' | 'rendered' | 'fallback'
+                reason: sp.reason || null,
                 seconds: round3(sp.seconds || 0),
               }))
               : null,
@@ -281,6 +290,14 @@ function formatMeasuredSummary(measured) {
   const sp = measured.spans;
   if (sp && sp.perScene) {
     parts.push(`${sp.reusedCount}/${sp.totalCount} render spans reused (${sp.unit})`);
+    if (sp.reasons && sp.reasons.length) parts.push(`reasons: ${sp.reasons.join(', ')}`);
+    if (sp.dirtySeconds != null) parts.push(`dirty ${sp.dirtySeconds}s`);
+    if (sp.invocations) {
+      const inv = [];
+      if (sp.invocations.spans) inv.push(`${sp.invocations.spans} span render(s)`);
+      if (sp.invocations.full) inv.push(`${sp.invocations.full} full render(s)`);
+      if (inv.length) parts.push(inv.join(' + '));
+    }
   } else if (sp && sp.mode === 'whole-video') {
     parts.push(sp.wholeVideoReused ? 'whole-video render reused' : 'whole-video render re-rendered');
   } else if (sp && sp.note) {

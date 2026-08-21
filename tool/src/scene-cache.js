@@ -18,15 +18,36 @@
  *   - 'whole-video' remains available to external providers that cannot render
  *     isolated spans: reuse the MP4 only when every visual input is unchanged.
 
+ * CHANGE-2026-041 — automatic dependency-aware revision (NAR-007-042..048,
+ * NAR-004-023):
+ *   - Placement independence: the span key covers a scene's LOCAL visual
+ *     identity (content, per-scene assets, scene-local measured timings) and
+ *     the shared render context, but NOT the scene's absolute global start.
+ *     A scene whose pixels are a pure function of scene-local time stays
+ *     reusable when an earlier scene's duration changes; placement is applied
+ *     at assembly (concatenation order). The per-scene reason "why" is
+ *     attributed by comparing against the last recorded identity snapshot
+ *     (`.scene-cache/identities.json`).
+ *   - Scene-scoped assets: only assets a scene references enter its key;
+ *     theme-CSS assets are global; unreferenced assets invalidate nothing.
+ *   - Start-sensitive safety: a renderer that evaluates scenes at global time
+ *     (no-browser) draws the chrome progress bar as an absolute-time visual
+ *     unless progress is disabled, so placement remains a dependency there and
+ *     a moved span re-renders conservatively.
+ *   - Conservative fallback: an unproven reuse (missing identity, corrupt span,
+ *     unknown executable-JS asset dependency) rebuilds with an attributed
+ *     reason; it is never a silent stale reuse.
+
  * Determinism contract: a cached span is reused ONLY if reproducing it would
  * yield the same pixels. The cache key is sha256(renderContextHash +
- * sceneHash + sceneTimingsFingerprint) — content, shared render context, and
- * measured word/turn timings. If anything differs, the span is re-rendered. If
- * a cached file is missing, empty, or its probed duration is wrong, it is
- * treated as invalid and re-rendered. Cache failures normally fall back to a
- * full renderer.render(). WebGL-heavy HyperFrames films refuse that fallback:
- * eagerly creating many contexts can silently blank early scenes, so a clear
- * failure is safer than publishing corrupt pixels. */
+ * sceneHash + sceneAssets + sceneTimingsFingerprint) — content, per-scene
+ * assets, shared render context, and measured scene-local word/turn timings.
+ * If anything differs, the span is re-rendered. If a cached file is missing,
+ * empty, or its probed duration is wrong, it is treated as invalid and
+ * re-rendered. Cache failures normally fall back to a full renderer.render().
+ * WebGL-heavy HyperFrames films refuse that fallback: eagerly creating many
+ * contexts can silently blank early scenes, so a clear failure is safer than
+ * publishing corrupt pixels. */
 
 const fs = require('fs');
 const path = require('path');
@@ -35,38 +56,57 @@ const { sha256 } = require('./manifest');
 
 const CACHE_DIR = '.scene-cache';
 const TOLERANCE = 0.08; // seconds: probed-vs-expected span duration slack
+const IDENTITIES_FILE = 'identities.json';
+const START_EPS = 0.001; // seconds: ms-rounded starts are exact to 1e-3
 
 function cacheDir(outDir) { return path.join(outDir, CACHE_DIR); }
+function identitiesPath(outDir) { return path.join(cacheDir(outDir), IDENTITIES_FILE); }
+
+function round3(n) {
+  return n == null ? null : Math.round(n * 1000) / 1000;
+}
 
 /* Shared render context: every project-level input that influences ALL scenes'
  * rendered pixels. A change here invalidates every span (correct — these are
  * shared inputs). Drawn from the enriched manifest so audio/timing/asset
  * content hashes are included.
  *
- * The monolithic `hashes.config` and per-scene `hashes.scenefile:*` entries are
- * deliberately EXCLUDED: `config` flips on any scene edit (defeating per-scene
- * caching) and per-scene file contents are already captured in each scene's own
- * hash. Only genuinely shared inputs (theme css, project choreography, imports,
- * markers, captions, chrome, series, and project asset / bed / sfx / clip /
- * walkthrough-capture file hashes) are kept. An asset change therefore
- * re-renders every span — conservative but never stale.
+ * Which hashes stay GLOBAL (invalidate every span) vs scene-local:
+ *   GLOBAL: theme CSS contents + `globalasset:*` files it references, project
+ *           choreography, and `import:*` sources. These appear in every frame.
+ *   SCENE-LOCAL: `config` (flips on any scene edit — defeating per-scene
+ *           caching), per-scene `scenefile:*` (already folded into each
+ *           scene's hash), asset files, clips, three refs — these enter the
+ *           per-scene key via `manifest.scenes[i].assets` (NAR-007-044).
+ *   AUDIO-LOCAL: bed/sfx file hashes affect the mix, never pixels, so they
+ *           must not invalidate spans (an audio-only change re-muxes the new
+ *           track over reused spans).
+ * The monolithic `hashes.config` is deliberately excluded for the same reason
+ * as before. An unreferenced asset edit therefore invalidates nothing, and a
+ * scene-referenced asset edit invalidates exactly that scene.
  *
- * Dependency model:
+ * Dependency model (CHANGE-2026-041):
  *   GLOBAL (in contextHash) — change invalidates all scenes
- *     theme (tokens + css), chrome, captions config, markers, series,
- *     project choreography, imports, voices, renderer version, fps, quality,
- *     format, asset hashes (bed/sfx/clip/capture files), walkthrough manifests
- *   LOCAL (in sceneHash + timings) — change invalidates only that scene
- *     scene body, visual, three, threeModule, clip path, walkthrough ref,
- *     transition, vo text, scene choreo/script file contents,
- *     measured word/turn timings */
+ *     theme (tokens + css string) + theme-referenced assets, chrome, captions
+ *     config, markers, series, project choreography, imports, voices,
+ *     renderer version, fps, quality, format
+ *   LOCAL (in sceneHash + sceneAssets + scene timings) — change invalidates
+ *     only that scene
+ *     scene body, visual, three, threeModule, clip, walkthrough ref,
+ *     transition, vo text, scene choreo/script file contents, the asset files
+ *     the scene references, measured scene-local word/turn timings
+ *   PLACEMENT (assembly metadata) — never a pixel input except for global-time
+ *     renderers drawing absolute-time visuals (see placementSensitive()) */
+const GLOBAL_HASH_PREFIXES = ['import:', 'globalasset:'];
 function renderContextHash(manifest, opts = {}) {
   const m = manifest || {};
   const sharedHashes = {};
   for (const [k, v] of Object.entries(m.hashes || {})) {
     if (k === 'config') continue;
-    if (k.startsWith('scenefile:')) continue;
-    sharedHashes[k] = v;
+    if (k === 'themeCss' || k === 'choreography') { sharedHashes[k] = v; continue; }
+    if (GLOBAL_HASH_PREFIXES.some(p => k.startsWith(p))) { sharedHashes[k] = v; continue; }
+    // Everything else (scenefile:*, asset walk entries, clip/three/bed/sfx
+    // refs) is scene-local or audio-local and must not invalidate every span.
   }
   const payload = {
     toolVersion: m.narova,
@@ -77,7 +117,13 @@ function renderContextHash(manifest, opts = {}) {
     captions: m.captions,
     choreography: m.choreography,
     timing: m.timing,
-    voices: m.voices,
+    // Voices affect AUDIO identity (backend/speaker/options); only their
+    // presentation metadata (label/color) reaches pixels via caption speaker
+    // labels. Per NAR-007-043, an audio-only voice change with unchanged
+    // measured timing must not invalidate spans.
+    voices: Object.fromEntries(Object.entries(m.voices || {}).map(([id, v]) => [
+      id, { label: v && v.label, color: v && v.color },
+    ])),
     markers: m.markers,
     series: m.series,
     platform: (m.project && m.project.platform) || null,
@@ -91,35 +137,74 @@ function renderContextHash(manifest, opts = {}) {
   return sha256(JSON.stringify(payload));
 }
 
-/* Measured word/turn timings for ONE scene (post-synth). Caption reveals,
- * data-cue motion, and per-turn animations are driven by these, so a re-synth
- * that shifts timings (even with identical text) must invalidate the span. */
+/* Whether a scene embeds executable JavaScript that could reference any asset
+ * dynamically. Such a scene cannot be proven to depend only on its static
+ * references, so its asset identity conservatively covers the whole asset tree
+ * (NAR-007-044 fallback). */
+function hasExecutableJs(scene) {
+  const s = scene || {};
+  return !!(s._scriptFileContents || s._threeModuleContents || s._choreographyFileContents);
+}
+
+/* Per-scene asset identity: hash of the scene's referenced asset content
+ * (project-relative path -> content hash). For scenes with executable JS or an
+ * unresolved local asset reference, the dependency is unknowable, so it covers
+ * the whole non-audio asset tree (conservative). */
+function sceneAssetIdentity(manifest, sceneIndex) {
+  const scene = (manifest.scenes || [])[sceneIndex];
+  if (scene && scene._unresolvedAssetRefs) return manifest.assetTreeHash || sha256('{}');
+  if (hasExecutableJs(scene)) return manifest.assetTreeHash || sha256('{}');
+  const assets = (scene && scene.assets) || {};
+  return sha256(JSON.stringify(assets, Object.keys(assets).sort()));
+}
+
+/* Measured word/turn timings for ONE scene (post-synth), expressed scene-locally.
+ * Caption reveals, data-cue motion, and per-turn animations are driven by these,
+ * so a re-synth that shifts timings (even with identical text) must invalidate
+ * the span. Absolute global start is deliberately EXCLUDED: it is placement
+ * metadata, not a pixel input for a scene whose visuals are local-time.
+ *
+ * Turn starts are stored as GLOBAL times in the enriched manifest only when the
+ * turn has words (mergeTimings adds the scene start); word-less turns keep the
+ * compile-time local placeholder 0. Normalize both back to scene-local. */
 function sceneTimingsFingerprint(scene) {
+  const sceneStart = scene.start || 0;
   const payload = {
     id: scene.id,
     duration: scene.duration,
-    start: scene.start,
     vo: (scene.vo || []).map(t => ({
-      start: t.start,
+      start: (t.start == null || !(t.words && t.words.length))
+        ? 0
+        : round3(t.start - sceneStart),
       words: (t.words || []).map(w => [w.w, w.t0, w.t1]),
     })),
   };
   return sha256(JSON.stringify(payload));
 }
 
-/* The full cache key for one scene span: content + measured timings + shared
- * render context. A span is reusable iff this key is stable. */
-function sceneCacheKey(scene, contextHash) {
-  return sha256([contextHash, scene.hash || '', sceneTimingsFingerprint(scene)].join('\n'));
+/* The full cache key for one scene span: content + per-scene assets + measured
+ * scene-local timings + shared render context. A span is reusable iff this key
+ * is stable. Absolute placement is not part of it (NAR-007-045). */
+function sceneCacheKey(scene, contextHash, assetIdentity) {
+  return sha256([contextHash, scene.hash || '', assetIdentity || '', sceneTimingsFingerprint(scene)].join('\n'));
 }
 
-/* Whole-video cache key: render context + every scene's content & timings.
- * Any single-scene change flips this key, forcing a full renderer.render(). */
+/* Whole-video cache key: render context + the whole asset tree (project-level
+ * JS or whole-video mode can load any asset dynamically, so every asset edit
+ * must invalidate it — NAR-007-044) + AUDIO identity (a whole-video cache entry
+ * is the rendered MP4 with audio muxed in, so a bed/SFX change must invalidate
+ * it) + every scene's content, assets & timings. Any single-scene, asset, or
+ * audio change flips this key, forcing a full renderer.render(). */
 function wholeVideoKey(manifest, contextHash) {
-  const sceneKeys = (manifest.scenes || [])
-    .map(s => (s.hash || '') + '\n' + sceneTimingsFingerprint(s))
+  const m = manifest || {};
+  const audioEntries = Object.entries(m.hashes || {})
+    .filter(([k]) => k.startsWith('bed:') || k.startsWith('sfx:'))
+    .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
+  const audioIdentity = sha256(JSON.stringify(audioEntries));
+  const sceneKeys = (m.scenes || [])
+    .map((s, i) => (s.hash || '') + '\n' + sceneAssetIdentity(m, i) + '\n' + sceneTimingsFingerprint(s))
     .join('\n');
-  return sha256(contextHash + '\n' + sceneKeys);
+  return sha256(contextHash + '\n' + audioIdentity + '\n' + (m.assetTreeHash || '') + '\n' + sceneKeys);
 }
 
 /* True if a cached file is a non-empty MP4 whose duration matches the expected
@@ -142,8 +227,14 @@ function spanIsValid(file, expectedSeconds) {
  * the nearest frame so the spans tile [0, totalFrames) exactly — no gap, no
  * overlap — which is what keeps the concatenated video frame-count-identical
  * to a full render (ceil(total*fps)). */
-function planSpans(manifest, contextHash, fps, outDir) {
+function planSpans(manifest, contextHash, fps, outDir, opts = {}) {
   const scenes = manifest.scenes || [];
+  const pSensitive = !!opts.placementSensitive;   // chrome progress / markers
+  const globalTime = !!opts.globalTime;            // non-isolated: sampling phase
+  const ordinalDep = !!opts.ordinalSensitive;
+  const prior = (opts.identities && opts.identities.scenes) || null;
+  const priorContext = opts.identities && opts.identities.contextHash;
+  const contextChanged = priorContext != null && priorContext !== contextHash;
   const total = manifest.totalDuration || scenes.reduce((n, s) => n + (s.duration || 0), 0);
   const totalFrames = Math.max(1, Math.ceil(total * fps));
   const starts = scenes.map(s => (s.start || 0));
@@ -152,9 +243,62 @@ function planSpans(manifest, contextHash, fps, outDir) {
     const frameEnd = i === scenes.length - 1 ? totalFrames : Math.round(starts[i + 1] * fps);
     const frameCount = Math.max(0, frameEnd - frameStart);
     const expectedSeconds = frameCount / fps;
-    const cacheKey = sceneCacheKey(s, contextHash);
+    const assetIdentity = sceneAssetIdentity(manifest, i);
+    const timingFingerprint = sceneTimingsFingerprint(s);
+    const cacheKey = sceneCacheKey(s, contextHash, assetIdentity);
     const spanFile = path.join(cacheDir(outDir), `${cacheKey}.mp4`);
-    const reusable = spanIsValid(spanFile, expectedSeconds);
+    const sidecar = readSpanSidecar(spanFile);
+    // Any project defining markers is placement-sensitive for every scene:
+    // markers are consumed declaratively (`data-cue="marker:name"`) and by JS,
+    // and isolated renders rebase markers against the scene start.
+    const markerSensitive = manifest.markers && Object.keys(manifest.markers).length > 0;
+
+    // Attribution only: compare against the last recorded identity snapshot.
+    // The REUSE DECISION below is driven by the key-matched span + sidecar, so
+    // a revert A→B→A reuses the still-valid A span even though the snapshot
+    // records B.
+    const prev = prior && prior[s.id];
+    let reason;
+    if (prev == null) reason = 'no prior cached identity';
+    else if (contextChanged) reason = 'render context changed';
+    else if (prev.content !== (s.hash || '')) reason = 'visual content changed';
+    else if (prev.assets !== assetIdentity) reason = 'referenced asset changed';
+    else if (prev.timing !== timingFingerprint) reason = 'measured timing changed';
+    else reason = 'unchanged';
+
+    // Reuse decision (key-first):
+    const fileValid = spanIsValid(spanFile, expectedSeconds)
+      && sidecar != null && sidecar.sceneId === s.id;
+    const sidecarStartMoved = sidecar == null
+      ? true : Math.round((sidecar.start || 0) * 1000) !== Math.round((s.start || 0) * 1000);
+    const sidecarIndexMoved = sidecar != null && sidecar.index !== i;
+    // Global-time renderers sample the full project at absolute frame times, so
+    // reuse is exact only when the frame-sampling PHASE is preserved: the
+    // fractional frame offset of the scene start (start*fps mod 1) must match.
+    // This also subsumes frame-count drift: a phase shift changes the required
+    // frame count by ±1, which a duration tolerance alone would accept.
+    const phaseChanged = globalTime && Math.abs(((s.start || 0) * fps % 1) - ((sidecar && sidecar.start || 0) * fps % 1)) > 1e-6;
+
+    let reusable = fileValid;
+    if (reusable && ordinalDep && sidecarIndexMoved) {
+      reusable = false; reason = 'scene position changed (global-time scene)';
+    } else if (reusable && sidecarStartMoved && markerSensitive) {
+      reusable = false; reason = 'marker-dependent scene placement changed';
+    } else if (reusable && sidecarStartMoved && pSensitive) {
+      reusable = false; reason = 'placement changed (global-time scene)';
+    } else if (reusable && sidecarStartMoved && phaseChanged) {
+      reusable = false; reason = 'placement changed (sampling phase)';
+    }
+    if (!reusable && prev != null && !fileValid) {
+      // The key/span is absent or corrupt: prefer the attributable cause.
+      if (reason === 'unchanged') reason = 'missing or invalid cached span';
+    }
+    if (reusable) {
+      reason = (sidecarStartMoved || sidecarIndexMoved)
+        ? 'placement changed; local visuals unchanged'
+        : 'unchanged';
+    }
+
     return {
       sceneIndex: i,
       sceneId: s.id,
@@ -167,8 +311,94 @@ function planSpans(manifest, contextHash, fps, outDir) {
       tDur: expectedSeconds,
       spanFile,
       reusable,
+      reason,
     };
   });
+}
+
+/* Whether a scene's pixels can depend on its ORDINAL (position in the scene
+ * list). Both bundled renderers embed ordinal-derived state: isolated
+ * HyperFrames spans carry `_firstScene` (entrance transition) and the chrome
+ * counter; no-browser slices render the entrance transition and counter by
+ * index. A scene whose ordinal changed therefore must re-render (NAR-007-046).
+ * This is conservative for all current renderers; a future renderer that is
+ * provably ordinal-independent could opt out. */
+function ordinalSensitive() {
+  return true;
+}
+
+/* Whether a scene's pixels can depend on its ABSOLUTE placement. The chrome
+ * progress bar is drawn from global time for every renderer, so enabling it
+ * makes every scene placement-sensitive. Any project that defines markers is
+ * placement-sensitive for every scene: markers are consumed both by executable
+ * JS and declaratively (`data-cue="marker:name"`, Three animations), and
+ * isolated renders rebase markers against the scene start. Global-time
+ * renderers additionally depend on the frame-sampling phase, handled per scene
+ * in planSpans. */
+function placementSensitive(manifest, scene) {
+  const m = manifest || {};
+  const chrome = m.chrome || {};
+  if (chrome.progress !== false) return true;
+  if (m.markers && Object.keys(m.markers).length > 0) return true;
+  return false;
+}
+
+/* ---- identity snapshot for reuse attribution (NAR-007-048) ------------------
+ * Written after every successful per-scene build so the NEXT build can say WHY
+ * each scene is being rebuilt or reused. Advisory; loss/missing is a plain
+ * "no prior cached identity" miss. */
+
+/* Per-span sidecar: records the placement/ordinal under which a span was
+ * rendered so reuse can validate them independently of the latest identity
+ * snapshot (which only attributes reasons). A revert A→B→A must reuse the
+ * still-valid A-keyed span. */
+function sidecarPath(spanFile) { return spanFile.replace(/\.mp4$/, '.json'); }
+function writeSpanSidecar(span, scene) {
+  try {
+    fs.writeFileSync(sidecarPath(span.spanFile), JSON.stringify({
+      sceneId: scene && scene.id,
+      index: scene && scene.index,
+      start: round3((scene && scene.start) || 0),
+    }));
+  } catch {}
+}
+function readSpanSidecar(spanFile) {
+  try { return JSON.parse(fs.readFileSync(sidecarPath(spanFile), 'utf8')); } catch { return null; }
+}
+
+function identitySnapshot(manifest, contextHash, placementSensitiveFlag) {
+  const scenes = {};
+  (manifest.scenes || []).forEach((s, i) => {
+    scenes[s.id] = {
+      index: i,
+      content: s.hash || '',
+      assets: sceneAssetIdentity(manifest, i),
+      timing: sceneTimingsFingerprint(s),
+      start: round3(s.start || 0),
+    };
+  });
+  return { version: 1, contextHash, placementSensitive: !!placementSensitiveFlag, scenes };
+}
+
+function readIdentities(outDir) {
+  try {
+    const raw = JSON.parse(fs.readFileSync(identitiesPath(outDir), 'utf8'));
+    if (!raw || raw.version !== 1 || !raw.scenes) return null;
+    return raw;
+  } catch {
+    return null;
+  }
+}
+
+function writeIdentities(outDir, snapshot) {
+  try {
+    ensureDir(cacheDir(outDir));
+    const tmp = identitiesPath(outDir) + '.tmp';
+    fs.writeFileSync(tmp, JSON.stringify(snapshot, null, 2));
+    fs.renameSync(tmp, identitiesPath(outDir));
+  } catch {
+    // Advisory only: a lost snapshot means a conservative re-render next time.
+  }
 }
 
 /* Per-scene isolation safety gate. A project feature is "unsafe" to render
@@ -217,6 +447,8 @@ function plan({ outDir, manifest, renderer, fps, quality, log }) {
   const mode = (renderer && renderer.cache && renderer.cache.mode) || 'none';
   const isolated = !!(renderer && renderer.cache && renderer.cache.isolated);
   const contextHash = renderContextHash(manifest, { fps, quality });
+  const pSensitive = placementSensitive(manifest);
+  const identities = readIdentities(outDir);
   const downgrade = (reason) => {
     if (log) log(`scene cache: selective render skipped — ${reason}`);
     const key = wholeVideoKey(manifest, contextHash);
@@ -226,7 +458,7 @@ function plan({ outDir, manifest, renderer, fps, quality, log }) {
     return {
       mode: 'whole-video', contextHash, wholeKey: key, wholeFile,
       reused: reusable ? 1 : 0, renderCount: reusable ? 0 : 1,
-      selectiveSkipped: reason,
+      selectiveSkipped: reason, placementSensitive: pSensitive,
     };
   };
   if (mode === 'per-scene') {
@@ -239,9 +471,19 @@ function plan({ outDir, manifest, renderer, fps, quality, log }) {
       const safety = selectiveRenderSafe(manifest);
       if (!safety.safe) return downgrade(safety.reason);
     }
-    const spans = planSpans(manifest, contextHash, fps, outDir);
+    const spans = planSpans(manifest, contextHash, fps, outDir, {
+      placementSensitive: placementSensitive(manifest),
+      // Global-time renderers embed the scene's ordinal, sample at absolute
+      // frame times (placement/phase), and trim spans to the planned frame
+      // count — all reuse dependencies. Isolated renderers rebase placement
+      // and do not trim, but still embed the ordinal.
+      globalTime: !isolated,
+      ordinalSensitive: ordinalSensitive(),
+      identities,
+    });
     return {
-      mode, contextHash, spans,
+      mode, contextHash, spans, placementSensitive: placementSensitive(manifest),
+      ordinalSensitive: ordinalSensitive(),
       reused: spans.filter(s => s.reusable).length,
       renderCount: spans.filter(s => !s.reusable).length,
     };
@@ -253,10 +495,10 @@ function plan({ outDir, manifest, renderer, fps, quality, log }) {
     const reusable = spanIsValid(wholeFile, total);
     return {
       mode, contextHash, wholeKey: key, wholeFile, reused: reusable ? 1 : 0,
-      renderCount: reusable ? 0 : 1,
+      renderCount: reusable ? 0 : 1, placementSensitive: pSensitive,
     };
   }
-  return { mode: 'none', contextHash, reused: 0, renderCount: 1 };
+  return { mode: 'none', contextHash, reused: 0, renderCount: 1, placementSensitive: pSensitive };
 }
 
 /* Mux-only path for the per-scene renderer: concatenate already-valid spans
@@ -294,6 +536,7 @@ function fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, rea
   if (renderer.name === 'hyperframes' && webglScenes > 12) {
     throw new Error(`isolated render failed and a full fallback would eagerly create ${webglScenes} WebGL contexts (${reason}); refusing a potentially blank render`);
   }
+  if (opts._invocations && typeof opts._invocations === 'object') opts._invocations.full = (opts._invocations.full || 0) + 1;
   return fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, log);
 }
 
@@ -309,18 +552,43 @@ function fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, rea
  * - none: delegate straight to renderer.render(). */
 /* Build the measured reuse summary (CHANGE-2026-026 / NAR-007-036) attached
  * to every renderToMp4 result. `fallback` and `selectiveSkipped` name causes
- * plainly; a fallback re-render is never counted as reuse. */
-function reuseSummary(cachePlan, spans, fallback = null) {
+ * plainly; a fallback re-render is never counted as reuse. CHANGE-2026-041
+ * adds the per-scene reuse reason (NAR-007-048), dirty-unit elapsed seconds,
+ * and renderer/provider invocation counts. */
+function reuseSummary(cachePlan, spans, fallback = null, extra = {}) {
+  const reasons = new Set();
   return {
     mode: cachePlan.mode,
     fallback,
     selectiveSkipped: cachePlan.selectiveSkipped || null,
-    spans: (spans || []).map(s => ({
-      sceneId: s.sceneId,
-      status: fallback ? 'fallback' : (s.reusable ? 'reused' : 'rendered'),
-      seconds: s.expectedSeconds,
-    })),
+    placementSensitive: cachePlan.placementSensitive || null,
+    dirtySeconds: extra.dirtySeconds != null ? Math.round(extra.dirtySeconds * 1000) / 1000 : null,
+    invocations: extra.invocations || null,
+    spans: (spans || []).map(s => {
+      const status = fallback ? 'fallback' : (s.reusable ? 'reused' : 'rendered');
+      if (s.reason) reasons.add(s.reason);
+      return {
+        sceneId: s.sceneId,
+        status,
+        reason: fallback ? null : s.reason || null,
+        seconds: s.expectedSeconds,
+      };
+    }),
+    reasons: reasons.size ? [...reasons] : null,
   };
+}
+
+/* One-line per-scene reuse reason, for the build log (NAR-007-048). */
+function logSpanReasons(spans, log) {
+  const reused = spans.filter(s => s.reusable);
+  const rendered = spans.filter(s => !s.reusable);
+  if (rendered.length) {
+    log('scene cache: re-render reasons — ' + rendered.map(s => `${s.sceneId}: ${s.reason}`).join(' · '));
+  }
+  const moved = reused.filter(s => s.reason && /placement/.test(s.reason));
+  if (moved.length) {
+    log('scene cache: reused with re-placement — ' + moved.map(s => `${s.sceneId} (${s.reason})`).join(', '));
+  }
 }
 
 function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
@@ -331,15 +599,24 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
   const quality = opts.quality || 'standard';
   const cachePlan = plan({ outDir, manifest, renderer, fps, quality, log });
   const mode = cachePlan.mode;
+  const invocations = { spans: 0, full: 0 };
+  let dirtySeconds = 0;
+  // Thread the invocation counter through fallbacks so the reuse report
+  // reflects every real renderer/provider call (NAR-007-048).
+  opts._invocations = invocations;
 
   if (mode === 'per-scene' && typeof renderer.renderSpans === 'function') {
     const spans = cachePlan.spans;
     const needRender = spans.filter(s => !s.reusable);
     if (needRender.length === 0) {
       log(`scene cache: all ${spans.length} scene span(s) reused — rendering nothing`);
+      logSpanReasons(spans, log);
     } else {
       log(`scene cache: rendering ${needRender.length} of ${spans.length} scene span(s) (${spans.length - needRender.length} reused)`);
+      logSpanReasons(spans, log);
+      const t0 = process.hrtime.bigint();
       try {
+        invocations.spans = 1;
         renderer.renderSpans(config, outDir, needRender, {
           fps, quality, keepFrames: opts.keepFrames, artifact: opts.artifact,
         });
@@ -347,12 +624,14 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
         // Never fail the build over the cache: discard any half-written span
         // (atomic temp+rename in the renderer means none should exist, but be
         // safe) and fall through to a full render below.
+        dirtySeconds = Number(process.hrtime.bigint() - t0) / 1e9;
         log(`scene cache: per-scene render failed (${e.message}) — falling back to full render`);
         for (const s of needRender) { try { fs.rmSync(s.spanFile, { force: true }); } catch {} }
         const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, e.message);
-        fb.reuse = reuseSummary(cachePlan, spans, `per-scene render failed: ${e.message}`);
+        fb.reuse = reuseSummary(cachePlan, spans, `per-scene render failed: ${e.message}`, { dirtySeconds, invocations });
         return fb;
       }
+      dirtySeconds += Number(process.hrtime.bigint() - t0) / 1e9;
     }
     // Re-validate after rendering (a freshly written span that came up short
     // would otherwise produce a broken concat). Any invalid span -> full fallback.
@@ -360,14 +639,14 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     if (broken.length) {
       log(`scene cache: ${broken.length} span(s) invalid after render — falling back to full render`);
       const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `${broken.length} invalid span(s)`);
-      fb.reuse = reuseSummary(cachePlan, spans, `${broken.length} invalid span(s) after render`);
+      fb.reuse = reuseSummary(cachePlan, spans, `${broken.length} invalid span(s) after render`, { dirtySeconds, invocations });
       return fb;
     }
     const audio = fullAudioPath(outDir, config);
     if (!fs.existsSync(audio)) {
       log('scene cache: full narration audio missing — falling back to full render');
       const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, 'full narration audio missing');
-      fb.reuse = reuseSummary(cachePlan, spans, 'full narration audio missing');
+      fb.reuse = reuseSummary(cachePlan, spans, 'full narration audio missing', { dirtySeconds, invocations });
       return fb;
     }
     try {
@@ -375,13 +654,20 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     } catch (e) {
       log(`scene cache: concat failed (${e.message}) — falling back to full render`);
       const fb = fullFallback(renderer, config, outDir, manifest, opts, outMp4, log, `concat failed: ${e.message}`);
-      fb.reuse = reuseSummary(cachePlan, spans, `concat failed: ${e.message}`);
+      fb.reuse = reuseSummary(cachePlan, spans, `concat failed: ${e.message}`, { dirtySeconds, invocations });
       return fb;
     }
+    // Persist the identity snapshot so the NEXT build can attribute reuse
+    // reasons and honor start-sensitive placement. Written after success only.
+    writeIdentities(outDir, identitySnapshot(manifest, cachePlan.contextHash, cachePlan.placementSensitive));
+    // Record each span's placement/ordinal sidecar (reused and fresh alike) so
+    // a later revert or placement shift can validate reuse independently of the
+    // latest snapshot.
+    for (const span of spans) writeSpanSidecar(span, manifest.scenes[span.sceneIndex]);
     pruneCache(cacheDir(outDir), spans.map(s => s.spanFile));
     return {
       mp4: outMp4, seconds: probe(outMp4), dir: outDir, project: outDir, renderer: renderer.name,
-      reuse: reuseSummary(cachePlan, spans, null),
+      reuse: reuseSummary(cachePlan, spans, null, { dirtySeconds, invocations }),
     };
   }
 
@@ -403,10 +689,11 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
       log(`scene cache: whole-video reuse (${renderer.displayName}) — render skipped`);
       return {
         ...composed, mp4: outMp4, seconds: probe(outMp4), project: composed.dir || outDir,
-        reuse: { mode: 'whole-video', fallback: null, selectiveSkipped: cachePlan.selectiveSkipped || null, spans: null, wholeVideoReused: true },
+        reuse: { mode: 'whole-video', fallback: null, selectiveSkipped: cachePlan.selectiveSkipped || null, spans: null, wholeVideoReused: true, invocations },
       };
     }
     log(`scene cache: whole-video miss (${renderer.displayName}) — full render, then cached`);
+    invocations.full += 1;
     const rendered = renderer.render(config, outDir, opts);
     // Store atomically so a crash mid-copy never leaves a corrupt cached MP4.
     try {
@@ -418,11 +705,12 @@ function renderToMp4(renderer, config, outDir, manifest, opts = {}) {
     } catch (e) {
       log(`scene cache: could not store whole-video cache (${e.message}) — build result is unaffected`);
     }
-    rendered.reuse = { mode: 'whole-video', fallback: null, selectiveSkipped: cachePlan.selectiveSkipped || null, spans: null, wholeVideoReused: false };
+    rendered.reuse = { mode: 'whole-video', fallback: null, selectiveSkipped: cachePlan.selectiveSkipped || null, spans: null, wholeVideoReused: false, invocations };
     return rendered;
   }
 
   // mode === 'none' — no caching for this renderer.
+  invocations.full += 1;
   const direct = renderer.render(config, outDir, opts);
   direct.reuse = direct.reuse || { mode: 'none', fallback: null, selectiveSkipped: null, spans: null };
   return direct;
@@ -440,8 +728,15 @@ function fullRenderAndCache(renderer, config, outDir, manifest, opts, outMp4, lo
       if (manifest) {
         const fps = Number(opts.fps || (manifest.format && manifest.format.fps) || 30);
         const contextHash = renderContextHash(manifest, { fps, quality: opts.quality });
-        const spans = planSpans(manifest, contextHash, fps, outDir);
+        const spans = planSpans(manifest, contextHash, fps, outDir, {
+          placementSensitive: placementSensitive(manifest),
+          globalTime: !(renderer && renderer.cache && renderer.cache.isolated),
+          ordinalSensitive: ordinalSensitive(),
+          identities: readIdentities(outDir),
+        });
         renderer.splitSpans(rendered.mp4, spans, fps, outDir);
+        for (const span of spans) writeSpanSidecar(span, manifest.scenes[span.sceneIndex]);
+        writeIdentities(outDir, identitySnapshot(manifest, contextHash, placementSensitive(manifest)));
         pruneCache(cacheDir(outDir), spans.map(s => s.spanFile));
         log('scene cache: repopulated spans from full render');
       }
@@ -466,10 +761,12 @@ function pruneCache(dir, keepFiles) {
   let entries;
   try { entries = fs.readdirSync(dir); } catch { return; }
 
-  // Compute total size and count.
+  // Compute total size and count. Only MP4 span files participate in the
+  // budget; metadata (identities.json, per-span sidecars) is never pruned.
   let totalSize = 0;
   const files = [];
   for (const name of entries) {
+    if (!name.endsWith('.mp4')) continue;
     if (name.startsWith('.') || name.endsWith('.tmp') || name.endsWith('.tmp.mp4')) continue;
     const full = path.join(dir, name);
     try {
@@ -536,6 +833,8 @@ function formatCacheStatus(cachePlan) {
 module.exports = {
   CACHE_DIR, cacheDir,
   renderContextHash, sceneTimingsFingerprint, sceneCacheKey, wholeVideoKey,
+  sceneAssetIdentity, hasExecutableJs, placementSensitive,
+  identitySnapshot, readIdentities, writeIdentities,
   spanIsValid, planSpans, plan, assembleFromSpans, renderToMp4, fullAudioPath,
-  formatCacheStatus, selectiveRenderSafe, pruneCache, reuseSummary,
+  formatCacheStatus, selectiveRenderSafe, pruneCache, reuseSummary, writeSpanSidecar, readSpanSidecar,
 };
