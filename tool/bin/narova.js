@@ -44,9 +44,10 @@ const { addSample, removeSample, listSamples } = require('../src/samples');
 const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const revisions = require('../src/revisions');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, releasePath, branchDir, resolveProjectDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RELEASES_DIR, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
-const { PROVIDERS, providerInfo, generate, readSpec } = require('../src/generate');
+const { generate, readSpec } = require('../src/generate');
 const {
-  addProvider, getProvider, isProviderName, listProviders, removeProvider, doctorProvider, providersDir,
+  addProvider, getSpeechProvider, getVideoProvider, isProviderName, listProviders,
+  removeProvider, doctorProvider, providersDir, providerKind, VIDEO_PROVIDER_PROTOCOL,
 } = require('../src/providers');
 const {
   backendHint, builtinNames, BUILTIN_BACKENDS, deliveryCapabilitiesFor,
@@ -76,7 +77,7 @@ const mDiag = (severity, code, message, subject) => machine.diag(severity, code,
 function publicProviderData(provider) {
   if (!provider) return provider;
   const { command: _command, ...publicFields } = provider;
-  return publicFields;
+  return { ...publicFields, kind: providerKind(provider) };
 }
 
 function publicProviderHello(hello) {
@@ -123,7 +124,7 @@ function registerConfigProviderSecrets(config, overrideBackend = null) {
   const backends = new Set(Object.values(config.voices || {}).map(voice => voice && voice.backend).filter(Boolean));
   if (overrideBackend) backends.add(overrideBackend);
   for (const backend of backends) {
-    const provider = getProvider(backend);
+    const provider = getSpeechProvider(backend);
     if (provider) registerProviderSecrets(provider);
   }
 }
@@ -240,10 +241,7 @@ function validateInvocationFlags(flags, cmd) {
   positiveNumber('duration');
   if (cmd === 'generate') {
     const provider = String(flags.provider || 'sora');
-    if (!['sora', 'runway'].includes(provider)) invocationError('--provider must be one of sora|runway for generate');
-    if (provider === 'sora' && flags.duration != null && !['4', '8', '12'].includes(String(flags.duration))) {
-      invocationError('--duration must be 4, 8, or 12 for the Sora provider');
-    }
+    if (!isProviderName(provider)) invocationError('--provider must be a lowercase-hyphen provider name for generate');
   }
   if (flags.size != null) {
     const size = String(flags.size);
@@ -591,9 +589,9 @@ Commands:
   renderers list       list bundled local renderer providers and capabilities
   renderers doctor <name>  verify a renderer's local requirements
   voices list|get      list / download TTS voices (delegates to narova_tts)
-  providers add <manifest>    register an external TTS provider
-  providers list              list explicitly registered providers
-  providers remove <name>     unregister an external TTS provider
+  providers add <manifest>    register an external speech or video provider
+  providers list              list explicitly registered providers by kind
+  providers remove <name>     unregister an external provider
   providers doctor <name>     verify environment + worker handshake
   voice sample add <file> <name>   save a clone sample for chatterbox
   voice sample list                list saved clone samples
@@ -604,12 +602,12 @@ Commands:
                                      --engine faster-whisper|whisper-cpp|auto (default auto)
   retime <config> <karaoke.json>  print scene duration suggestions aligned to word timings
                                       --apply   rewrite the config file in-place
-  generate <prompt>       generate a video clip via AI (Sora / Runway)
-                              --provider sora|runway   API provider (default: sora)
+  generate <prompt>       generate a video clip via a registered provider
+                              --provider <name>        registered video provider (default: sora)
                               --output <path>           output file (default: assets/gen-<provider>-<slug>.mp4)
-                              --model <id>              provider model (e.g. sora-2, gen4.5)
+                              --model <id>              provider model
                               --size <WxH>              generation size/ratio
-                              --duration <s>            Sora: 4|8|12; Runway: provider-supported seconds
+                              --duration <s>            provider-supported seconds
                               --regenerate <mp4>        re-run a previous clip from its .gen.json spec
                                                         (keeps provider/model/prompt; override any of them)
                               A .gen.json spec sidecar is written next to every clip so the
@@ -2394,7 +2392,7 @@ async function main() {
       if (!['list', 'get'].includes(sub)) usageError('usage: narova voices list|get [voice]');
       if (sub === 'get' && !positionals[2]) usageError('usage: voices get <name> --backend piper');
       if (machine.isActive() && flags.backend) {
-        const external = getProvider(String(flags.backend));
+        const external = getSpeechProvider(String(flags.backend));
         if (external) registerProviderSecrets(external);
       }
       const py = findPython(flags.project || '.');
@@ -2431,17 +2429,20 @@ async function main() {
         // backends declare too, so one command shows the whole speech surface.
         const builtins = [...builtinNames()].sort();
         if (entries.length === 0) {
-          console.log(`no external TTS providers registered (${providersDir()})`);
+          console.log(`no external providers registered (${providersDir()})`);
         } else {
           for (const provider of entries) {
             const version = provider.providerVersion ? ` ${provider.providerVersion}` : '';
-            const voices = provider.capabilities.voiceListing ? 'voices' : 'no-voice-list';
-            console.log(`${provider.name.padEnd(20)} ${provider.displayName}${version}  ${provider.protocol}  ${voices}`);
-            if (provider.deliveryCapabilities) {
+            const kind = providerKind(provider);
+            const capability = kind === 'speech'
+              ? (provider.capabilities.voiceListing ? 'voices' : 'no-voice-list')
+              : 'video generation';
+            console.log(`${provider.name.padEnd(20)} ${provider.displayName}${version}  ${provider.protocol}  ${capability}`);
+            if (kind === 'speech' && provider.deliveryCapabilities) {
               const declared = Object.entries(provider.deliveryCapabilities)
                 .map(([family, status]) => `${family}:${status}`).join('  ');
               console.log(`${' '.repeat(20)} delivery: ${declared}`);
-            } else {
+            } else if (kind === 'speech') {
               console.log(`${' '.repeat(20)} delivery: (undeclared — every family reads as unknown)`);
             }
           }
@@ -2466,7 +2467,7 @@ async function main() {
         const added = addProvider(manifest, { beforeHandshake: registerProviderSecrets });
         console.log(`provider "${added.name}" registered -> ${path.join(providersDir(), `${added.name}.json`)}`);
         if (added.missingEnvironment.length) {
-          console.log(`  set before synthesis: ${added.missingEnvironment.join(', ')}`);
+          console.log(`  set before use: ${added.missingEnvironment.join(', ')}`);
         }
         mSetData({ provider: publicProviderData(added) });
         mArtifact(path.join(providersDir(), `${added.name}.json`), 'provider-registry');
@@ -2631,14 +2632,15 @@ async function main() {
       // Minimal early help: only when there is no prompt AND no --regenerate.
       if (!positionals[1] && !flags.regenerate) {
         const lines = [
-          'usage: narova generate <prompt> --provider sora|runway [--output <path>]',
+          'usage: narova generate <prompt> --provider <registered-name> [--output <path>]',
           '       narova generate --regenerate <existing-clip.mp4> [new prompt] [overrides]',
           '',
-          'Providers:',
+          'Registered video providers:',
         ];
-        for (const [id, p] of Object.entries(PROVIDERS)) {
-          lines.push(`  ${id.padEnd(8)} ${p.description}`);
-        }
+        const videos = listProviders(VIDEO_PROVIDER_PROTOCOL);
+        if (videos.length) {
+          for (const provider of videos) lines.push(`  ${provider.name.padEnd(12)} ${provider.displayName}`);
+        } else lines.push('  (none — install narova-openai for Sora or narova-runway for Runway, then register its video manifest)');
         usageError(...lines);
       }
       try {
@@ -2666,22 +2668,23 @@ async function main() {
           console.log(`regenerating from spec: ${path.basename(regenPath).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json`);
         }
 
-        const provider = flags.provider || (baseSpec && baseSpec.provider) || 'sora';
-        const info = providerInfo(provider);
-        if (!info) {
-          usageError(`unknown provider: ${provider} (valid: ${Object.keys(PROVIDERS).join(', ')})`);
+        const provider = String(flags.provider || (baseSpec && baseSpec.provider) || 'sora');
+        if (!isProviderName(provider)) {
+          usageError('video provider name must start with a lowercase letter and contain only lowercase letters, digits, and hyphens');
         }
+        const info = getVideoProvider(provider);
+        if (!info) {
+          console.error(`video provider "${provider}" is not registered`);
+          console.error('install its companion, then run `narova providers add <video-provider-manifest.json>`');
+          process.exit(1);
+        }
+        registerProviderSecrets(info);
         const prompt = positionals[1] || (baseSpec && baseSpec.prompt);
         if (!prompt) {
           usageError(
-            'usage: narova generate <prompt> --provider sora|runway [--output <path>]',
+            'usage: narova generate <prompt> --provider <registered-name> [--output <path>]',
             '       narova generate --regenerate <existing-clip.mp4> [--provider ..] [new prompt]',
           );
-        }
-        const apiKey = process.env[info.envKey];
-        if (!apiKey) {
-          console.error(`${info.name} requires ${info.envKey} environment variable`);
-          process.exit(1);
         }
 
         const params = {};
@@ -2703,13 +2706,20 @@ async function main() {
             ? path.resolve(path.dirname(flags.regenerate
                 ? path.resolve(projectDir, flags.regenerate) : projectDir), baseSpec.artifact)
             : path.join(assetsDir, `gen-${provider}-${slug}.mp4`));
-        await generate(provider, prompt, apiKey, output, assetsDir, { params, projectDir });
+        await generate(provider, prompt, output, assetsDir, { params, projectDir, providerManifest: info });
         console.log(`Add to reel.config.mjs:  clip: "assets/${path.basename(output)}"`);
         if (readSpec(output)) {
           console.log(`Generative spec:        assets/${path.basename(output).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json (edit/regenerate from here)`);
         }
         const specPath = output.replace(/\.(mp4|webm|mov)$/i, '.gen.json');
-        mSetData({ provider, output, spec: fs.existsSync(specPath) ? specPath : null });
+        const generatedSpec = readSpec(output);
+        mSetData({
+          provider,
+          providerProtocol: generatedSpec && generatedSpec.providerProtocol,
+          providerVersion: generatedSpec && generatedSpec.providerVersion,
+          output,
+          spec: fs.existsSync(specPath) ? specPath : null,
+        });
         mArtifact(output, 'generated-media');
         if (fs.existsSync(specPath)) mArtifact(specPath, 'generation-recipe');
         mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');

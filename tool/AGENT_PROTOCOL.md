@@ -1,6 +1,6 @@
 # Narova agent protocol
 
-Narova release: **0.35.0**
+Narova release: **0.36.0**
 Machine schema: **`narova.result/1`**
 
 This is the shipped machine-interface guide for agents and integrations. It is
@@ -86,7 +86,7 @@ operation may add fields in a later schema-1 release.
 | `build` | `{ mp4, seconds, renderer, deliverables[], companion, revision }`, or `{ builds[] }` for `--variants` | `video`, `captions` or `caption-omission`, `manifest`, `timings`, `audio`, `renderer-project`, `revision-ledger`, `deliverable`, `thumbnail`, `video-companion` |
 | `preview` | `{ renderer, detached, url?, pid?, port?, stopped? }` | `renderer-project`, `preview-state`, `preview-log`, or draft `video` |
 | `doctor` | `{ ok, checks[] }` | none |
-| `generate` | `{ provider, output, spec }` | `generated-media`, `generation-recipe`, `registry` |
+| `generate` | `{ provider, providerProtocol, providerVersion, output, spec }` | `generated-media`, `generation-recipe`, `registry` |
 | `retime` | `{ applied, scenes[] }` | `authoring-source` only with `--apply` |
 | `karaoke generate` | `{ cues[] }` | `captions` |
 | `assets providers` | `{ pack, providers[] }` | none |
@@ -114,7 +114,7 @@ operation may add fields in a later schema-1 release.
 | `branch set` | branch identity, status, and rationale | `branch-metadata` |
 | `renderers list` | `{ renderers[] }` | none |
 | `renderers doctor` | `{ renderer, ok, checks[] }` | none |
-| `providers list` | `{ providers[], builtins[] }` | none |
+| `providers list` | `{ providers[], builtins[] }`, with additive provider `kind` and protocol-specific capabilities | none |
 | `providers add` | `{ provider }` | `provider-registry` |
 | `providers remove` | `{ name, removed }` | none |
 | `providers doctor` | `{ name, hello: { protocol, provider, providerVersion }, missingEnvironment[] }` | none |

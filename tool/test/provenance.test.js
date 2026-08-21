@@ -615,6 +615,31 @@ test('provenance marks malformed generation recipes unknown and incomplete', () 
   }
 });
 
+test('provenance verifies current version-2 generation recipes', () => {
+  const dir = documentedProject();
+  try {
+    const recipeFile = path.join(dir, 'assets', 'gen-clip.gen.json');
+    const recipe = JSON.parse(fs.readFileSync(recipeFile, 'utf8'));
+    Object.assign(recipe, {
+      version: 2,
+      providerName: 'OpenAI Sora',
+      providerProtocol: 'narova-video-provider/v1',
+      providerVersion: '1.0.0',
+      params: { model: 'sora-2', size: '1280x720', duration: 8 },
+      generatedAt: '2026-08-21T00:00:00.000Z',
+    });
+    fs.writeFileSync(recipeFile, `${JSON.stringify(recipe)}\n`);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
+    const generated = report.aiGeneration.generatedMedia[0];
+    assert.equal(generated.recipeGrade, 'verified');
+    assert.equal(generated.recipeStatus, 'available');
+    assert.equal(generated.recipeIssue, null);
+    assert.equal(report.aiGeneration.incomplete, false);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('provenance marks structurally invalid generation recipes unknown and incomplete', () => {
   const dir = documentedProject();
   try {
@@ -623,7 +648,7 @@ test('provenance marks structurally invalid generation recipes unknown and incom
     const generated = report.aiGeneration.generatedMedia[0];
     assert.equal(generated.recipeGrade, 'unknown');
     assert.equal(generated.recipeStatus, 'unavailable');
-    assert.match(generated.recipeIssue, /not a narova-generate-spec v1/);
+    assert.match(generated.recipeIssue, /not a supported narova-generate-spec version 1 or 2/);
     assert.equal(report.aiGeneration.incomplete, true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

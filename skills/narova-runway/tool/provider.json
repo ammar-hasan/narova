@@ -1,0 +1,15 @@
+{
+  "name": "runway",
+  "displayName": "Runway",
+  "protocol": "narova-video-provider/v1",
+  "command": [
+    "python3",
+    "./worker.py"
+  ],
+  "requiredEnvironment": [
+    "RUNWAYML_API_SECRET"
+  ],
+  "capabilities": {
+    "generation": true
+  }
+}

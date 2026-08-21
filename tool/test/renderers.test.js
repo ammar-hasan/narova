@@ -304,6 +304,54 @@ test('no-browser provider renders a real browserless MP4 with local audio', { ti
   assert.equal(fs.readdirSync(proof.dir).filter(file => file.endsWith('.png')).length, 2);
 });
 
+test('no-browser selective spans create clip extraction storage before ffmpeg writes', { timeout: 30000 }, t => {
+  const ffmpeg = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
+  try { require.resolve('@napi-rs/canvas'); }
+  catch { t.skip('@napi-rs/canvas not installed'); return; }
+  if (ffmpeg.status !== 0) { t.skip('ffmpeg not installed'); return; }
+
+  const tempRoot = path.join(process.cwd(), 'out', 'test-tmp');
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const project = fs.mkdtempSync(path.join(tempRoot, 'narova-no-browser-clip-span-'));
+  const out = path.join(project, 'out');
+  fs.mkdirSync(out, { recursive: true });
+  const audio = path.join(project, 'narration.wav');
+  const clip = path.join(project, 'clip.mp4');
+  const madeAudio = spawnSync('ffmpeg', [
+    '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=330:duration=0.6',
+    '-ar', '48000', '-ac', '1', audio,
+  ], { encoding: 'utf8' });
+  assert.equal(madeAudio.status, 0, madeAudio.stderr);
+  const madeClip = spawnSync('ffmpeg', [
+    '-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=#2468a0:s=160x90:d=0.6:r=5',
+    '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip,
+  ], { encoding: 'utf8' });
+  assert.equal(madeClip.status, 0, madeClip.stderr);
+
+  try {
+    const config = resolveConfig({
+      title: 'Clip span', renderer: 'no-browser', size: { w: 160, h: 90 },
+      narration: { file: 'narration.wav' }, voices: {}, chrome: false,
+      scenes: [{
+        id: 'one', clip: 'clip.mp4', dur: 0.6, vo: [],
+        visual: { type: 'group', style: { width: '100%', height: '100%' } },
+      }],
+    }, {}, project);
+    fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify({
+      total: 0.6, one: { dur: 0.6, turns: [], words: [] },
+    }));
+    const spanFile = path.join(out, '.scene-cache', 'one.mp4');
+    const result = getRenderer('no-browser').renderSpans(config, out, [{
+      sceneIndex: 0, frameStart: 0, frameEnd: 3, frameCount: 3, spanFile,
+    }], { fps: 5, quality: 'draft' });
+    assert.equal(result.spans.length, 1);
+    assert.ok(fs.existsSync(spanFile), 'selective clip span must render without a missing .frames directory');
+    assert.ok(fs.statSync(spanFile).size > 0);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 // --- canvas3d node type ---
 
 test('legacy canvas3d placeholder is rejected in favor of working scene.three', () => {

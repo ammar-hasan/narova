@@ -298,6 +298,11 @@
     "npx skills add ammar-hasan/narova --skill narova-elevenlabs -g",
     document.getElementById("copyElevenLabel")
   );
+  bindCopy(
+    "copyRunway",
+    "npx skills add ammar-hasan/narova --skill narova-runway -g",
+    document.getElementById("copyRunwayLabel")
+  );
   document.querySelectorAll("[data-copy-command]").forEach(function (button) {
     bindCopy(button, button.getAttribute("data-copy-command"), null);
   });

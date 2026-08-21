@@ -6,6 +6,44 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.36.0] - 2026-08-21
+
+### Added
+
+- **External video-provider protocol.** `narova generate` now delegates vendor
+  submission, polling, and download through explicitly registered
+  `narova-video-provider/v1` JSONL workers while core retains staging,
+  validation, provenance, recipe identity, asset registration, and rollback.
+- **Runway companion.** The new independently installable `narova-runway`
+  skill carries the Runway text-to-video API worker, manifest, setup guidance,
+  and hermetic protocol/request tests.
+- **Sora in the OpenAI companion.** `narova-openai` now optionally registers a
+  separate `sora` video worker alongside its existing `openai` speech worker;
+  the documented deprecation and September 24, 2026 API shutdown stay isolated
+  with that provider rather than becoming core behavior.
+
+### Changed
+
+- **Generation recipes v2.** Generated-asset identity now records the provider
+  protocol and worker version. Existing v1 recipe sidecars remain readable.
+
+### Fixed
+
+- **External-provider boundary hardening.** Video workers now write only to a
+  mode-0700 same-filesystem stage; core requires the exact response path,
+  bounds and truncates worker I/O, rejects oversized, error-document, and
+  undecodable output, hashes media incrementally, and blocks registered secret
+  substrings anywhere in the complete candidate recipe before publication.
+- **Provider-list machine compatibility.** The protocol guide retains the
+  existing additive `builtins[]` projection while documenting provider kinds.
+
+- **Version-2 generation provenance.** `narova provenance` now recognizes and
+  verifies current video-generation recipes while retaining version-1 support.
+- **Browserless incremental clip rendering.** Selective no-browser rebuilds now
+  recreate their private frame-extraction directory before FFmpeg writes clip
+  frames, so a changed generated-video scene can reuse the other scene spans
+  without falling back to a full render.
+
 ## [0.35.0] - 2026-08-21
 
 ### Added

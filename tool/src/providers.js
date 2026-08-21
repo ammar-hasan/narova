@@ -1,5 +1,5 @@
 'use strict';
-/* Explicit external TTS provider registry.
+/* Explicit external provider registry.
  *
  * Registration copies a normalized manifest into ~/.narova/providers. Narova
  * never scans skill directories and never executes an unregistered worker.
@@ -10,8 +10,16 @@ const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const { isBuiltinBackend } = require('./tts-backends');
+const machine = require('./machine');
 
-const PROVIDER_PROTOCOL = 'narova-tts-provider/v1';
+const TTS_PROVIDER_PROTOCOL = 'narova-tts-provider/v1';
+const VIDEO_PROVIDER_PROTOCOL = 'narova-video-provider/v1';
+// Historical public export retained for speech-provider callers.
+const PROVIDER_PROTOCOL = TTS_PROVIDER_PROTOCOL;
+const PROVIDER_KINDS = Object.freeze({
+  [TTS_PROVIDER_PROTOCOL]: 'speech',
+  [VIDEO_PROVIDER_PROTOCOL]: 'video-generation',
+});
 const NAME_RE = /^[a-z][a-z0-9-]*$/;
 const ENV_RE = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const SECRET_KEY_RE = /(?:api[-_]?key|authorization|credential|password|secret|token)/i;
@@ -78,8 +86,9 @@ function validateManifest(raw, baseDir = '.') {
   if (isBuiltinBackend(raw.name)) {
     throw new Error(`provider.name: ${JSON.stringify(raw.name)} is reserved by a built-in backend`);
   }
-  if (raw.protocol !== PROVIDER_PROTOCOL) {
-    throw new Error(`provider.protocol: unsupported protocol ${JSON.stringify(raw.protocol)}; expected ${PROVIDER_PROTOCOL}`);
+  const kind = PROVIDER_KINDS[raw.protocol];
+  if (!kind) {
+    throw new Error(`provider.protocol: unsupported protocol ${JSON.stringify(raw.protocol)}; expected ${Object.keys(PROVIDER_KINDS).join(' or ')}`);
   }
   if (raw.displayName != null && (typeof raw.displayName !== 'string' || !raw.displayName.trim())) {
     throw new Error('provider.displayName: expected a non-empty string');
@@ -96,8 +105,9 @@ function validateManifest(raw, baseDir = '.') {
       || Object.values(capabilities).some(value => typeof value !== 'boolean')) {
     throw new Error('provider.capabilities: expected an object with boolean values');
   }
-  if (capabilities.synthesis !== true) {
-    throw new Error('provider.capabilities.synthesis: must be true');
+  const requiredCapability = kind === 'speech' ? 'synthesis' : 'generation';
+  if (capabilities[requiredCapability] !== true) {
+    throw new Error(`provider.capabilities.${requiredCapability}: must be true`);
   }
   if (raw.providerVersion != null
       && (typeof raw.providerVersion !== 'string' || !raw.providerVersion.trim())) {
@@ -108,6 +118,9 @@ function validateManifest(raw, baseDir = '.') {
   // a closed status vocabulary. Declarations are disclosures only: they
   // never restrict what options a request may carry.
   if (raw.deliveryCapabilities != null) {
+    if (kind !== 'speech') {
+      throw new Error('provider.deliveryCapabilities: supported only by speech providers');
+    }
     if (!raw.deliveryCapabilities || typeof raw.deliveryCapabilities !== 'object'
         || Array.isArray(raw.deliveryCapabilities)) {
       throw new Error('provider.deliveryCapabilities: expected an object of family -> "honored" | "ignored" | "unknown"');
@@ -124,7 +137,7 @@ function validateManifest(raw, baseDir = '.') {
   return {
     name: raw.name,
     displayName: raw.displayName || raw.name,
-    protocol: PROVIDER_PROTOCOL,
+    protocol: raw.protocol,
     command,
     requiredEnvironment: [...requiredEnvironment],
     capabilities: { ...capabilities },
@@ -140,8 +153,28 @@ function responseError(response, fallback) {
   return fallback;
 }
 
+function redactProviderText(value, manifest = { requiredEnvironment: [] }) {
+  let redacted = machine.redact(String(value));
+  const secrets = (manifest.requiredEnvironment || [])
+    .map(name => process.env[name])
+    .filter(secret => typeof secret === 'string' && secret.length > 0)
+    .sort((a, b) => b.length - a.length);
+  for (const secret of new Set(secrets)) {
+    if (secret.length >= 4) {
+      redacted = redacted.split(secret).join('[REDACTED]');
+      continue;
+    }
+    const escaped = secret.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
+    redacted = redacted.replace(
+      new RegExp(`(^|[^A-Za-z0-9])${escaped}(?=$|[^A-Za-z0-9])`, 'g'),
+      '$1[REDACTED]',
+    );
+  }
+  return redacted;
+}
+
 function handshake(manifest, opts = {}) {
-  const request = JSON.stringify({ operation: 'hello', protocol: PROVIDER_PROTOCOL }) + '\n';
+  const request = JSON.stringify({ operation: 'hello', protocol: manifest.protocol }) + '\n';
   const result = spawnSync(manifest.command[0], manifest.command.slice(1), {
     input: request,
     encoding: 'utf8',
@@ -151,7 +184,7 @@ function handshake(manifest, opts = {}) {
   });
   if (result.error) {
     if (result.error.code === 'ETIMEDOUT') throw new Error(`provider ${manifest.name} handshake timed out`);
-    throw new Error(`provider ${manifest.name} failed to start: ${result.error.message}`);
+    throw new Error(`provider ${manifest.name} failed to start: ${redactProviderText(result.error.message, manifest)}`);
   }
   const line = String(result.stdout || '').split(/\r?\n/).find(Boolean);
   if (!line) {
@@ -161,10 +194,10 @@ function handshake(manifest, opts = {}) {
   try { response = JSON.parse(line); }
   catch { throw new Error(`provider ${manifest.name} returned invalid JSON during handshake`); }
   if (!response || response.ok !== true) {
-    throw new Error(`provider ${manifest.name} handshake failed: ${responseError(response, 'unknown worker error')}`);
+    throw new Error(`provider ${manifest.name} handshake failed: ${redactProviderText(responseError(response, 'unknown worker error'), manifest)}`);
   }
-  if (response.protocol !== PROVIDER_PROTOCOL) {
-    throw new Error(`provider ${manifest.name} uses unsupported protocol ${JSON.stringify(response.protocol)}; expected ${PROVIDER_PROTOCOL}`);
+  if (response.protocol !== manifest.protocol) {
+    throw new Error(`provider ${manifest.name} uses unsupported protocol ${JSON.stringify(response.protocol)}; expected ${manifest.protocol}`);
   }
   if (response.provider !== manifest.name) {
     throw new Error(`provider handshake name mismatch: manifest=${manifest.name}, worker=${JSON.stringify(response.provider)}`);
@@ -199,7 +232,7 @@ function addProvider(filePath, opts = {}) {
   return { ...registered, missingEnvironment: missingEnvironment(registered) };
 }
 
-function getProvider(name) {
+function getProvider(name, protocol = null) {
   if (!isProviderName(name)) return null;
   const file = providerPath(name);
   if (!fs.existsSync(file)) return null;
@@ -210,17 +243,22 @@ function getProvider(name) {
   if (manifest.name !== name) {
     throw new Error(`registered provider filename/name mismatch for ${name}`);
   }
+  if (protocol != null && manifest.protocol !== protocol) return null;
   return manifest;
 }
 
-function listProviders() {
+function listProviders(protocol = null) {
   if (!fs.existsSync(providersDir())) return [];
   return fs.readdirSync(providersDir(), { withFileTypes: true })
     .filter(entry => entry.isFile() && entry.name.endsWith('.json'))
-    .map(entry => getProvider(entry.name.slice(0, -5)))
+    .map(entry => getProvider(entry.name.slice(0, -5), protocol))
     .filter(Boolean)
     .sort((a, b) => a.name.localeCompare(b.name));
 }
+
+const getSpeechProvider = name => getProvider(name, TTS_PROVIDER_PROTOCOL);
+const getVideoProvider = name => getProvider(name, VIDEO_PROVIDER_PROTOCOL);
+const providerKind = manifest => manifest ? (PROVIDER_KINDS[manifest.protocol] || null) : null;
 
 function removeProvider(name) {
   if (!isProviderName(name)) {
@@ -298,7 +336,12 @@ function containsRequiredEnvironmentValue(value, manifest) {
     .filter(secret => typeof secret === 'string' && secret.length > 0));
   if (secrets.size === 0) return false;
   function visit(child) {
-    if (typeof child === 'string') return secrets.has(child);
+    if (typeof child === 'string') {
+      for (const secret of secrets) {
+        if (child.includes(secret)) return true;
+      }
+      return false;
+    }
     if (Array.isArray(child)) return child.some(visit);
     if (child && typeof child === 'object') return Object.values(child).some(visit);
     return false;
@@ -308,6 +351,9 @@ function containsRequiredEnvironmentValue(value, manifest) {
 
 module.exports = {
   PROVIDER_PROTOCOL,
+  TTS_PROVIDER_PROTOCOL,
+  VIDEO_PROVIDER_PROTOCOL,
+  PROVIDER_KINDS,
   providersDir,
   providerPath,
   isProviderName,
@@ -316,6 +362,9 @@ module.exports = {
   handshake,
   addProvider,
   getProvider,
+  getSpeechProvider,
+  getVideoProvider,
+  providerKind,
   listProviders,
   removeProvider,
   doctorProvider,
@@ -323,4 +372,5 @@ module.exports = {
   jsonCompatibilityError,
   stableStringify,
   containsRequiredEnvironmentValue,
+  redactProviderText,
 };

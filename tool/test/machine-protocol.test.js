@@ -571,7 +571,7 @@ test('malformed recognized option values are usage errors', () => {
     ['check', '--size', 'bananas', '--project', project],
     ['karaoke', 'generate', '/missing.wav', '--max-words', '1.5'],
     ['generate', 'prompt', '--duration', 'never'],
-    ['generate', 'prompt', '--provider', 'sora', '--duration', '5'],
+    ['generate', 'prompt', '--provider', '../bad'],
   ]) {
     const malformed = run([...args, '--json']);
     assert.equal(malformed.status, 2, `${args.join(' ')}: ${malformed.stderr}`);

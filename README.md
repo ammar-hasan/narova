@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.35.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.36.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -344,12 +344,13 @@ agent finds a better asset through a browser, archive, or new source, it can use
 automatically; builds consume local files only and never acquire media.
 
 **AI clips as scene material.** When a project wants a generated shot, `narova
-generate "<prompt>"` produces an AI video clip through an explicitly selected
-provider — Sora or Runway — into the project asset registry with a generation
-recipe, so the clip participates in the same provenance, cache identity, and
-release evidence as any other media. This is an optional input to a Narova
-scene, never the product itself; it requires the chosen provider's API key in
-the environment and uses the network only when invoked.
+generate "<prompt>"` asks an explicitly registered video companion to produce
+a clip, then commits it to the project asset registry with a generation recipe,
+so it participates in the same provenance, cache identity, and release evidence
+as any other media. Sora lives in `narova-openai`; Runway lives in the separate
+`narova-runway` skill. Vendor APIs and credentials never enter core. This is an
+optional scene input, never the product itself, and the network is used only
+when generation is invoked.
 
 **Real product walkthroughs.** Explore a website/app semantically, record
 cursor-guided actions on narration beats, frame or full-bleed the real UI, then
@@ -391,9 +392,10 @@ narova preview --renderer no-browser   # writes out/preview-no-browser.mp4
 
 See the exact [renderer capability contract](skills/narova/references/renderers.md).
 
-Local speech ships as built-in backends; optional hosted voices are separate,
-explicitly registered companions — never dependencies. Keep credentials in the
-provider's required environment variables, never in the config.
+Local speech ships as built-in backends; optional hosted speech and video
+providers are separate, explicitly registered companions — never dependencies.
+Keep credentials in the provider's required environment variables, never in
+the config.
 
 | Backend | Quality | Speed | Setup | Notes |
 |---------|---------|-------|-------|-------|
@@ -407,6 +409,7 @@ narova providers add <provider-manifest.json>
 narova providers doctor <name>
 npx skills add ammar-hasan/narova --skill narova-elevenlabs -g
 npx skills add ammar-hasan/narova --skill narova-openai -g
+npx skills add ammar-hasan/narova --skill narova-runway -g
 ```
 
 For authored 3D work that needs intentional subject/world representation or
@@ -654,7 +657,7 @@ narova review         observability suite (contact sheets, silences, takes)
 narova critique       optional craft guidance; not a correctness gate
 narova generate       AI clip generation via an explicitly selected provider
 narova voices         list or download voices
-narova providers      add/list/remove/doctor external TTS providers
+narova providers      add/list/remove/doctor external speech/video providers
 narova renderers      list/doctor the two bundled local renderers
 narova assets         import/download/search/acquire/verify/credits
 narova provenance     graded project trust report (verified/declared/unknown)
