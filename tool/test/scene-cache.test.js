@@ -370,8 +370,9 @@ test('unrecognized mount-path references fall back conservatively', () => {
 
 // CHANGE-2026-041 / NAR-007-042: a global-time renderer samples the full
 // project at absolute frame times, so a non-frame-aligned placement shift
-// changes the frame-sampling PHASE and the required frame count by ±1 — reuse
-// would drift the concat vs a clean build. (Adversarial review finding.)
+// changes the frame-sampling PHASE — reuse would drift the concat vs a clean
+// build. The local-time decision is placement-independent; the global-time
+// decision re-renders on a phase shift. (Adversarial review finding.)
 test('global-time reuse rejects a non-frame-aligned placement shift', () => {
   const out = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-frames-'));
   try {
@@ -388,9 +389,13 @@ test('global-time reuse rejects a non-frame-aligned placement shift', () => {
     const ids = sc.identitySnapshot(old, ctx, false);
     const oldSpans = sc.planSpans(old, ctx, 30, out, { placementSensitive: false, globalTime: false, identities: ids });
     const b = oldSpans[1]; // duration unchanged (key identical), placement shifts
+    // Write the span at the NEW required frame count so span validity does not
+    // depend on probe tolerance across environments; the sidecar keeps the OLD
+    // placement, which is what drives the phase decision.
+    const neuSpans = sc.planSpans(neu, ctx, 30, out, { placementSensitive: false, globalTime: false, identities: ids });
     fs.mkdirSync(path.dirname(b.spanFile), { recursive: true });
     spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'color=c=black:s=16x16',
-      '-frames:v', String(b.frameCount), '-r', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', b.spanFile]);
+      '-frames:v', String(neuSpans[1].frameCount), '-r', '30', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', b.spanFile]);
     sc.writeSpanSidecar(b, old.scenes[1]);
     // Isolated/local-time renderer: placement-independent → reuses.
     const isolated = sc.planSpans(neu, ctx, 30, out, { placementSensitive: false, globalTime: false, ordinalSensitive: true, identities: ids });
