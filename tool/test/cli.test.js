@@ -34,6 +34,31 @@ test('help shows on no command, help, and -h', () => {
   }
 });
 
+test('action-scoped help prints the action usage, not global help (NAR-009-036)', () => {
+  const cases = [
+    { args: ['assets', 'import', '--help'], needle: /usage: narova assets import <file>/ },
+    { args: ['assets', 'download', '--help'], needle: /usage: narova assets download <url>/ },
+    { args: ['assets', 'providers', '--help'], needle: /usage: narova assets providers/ },
+    { args: ['assets', 'search', '--help'], needle: /usage: narova assets search <query>/ },
+    { args: ['assets', 'acquire', '--help'], needle: /usage: narova assets acquire <id>/ },
+    { args: ['walkthrough', 'explore', '--help'], needle: /usage: narova walkthrough explore <id>/ },
+    { args: ['branch', 'save', '--help'], needle: /usage: narova branch save <name>/ },
+  ];
+  for (const { args, needle } of cases) {
+    const r = run(args);
+    assert.equal(r.status, 0, args.join(' '));
+    assert.match(r.stdout, needle, args.join(' '));
+    assert.ok(!r.stdout.includes('Usage: narova'), `global help leaked into ${args.join(' ')}`);
+  }
+});
+
+test('group help and bare --help still print global help (NAR-009-036)', () => {
+  const bare = run(['--help']);
+  assert.match(bare.stdout, /Usage: narova/);
+  const group = run(['assets', '--help']);
+  assert.match(group.stdout, /Usage: narova/);
+});
+
 test('core asset provider discovery reports optional credentials without exposing values', () => {
   const env = { ...process.env, PEXELS_API_KEY: 'provider-secret' };
   delete env.PIXABAY_API_KEY;

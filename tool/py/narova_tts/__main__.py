@@ -110,13 +110,11 @@ def _voices(argv: list[str]) -> int:
         print("usage: voices get <name> --backend piper", file=sys.stderr)
         return 2
     import os
-    import subprocess
-    from pathlib import Path
-    # Same default as PiperBackend (honors NAROVA_PIPER_DIR).
+    from .backends import download_piper_voice
+    # Same default as PiperBackend (honors NAROVA_PIPER_DIR); the shared
+    # routine verifies received bytes against the declared content length.
     data_dir = Path(os.environ.get("NAROVA_PIPER_DIR", Path.home() / ".cache" / "narova" / "piper"))
-    data_dir.mkdir(parents=True, exist_ok=True)
-    subprocess.run([sys.executable, "-m", "piper.download_voices", args.name,
-                    "--data-dir", str(data_dir)], check=True)
+    download_piper_voice(args.name, data_dir)
     return 0
 
 

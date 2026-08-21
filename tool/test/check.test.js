@@ -466,10 +466,24 @@ test('critique: no results when config passes all heuristics', () => {
 
 test('body elements using HyperFrames-reserved class names warn', () => {
   const { lines } = run(base([
-    { id: 's', body: '<section class="scene hook"><div class="progress"></div></section>', vo: [{ who: 'a', text: 'a' }] },
+    { id: 's', body: '<section class="scene hook"><div class="capzone"></div></section>', vo: [{ who: 'a', text: 'a' }] },
   ]));
   assert.ok(lines.some(l => l.includes('reserved name "scene"')), lines.join('\n'));
-  assert.ok(lines.some(l => l.includes('reserved name "progress"')), lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('reserved name "capzone"')), lines.join('\n'));
+});
+
+test('restyling the documented chrome classes per guidance does not warn (NAR-007-050)', () => {
+  const { lines } = run(base([
+    { id: 's', body: '<section class="story-scene"><div class="topbar"><span class="wordmark"></span><span class="counter"></span></div><div class="progress"></div></section>', vo: [{ who: 'a', text: 'a' }] },
+  ]));
+  assert.ok(!lines.some(l => l.includes('reserved name')), lines.join('\n'));
+});
+
+test('theme.css restyling the chrome surface does not warn while reserved classes still do (NAR-007-050)', () => {
+  const clean = run(cssConfig('.progress { background: #000; } .topbar { height: 48px; } .wordmark { font-weight: 800; } .counter { font-variant-numeric: tabular-nums; }'));
+  assert.ok(!clean.lines.some(l => l.includes('reserved class name')), clean.lines.join('\n'));
+  const dirty = run(cssConfig('.scene { color: red; }'));
+  assert.ok(dirty.lines.some(l => l.includes('reserved class name "scene"')), dirty.lines.join('\n'));
 });
 
 test('body elements without reserved class names are silent', () => {
@@ -995,6 +1009,130 @@ test('strict: claims table format is parsed', () => {
   const { lines } = run(config, { strict: true });
   // Third claim "99% of users prefer this." is not in the ledger table.
   assert.ok(lines.some(l => l.includes('not found in claims.md') && l.includes('1 of 3')), lines.join('\n'));
+});
+
+test('claims table rows are read by named column; an empty cell does not shift columns (NAR-007-029)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-namedcol-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), [
+    '# Claims ledger', '',
+    '## Claims', '',
+    '| Claim (as spoken in vo) | Tag | Source |',
+    '|---|---|---|',
+    '| Over 2,000+ products. |  | https://example.com |',
+    '| Leading platform in the region. | verbatim | https://example.com |',
+  ].join('\n'));
+  const config = {
+    title: 'S', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+    voices: { a: { backend: 'piper' } },
+    scenes: [{ id: 's', body: '<p>x</p>', vo: [
+      { who: 'a', text: 'Over 2,000+ products.' },
+      { who: 'a', text: 'Leading platform in the region.' },
+    ] }],
+  };
+  const { lines } = run(config, { strict: true });
+  assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+});
+
+test('claims table with no claim-named header falls back to the second column (NAR-007-029)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-fallback-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), [
+    '# Claims ledger', '',
+    '## Claims', '',
+    '| Treatment | Spoken claim | Source |',
+    '|---|---|---|',
+    '| verbatim | Over 2,000+ products. | https://example.com |',
+  ].join('\n'));
+  const config = {
+    title: 'S', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+    voices: { a: { backend: 'piper' } },
+    scenes: [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Over 2,000+ products.' }] }],
+  };
+  const { lines } = run(config, { strict: true });
+  assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+});
+
+test('multiple tables under ## Claims each contribute by their own named column (NAR-007-029)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-multitable-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), [
+    '# Claims ledger', '',
+    '## Claims', '',
+    '| Claim (as spoken in vo) | Tag | Source |',
+    '|---|---|---|',
+    '| First claim here. |  | https://example.com |', '',
+    '| Claim | Treatment | Source |',
+    '|---|---|---|',
+    '| Second claim here. | verbatim | https://example.com |',
+  ].join('\n'));
+  const config = {
+    title: 'S', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+    voices: { a: { backend: 'piper' } },
+    scenes: [{ id: 's', body: '<p>x</p>', vo: [
+      { who: 'a', text: 'First claim here.' },
+      { who: 'a', text: 'Second claim here.' },
+    ] }],
+  };
+  const { lines } = run(config, { strict: true });
+  assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
+  assert.ok(!lines.some(l => l.includes('Claim') && l.includes('no claim lines were parsed')), lines.join('\n'));
+});
+
+test('a table under a non-## Claims heading contributes nothing and warns at every level (NAR-007-049)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-zeroclaims-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), [
+    '# Sources', '',
+    '| Spoken claim | Treatment | Source evidence |',
+    '|---|---|---|',
+    '| Over 2,000+ products. | verbatim | https://example.com |',
+  ].join('\n'));
+  const config = {
+    title: 'S', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+    voices: { a: { backend: 'piper' } },
+    scenes: [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Over 2,000+ products.' }] }],
+  };
+  for (const opts of [{}, { strict: true }, { release: true }]) {
+    const { ok, lines } = run(config, opts);
+    assert.ok(lines.some(l => l.includes('no claim lines were parsed from the ledger')), lines.join('\n'));
+    assert.ok(!lines.some(l => l.includes('no claim lines were parsed from the ledger') && l.startsWith('fail:')), lines.join('\n'));
+    // Release fails on the unledgered claim, but never because of the advisory.
+    const advisoryFails = lines.filter(l => l.includes('no claim lines were parsed from the ledger') && l.startsWith('fail:'));
+    assert.equal(advisoryFails.length, 0, lines.join('\n'));
+    if (opts.release) assert.equal(ok, false);
+    else assert.equal(ok, true);
+  }
+});
+
+test('an empty claims.md with no detected claims warns but still succeeds (NAR-007-049)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-empty-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), '');
+  const config = {
+    title: 'S', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+    voices: { a: { backend: 'piper' } },
+    scenes: [{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'Just words, nothing numeric.' }] }],
+  };
+  const { ok, lines } = run(config);
+  assert.equal(ok, true, lines.join('\n'));
+  assert.ok(lines.some(l => l.includes('no claim lines were parsed from the ledger')), lines.join('\n'));
+});
+
+test('bullets after a ## Claims table still count (regardless of position, NAR-007-029)', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-bulletpos-'));
+  fs.writeFileSync(path.join(dir, 'claims.md'), [
+    '## Claims', '',
+    '| Claim | Source |',
+    '|---|---|',
+    '| Table claim here. | https://example.com |', '',
+    '- bullet claim anywhere in the file here',
+  ].join('\n'));
+  const config = {
+    title: 'S', size: { w: 100, h: 100 }, themeCss: '', projectDir: dir,
+    voices: { a: { backend: 'piper' } },
+    scenes: [{ id: 's', body: '<p>x</p>', vo: [
+      { who: 'a', text: 'Table claim here.' },
+      { who: 'a', text: 'Bullet claim anywhere in the file here.' },
+    ] }],
+  };
+  const { lines } = run(config, { strict: true });
+  assert.ok(!lines.some(l => l.includes('not found in claims')), lines.join('\n'));
 });
 
 test('release: CLAIMS.md (uppercase) is also found', () => {

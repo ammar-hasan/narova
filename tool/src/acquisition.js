@@ -117,11 +117,11 @@ async function provisionMedia(view, pin = mediaPinFor()) {
 }
 
 /* Media tooling: platforms without a recorded digest fail closed to
- * explicit guidance (NAR-021-002 `needs-user-action`). */
-function mediaGuidance() {
-  const p = process.platform;
-  if (p === 'darwin') return 'install ffmpeg — `brew install ffmpeg` (or from https://ffmpeg.org)';
-  if (p === 'win32') return 'install ffmpeg — `winget install ffmpeg` (or from https://ffmpeg.org)';
+ * explicit guidance (NAR-021-002 `needs-user-action`). The platform is
+ * injectable so doctor's hint can be exercised for other platforms. */
+function mediaGuidance(platform = process.platform) {
+  if (platform === 'darwin') return 'install ffmpeg — `brew install ffmpeg` (or from https://ffmpeg.org)';
+  if (platform === 'win32') return 'install ffmpeg — `winget install ffmpeg` (or from https://ffmpeg.org)';
   return 'install ffmpeg via your distribution (e.g. `apt install ffmpeg`) or from https://ffmpeg.org';
 }
 

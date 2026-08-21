@@ -801,6 +801,88 @@ test('rights buckets land per recorded license facts (NAR-005-021 scenario)', ()
   }
 });
 
+test('an unrecognized --license warns, is stored verbatim, and stays unknown (NAR-016-059)', () => {
+  const dir = tmp('narova-prov-advisory-');
+  try {
+    fs.mkdirSync(path.join(dir, 'assets'));
+    fs.writeFileSync(path.join(dir, 'reel.config.mjs'), `export default {
+  title: 'Adv',
+  scenes: [{ id: 'one', dur: 5, body: '<p>a</p>', vo: [] }],
+};
+`);
+    fs.writeFileSync(path.join(dir, 'assets', 'nasa.jpg'), 'nasa');
+    const r = run(['assets', 'import', 'assets/nasa.jpg', '--project', dir,
+      '--origin', 'stock', '--license', 'NASA-PD']);
+    assert.equal(r.status, 0, r.stderr);
+    assert.match(r.stderr, /license "NASA-PD" is not a recognized form/, r.stderr);
+    assert.match(r.stderr, /Creative Commons/, r.stderr);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
+    const row = report.media.rows.find(x => x.file === 'assets/nasa.jpg');
+    assert.equal(row.rights.license, 'NASA-PD');
+    assert.equal(row.rights.bucket, 'unknown');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('a recognized --license does not warn and lands in the public-domain bucket (NAR-016-059)', () => {
+  const dir = tmp('narova-prov-recognized-');
+  try {
+    fs.mkdirSync(path.join(dir, 'assets'));
+    fs.writeFileSync(path.join(dir, 'reel.config.mjs'), `export default {
+  title: 'Rec',
+  scenes: [{ id: 'one', dur: 5, body: '<p>r</p>', vo: [] }],
+};
+`);
+    fs.writeFileSync(path.join(dir, 'assets', 'a.jpg'), 'a');
+    fs.writeFileSync(path.join(dir, 'assets', 'b.jpg'), 'b');
+    const r1 = run(['assets', 'import', 'assets/a.jpg', '--project', dir,
+      '--origin', 'stock', '--provider', 'nasa', '--license', 'Public Domain (NASA)']);
+    assert.equal(r1.status, 0, r1.stderr);
+    assert.ok(!r1.stderr.includes('not a recognized form'), r1.stderr);
+    const r2 = run(['assets', 'import', 'assets/b.jpg', '--project', dir,
+      '--origin', 'stock', '--provider', 'nasa', '--license', 'CC0-1.0']);
+    assert.equal(r2.status, 0, r2.stderr);
+    assert.ok(!r2.stderr.includes('not a recognized form'), r2.stderr);
+    const report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
+    for (const f of ['a.jpg', 'b.jpg']) {
+      assert.equal(report.media.rows.find(x => x.file === `assets/${f}`).rights.bucket, 'public domain');
+    }
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('re-importing a modified file at the same path retains origin/rights records (NAR-020-037)', () => {
+  const dir = tmp('narova-prov-reimport-');
+  try {
+    fs.mkdirSync(path.join(dir, 'assets'));
+    fs.writeFileSync(path.join(dir, 'reel.config.mjs'), `export default {
+  title: 'Re',
+  scenes: [{ id: 'one', dur: 5, body: '<p>r</p>', vo: [] }],
+};
+`);
+    fs.writeFileSync(path.join(dir, 'assets', 'glacier.jpg'), 'v1');
+    assert.equal(run(['assets', 'import', 'assets/glacier.jpg', '--project', dir,
+      '--origin', 'stock', '--provider', 'nasa', '--item-id', 'ITEM-9',
+      '--source-page', 'https://example.test/item', '--license', 'Public Domain (NASA)']).status, 0);
+    // Grade the file in place (modified bytes), then re-import with no flags.
+    fs.writeFileSync(path.join(dir, 'assets', 'glacier.jpg'), 'graded-bytes');
+    assert.equal(run(['assets', 'import', 'assets/glacier.jpg', '--project', dir]).status, 0);
+    const lock = readAssetLock(dir);
+    const record = lock.assets.find(x => x.file === 'assets/glacier.jpg');
+    assert.equal(record.origin.provider, 'nasa');
+    assert.equal(record.origin.itemId, 'ITEM-9');
+    assert.equal(record.origin.sourcePage, 'https://example.test/item');
+    assert.equal(record.rights.license, 'Public Domain (NASA)');
+    // The refreshed bytes pass verify.
+    const verify = run(['assets', 'verify', '--project', dir]);
+    assert.equal(verify.status, 0, verify.stdout + verify.stderr);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('assets credits formats share selection; default output is unchanged', () => {
   const dir = path.join(tmp('narova-cli-credits-'), 'p');
   assert.equal(run(['init', dir]).status, 0);

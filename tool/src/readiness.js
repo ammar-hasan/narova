@@ -425,11 +425,13 @@ function readinessMatrix() {
   return [probeSubstrate(), probeMedia(), probeSpeechRuntime(), probeVoice(), probeRenderer()];
 }
 
-/* Neat human rendering of the matrix (doctor parity, NAR-021-007). */
+/* Neat human rendering of the matrix (doctor parity, NAR-021-007). An
+ * auto-provisionable item names the surface that provisions it — the
+ * readiness/doctor surface itself never provisions (NAR-021-002). */
 function formatMatrix(items) {
   const rows = items.map((i) => {
     const mark = i.status === 'satisfied' ? '✓' : i.status === 'auto-provisionable' ? '◐' : '✗';
-    const where = i.detail || i.resolved || (i.status === 'needs-user-action' ? i.reason : 'will be set up automatically');
+    const where = i.detail || i.resolved || (i.status === 'needs-user-action' ? i.reason : 'provisioned on first run / `narova demo`');
     return `  ${mark} ${i.label} — ${where}`;
   });
   return ['Readiness:', ...rows].join('\n');

@@ -81,6 +81,21 @@ function rightsBucket(record) {
   return 'unknown';
 }
 
+/* License-string recognition for the import/download advisory (NAR-016-059).
+ * Advisory only — recognition never gates storage and never changes the
+ * rightsBucket display mapping above. Recognized forms: `public domain`
+ * spellings, `cc0`, and the familiar Creative Commons identifiers (cc-by,
+ * cc-by-sa, cc-by-nc, cc-by-nd and their combinations) with an optional
+ * version suffix or creativecommons.org URL form. */
+const CC_LICENSE_URL_RE = /^https?:\/\/(www\.)?creativecommons\.org\/(licenses|publicdomain)\//i;
+function recognizedLicense(license) {
+  const value = String(license || '').trim();
+  if (!value) return false;
+  if (/^cc[- ]?0\b/i.test(value) || /public[\s-]?domain/i.test(value)) return true;
+  if (/^cc[- ]?by(?:[- ](?:nc-sa|nc-nd|sa|nc|nd))?(?=[- ]|$)/i.test(value)) return true;
+  return CC_LICENSE_URL_RE.test(value);
+}
+
 function bucketSortKey(bucket) {
   const order = ['original', 'public domain'];
   const i = order.indexOf(bucket);
@@ -733,5 +748,6 @@ module.exports = {
   collectProvenance,
   formatProvenance,
   originClass,
+  recognizedLicense,
   rightsBucket,
 };

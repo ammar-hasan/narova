@@ -36,7 +36,7 @@ const {
   normalizeRegistrationMetadata, resolveProjectFile, unregisterAsset, verifyAssets,
   withAssetMutation,
 } = require('../src/asset-registry');
-const { collectProvenance, formatProvenance } = require('../src/provenance');
+const { collectProvenance, formatProvenance, recognizedLicense } = require('../src/provenance');
 const { listStockProviders, resolveStock, searchStock } = require('../src/stock-providers');
 const { generateKaraoke } = require('../src/karaoke');
 const { retime } = require('../src/retime');
@@ -336,6 +336,15 @@ function assetRegistrationFromFlags(flags, defaults = {}) {
     ...(Object.keys(origin).length ? { origin } : {}),
     ...(Object.keys(rights).length ? { rights } : {}),
   };
+}
+
+/* Import-time license advisory (NAR-016-059): an unrecognized --license
+ * string warns — naming the value and the recognized vocabulary — but is
+ * stored unchanged; the open registry storage contract is untouched. */
+function adviseUnrecognizedLicense(flags) {
+  if (flags.license && !recognizedLicense(flags.license)) {
+    console.error(`warning: license "${terminalSafe(flags.license)}" is not a recognized form — recognized forms include "Public Domain", "CC0", and Creative Commons identifiers (CC-BY, CC-BY-SA, CC-BY-NC, CC-BY-ND, with an optional version or URL)`);
+  }
 }
 
 async function loadResolved(flags, { readOnly = false, ignoreRestore = false } = {}) {
@@ -674,6 +683,40 @@ Options:
   --provider <name> --kind image|video|audio|model --limit <1..20> --json
 `;
 
+/* Action-scoped help (NAR-009-036): for grouped command families with
+ * distinct per-action usage, `narova <group> <action> --help` prints that
+ * action's usage and the options it accepts. A group without an action (or
+ * an action without usage text) falls back to the global HELP. */
+const ASSET_METADATA_FLAGS = `  --origin <mode> --provider <name> --item-id <id> --source-page <url>
+  --license <id> --license-url <url> --creator <name> --attribution <text>`;
+const ACTION_HELP = {
+  assets: {
+    import: `usage: narova assets import <file> [metadata options]\n${ASSET_METADATA_FLAGS}`,
+    download: `usage: narova assets download <url> --output <project-relative path> [metadata options]\n${ASSET_METADATA_FLAGS}`,
+    providers: 'usage: narova assets providers [--pack core|essential]',
+    search: 'usage: narova assets search <query> --provider <name> --kind image|video|audio|model [--limit N] [--pack core|essential] [--json]',
+    acquire: `usage: narova assets acquire <id> --provider <name> --kind image|video|audio|model --output <project-relative path> [--pack core|essential]
+  acquire derives stock provenance from the provider — --origin, --item-id, and --source-page are not accepted
+  --license <id> --license-url <url> --creator <name> --attribution <text>  (rights overrides)`,
+    list: 'usage: narova assets list',
+    untrack: 'usage: narova assets untrack <project-relative file>',
+    verify: 'usage: narova assets verify',
+    credits: 'usage: narova assets credits [--format text|youtube|web|json]',
+  },
+  walkthrough: {
+    explore: 'usage: narova walkthrough explore <id>',
+    capture: 'usage: narova walkthrough capture [id]',
+    status: 'usage: narova walkthrough status [id]',
+  },
+  branch: {
+    save: 'usage: narova branch save <name> --rationale "why this small proof may serve the brief" [--judge-assertion <id>] [--video <file>] [--status candidate|exploring] [--parent <name>]',
+    compare: 'usage: narova branch compare <name> <name> [name]',
+    list: 'usage: narova branch list',
+    set: 'usage: narova branch set <name> [--status approved|rejected|archived|candidate] [--rationale "..."]',
+    show: 'usage: narova branch show <name>',
+  },
+};
+
 async function main() {
   const argv = process.argv.slice(2);
   // Pre-scan for the machine-output request so even a parse failure can emit
@@ -713,7 +756,11 @@ async function main() {
     console.log(HELP);
     return;
   }
-  if ((flags.help || flags.h) && cmd !== 'demo') { console.log(HELP); return; }
+  if ((flags.help || flags.h) && cmd !== 'demo') {
+    const actionHelp = ACTION_HELP[cmd] && ACTION_HELP[cmd][positionals[1]];
+    console.log(actionHelp || HELP);
+    return;
+  }
 
   switch (cmd) {
     case 'init': {
@@ -1026,6 +1073,7 @@ async function main() {
           });
           console.log(`tracked: ${record.file} (${record.kind}, ${record.bytes} bytes)`);
           console.log(`lock:    ${path.join(projectDir, 'assets.lock.json')}`);
+          adviseUnrecognizedLicense(flags);
           mData({ file: record.file, kind: record.kind, bytes: record.bytes });
           mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
           return;
@@ -1174,6 +1222,7 @@ async function main() {
         }
         console.log(`${stock ? 'acquired' : 'downloaded'}: ${record.file} (${record.kind}, ${record.bytes} bytes)`);
         console.log(`lock:       ${path.join(projectDir, 'assets.lock.json')}`);
+        adviseUnrecognizedLicense(flags);
         mData({ file: record.file, kind: record.kind, bytes: record.bytes, ...(stock ? { provider: stock.provider, itemId: stock.id } : { url }) });
         mArtifact(path.join(projectDir, record.file), 'asset');
         mArtifact(path.join(projectDir, 'assets.lock.json'), 'registry');
