@@ -79,7 +79,7 @@ test('npm metadata uses focused prompt-to-video discovery language', () => {
 test('READMEs lead with the product category and distribution links', () => {
   const repositoryReadme = read('README.md');
   const packageReadme = read('tool/README.md');
-  assert.match(repositoryReadme, /^# Narova — prompt-to-video CLI and agent skill$/m);
+  assert.match(repositoryReadme, /^# Narova — open video production system for humans and agents$/m);
   assert.match(packageReadme, /^# Narova — local-first prompt-to-video CLI$/m);
   for (const content of [repositoryReadme, packageReadme]) {
     assert.match(content, new RegExp(npmUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
