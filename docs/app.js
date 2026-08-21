@@ -175,10 +175,10 @@
     var box = document.getElementById("karaoke");
     if (!box) return;
     var script = [
-      { who: "a", label: "host · A", text: "Wait — the video builds itself?" },
-      { who: "b", label: "host · B", text: "Every word lands right on the beat." },
-      { who: "a", label: "host · A", text: "No timeline. No keyframes." },
-      { who: "b", label: "host · B", text: "Just a prompt." }
+      { who: "a", label: "you · A", text: "Narova turns intent into a project." },
+      { who: "b", label: "agent · B", text: "Scenes, proofs, and a timeline." },
+      { who: "a", label: "you · A", text: "Change scene four, keep the rest." },
+      { who: "b", label: "agent · B", text: "Inspect the evidence, then ship." }
     ];
     var spans = [];
     script.forEach(function (turn) {
@@ -283,6 +283,9 @@
     });
   }
   var INSTALL = "npx skills add ammar-hasan/narova --skill narova -g";
+  var DEMO = "npx @narova/narova demo";
+  bindCopy("copyDemo", DEMO, document.getElementById("copyDemoLabel"));
+  bindCopy("copyDemo2", DEMO, document.querySelector("#copyDemo2 .copy-label"));
   bindCopy("copyInstall", INSTALL, document.querySelector("#copyInstall .copy-label"));
   bindCopy("copyInstall2", INSTALL, document.querySelector("#copyInstall2 .copy-label"));
   bindCopy(

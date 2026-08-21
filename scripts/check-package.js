@@ -50,12 +50,13 @@ if (toolPackage.repository?.url !== 'git+https://github.com/ammar-hasan/narova.g
     || toolPackage.repository?.directory !== 'tool') {
   throw new Error('npm repository metadata must identify ammar-hasan/narova and the tool/ package directory');
 }
-const expectedDescription = 'Local-first prompt-to-video CLI for AI agents, with deterministic scene scripts, TTS, word-synced captions, product walkthroughs, and 2D/3D rendering.';
+const expectedDescription = 'Open video production system for humans and agents — local-first CLI for directable, reproducible video: scene scripts, deterministic rendering, local speech, word-synced captions, product walkthroughs, AI clips, revisions, and provenance.';
 if (toolPackage.description !== expectedDescription) {
-  throw new Error('npm description must preserve Narova\'s clear prompt-to-video positioning');
+  throw new Error('npm description must identify the open video production system and its real scope');
 }
 const expectedKeywords = [
   'video',
+  'video-production',
   'video-generation',
   'prompt-to-video',
   'text-to-video',
@@ -63,6 +64,7 @@ const expectedKeywords = [
   'video-cli',
   'agent-skills',
   'motion-graphics',
+  'scene-script',
   'text-to-speech',
   'tts',
   'captions',

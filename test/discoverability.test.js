@@ -16,6 +16,7 @@ const skillUrl = 'https://skills.sh/ammar-hasan/narova';
 const releaseDate = '2026-08-12';
 const expectedKeywords = [
   'video',
+  'video-production',
   'video-generation',
   'prompt-to-video',
   'text-to-video',
@@ -23,6 +24,7 @@ const expectedKeywords = [
   'video-cli',
   'agent-skills',
   'motion-graphics',
+  'scene-script',
   'text-to-speech',
   'tts',
   'captions',
@@ -67,11 +69,11 @@ function expectHeadMetadata(html, canonicalUrl) {
   }
 }
 
-test('npm metadata uses focused prompt-to-video discovery language', () => {
+test('npm metadata uses open video production system discovery language', () => {
   const pkg = JSON.parse(read('tool/package.json'));
   assert.equal(
     pkg.description,
-    'Local-first prompt-to-video CLI for AI agents, with deterministic scene scripts, TTS, word-synced captions, product walkthroughs, and 2D/3D rendering.',
+    'Open video production system for humans and agents — local-first CLI for directable, reproducible video: scene scripts, deterministic rendering, local speech, word-synced captions, product walkthroughs, AI clips, revisions, and provenance.',
   );
   assert.deepEqual(pkg.keywords, expectedKeywords);
 });
@@ -80,7 +82,7 @@ test('READMEs lead with the product category and distribution links', () => {
   const repositoryReadme = read('README.md');
   const packageReadme = read('tool/README.md');
   assert.match(repositoryReadme, /^# Narova — open video production system for humans and agents$/m);
-  assert.match(packageReadme, /^# Narova — local-first prompt-to-video CLI$/m);
+  assert.match(packageReadme, /^# Narova — open video production system for humans and agents$/m);
   for (const content of [repositoryReadme, packageReadme]) {
     assert.match(content, new RegExp(npmUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
     assert.match(content, new RegExp(skillUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
@@ -96,12 +98,12 @@ test('website metadata and hero present the skill without making people secondar
   expectHeadMetadata(home, homeUrl);
   expectHeadMetadata(changelog, changelogUrl);
   expectHeadMetadata(explore, exploreUrl);
-  assert.match(home, /<title>[^<]*prompt-to-video skill and local CLI[^<]*<\/title>/i);
-  assert.match(home, /<p class="kicker reveal-line">Open-source prompt-to-video<\/p>/);
-  assert.match(home, /<h1[^>]*>[\s\S]*Prompt in\.[\s\S]*Directed video out\.[\s\S]*<\/h1>/);
-  assert.match(home, /<p class="hero-sub reveal-line">[\s\S]*work interactively[\s\S]*agent run unattended[\s\S]*skill directs the work[\s\S]*local CLI handles[\s\S]*<\/p>/i);
+  assert.match(home, /<title>[^<]*open video production system for humans and agents[^<]*<\/title>/i);
+  assert.match(home, /<p class="kicker reveal-line">Open video production system<\/p>/);
+  assert.match(home, /<h1[^>]*>[\s\S]*From idea to[\s\S]*a video you keep directing\.[\s\S]*<\/h1>/);
+  assert.match(home, /<p class="hero-sub reveal-line">[\s\S]*not a video-generation[\s\S]*model[\s\S]*you and your agent own the creative direction[\s\S]*work interactively[\s\S]*agent run unattended[\s\S]*local CLI handles[\s\S]*<\/p>/i);
   assert.doesNotMatch(home, /for AI agents/i);
-  assert.match(changelog, /<title>[^<]*prompt-to-video[^<]*agent skill[^<]*<\/title>/i);
+  assert.match(changelog, /<title>[^<]*open video production system releases[^<]*<\/title>/i);
   assert.match(home, new RegExp(`href="${npmUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(home, new RegExp(`href="${skillUrl.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}"`));
   assert.match(home, /<link rel="icon" href="assets\/favicon\.svg" type="image\/svg\+xml">/);
@@ -133,9 +135,9 @@ test('structured data is accurate, evergreen, and free of invented reviews', () 
   assert.equal(webPage['@id'], `${homeUrl}#webpage`);
   assert.equal(software['@id'], `${homeUrl}#software`);
   assert.equal(software.name, 'Narova');
-  assert.match(webPage.name, /prompt-to-video skill and local CLI/i);
+  assert.match(webPage.name, /open video production system for humans and agents/i);
   assert.match(webPage.description, /agent skill and local CLI/i);
-  assert.match(software.description, /agent skill with a local CLI/i);
+  assert.match(software.description, /open video production system/i);
   assert.doesNotMatch(JSON.stringify(data), /for AI agents/i);
   assert.equal(software.applicationCategory, 'DeveloperApplication');
   assert.equal(software.downloadUrl, npmUrl);

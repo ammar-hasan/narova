@@ -1,8 +1,11 @@
-# Narova — local-first prompt-to-video CLI
+# Narova — open video production system for humans and agents
 
-Narova is a deterministic, programmatic video CLI for AI agents. It turns
-prompts and scene scripts into narrated or silent 2D/3D video with local TTS,
-word-synced captions, speech-timed visuals, and product walkthrough capture.
+Narova is an open, local-first video production system for humans and agents.
+It turns creative intent — a prompt, script, scene file, source, repository, or
+real product flow — into directable, reproducible video: structured scenes,
+deterministic timelines, local speech, word-synced captions, multiple local
+renderers, AI clip generation, real product walkthroughs, revisions,
+provenance, and release.
 
 The CLI and the Narova agent skill are separate artifacts. Installing this npm
 package adds the `narova`, `narova-setup`, and `narova-uninstall` commands; it
@@ -37,11 +40,14 @@ narova-setup
 ```
 
 Optional `--xtts`, `--qwen`, and `--chatterbox` flags install larger local
-voice backends into Narova-owned virtual environments.
+voice backends into Narova-owned virtual environments. Optional hosted voices
+(ElevenLabs, OpenAI) are separate companion skills registered explicitly; the
+core package stays local-first.
 
 ## Quick start
 
 ```bash
+npx @narova/narova demo    # one command to a finished MP4
 narova init my-video
 cd my-video
 narova check
@@ -62,18 +68,29 @@ for the format, bounds, trust notice, and extraction rules.
 
 ## What it makes
 
-- Prompt-to-video and script-to-video explainers
+- Prompt-to-video, script-to-video, and source-grounded explainers
 - Narrated dialogue with local TTS and word-synced captions
+- Silent and marker-driven motion pieces (narration is optional)
 - Deterministic 2D HTML/CSS/SVG and Three.js/WebGL scenes
+- AI clip generation through explicitly selected providers (Sora, Runway)
 - Real product walkthrough videos with timed browser actions
 - Local MP4, SRT, and VTT deliverables without a render service
 - Deterministic shareable project archives with safe inspection and remix lineage
 - Read-only evidence-graded provenance reports and text, YouTube, web, or JSON
   credit output
 
+Two local renderers ship with the package. HyperFrames is the full browser
+canvas (HTML/CSS, WebGL, Studio); No-Browser draws a portable scene tree with
+Skia when a machine cannot launch a browser. Both run locally with no render
+service or fee.
+
+Agents can consume the versioned `narova.result/1` machine protocol (`--json`
+on every operation) with stable exit classes, diagnostics, and artifact
+records — no parsing of terminal prose.
+
 See the [project README](https://github.com/ammar-hasan/narova#readme) for the
 scene-script format, renderer choices, product walkthroughs, source grounding,
-and full workflow.
+proof branches, judge/assertions, and full workflow.
 
 ## Agent skill
 
@@ -86,7 +103,7 @@ npx skills add ammar-hasan/narova --skill narova -g
 ## Network and local data
 
 Narova renders locally. First use can download the pinned HyperFrames CLI,
-Python packages, and selected speech models. Optional stock providers, cloud
+Python packages, and selected speech models. Optional stock providers, AI clip
 generation, browser capture, and external voice providers use the network only
 when explicitly selected. Models, caches, saved voices, and provider manifests
 live under `~/.narova` by default and are retained across CLI upgrades.

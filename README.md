@@ -126,16 +126,26 @@ ordinary local files either way.
 
 ## What you can make
 
+The system is not limited to one input or one output. Any of these are
+first-class starting points or scene materials:
+
 - Explainers and social video
 - Product launch films
 - Real browser walkthroughs
 - Repository and technical overviews
 - Research and source-grounded videos
 - Multi-speaker dialogue
-- Silent motion pieces
+- Silent motion pieces and marker-driven events
 - HTML/CSS/SVG motion design
-- Three.js/WebGL 3D
-- Mixed media and generated clips
+- Three.js/WebGL 3D and mixed compositing
+- AI-generated clips through explicitly selected providers (Sora, Runway)
+- Stock, original, and generated media combined in one timeline
+- Platform presets and SRT/VTT delivery
+
+Nothing above requires a particular renderer, voice vendor, or cloud service.
+Narova renders through either of its two local renderers, speaks through local
+TTS or an explicitly registered hosted provider, and treats AI clip generation
+as one optional source of scene media — not the product itself.
 
 ## Try it — one command
 
@@ -327,6 +337,14 @@ agent finds a better asset through a browser, archive, or new source, it can use
 `assets download` or `assets import` and preserve the same provenance record.
 `ingest`, AI `generate`, and walkthrough capture register their outputs
 automatically; builds consume local files only and never acquire media.
+
+**AI clips as scene material.** When a project wants a generated shot, `narova
+generate "<prompt>"` produces an AI video clip through an explicitly selected
+provider — Sora or Runway — into the project asset registry with a generation
+recipe, so the clip participates in the same provenance, cache identity, and
+release evidence as any other media. This is an optional input to a Narova
+scene, never the product itself; it requires the chosen provider's API key in
+the environment and uses the network only when invoked.
 
 **Real product walkthroughs.** Explore a website/app semantically, record
 cursor-guided actions on narration beats, frame or full-bleed the real UI, then
