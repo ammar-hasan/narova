@@ -164,26 +164,32 @@
       "archiveIdentity": "8453da0f68b9c80b28f051aa52549b031c1788ba8603fceed4326d92c64477d2"
     },
     {
-      "kind": "demo",
+      "kind": "explore",
       "id": "product-walkthrough",
-      "title": "Continuous product walkthrough",
-      "summary": "The approximately 83-second narrated Narova product walkthrough embedded on the website.",
-      "mediaType": "video",
-      "media": {
-        "path": "demos/product-walkthrough/video.mp4",
+      "title": "A Complete Product Walkthrough",
+      "summary": "An 83-second continuous real-browser take: create, configure, search, assign, automate, and invite, all timed to narration and captions.",
+      "video": {
+        "path": "explore/product-walkthrough/video.mp4",
         "sha256": "eec6fbc509830852c1a0ffa7e2866a9acf3d52bf3147be62fe55a08e1781d1d0",
         "bytes": 4732762
       },
       "poster": {
-        "path": "demos/product-walkthrough/poster.jpg",
+        "path": "explore/product-walkthrough/poster.jpg",
         "sha256": "625925cbf859075939fad27fd4a41e897e28391677df1499db9d805d54748657",
         "bytes": 73665
       },
       "captions": {
-        "path": "demos/product-walkthrough/captions.vtt",
+        "path": "explore/product-walkthrough/captions.vtt",
         "sha256": "e60f1609958c5e18ef8e953aff9e02233f0f1aff93d8057cab1d78c2208a8bb3",
         "bytes": 2298
       },
+      "archive": {
+        "path": "explore/product-walkthrough/product-walkthrough.narova",
+        "sha256": "8a28feef4c6738d8ab3a9fbcb68dce68cd7e52fb19975c352dfb60f597cbe40a",
+        "bytes": 3128585
+      },
+      "producingVersion": "0.39.0",
+      "archiveIdentity": "8a28feef4c6738d8ab3a9fbcb68dce68cd7e52fb19975c352dfb60f597cbe40a",
       "rights": {
         "basis": "First-party Narova product walkthrough and render.",
         "license": "CC0-1.0",

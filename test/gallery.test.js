@@ -15,7 +15,7 @@ const index = () => JSON.parse(fs.readFileSync(indexPath, 'utf8'));
 
 test('checked-in gallery projection is current and backed by verified archives', () => {
   const result = buildGallery({ root, check: true });
-  assert.equal(result.entries, 4);
+  assert.equal(result.entries, 5);
   assert.equal(result.assetCommit, loadPublicAssets(root).commit);
   for (const entry of index().entries) {
     const archive = inspectArchive(path.join(root, entry.archive));

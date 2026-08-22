@@ -1,8 +1,8 @@
 {
   "format": "narova.public-assets/1",
   "repository": "https://github.com/ammar-hasan/narova-assets",
-  "commit": "6383a188b50df1f0fea1b64496423e173619b16e",
-  "catalogSha256": "c91c7253373b2b41346a010dabd3cb201db51ad848606a83f032a99c66c980b3",
+  "commit": "03a9116737a58589df1d852d557f48a5082f1c83",
+  "catalogSha256": "2ad283f4afcbdd55065c9cf6d1bcf0ee189c6db77c28f58033b796483f034b60",
   "explore": {
     "narova-skill-reel": {
       "archive": "explore/narova-skill-reel/narova-skill-reel.narova",
@@ -27,12 +27,18 @@
       "video": "explore/nori-and-the-pocket-moon/video.mp4",
       "poster": "explore/nori-and-the-pocket-moon/poster.jpg",
       "captions": "explore/nori-and-the-pocket-moon/captions.vtt"
+    },
+    "product-walkthrough": {
+      "archive": "explore/product-walkthrough/product-walkthrough.narova",
+      "video": "explore/product-walkthrough/video.mp4",
+      "poster": "explore/product-walkthrough/poster.jpg",
+      "captions": "explore/product-walkthrough/captions.vtt"
     }
   },
   "demos": {
-    "productWalkthroughVideo": "demos/product-walkthrough/video.mp4",
-    "productWalkthroughPoster": "demos/product-walkthrough/poster.jpg",
-    "productWalkthroughCaptions": "demos/product-walkthrough/captions.vtt",
+    "productWalkthroughVideo": "explore/product-walkthrough/video.mp4",
+    "productWalkthroughPoster": "explore/product-walkthrough/poster.jpg",
+    "productWalkthroughCaptions": "explore/product-walkthrough/captions.vtt",
     "clickHighlightProof": "demos/click-highlight-proof/video.mp4",
     "readmePreview": "demos/readme-preview/preview.gif",
     "exploreShare": "demos/explore-share/share.png"

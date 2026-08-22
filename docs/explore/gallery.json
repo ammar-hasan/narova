@@ -67,6 +67,38 @@
       }
     },
     {
+      "id": "product-walkthrough",
+      "title": "A Complete Product Walkthrough",
+      "summary": "One continuous real-browser take: create, configure, search, assign, automate, and invite—all timed to narration and captions.",
+      "archive": "docs/explore/projects/product-walkthrough.narova",
+      "archiveSha256": "8a28feef4c6738d8ab3a9fbcb68dce68cd7e52fb19975c352dfb60f597cbe40a",
+      "producingVersion": "0.39.0",
+      "video": "docs/assets/narova-product-walkthrough-demo.mp4",
+      "videoSha256": "eec6fbc509830852c1a0ffa7e2866a9acf3d52bf3147be62fe55a08e1781d1d0",
+      "captions": "docs/assets/narova-product-walkthrough-demo.vtt",
+      "poster": "docs/assets/narova-product-walkthrough-poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "The shipped 83-second walkthrough passed its original release and continuous-browser capture checks; ordinary portable authoring validation passes under Narova 0.39.0 with documented capture freshness advisories."
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "First-party Narova product walkthrough reconstructed from its checked-in authored project and preserved continuous browser capture at public source commit 47b1606; the published video, poster, and captions remain byte-identical.",
+        "lineage": "No recorded remix parent."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, English WebVTT captions, poster, text fallback, and script-free collapsed inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party Narova project, disposable product fixture capture, narration, and rendered media published under CC0-1.0; attribution and proof of use are not required.",
+        "credits": [
+          "Narova walkthrough project and render — Ammar Hasan (voluntary credit; CC0-1.0)"
+        ]
+      }
+    },
+    {
       "id": "narova-skill-reel",
       "title": "Prompt. Voice. Motion.",
       "summary": "The 30-second first-party reel that explains Narova through its own narrated, cue-driven pipeline.",
