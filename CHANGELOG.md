@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.38.0] - 2026-08-22
+
 ### Added
 
 - **Google provider companion (`narova-google`).** Two independently

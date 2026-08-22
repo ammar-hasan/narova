@@ -67,7 +67,20 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.37.0</span>
+        <span class="rel-version" data-narova-version>0.38.0</span>
+        <span class="rel-date">2026-08-22</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Google provider companion.</strong> A separately selectable <code>narova-google</code> skill registers two independent workers: Gemini speech on the provider-v1 speech protocol and single-submission Veo video generation on the provider-v1 video protocol. Standard-library workers keep the credential in its declared environment variable, sent only in the provider-specific request header — never in URLs, responses, recipes, or error text. Speech returns mono 16-bit WAV; generation submits exactly once with no automatic retry, and generated videos may be SynthID-watermarked. Installing the skill registers neither provider.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.37.0</span>
         <span class="rel-date">2026-08-21</span>
       </div>
       <div class="rel-body">
