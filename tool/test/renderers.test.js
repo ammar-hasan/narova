@@ -208,6 +208,47 @@ test('no-browser honors disabled, subtitle, pop, rise, and slam caption behavior
   assert.equal(captionWordStyle('slam', true, false, '#f00').y, -7);
 });
 
+test('no-browser draws the shared caption size and plate presentation', () => {
+  const { drawCaptions } = getRenderer('no-browser')._internals;
+  function context() {
+    const calls = { fills: 0, fonts: [] };
+    const target = {
+      save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {},
+      quadraticCurveTo() {}, closePath() {}, fill() { calls.fills += 1; },
+      fillText() {}, measureText(text) { return { width: text.length * 8 }; },
+      set font(value) { calls.fonts.push(value); },
+      set fillStyle(_) {}, set globalAlpha(_) {}, set textBaseline(_) {},
+      set textAlign(_) {}, set direction(_) {},
+    };
+    return { target, calls };
+  }
+  const baseProject = {
+    captionsEnabled: true,
+    size: { w: 640, h: 360 },
+    voices: { a: { color: '#fff' } },
+    theme: {},
+    timeline: {
+      preset: 'subtitle',
+      groups: [{ start: 0, end: 1, who: 'a', words: [{ w: 'Light', t0: 0, t1: 1 }] }],
+    },
+  };
+  const automatic = context();
+  drawCaptions(automatic.target, {
+    ...baseProject,
+    timeline: { ...baseProject.timeline, captionPresentation: { plate: false, size: null } },
+  }, 0.5, {});
+  assert.equal(automatic.calls.fills, 0);
+  assert.ok(automatic.calls.fonts.includes('800 17.28px sans-serif'));
+
+  const authored = context();
+  drawCaptions(authored.target, {
+    ...baseProject,
+    timeline: { ...baseProject.timeline, captionPresentation: { plate: true, size: 22 } },
+  }, 0.5, {});
+  assert.equal(authored.calls.fills, 1);
+  assert.ok(authored.calls.fonts.includes('800 22px sans-serif'));
+});
+
 test('no-browser compose carries captions:false into its project timeline', () => {
   const temp = fs.mkdtempSync(path.join(require('node:os').tmpdir(), 'narova-no-cap-'));
   const out = path.join(temp, 'out');

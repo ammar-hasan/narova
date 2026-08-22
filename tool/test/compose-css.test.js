@@ -95,6 +95,15 @@ test('layout patterns remain an explicit opt-in at the CSS assembly boundary', (
   assert.match(composeCss({}, voices, size, '', 'dark', true, true), /\.s-title\{/);
 });
 
+test('caption plate and size are authored overrides while defaults emit no override', () => {
+  const baseline = composeCss({}, voices, size);
+  assert.equal((baseline.match(/\.caption2\{font-size:/g) || []).length, 1);
+  assert.doesNotMatch(baseline, /\.caption2\{background:/);
+  const explicit = composeCss({}, voices, size, '', 'dark', true, false, false, { plate: true, size: 22 });
+  assert.match(explicit, /\.caption2\{font-size:22px\}/);
+  assert.match(explicit, /\.caption2\{background:rgba\(3,7,14,\.86\)/);
+});
+
 test('zero-style canvas is full-frame with no centering, gutter, max-width, or caption reserve', () => {
   const css = composeCss({}, voices, size, '', 'dark', true, false, false);
   assert.match(css, /\.canvas,\.scenebody\{position:absolute;inset:0\}/);

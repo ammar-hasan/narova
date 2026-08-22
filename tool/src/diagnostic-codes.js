@@ -15,6 +15,7 @@ const REGISTRY = Object.freeze({
 
   // Advisory checks (never fail the operation on their own).
   'check.warning': 'Advisory check finding; warnings never fail the operation outside release gates.',
+  'check.clip-truncation': 'Advisory: a scene-bound direct clip probes longer than the resolved scene duration; the clip will be cut mid-playback. Remedy: set scene minDur.',
 
   // Release gates (check --release / build --release).
   'gate.release.captions-missing': 'Release gate: narration audio is present but the published caption sidecar is absent or empty without a recorded derivation reason.',

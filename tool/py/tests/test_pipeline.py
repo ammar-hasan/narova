@@ -3,8 +3,10 @@
 Run: PYTHONPATH=py python3 -m unittest discover -s py/tests -v
 (no heavy TTS deps needed — backends import lazily)."""
 import json
+import shutil
 import tempfile
 import unittest
+import wave
 from pathlib import Path
 from unittest import mock
 
@@ -12,6 +14,7 @@ from narova_tts import pipeline
 from narova_tts.backends import ChatterboxBackend, XttsBackend, XTTS_LANGS
 from narova_tts.pipeline import (
     rescale_timings,
+    pad_scene_to_min_duration,
     scene_starts,
     sentence_cache_key,
     sentences,
@@ -56,6 +59,104 @@ class TestRescaleTimings(unittest.TestCase):
         t = rescale_timings(self.scene(), 10.0)
         self.assertEqual(t["turns"], [0.16, 5.0])
         self.assertEqual(t["words"][0]["t0"], 0.16)
+
+
+@unittest.skipUnless(shutil.which("ffmpeg") and shutil.which("ffprobe"), "media tools unavailable")
+class TestMinDurationPadding(unittest.TestCase):
+    def test_padding_keeps_spoken_pcm_prefix_and_publishes_floor(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            wav = root / "scene.wav"
+            pipeline.sh("ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                        "-i", f"sine=frequency=440:sample_rate={pipeline.RATE}:duration=0.4",
+                        "-c:a", "pcm_s16le", str(wav))
+            with wave.open(str(wav), "rb") as source:
+                prefix = source.readframes(source.getnframes())
+            spoken, final = pad_scene_to_min_duration(wav, 1.0, root, "test")
+            with wave.open(str(wav), "rb") as result:
+                padded = result.readframes(result.getnframes())
+            self.assertEqual(padded[:len(prefix)], prefix)
+            self.assertAlmostEqual(spoken, 0.4, places=2)
+            self.assertGreaterEqual(final, 0.999)
+
+    def test_synthesis_path_keeps_coordinates_on_spoken_prefix(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            voices = {"a": {"backend": "piper", "speaker": "fixture"}}
+            config = {"voices": voices, "speech": {"deterministicTakes": True}}
+            timing = {"gapSentence": 0.05, "gapTurn": 0.05,
+                      "lead": 0.1, "tail": 0.1, "tempo": 1.0}
+
+            def synth_fixture(_backend, _who, _text, _tmp, out, _tempo, **_kwargs):
+                pipeline.sh("ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+                            "-i", f"sine=frequency=440:sample_rate={pipeline.RATE}:duration=0.2",
+                            "-c:a", "pcm_s16le", str(out))
+                return 0.2, False
+
+            def build(name, min_dur=None):
+                audio_dir = root / name / "audio"
+                tmp = root / name / "tmp"
+                audio_dir.mkdir(parents=True)
+                tmp.mkdir(parents=True)
+                scene = {"n": 1, "id": "one", "segments": [
+                    {"who": "a", "text": "Hello light."},
+                ]}
+                if min_dur is not None:
+                    scene["minDur"] = min_dur
+                with mock.patch.object(pipeline, "synth_sentence", side_effect=synth_fixture):
+                    result = pipeline._synthesize_with_router(
+                        [scene], config, timing, audio_dir, tmp, "piper", voices,
+                        {"a": object()})
+                return result["one"], audio_dir / "01.wav"
+
+            plain, plain_wav = build("plain")
+            padded, padded_wav = build("padded", 1.0)
+            self.assertEqual(padded["turns"], plain["turns"])
+            self.assertEqual(padded["words"], plain["words"])
+            self.assertLessEqual(padded["words"][-1]["t1"], plain["dur"])
+            self.assertGreaterEqual(padded["dur"], 0.999)
+            with wave.open(str(plain_wav), "rb") as source:
+                spoken_pcm = source.readframes(source.getnframes())
+            with wave.open(str(padded_wav), "rb") as source:
+                padded_pcm = source.readframes(source.getnframes())
+            self.assertEqual(padded_pcm[:len(spoken_pcm)], spoken_pcm)
+
+    def test_native_clip_audio_bypasses_tts_and_keeps_supplied_words(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            clip = root / "native.mp4"
+            pipeline.sh("ffmpeg", "-y", "-loglevel", "error",
+                        "-f", "lavfi", "-i", "color=c=black:s=64x64:d=0.5",
+                        "-f", "lavfi", "-i", "sine=frequency=440:duration=0.5",
+                        "-shortest", "-c:v", "libx264", "-c:a", "aac", str(clip))
+            audio_dir = root / "audio"
+            tmp = root / "tmp"
+            audio_dir.mkdir()
+            tmp.mkdir()
+            scene = {
+                "n": 1, "id": "native", "dur": 1.0,
+                "segments": [{"who": "a", "text": "Hello there."}],
+                "clipAudio": {
+                    "authority": "native", "file": str(clip),
+                    "wordTimings": [{
+                        "start": 0.1, "end": 0.45, "text": "Hello there.",
+                        "words": [
+                            {"text": "Hello", "start": 0.1, "end": 0.25},
+                            {"text": "there.", "start": 0.26, "end": 0.45},
+                        ],
+                    }],
+                },
+            }
+            result = pipeline._synthesize_with_router(
+                [scene], {"voices": {}},
+                {"gapSentence": 0.1, "gapTurn": 0.1, "lead": 0.1,
+                 "tail": 0.1, "tempo": 1.0},
+                audio_dir, tmp, "piper", {}, {})
+            self.assertGreaterEqual(result["native"]["dur"], 0.999)
+            self.assertEqual(result["native"]["audioAuthority"], "native")
+            self.assertEqual(result["native"]["turns"], [0.1])
+            self.assertEqual(result["native"]["words"][0]["ti"], 0)
+            self.assertTrue((audio_dir / "01.wav").exists())
 
 
 class TestSentences(unittest.TestCase):

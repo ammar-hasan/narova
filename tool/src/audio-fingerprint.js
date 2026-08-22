@@ -52,11 +52,24 @@ function audioFingerprint(config) {
     }
   }
 
+  const hasClipAudioDecision = (config.scenes || []).some(scene => scene.clipAudio != null);
+  const clipAudio = (config.scenes || []).map(scene => {
+    const authority = scene.clipAudio?.authority || 'synthesis';
+    return {
+      authority,
+      ...(authority === 'native' ? {
+        clipHash: scene.clipAudio?.file ? hashFile(scene.clipAudio.file) : null,
+        dur: scene.dur,
+      } : {}),
+    };
+  });
+
   const timing = config.timing || {};
   const tempo = timing.tempo != null ? timing.tempo : 1.0;
   return sha256(stableStringify({
     voices: entries,
     turns,
+    ...(hasClipAudioDecision ? { clipAudio } : {}),
     tempo,
     gapSentence: timing.gapSentence != null ? timing.gapSentence : 0.24,
     gapTurn: timing.gapTurn != null ? timing.gapTurn : 0.44,
@@ -117,6 +130,11 @@ function timingsFingerprint(config) {
       id: scene.id,
       turns: (scene.vo || []).length,
       silentDur: (scene.vo || []).length === 0 ? scene.dur : null,
+      minDur: (scene.vo || []).length > 0 ? (scene.minDur ?? null) : null,
+      ...(scene.clipAudio ? { clipAudio: {
+        authority: scene.clipAudio.authority,
+        wordTimings: scene.clipAudio.wordTimings || null,
+      } } : {}),
     })),
   }));
 }

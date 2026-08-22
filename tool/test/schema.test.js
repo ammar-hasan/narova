@@ -155,6 +155,63 @@ test('legacy caption/dur fields are accepted', () => {
   assert.doesNotThrow(() => resolveConfig(raw, {}, '.'));
 });
 
+test('native clip audio is explicit, transcript-bound, and reversible', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-native-audio-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'scene.mp4'), 'fixture');
+    fs.writeFileSync(path.join(dir, 'words.json'), JSON.stringify([{
+      start: 0.1, end: 1.2, text: 'Hello there.',
+      words: [
+        { text: 'Hello', start: 0.1, end: 0.5 },
+        { text: 'there.', start: 0.55, end: 1.2 },
+      ],
+    }]));
+    const raw = validRaw();
+    raw.scenes[0] = {
+      ...raw.scenes[0], clip: 'scene.mp4', dur: 2,
+      clipAudio: {
+        authority: 'native', role: 'dialogue',
+        rationale: 'Visible generated dialogue requires performance sync.',
+        wordTimings: 'words.json',
+      },
+    };
+    const resolved = resolveConfig(raw, {}, dir);
+    assert.equal(resolved.scenes[0].clipAudio.authority, 'native');
+    assert.equal(resolved.scenes[0].clipAudio.file, path.join(dir, 'scene.mp4'));
+    assert.equal(narration(resolved)[0].clipAudio.wordTimings[0].text, 'Hello there.');
+
+    raw.scenes[0].clipAudio.authority = 'synthesis';
+    delete raw.scenes[0].clipAudio.wordTimings;
+    assert.equal(resolveConfig(raw, {}, dir).scenes[0].clipAudio.authority, 'synthesis');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('native clip audio rejects implicit duration, mismatched timing, and global narration', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-native-audio-bad-'));
+  try {
+    fs.writeFileSync(path.join(dir, 'scene.mp4'), 'fixture');
+    fs.writeFileSync(path.join(dir, 'narration.wav'), 'fixture');
+    fs.writeFileSync(path.join(dir, 'words.json'), JSON.stringify([{
+      start: 0, end: 1, text: 'Different words.', words: [],
+    }]));
+    const raw = validRaw();
+    raw.scenes[0] = {
+      ...raw.scenes[0], clip: 'scene.mp4',
+      clipAudio: { authority: 'native', rationale: 'Keep the source performance.', wordTimings: 'words.json' },
+    };
+    assert.throws(() => resolveConfig(raw, {}, dir), /native requires a positive explicit scene\.dur/);
+    raw.scenes[0].dur = 2;
+    assert.throws(() => resolveConfig(raw, {}, dir), /must match scene\.vo/);
+    delete raw.scenes[0].clipAudio.wordTimings;
+    raw.narration = { file: 'narration.wav' };
+    assert.throws(() => resolveConfig(raw, {}, dir), /cannot be combined with one global external narration/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('theme.mode defaults to dark, accepts light, rejects junk', () => {
   assert.equal(resolveConfig(validRaw(), {}, '.').mode, 'dark');
   assert.equal(resolveConfig({ ...validRaw(), theme: { mode: 'light' } }, {}, '.').mode, 'light');
@@ -334,9 +391,9 @@ test('sfx entries anchor to scenes; bad anchors/files throw', () => {
 });
 
 test('captions preset/emphasis resolve with defaults; junk throws', () => {
-  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'subtitle', emphasis: [], maxWords: null });
+  assert.deepEqual(resolveConfig(validRaw(), {}, '.').captions, { preset: 'subtitle', emphasis: [], maxWords: null, plate: false, size: null });
   const c = resolveConfig({ ...validRaw(), captions: { preset: 'slam', emphasis: ['Free', ' zero '] } }, {}, '.');
-  assert.deepEqual(c.captions, { preset: 'slam', emphasis: ['Free', 'zero'], maxWords: null });
+  assert.deepEqual(c.captions, { preset: 'slam', emphasis: ['Free', 'zero'], maxWords: null, plate: false, size: null });
   assert.throws(() => resolveConfig({ ...validRaw(), captions: { preset: 'bounce' } }, {}, '.'),
     /config\.captions\.preset: unknown preset "bounce"/);
   assert.throws(() => resolveConfig({ ...validRaw(), captions: { emphasis: 'Free' } }, {}, '.'),
@@ -811,4 +868,43 @@ test('config.imports reject remote URLs', () => {
     () => resolveConfig(raw, {}, '.'),
     /remote URLs/,
   );
+});
+
+test('scene minDur resolves only as a positive finite synthesized-scene floor', () => {
+  const raw = validRaw();
+  raw.scenes[0].minDur = 7.5;
+  assert.equal(resolveConfig(raw, {}, '.').scenes[0].minDur, 7.5);
+  for (const value of [0, -1, 'eight', Infinity]) {
+    const invalid = validRaw();
+    invalid.scenes[0].minDur = value;
+    assert.throws(() => resolveConfig(invalid, {}, '.'), /scenes\[0\]\.minDur.*positive finite/);
+  }
+  const silent = validRaw();
+  silent.scenes[0].vo = [];
+  silent.scenes[0].dur = 2;
+  silent.scenes[0].minDur = 5;
+  assert.throws(() => resolveConfig(silent, {}, '.'), /scenes\[0\]\.minDur.*voiced scenes.*silent scenes use dur/);
+});
+
+test('scene minDur is rejected during resolution for external narration', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-external-min-dur-'));
+  fs.writeFileSync(path.join(dir, 'voice.wav'), 'audio');
+  const raw = validRaw();
+  raw.narration = { file: 'voice.wav' };
+  raw.scenes[0].minDur = 8;
+  assert.throws(() => resolveConfig(raw, {}, dir), /scenes\[0\]\.minDur.*external narration/);
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('caption plate and composition-pixel size validate and resolve defaults', () => {
+  const defaults = resolveConfig(validRaw(), {}, '.').captions;
+  assert.deepEqual({ plate: defaults.plate, size: defaults.size }, { plate: false, size: null });
+  const raw = { ...validRaw(), captions: { preset: 'subtitle', plate: true, size: 22 } };
+  assert.deepEqual(
+    (({ plate, size }) => ({ plate, size }))(resolveConfig(raw, {}, '.').captions),
+    { plate: true, size: 22 },
+  );
+  for (const captions of [{ plate: 'yes' }, { size: 9 }, { size: 121 }, { size: 22.5 }]) {
+    assert.throws(() => resolveConfig({ ...validRaw(), captions }, {}, '.'), /config\.captions\.(?:plate|size)/);
+  }
 });

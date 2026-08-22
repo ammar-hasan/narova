@@ -13,7 +13,7 @@
  * creative approval from warnings to errors. */
 const fs = require('fs');
 const path = require('path');
-const { PLATFORMS } = require('./util');
+const { PLATFORMS, probe } = require('./util');
 const { captureStatus } = require('./walkthrough');
 const { timingsFingerprint } = require('./audio-fingerprint');
 const { hashFile } = require('./manifest');
@@ -606,7 +606,8 @@ function releaseGateCode(message) {
 function collectDiagnostics(opts, warnings, errors, release) {
   if (!opts.diagnostics) return;
   for (const w of warnings) {
-    opts.diagnostics.push({ severity: 'warning', code: assertRegistered('check.warning'), message: w });
+    const code = w.startsWith('clip truncation:') ? 'check.clip-truncation' : 'check.warning';
+    opts.diagnostics.push({ severity: 'warning', code: assertRegistered(code), message: w });
   }
   for (const e of errors) {
     opts.diagnostics.push(release
@@ -726,9 +727,31 @@ function check(config, opts = {}) {
   }
 
   const timingsPath = path.join(opts.outDir || path.join(config.projectDir || '.', 'out'), 'timings.json');
+  const timingsFingerprintPath = path.join(path.dirname(timingsPath), '.timings-fingerprint');
   let timings = null;
-  if (fs.existsSync(timingsPath)) {
-    try { timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8')); } catch { /* synth will report malformed timings */ }
+  if (fs.existsSync(timingsPath) && fs.existsSync(timingsFingerprintPath)) {
+    try {
+      if (fs.readFileSync(timingsFingerprintPath, 'utf8').trim() === timingsFingerprint(config)) {
+        timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
+      }
+    } catch { /* synth will report malformed timings */ }
+  }
+  // NAR-007-051: a fresh, best-effort probe on every direct scene clip. The
+  // warning is advisory; probe unavailability/failure never blocks a build.
+  for (const scene of config.scenes) {
+    if (!scene.clip) continue;
+    try {
+      const mediaSeconds = probe(path.resolve(config.projectDir || '.', scene.clip));
+      const timingSeconds = timings && timings[scene.id] && timings[scene.id].dur;
+      const hasVoice = (scene.vo || []).length > 0;
+      const sceneSeconds = Number.isFinite(timingSeconds)
+        ? timingSeconds
+        : (hasVoice ? null : scene.dur);
+      if (Number.isFinite(mediaSeconds) && Number.isFinite(sceneSeconds)
+          && mediaSeconds - sceneSeconds > 0.05) {
+        warnings.push(`clip truncation: scene "${scene.id}" clip "${scene.clip}" is ${mediaSeconds.toFixed(3)}s but the resolved scene is ${sceneSeconds.toFixed(3)}s — set scene minDur to preserve the full clip`);
+      }
+    } catch { /* advisory is suppressed only because the required probe failed */ }
   }
   for (const [id, flow] of Object.entries(config.walkthroughs || {})) {
     const status = captureStatus(config, id, timings, {

@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.38.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.39.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -512,6 +512,15 @@ export default {
   scenes: [
     {
       id: "title",
+      // For a generated clip with visibly synchronized dialogue, an agent can
+      // choose the preserved source performance instead of synthesizing `vo`:
+      // clip: "assets/title.mp4",
+      // dur: 8,
+      // clipAudio: {
+      //   authority: "native", role: "dialogue",
+      //   rationale: "The visible delivery requires lip sync.",
+      //   wordTimings: "assets/title.words.json", // optional; one cue/vo turn
+      // },
       vo: [                                   // what is SPOKEN, in order
         { who: "a", text: "This is narova." },
         { who: "b", text: "Scenes in, video out. Let's go." },
@@ -528,6 +537,14 @@ export default {
 The rules:
 
 - `vo` is the spoken dialogue. Each turn is `{ who, text }`.
+- Direct clips remain visual-only unless `clipAudio` records a choice. Use
+  `authority: "native"` when the source performance itself is authoritative
+  (especially generated visible dialogue requiring lip sync), or
+  `authority: "synthesis"` to document a deliberate replacement. How the file
+  was downloaded is not a decision rule. Native authority requires `clip`, an
+  explicit `dur`, and a non-empty rationale; native dialogue additionally
+  requires the matching `vo` transcript. Native audio plays once and any
+  remaining scene time is silence.
 - `body` is HTML for the screen.
 - `data-cue="1"` means: stay hidden until turn 1 starts. Counting starts at 0.
 - `class="reveal"` means: animate in when the scene starts.

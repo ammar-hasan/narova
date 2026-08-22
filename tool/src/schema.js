@@ -461,6 +461,11 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     if (s.dur != null && !(typeof s.dur === 'number' && Number.isFinite(s.dur) && s.dur > 0)) {
       errs.push(`${at}.dur: when provided, must be a positive finite number`);
     }
+    if (s.minDur != null && !(typeof s.minDur === 'number' && Number.isFinite(s.minDur) && s.minDur > 0)) {
+      errs.push(`${at}.minDur: when provided, must be a positive finite number`);
+    } else if (s.minDur != null && Array.isArray(s.vo) && s.vo.length === 0) {
+      errs.push(`${at}.minDur: only synthesized voiced scenes may declare a duration floor; silent scenes use dur`);
+    }
     if (s.elements != null) {
       validateElements(s.elements, `${at}`, errs);
     }
@@ -474,6 +479,88 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (!fs.existsSync(clipPath) || !fs.statSync(clipPath).isFile()) {
           errs.push(`${at}.clip: file not found: ${clipPath}`);
         }
+      }
+    }
+    // Explicit scene soundtrack authority. Omission preserves the historical
+    // visual-only clip + synthesized narration behavior. The record is an
+    // authored decision, not an inference from how the clip was acquired.
+    if (s.clipAudio != null) {
+      const caAt = `${at}.clipAudio`;
+      if (!s.clipAudio || typeof s.clipAudio !== 'object' || Array.isArray(s.clipAudio)) {
+        errs.push(`${caAt}: expected { authority, role?, rationale, wordTimings? }`);
+      } else {
+        const authority = s.clipAudio.authority;
+        const roles = new Set(['dialogue', 'ambience', 'effects', 'music', 'mixed', 'unknown']);
+        if (!['synthesis', 'native'].includes(authority)) {
+          errs.push(`${caAt}.authority: expected synthesis|native`);
+        }
+        if (typeof s.clipAudio.rationale !== 'string' || !s.clipAudio.rationale.trim()) {
+          errs.push(`${caAt}.rationale: required non-empty decision rationale`);
+        }
+        if (s.clipAudio.role != null && !roles.has(s.clipAudio.role)) {
+          errs.push(`${caAt}.role: expected one of ${[...roles].join('|')}`);
+        }
+        const normalized = {
+          authority,
+          role: s.clipAudio.role || 'unknown',
+          rationale: typeof s.clipAudio.rationale === 'string' ? s.clipAudio.rationale.trim() : '',
+        };
+        if (authority === 'native') {
+          if (!s.clip) errs.push(`${caAt}.authority: native requires scene.clip`);
+          if (!s._durAuthored) errs.push(`${caAt}.authority: native requires a positive explicit scene.dur`);
+          if (normalized.role === 'dialogue' && (!Array.isArray(s.vo) || s.vo.length === 0)) {
+            errs.push(`${caAt}.authority: native dialogue requires scene.vo as the declared transcript`);
+          }
+          if (s.minDur != null) errs.push(`${at}.minDur: native clip audio uses explicit dur; remove minDur`);
+          if (s.clip) normalized.file = path.resolve(baseDir, s.clip);
+          if (s.clipAudio.wordTimings != null) {
+            if (typeof s.clipAudio.wordTimings !== 'string' || !s.clipAudio.wordTimings.trim()) {
+              errs.push(`${caAt}.wordTimings: must be a project-relative JSON file path`);
+            } else {
+              const wp = path.resolve(baseDir, s.clipAudio.wordTimings);
+              if (!fs.existsSync(wp) || !fs.statSync(wp).isFile()) {
+                errs.push(`${caAt}.wordTimings: not found: ${wp}`);
+              } else try {
+                const cues = JSON.parse(fs.readFileSync(wp, 'utf8'));
+                if (!Array.isArray(cues) || cues.length !== s.vo.length) {
+                  errs.push(`${caAt}.wordTimings: JSON must contain one cue per scene.vo turn`);
+                } else {
+                  const norm = value => String(value || '').normalize('NFKC')
+                    .toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
+                  cues.forEach((cue, ci) => {
+                    const cat = `${caAt}.wordTimings[${ci}]`;
+                    if (!cue || typeof cue !== 'object' || Array.isArray(cue)
+                        || !Number.isFinite(cue.start) || !Number.isFinite(cue.end)
+                        || cue.start < 0 || cue.end <= cue.start || cue.end > s.dur) {
+                      errs.push(`${cat}: start/end must be within scene.dur and end after start`);
+                      return;
+                    }
+                    if (typeof cue.text !== 'string' || norm(cue.text) !== norm(s.vo[ci].text)) {
+                      errs.push(`${cat}.text: must match scene.vo[${ci}].text`);
+                    }
+                    if (!Array.isArray(cue.words)) {
+                      errs.push(`${cat}.words: expected an array`);
+                    } else cue.words.forEach((word, wi) => {
+                      if (!word || typeof word !== 'object' || Array.isArray(word)
+                          || typeof (word.text || word.w) !== 'string' || !(word.text || word.w).trim()
+                          || !Number.isFinite(word.start) || !Number.isFinite(word.end)
+                          || word.start < cue.start || word.end <= word.start || word.end > cue.end) {
+                        errs.push(`${cat}.words[${wi}]: text and timing must be contained by its cue`);
+                      }
+                    });
+                  });
+                  normalized.wordTimingsPath = wp;
+                  normalized.wordTimings = cues;
+                }
+              } catch (e) {
+                errs.push(`${caAt}.wordTimings: invalid JSON: ${e.message}`);
+              }
+            }
+          }
+        } else if (s.clipAudio.wordTimings != null) {
+          errs.push(`${caAt}.wordTimings: only valid when authority is native`);
+        }
+        s.clipAudio = normalized;
       }
     }
     if (s.three != null) {
@@ -721,6 +808,10 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
                       }
                     }
                   }
+                  // Cues are timeline evidence; authors and aligners need not
+                  // serialize them in chronological order. Canonicalize once
+                  // so transcript validation and both renderers agree.
+                  karaokeData.sort((a, b) => a.start - b.start);
                   const normalized = value => String(value || '').normalize('NFKC')
                     .toLocaleLowerCase().replace(/[^\p{L}\p{N}]+/gu, ' ').trim().replace(/\s+/g, ' ');
                   const scriptText = normalized(scenes.flatMap(scene => scene.vo.map(turn => turn.text)).join(' '));
@@ -784,6 +875,17 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
+  if (narrationSource) {
+    scenes.forEach((scene, index) => {
+      if (scene.minDur != null) {
+        errs.push(`config.scenes[${index}].minDur: not supported with external narration — external narration is one global file partitioned by authored scene durations; remove minDur`);
+      }
+      if (scene.clipAudio?.authority === 'native') {
+        errs.push(`config.scenes[${index}].clipAudio.authority: native scene audio cannot be combined with one global external narration file`);
+      }
+    });
+  }
+
   // Sound: an optional background bed plus spot SFX, mixed into the narration
   // track by the Python stage. Accepts `bed` or the legacy `music` key.
   let bed = null;
@@ -836,7 +938,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   // case-insensitively, punctuation-stripped, against each spoken token).
   // Set `captions: false` to disable the visual caption band entirely —
   // SRT/VTT sidecars are still exported for accessibility and embed use.
-  let captions = { preset: 'subtitle', emphasis: [], maxWords: null };
+  let captions = { preset: 'subtitle', emphasis: [], maxWords: null, plate: false, size: null };
   let captionsEnabled = true;
   if (raw.captions === false) {
     captionsEnabled = false;
@@ -859,6 +961,16 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (!Number.isInteger(c.maxWords) || c.maxWords < 1 || c.maxWords > 30) {
           errs.push('config.captions.maxWords: expected an integer from 1 to 30');
         } else captions.maxWords = c.maxWords;
+      }
+      if (c.plate != null) {
+        if (typeof c.plate !== 'boolean') {
+          errs.push('config.captions.plate: expected a boolean');
+        } else captions.plate = c.plate;
+      }
+      if (c.size != null) {
+        if (!Number.isInteger(c.size) || c.size < 10 || c.size > 120) {
+          errs.push('config.captions.size: expected an integer from 10 to 120 (composition-coordinate pixels)');
+        } else captions.size = c.size;
       }
     }
   }
@@ -1242,6 +1354,8 @@ function narration(config) {
     id: s.id,
     segments: s.vo,
     ...(s.vo.length === 0 ? { dur: s.dur } : {}),
+    ...(s.vo.length > 0 && s.minDur != null ? { minDur: s.minDur } : {}),
+    ...(s.clipAudio ? { clipAudio: s.clipAudio } : {}),
   }));
 }
 

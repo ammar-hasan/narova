@@ -1,6 +1,6 @@
 # Narova agent protocol
 
-Narova release: **0.38.0**
+Narova release: **0.39.0**
 Machine schema: **`narova.result/1`**
 
 This is the shipped machine-interface guide for agents and integrations. It is
@@ -233,6 +233,7 @@ within `narova.result/1`.
 | `operation.failed` | error | The operation could not complete its own work. |
 | `subject.non-pass` | error | Generic subject non-pass when no narrower code applies. |
 | `check.warning` | warning | Advisory check finding. |
+| `check.clip-truncation` | warning | A direct clip probes more than 50ms longer than its resolved scene; `minDur` can preserve the full clip. |
 | `gate.release.captions-missing` | error | Narration exists but required caption publication evidence is absent. |
 | `gate.release.asset-provenance` | error | Tracked asset provenance verification failed. |
 | `gate.release.creative-brief` | error | Creative brief or required proof evidence is absent or invalid. |

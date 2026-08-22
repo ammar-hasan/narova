@@ -276,8 +276,8 @@ test('record contents carry every NAR-009-025 field', () => {
   assert.ok(rec.manifestIdentity.length === 64);
   assert.ok(rec.renderContextIdentity.length === 64);
   assert.deepEqual(rec.sceneIdentities, [
-    { id: 's1', digest: 'h0', narration: rev.narrationDigest({ vo: [] }), silentDur: null, duration: 1.5, sentences: null },
-    { id: 's2', digest: 'h1', narration: rev.narrationDigest({ vo: [] }), silentDur: null, duration: 1.5, sentences: null },
+    { id: 's1', digest: 'h0', narration: rev.narrationDigest({ vo: [] }), silentDur: null, minDur: null, duration: 1.5, sentences: null },
+    { id: 's2', digest: 'h1', narration: rev.narrationDigest({ vo: [] }), silentDur: null, minDur: null, duration: 1.5, sentences: null },
   ]);
   assert.deepEqual(rec.stageDurations, { synth: 1.2, composeAndRender: 3.4 });
   assert.ok(rec.measuredReuse);
@@ -326,6 +326,14 @@ test('classification: narration vs visual vs timing vs added/removed/reordered',
   const reordered = [scene('s2'), scene('s1')];
   const rows2 = rev.buildRevisionReport({ currentScenes: reordered, currentContextIdentity: 'ctx-A', baselineRecord: rec(1, [scene('s1'), scene('s2')]) }).rows;
   assert.ok(rows2.every(r => r.cls === 'structural' && r.reason === 'reordered'));
+});
+
+test('classification: minDur-only edits are timing changes with a downstream cascade', () => {
+  const before = [{ id: 's1', digest: 'same', narration: 'same', silentDur: null, minDur: null }];
+  const after = [{ ...before[0], minDur: 8 }];
+  const rows = rev.classifyScenes(after, before);
+  assert.deepEqual(rows, [{ sceneId: 's1', cls: 'timing', reason: 'minDur changed' }]);
+  assert.ok(rev.derivedImpacts(rows[0]).includes('timeline re-chained'));
 });
 
 test('render-context change is one project line, never N per-scene changes', () => {

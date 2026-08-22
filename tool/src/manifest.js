@@ -260,6 +260,8 @@ function compile(config, opts = {}) {
       preset:   (captions && captions.preset)   || 'subtitle',
       emphasis: (captions && captions.emphasis) || [],
       maxWords: (captions && captions.maxWords) || null,
+      plate:    captions && captions.plate === true,
+      size:     captions && captions.size != null ? captions.size : null,
     },
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
@@ -421,8 +423,17 @@ function compileScenes(scenes, projectDir, assetsDir) {
     visual: s.visual || null,
     three: s.three || null,
     clip: s.clip || null,
+    clipAudio: s.clipAudio ? {
+      authority: s.clipAudio.authority,
+      role: s.clipAudio.role,
+      rationale: s.clipAudio.rationale,
+      ...(s.clipAudio.wordTimingsPath
+        ? { wordTimings: path.relative(projectDir, s.clipAudio.wordTimingsPath) }
+        : {}),
+    } : null,
     walkthrough: s.walkthrough || null,
     dur:  s.dur || null,   // silent scene fixed duration
+    minDur: s.minDur != null ? s.minDur : null,
     // Inlined modular author sources are render inputs, not merely hash inputs.
     // Persist them so manifest -> compose is lossless.
     _choreographyFileContents: s._choreographyFileContents || '',
@@ -583,7 +594,7 @@ function sceneHash(s) {
     id: s.id,
     vo: s.vo, body: s.body, visual: s.visual, three: s.three,
     clip: s.clip, walkthrough: s.walkthrough, transition: s.transition,
-    dur: s.dur,
+    dur: s.dur, minDur: s.minDur, clipAudio: s.clipAudio,
     choreographyFile: s._choreographyFileContents || null,
     scriptFile: s._scriptFileContents || null,
     threeModule: s._threeModuleContents || null,
@@ -831,6 +842,13 @@ function mergeTimings(tl, timingsPath) {
     s.duration = ts.dur || 0;
 
     if (ts.words && Array.isArray(ts.words) && s.vo.length > 0) {
+      if (ts.words.length > 0 && ts.words.every(word => Number.isInteger(word.ti))) {
+        for (let ti = 0; ti < s.vo.length; ti++) {
+          s.vo[ti].words = ts.words.filter(word => word.ti === ti)
+            .map(word => ({ w: word.w, t0: word.t0, t1: word.t1 }));
+          s.vo[ti].start = globalStart + (ts.turns ? ts.turns[ti] || 0 : 0);
+        }
+      } else {
       // Group words by sentence index (si).
       const bySi = new Map();
       for (const w of ts.words) {
@@ -857,6 +875,7 @@ function mergeTimings(tl, timingsPath) {
         if (!s.vo[ti].words || s.vo[ti].words.length === 0) {
           s.vo[ti].words = [];
         }
+      }
       }
     }
 

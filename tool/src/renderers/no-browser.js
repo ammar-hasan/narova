@@ -631,7 +631,10 @@ function drawCaptions(ctx, project, time, env) {
   const group = project.timeline.groups.find(g => time >= g.start && time < g.end);
   if (!group || !group.words.length) return;
   const width = project.size.w, height = project.size.h;
-  const fontSize = Math.max(24, Math.round(width * 0.035));
+  const presentation = project.timeline.captionPresentation || {};
+  const fontSize = presentation.size != null
+    ? presentation.size
+    : Math.min(30, Math.max(17, width * 0.027));
   const paddingX = fontSize * 0.75, paddingY = fontSize * 0.42;
   const captionText = group.words.map(word => word.w).join(' ');
   const strongCharacters = [...captionText].filter(character => /[\p{L}\p{N}]/u.test(character));
@@ -661,8 +664,10 @@ function drawCaptions(ctx, project, time, env) {
   const lineHeight = fontSize * 1.08;
   const boxHeight = lines.length * lineHeight + paddingY * 2;
   const x = (width - boxWidth) / 2, y = height - boxHeight - Math.max(22, height * 0.055);
-  roundRect(ctx, x, y, boxWidth, boxHeight, fontSize * 0.42);
-  ctx.fillStyle = 'rgba(3,7,14,0.86)'; ctx.fill();
+  if (presentation.plate === true) {
+    roundRect(ctx, x, y, boxWidth, boxHeight, fontSize * 0.42);
+    ctx.fillStyle = 'rgba(3,7,14,0.86)'; ctx.fill();
+  }
   ctx.textBaseline = 'middle';
   const canvasRtl = rtl && !font;
   ctx.textAlign = canvasRtl ? 'right' : 'left';
@@ -1043,6 +1048,6 @@ module.exports = {
   cache: { mode: 'per-scene' },
   _internals: {
     layoutTree, animatedState, renderCanvas, qualityOptions,
-    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, captionWordStyle, gradientLine,
+    fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, captionWordStyle, drawCaptions, gradientLine,
   },
 };

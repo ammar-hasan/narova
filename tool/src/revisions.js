@@ -87,7 +87,14 @@ function narrationDigest(scene) {
     ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
     ...(turn.take != null ? { take: turn.take } : {}),
   }));
-  return sha256(JSON.stringify(turns));
+  return sha256(JSON.stringify({
+    turns,
+    clipAudio: scene.clipAudio ? {
+      authority: scene.clipAudio.authority,
+      role: scene.clipAudio.role,
+      wordTimings: scene.clipAudio.wordTimings || null,
+    } : null,
+  }));
 }
 
 /* Per-scene classification inputs for a freshly compiled (un-enriched)
@@ -98,6 +105,7 @@ function sceneProjection(manifest, sentenceCountsByScene = null) {
     digest: s.hash || null,                 // full authored content identity
     narration: narrationDigest(s),          // speech-side identity
     silentDur: s.dur || null,               // authored silent duration
+    minDur: s.minDur ?? null,               // authored duration floor (NAR-007-052)
     duration: s.duration || null,           // measured (records only)
     sentences: sentenceCountsByScene ? (sentenceCountsByScene[s.id] ?? null) : null,
   }));
@@ -339,6 +347,7 @@ function recordRevision({ config, opts = {}, outDir, manifest, renderReuse, deli
       digest: s.hash || null,
       narration: narrationDigest(s),
       silentDur: s.dur || null,
+      minDur: s.minDur ?? null,
       duration: s.duration || null,
       sentences: sentenceCounts ? (sentenceCounts[s.id] ?? null) : null,
     }));
@@ -405,6 +414,7 @@ function classifyScenes(after, before) {
     const aDur = a.silentDur ?? null;
     const bDur = b.silentDur ?? null;
     if (aDur !== bDur) { rows.push({ sceneId: a.id, cls: 'timing' }); continue; }
+    if ((a.minDur ?? null) !== (b.minDur ?? null)) { rows.push({ sceneId: a.id, cls: 'timing', reason: 'minDur changed' }); continue; }
     if ((a.digest || '') !== (b.digest || '')) { rows.push({ sceneId: a.id, cls: 'visual' }); continue; }
     rows.push({ sceneId: a.id, cls: 'unchanged' });
   }
@@ -671,6 +681,8 @@ module.exports = {
   manifestIdentity,
   narrationDigest,
   sceneProjection,
+  classifyScenes,
+  derivedImpacts,
   readLedger,
   appendRecord,
   sceneAudioDigests,

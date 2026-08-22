@@ -101,3 +101,10 @@ test('DATA stays JSON-serializable with preset, kw, and transition', () => {
   const d = composeData(full, timings);
   assert.deepEqual(JSON.parse(JSON.stringify(d)), d);
 });
+
+test('caption presentation resolves one composition-coordinate size for both profiles', () => {
+  const automatic = composeData(config, timings).captionPresentation;
+  assert.deepEqual(automatic, { plate: false, size: 30 });
+  const authored = composeData({ ...config, captions: { plate: true, size: 22 } }, timings);
+  assert.deepEqual(authored.captionPresentation, { plate: true, size: 22 });
+});

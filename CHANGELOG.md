@@ -6,6 +6,39 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.39.0] - 2026-08-22
+
+### Added
+
+- **Per-scene clip-audio authority.** A scene may record `clipAudio` with an
+  explicit `native` or `synthesis` decision, semantic role, and rationale.
+  Native authority preserves synchronized source performance, never loops
+  speech, bypasses TTS, optionally consumes transcript-matched word timings,
+  and fails clearly when the clip has no decodable audio stream. Omission keeps
+  the historical synthesized-narration behavior, and switching authority does
+  not modify the source clip.
+
+- **Narrated scene duration floors.** `scene.minDur` preserves a synthesized
+  performance and pads its normalized scene with trailing silence, allowing a
+  bound clip to finish without slowing or truncating speech. Clip/scene
+  mismatches now produce an attributed advisory with `minDur` as the remedy;
+  timing identity and revision impact treat floor edits as timing changes.
+- **Authored caption presentation.** `captions.plate` and `captions.size`
+  control backdrop presence and composition-coordinate font size in both local
+  renderers.
+
+### Changed
+
+- **Browserless caption compatibility.** With no authored presentation, the
+  portable renderer now matches the browser's unrounded responsive 17–30px
+  size and default no-plate treatment. Browser default pixels are unchanged.
+
+### Fixed
+
+- **Padded timing reconciliation.** Word and turn coordinates reconcile to the
+  normalized spoken span before `minDur` silence is appended; padding no longer
+  stretches captions across silence.
+
 ## [0.38.0] - 2026-08-22
 
 ### Added

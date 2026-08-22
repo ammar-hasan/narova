@@ -4,6 +4,7 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
+const { spawnSync } = require('node:child_process');
 const { check, critique, internalShotCount, needsCreativeBrief, estimateSeconds, quantityFragments } = require('../src/check');
 const { resolveConfig } = require('../src/schema');
 const { timingsFingerprint } = require('../src/audio-fingerprint');
@@ -1452,6 +1453,66 @@ test('no caption rule fires without narration audio', () => {
   const { ok, lines } = run(config, { release: true, outDir: path.join(dir, 'out') });
   assert.equal(ok, true, lines.join('\n'));
   assert.ok(!lines.some(l => l.includes('caption sidecar')), lines.join('\n'));
+});
+
+test('a longer direct clip emits one attributed advisory and minDur suppresses it', t => {
+  if (spawnSync('ffprobe', ['-version']).status !== 0) { t.skip('ffprobe unavailable'); return; }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-clip-floor-'));
+  const clip = path.join(dir, 'clip.mp4');
+  const made = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'color=c=black:s=32x32:d=2:r=5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
+  if (made.status !== 0) { fs.rmSync(dir, { recursive: true, force: true }); t.skip('ffmpeg fixture failed'); return; }
+  const diagnostics = [];
+  const scene = { id: 's', body: '<p>x</p>', clip, dur: 1, vo: [{ who: 'a', text: 'short' }] };
+  const warnedConfig = { ...base([scene]), projectDir: dir };
+  const outDir = path.join(dir, 'out');
+  fs.mkdirSync(outDir);
+  fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify({ s: { dur: 1 } }));
+  fs.writeFileSync(path.join(outDir, '.timings-fingerprint'), timingsFingerprint(warnedConfig));
+  const warned = run(warnedConfig, { outDir, diagnostics });
+  assert.ok(warned.lines.some(line => /clip truncation:.*2\.000s.*1\.000s.*minDur/.test(line)), warned.lines.join('\n'));
+  assert.equal(diagnostics.filter(d => d.code === 'check.clip-truncation').length, 1);
+  const kept = run({ ...base([{ ...scene, minDur: 2 }]), projectDir: dir }, { outDir: path.join(dir, 'out') });
+  assert.ok(!kept.lines.some(line => line.includes('clip truncation:')), kept.lines.join('\n'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('clip advisory resolves project-relative media and ignores stale timing evidence', t => {
+  if (spawnSync('ffprobe', ['-version']).status !== 0) { t.skip('ffprobe unavailable'); return; }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-clip-freshness-'));
+  const clip = path.join(dir, 'clip.mp4');
+  const made = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'color=c=black:s=32x32:d=2:r=5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
+  if (made.status !== 0) { fs.rmSync(dir, { recursive: true, force: true }); t.skip('ffmpeg fixture failed'); return; }
+  const outDir = path.join(dir, 'out');
+  fs.mkdirSync(outDir);
+  const scene = { id: 's', body: '<p>x</p>', clip: 'clip.mp4', dur: 1, vo: [{ who: 'a', text: 'short' }] };
+  const config = { ...base([scene]), projectDir: dir };
+  fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify({ s: { dur: 5 } }));
+  fs.writeFileSync(path.join(outDir, '.timings-fingerprint'), 'stale');
+  const warned = run(config, { outDir });
+  assert.ok(!warned.lines.some(line => line.includes('clip truncation:')), warned.lines.join('\n'));
+  fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify({ s: { dur: 1 } }));
+  fs.writeFileSync(path.join(outDir, '.timings-fingerprint'), timingsFingerprint(config));
+  const current = run(config, { outDir });
+  assert.ok(current.lines.some(line => /clip truncation:.*2\.000s.*1\.000s/.test(line)), current.lines.join('\n'));
+  fs.rmSync(dir, { recursive: true, force: true });
+});
+
+test('voiced clip advisory waits for measured timings instead of treating minDur as duration', t => {
+  if (spawnSync('ffprobe', ['-version']).status !== 0) { t.skip('ffprobe unavailable'); return; }
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-clip-floor-only-'));
+  const clip = path.join(dir, 'clip.mp4');
+  const made = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i',
+    'color=c=black:s=32x32:d=3:r=5', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', clip]);
+  if (made.status !== 0) { fs.rmSync(dir, { recursive: true, force: true }); t.skip('ffmpeg fixture failed'); return; }
+  const config = { ...base([{
+    id: 's', body: '<p>x</p>', clip: 'clip.mp4', minDur: 2,
+    dur: 4, vo: [{ who: 'a', text: 'narration longer than the floor' }],
+  }]), projectDir: dir };
+  const checked = run(config, { outDir: path.join(dir, 'out') });
+  assert.ok(!checked.lines.some(line => line.includes('clip truncation:')), checked.lines.join('\n'));
+  fs.rmSync(dir, { recursive: true, force: true });
 });
 
 // ---- NAR-007-027 — unused-delivery-control critique hint (CHANGE-2026-018) --

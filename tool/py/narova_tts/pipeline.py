@@ -70,6 +70,23 @@ def make_silence(dur: float, out: Path) -> None:
        "-c:a", "pcm_s16le", "-sample_fmt", "s16", str(out))
 
 
+def pad_scene_to_min_duration(wav: Path, min_dur: float, tmp: Path,
+                              label: str) -> tuple[float, float]:
+    """Append canonical silence without reprocessing the spoken prefix.
+
+    Returns ``(spoken_duration, final_duration)`` so speech coordinates use
+    the first measurement while the timeline publishes the second.
+    """
+    spoken = probe(wav)
+    if min_dur > 0 and min_dur > spoken + 1e-6:
+        pad = tmp / f"sil_pad_{label}.wav"
+        make_silence(min_dur - spoken, pad)
+        padded = tmp / f"scene_{label}_padded.wav"
+        concat([wav, pad], padded, tmp, norm=False)
+        shutil.move(padded, wav)
+    return spoken, probe(wav)
+
+
 def concat(pieces: list[Path], out: Path, tmp: Path, norm: bool = False) -> None:
     """Concat wav pieces. With norm=True apply loudnorm for broadcast headroom
     and consistent loudness across voices (LEARNINGS #5) — this changes duration,
@@ -334,7 +351,14 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
     # Forced alignment replaces estimated word times with measured ones. Runs on
     # the reuse path too (config.align may change without the text changing).
     if config.get("align"):
-        align_scenes(scenes, timings, audio_dir, config["align"].get("engine", "auto"))
+        # Native dialogue timings are supplied evidence from the source
+        # performance. Never replace them with a speech aligner run intended
+        # for synthesized scene WAVs.
+        alignable = [s for s in scenes
+                     if (s.get("clipAudio") or {}).get("authority") != "native"]
+        if alignable:
+            align_scenes(alignable, timings, audio_dir,
+                         config["align"].get("engine", "auto"))
 
     timings_path.write_text(json.dumps(timings))
 
@@ -390,6 +414,44 @@ def _synthesize_with_router(
     timings: dict[str, Any] = {}
     for s in scenes:
         nn = f"{s['n']:02d}"
+        clip_audio = s.get("clipAudio") or {}
+        if clip_audio.get("authority") == "native":
+            dur = float(s["dur"])
+            wav = audio_dir / f"{nn}.wav"
+            source = clip_audio.get("file")
+            try:
+                sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(source),
+                   "-vn", "-t", str(dur), "-ar", str(RATE), "-ac", "1",
+                   "-c:a", "pcm_s16le", str(wav))
+            except Exception as exc:
+                raise RuntimeError(
+                    f"scene {nn} [{s['id']}]: native clip audio could not be decoded; "
+                    "choose synthesis or provide a clip with an audio stream"
+                ) from exc
+            if not wav.exists() or probe(wav) <= 0:
+                raise RuntimeError(
+                    f"scene {nn} [{s['id']}]: native clip has no decodable audio stream")
+            _, final_duration = pad_scene_to_min_duration(wav, dur, tmp, str(nn))
+            cues = clip_audio.get("wordTimings") or []
+            turns = [round(float(cue["start"]), 3) for cue in cues]
+            words = []
+            for ti, cue in enumerate(cues):
+                who = s["segments"][ti]["who"]
+                for word in cue.get("words", []):
+                    words.append({
+                        "w": word.get("text", word.get("w")),
+                        "t0": round(float(word["start"]), 3),
+                        "t1": round(float(word["end"]), 3),
+                        "who": who, "si": ti, "ti": ti,
+                    })
+            timings[s["id"]] = {
+                "dur": round(final_duration, 3), "turns": turns, "words": words,
+                "audioAuthority": "native",
+            }
+            to_mp3(wav, audio_dir / f"{nn}.mp3")
+            print(f"scene {nn} [{s['id']:>9}] {final_duration:5.1f}s  "
+                  "audio=native", flush=True)
+            continue
         # Silent scene: no narration, just a fixed-duration silence block.
         if not s["segments"]:
             dur = float(s.get("dur", 2.0))
@@ -497,10 +559,20 @@ def _synthesize_with_router(
         wav = audio_dir / f"{nn}.wav"
         concat(pieces, raw, tmp)                       # pre-loudnorm splice
         concat([raw], wav, tmp, norm=True)             # loudnorm -> final wav
+        # minDur floor: extend the normalized scene with canonical silence so
+        # spoken content is byte-identical to an unpadded build (NAR-003-008).
+        scene_min_dur = float(s.get("minDur") or 0)
+        measured_spoken, final_duration = pad_scene_to_min_duration(
+            wav, scene_min_dur, tmp, str(nn))
+        timings[s["id"]] = {"dur": round(clock, 3), "turns": turns, "words": words}
+        # Reconcile speech coordinates against the normalized spoken span
+        # before padding. Padding is presentation time, never speech time.
+        rescale_timings(timings[s["id"]], measured_spoken)
         to_mp3(wav, audio_dir / f"{nn}.mp3")
 
-        timings[s["id"]] = {"dur": round(clock, 3), "turns": turns, "words": words}
-        rescale_timings(timings[s["id"]], probe(wav))  # sync timeline to actual audio
+        # The final media measurement is canonical. Do not rescale word/turn
+        # coordinates across the appended silence.
+        timings[s["id"]]["dur"] = round(final_duration, 3)
         print(f"scene {nn} [{s['id']:>9}] {timings[s['id']]['dur']:5.1f}s  "
               f"turns={''.join(t['who'] for t in s['segments'])}", flush=True)
     # NAR-018-070: advisory take-identity evidence. Never required by any

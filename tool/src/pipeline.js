@@ -687,6 +687,8 @@ function configFromManifest(manifest, resolvedConfig) {
     scenes: (m.scenes || []).map((s, i) => ({
       ...((original.scenes || [])[i] || {}),
       id: s.id, body: s.body || '', visual: s.visual || null, clip: s.clip || null, dur: s.dur || null,
+      minDur: s.minDur != null ? s.minDur : null,
+      clipAudio: s.clipAudio || ((original.scenes || [])[i]?.clipAudio) || null,
       walkthrough: s.walkthrough || null, three: s.three || null,
       transition: s.transition || 'fade',
       vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}), ...(t.take != null ? { take: t.take } : {}) })),

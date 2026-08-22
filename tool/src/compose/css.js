@@ -285,7 +285,16 @@ function patternsCss(t) { return `/* Narova layout patterns — optional. Includ
 
 /* ---- stylesheet assembly -------------------------------------------------- */
 
-function composeCss(theme, voices, size, extraCss = '', mode = 'dark', captionsEnabled = true, includePatterns = false, includeSafeLayout = false) {
+function captionPresentationCss(captions = {}) {
+  const rules = [];
+  if (captions.size != null) rules.push(`.caption2{font-size:${captions.size}px}`);
+  if (captions.plate === true) {
+    rules.push('.caption2{background:rgba(3,7,14,.86);border-radius:.42em;padding:.42em .75em}');
+  }
+  return rules.join('\n');
+}
+
+function composeCss(theme, voices, size, extraCss = '', mode = 'dark', captionsEnabled = true, includePatterns = false, includeSafeLayout = false, captions = {}) {
   const base = mode === 'light' ? { ...DEFAULT_TOKENS, ...LIGHT_TOKENS } : DEFAULT_TOKENS;
   const t = { ...base, ...theme };
   const parts = [
@@ -296,8 +305,10 @@ function composeCss(theme, voices, size, extraCss = '', mode = 'dark', captionsE
   ];
   if (includeSafeLayout) parts.push(safeLayoutCss(captionsEnabled));
   if (includePatterns) parts.push(patternsCss(t));
+  const captionCss = captionPresentationCss(captions);
+  if (captionCss) parts.push(captionCss);
   const out = parts.join('\n');
   return extraCss ? `${out}\n${extraCss}` : out;
 }
 
-module.exports = { composeCss, patternsCss, safeLayoutCss, presetOverridesCss, DEFAULT_TOKENS, LIGHT_TOKENS };
+module.exports = { composeCss, patternsCss, safeLayoutCss, presetOverridesCss, captionPresentationCss, DEFAULT_TOKENS, LIGHT_TOKENS };

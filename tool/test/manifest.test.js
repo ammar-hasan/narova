@@ -106,6 +106,38 @@ test('compile includes project metadata', () => {
   assert.equal(tl.project.platform, null);
 });
 
+test('manifest retains minDur and resolved caption presentation', () => {
+  const raw = makeRaw({ captions: { preset: 'subtitle', plate: true, size: 24 } });
+  raw.scenes[0].minDur = 8;
+  const tl = compile(resolve(raw));
+  assert.equal(tl.scenes[0].minDur, 8);
+  assert.deepEqual(
+    (({ plate, size }) => ({ plate, size }))(tl.captions),
+    { plate: true, size: 24 },
+  );
+  assert.deepEqual(validate(tl), []);
+});
+
+test('manifest retains the explicit clip-audio authority decision', () => {
+  withAssets({}, (dir, cfg) => {
+    const clip = path.join(dir, 'assets', 'native.mp4');
+    fs.writeFileSync(clip, 'fixture');
+    cfg.scenes[0] = {
+      ...cfg.scenes[0], clip: 'assets/native.mp4', dur: 2,
+      clipAudio: {
+        authority: 'native', role: 'dialogue',
+        rationale: 'The visible performance requires lip sync.',
+      },
+    };
+    const tl = compile(resolveConfig(cfg, {}, dir));
+    assert.deepEqual(tl.scenes[0].clipAudio, {
+      authority: 'native', role: 'dialogue',
+      rationale: 'The visible performance requires lip sync.',
+    });
+    assert.deepEqual(validate(tl), []);
+  });
+});
+
 test('compile includes format with sizing', () => {
   const tl = compile(resolve(makeRaw()));
   assert.equal(tl.format.width, 1280);
@@ -879,6 +911,26 @@ test('revision: narration edit (text change) DOES change audio fingerprint', () 
     'changing narration text MUST invalidate audio fingerprint — text edits need re-synth');
 });
 
+test('revision: native authority and source bytes participate in audio identity', () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-native-fingerprint-'));
+  try {
+    const clip = path.join(dir, 'native.mp4');
+    fs.writeFileSync(clip, 'first source bytes');
+    const synthesis = resolve(baseConfig());
+    const native = resolve(baseConfig());
+    native.scenes[0].dur = 2;
+    native.scenes[0].clipAudio = {
+      authority: 'native', file: clip, role: 'dialogue', rationale: 'sync',
+    };
+    assert.notEqual(audioFingerprint(synthesis), audioFingerprint(native));
+    const first = audioFingerprint(native);
+    fs.writeFileSync(clip, 'changed source bytes');
+    assert.notEqual(first, audioFingerprint(native));
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('revision: voice change (speaker swap) DOES change audio fingerprint', () => {
   const a = resolve(baseConfig());
   const b = resolve(baseConfig());
@@ -931,6 +983,15 @@ test('revision: identical configs produce identical audio fingerprints', () => {
   // Run twice — fingerprint must be stable across calls
   assert.equal(audioFingerprint(a), audioFingerprint(b),
     'audio fingerprint must be stable across repeated calls');
+});
+
+test('minDur changes timing identity without invalidating sentence audio identity', () => {
+  const { timingsFingerprint } = require('../src/audio-fingerprint');
+  const a = resolve(baseConfig());
+  const b = resolve(baseConfig());
+  b.scenes[0].minDur = 8;
+  assert.equal(audioFingerprint(a), audioFingerprint(b));
+  assert.notEqual(timingsFingerprint(a), timingsFingerprint(b));
 });
 
 test('revision: scene count change DOES change audio fingerprint (structure change)', () => {

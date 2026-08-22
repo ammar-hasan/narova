@@ -76,13 +76,16 @@ export default {
   platform: "tiktok",                // optional: tiktok|reels|shorts|linkedin|x|youtube — picks the frame size
                                      // (when size is unset) and a target duration band for `check`
   captions: {
-    preset: "karaoke",               // karaoke (default) | slam | pop | rise — the caption word style
+    preset: "subtitle",              // subtitle (default) | karaoke | slam | pop | rise
     emphasis: ["factory"],           // words to auto-highlight wherever they are spoken
+    plate: false,                     // optional rounded backdrop behind active groups
+    size: 24,                         // optional 10..120 composition-coordinate pixels
   },
   scenes: [
     {
       id: "title",                       // unique, [A-Za-z][A-Za-z0-9_-]*
       transition: "wipe",                // optional: fade (default) | wipe | slide | zoom
+      minDur: 8,                          // optional narrated-scene floor; pads after speech
       vo: [                              // what is SPOKEN, in order
         { who: "b", text: "What if your codebase could build itself?" },
         { who: "a", text: "That's the Venture Factory. Let me show you." },
@@ -455,6 +458,16 @@ available without it.
   against louder ones after loudnorm. Included in the sentence cache identity.
 - Per-scene `clip`: a project-relative video file played as a full-bleed
   background behind the HTML overlay (looped, dimmed to 52%, seek-safe).
+- **Clip soundtrack authority**: direct clips remain visual-only unless the
+  scene records `clipAudio: { authority, role?, rationale, wordTimings? }`.
+  `authority: "native"` is strongly preferred when generated visible dialogue
+  and picture are one synchronized performance; how a file was downloaded is
+  never the rule. Native audio requires `clip`, explicit positive `dur`, and a
+  rationale; native dialogue also requires matching `vo`. It plays once,
+  trims/silence-fills to `dur`, bypasses TTS, and fails instead of silently
+  substituting a voice. Optional timing JSON contains one transcript-matching
+  cue per turn. Use `authority: "synthesis"` to record deliberate replacement.
+  Switching does not rewrite or regenerate the source clip.
 - Per-scene `walkthrough`: a declared product capture id, or
   `{ id, layout, fit, opacity, position }`. It cannot be combined with
   `clip`. See [product-walkthroughs.md](product-walkthroughs.md) for semantic
@@ -468,7 +481,9 @@ available without it.
   Format: `[{ start, end, text, words: [{ text, start, end }] }]`.
   See [audio.md](audio.md) §External narration.
 - If `theme.css` is set, the file must exist.
-- Old fields `caption` and `dur` are ignored. Do not write them.
+- Legacy per-scene `caption` is ignored. `dur` remains required for silent and
+  native-audio scenes; synthesized voiced scenes use measured audio plus
+  optional `minDur`.
 
 ## How the pieces behave
 
@@ -490,7 +505,8 @@ available without it.
   first scene enters clean. An unknown value falls back to `fade` — `check`
   warns and names the valid set.
 - **Caption presets**: `captions.preset` restyles the word-by-word captions.
-  `karaoke` (default) flips each active word to the speaker's color. `slam`
+  `subtitle` is the neutral default. `karaoke` flips each active word to the
+  speaker's color. `slam`
   lands the active word big and heavy, settling back once spoken. `pop` dims
   upcoming words further and pops the active word up into place. `rise` lifts
   the active word with an underline in the speaker's color. All presets are
@@ -500,6 +516,16 @@ available without it.
   product names, the one number that matters. Matching is case-insensitive and
   ignores surrounding punctuation (`"Factory."` matches `factory`), and it
   composes with every preset.
+- **Caption presentation**: `captions.plate` controls a rounded backdrop in
+  both renderers (default `false`). `captions.size` sets the font in
+  composition-coordinate pixels (`10..120`); absent size uses the same
+  responsive 17–30px rule in both profiles.
+- **Bound clips without rushed speech**: `scene.minDur` is a positive duration
+  floor for synthesized narrated scenes. Narova keeps the measured performance
+  unchanged and appends silence after it. Check warns when a direct clip is
+  more than 50ms longer than the resolved scene and names `minDur` as the fix.
+  External-narration projects reject `minDur` because one global audio file
+  cannot be padded inside without shifting later cues.
 - **Platform targets**: `platform: "tiktok" | "reels" | "shorts" | "linkedin" | "x"`
   picks the frame size when `size` is unset and gives `check` a target
   duration band — it warns when the estimated narration falls outside it

@@ -76,7 +76,15 @@ function composeData(config, timings, captionsEnabled = true) {
     delete g.sceneEnd;
   });
 
-  return { total, scenes, groups, preset: captionsEnabled ? (captions.preset || 'subtitle') : false, markers: config.markers || {} };
+  return {
+    total, scenes, groups,
+    preset: captionsEnabled ? (captions.preset || 'subtitle') : false,
+    captionPresentation: {
+      plate: captions.plate === true,
+      size: captions.size != null ? captions.size : Math.min(30, Math.max(17, (config.size?.w || 1280) * 0.027)),
+    },
+    markers: config.markers || {},
+  };
 }
 
 module.exports = { composeData, r3, normWord };
