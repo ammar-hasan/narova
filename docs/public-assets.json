@@ -1,8 +1,8 @@
 {
   "format": "narova.public-assets/1",
   "repository": "https://github.com/ammar-hasan/narova-assets",
-  "commit": "9d560ca6a0229f1b7284d7c12a5d1fae0591f838",
-  "catalogSha256": "fa54738e13f660da2230073299c91ba5de6a5eb628aff5c4f0a91c49fb37a4f1",
+  "commit": "6383a188b50df1f0fea1b64496423e173619b16e",
+  "catalogSha256": "c91c7253373b2b41346a010dabd3cb201db51ad848606a83f032a99c66c980b3",
   "explore": {
     "narova-skill-reel": {
       "archive": "explore/narova-skill-reel/narova-skill-reel.narova",
@@ -15,6 +15,18 @@
       "video": "explore/narova-one-command-demo/video.mp4",
       "poster": "explore/narova-one-command-demo/poster.jpg",
       "captions": "explore/narova-one-command-demo/captions.vtt"
+    },
+    "nature-of-light": {
+      "archive": "explore/nature-of-light/nature-of-light.narova",
+      "video": "explore/nature-of-light/video.mp4",
+      "poster": "explore/nature-of-light/poster.jpg",
+      "captions": "explore/nature-of-light/captions.vtt"
+    },
+    "nori-and-the-pocket-moon": {
+      "archive": "explore/nori-and-the-pocket-moon/nori-and-the-pocket-moon.narova",
+      "video": "explore/nori-and-the-pocket-moon/video.mp4",
+      "poster": "explore/nori-and-the-pocket-moon/poster.jpg",
+      "captions": "explore/nori-and-the-pocket-moon/captions.vtt"
     }
   },
   "demos": {

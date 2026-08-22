@@ -84,6 +84,86 @@
       }
     },
     {
+      "kind": "explore",
+      "id": "nature-of-light",
+      "title": "The Nature of Light",
+      "summary": "A cinematic 46-second journey from prisms and wave interference to photons, using the native scene dialogue for natural delivery and lip sync.",
+      "video": {
+        "path": "explore/nature-of-light/video.mp4",
+        "sha256": "5a985e0c3da7c8f949e8a96b4f4122288627d275ddeb2e3fbfe5a326002d43e8",
+        "bytes": 13417609
+      },
+      "poster": {
+        "path": "explore/nature-of-light/poster.jpg",
+        "sha256": "745bb8bf8737e19f011343fdee29739d55e8e3ad67ef5b8974cff1afa149f9db",
+        "bytes": 80508
+      },
+      "captions": {
+        "path": "explore/nature-of-light/captions.vtt",
+        "sha256": "bc2c62d22689b4453d8bd93341bce4ec7487a75a8aea47341d3853a255d0692a",
+        "bytes": 1003
+      },
+      "archive": {
+        "path": "explore/nature-of-light/nature-of-light.narova",
+        "sha256": "68a18b4b70e6c3f137898273ce7817f1ced39956e71f7bf1ee2fd5ae1e542676",
+        "bytes": 27896226
+      },
+      "producingVersion": "0.39.0",
+      "rights": {
+        "basis": "First-party Narova project and rendered media generated for the owner; no third-party stock media.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Ammar Hasan",
+        "credit": "Ammar Hasan — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      },
+      "archiveIdentity": "68a18b4b70e6c3f137898273ce7817f1ced39956e71f7bf1ee2fd5ae1e542676"
+    },
+    {
+      "kind": "explore",
+      "id": "nori-and-the-pocket-moon",
+      "title": "Nori and the Pocket Moon",
+      "summary": "A gentle 30-second felt-storybook adventure about carrying a tiny moon home, with OpenAI narration and generated scenes.",
+      "video": {
+        "path": "explore/nori-and-the-pocket-moon/video.mp4",
+        "sha256": "c8d912f37899c075808a6919e3614ad76fb7dbbfd5e41450fc3a9c7b57669639",
+        "bytes": 8952050
+      },
+      "poster": {
+        "path": "explore/nori-and-the-pocket-moon/poster.jpg",
+        "sha256": "d768c8135fe74d2f2731bc1d94eb6d336221180ffb2e0d2d366d8ca23cdc7d3a",
+        "bytes": 89393
+      },
+      "captions": {
+        "path": "explore/nori-and-the-pocket-moon/captions.vtt",
+        "sha256": "b1e905491f75e0e0e2c86335ef83606485db6f452c24dfbbe50f7ca0bf61657d",
+        "bytes": 734
+      },
+      "archive": {
+        "path": "explore/nori-and-the-pocket-moon/nori-and-the-pocket-moon.narova",
+        "sha256": "8453da0f68b9c80b28f051aa52549b031c1788ba8603fceed4326d92c64477d2",
+        "bytes": 18341008
+      },
+      "producingVersion": "0.39.0",
+      "rights": {
+        "basis": "First-party Narova project and rendered media generated for the owner; no third-party stock media.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Ammar Hasan",
+        "credit": "Ammar Hasan — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      },
+      "archiveIdentity": "8453da0f68b9c80b28f051aa52549b031c1788ba8603fceed4326d92c64477d2"
+    },
+    {
       "kind": "demo",
       "id": "product-walkthrough",
       "title": "Continuous product walkthrough",

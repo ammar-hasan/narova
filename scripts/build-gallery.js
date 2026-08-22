@@ -264,8 +264,9 @@ function entryMarkup(entry, index) {
         </video>
       </section>
 
-      <section class="gallery-step inspect" aria-labelledby="${entry.id}-inspect">
-        <div class="step-label"><span>02</span><h3 id="${entry.id}-inspect">Inspect</h3></div>
+      <details class="gallery-step inspect">
+        <summary id="${entry.id}-inspect"><span>02</span><strong>Inspect source</strong><small>${entry.project.scenes.length} scenes · ${entry.project.summary.members.length} archive files</small></summary>
+        <div class="inspect-body">
         <div class="inspect-grid">
           <div class="fact-panel">
             <h4>Verified archive</h4>
@@ -294,7 +295,8 @@ function entryMarkup(entry, index) {
         <div class="source-list">
         ${entry.project.sourceMembers.map(sourceMarkup).join('\n        ')}
         </div>
-      </section>
+        </div>
+      </details>
 
       <section class="gallery-step remix" aria-labelledby="${entry.id}-remix">
         <div class="step-label"><span>03</span><h3 id="${entry.id}-remix">Remix</h3></div>
@@ -369,7 +371,7 @@ ${JSON.stringify({
   <section class="explore-hero">
     <p class="kicker">THE PROJECT IS THE MEDIUM</p>
     <h1>Watch it.<br><em>Open the source.</em><br>Make it yours.</h1>
-    <p>Each finished video below carries its verified authoring archive, readable source, provenance, credits, and one exact remix path. No account. No upload form. No hidden runtime.</p>
+    <p>Play a finished video, peek into its verified source, then download the complete project and make it yours.</p>
     <div class="loop" aria-label="Gallery workflow"><span>01 Watch</span><i>→</i><span>02 Inspect</span><i>→</i><span>03 Remix</span></div>
   </section>
   <section class="gallery" aria-label="Curated Narova projects">

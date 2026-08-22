@@ -1,7 +1,71 @@
 {
   "format": "narova.gallery/1",
-  "updated": "2026-08-20",
+  "updated": "2026-08-22",
   "entries": [
+    {
+      "id": "nori-and-the-pocket-moon",
+      "title": "Nori and the Pocket Moon",
+      "summary": "A gentle felt-storybook adventure about carrying a tiny moon home, with OpenAI narration and generated scenes.",
+      "archive": "docs/explore/projects/nori-and-the-pocket-moon.narova",
+      "archiveSha256": "8453da0f68b9c80b28f051aa52549b031c1788ba8603fceed4326d92c64477d2",
+      "producingVersion": "0.39.0",
+      "video": "docs/explore/assets/nori-and-the-pocket-moon.mp4",
+      "videoSha256": "c8d912f37899c075808a6919e3614ad76fb7dbbfd5e41450fc3a9c7b57669639",
+      "captions": "docs/explore/assets/nori-and-the-pocket-moon.vtt",
+      "poster": "docs/explore/assets/nori-and-the-pocket-moon-poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "Ordinary project check passed; the approved encoded video has an audio stream, complete WebVTT captions, and no regeneration was performed."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, English WebVTT captions, poster, text fallback, and script-free collapsed inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party project and rendered media published by the owner under CC0-1.0; no third-party stock media; attribution and proof of use are not required.",
+        "credits": [
+          "Project and render — Ammar Hasan (voluntary credit; CC0-1.0)"
+        ]
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "Original first-party children’s story authored for the OpenAI companion production, with generated scene footage, OpenAI narration, word timings, creative notes, and portable authoring source included in the archive.",
+        "lineage": "No recorded remix parent."
+      }
+    },
+    {
+      "id": "nature-of-light",
+      "title": "The Nature of Light",
+      "summary": "A cinematic journey from prisms and wave interference to photons, with native scene dialogue preserved for natural delivery and lip sync.",
+      "archive": "docs/explore/projects/nature-of-light.narova",
+      "archiveSha256": "68a18b4b70e6c3f137898273ce7817f1ced39956e71f7bf1ee2fd5ae1e542676",
+      "producingVersion": "0.39.0",
+      "video": "docs/explore/assets/nature-of-light.mp4",
+      "videoSha256": "5a985e0c3da7c8f949e8a96b4f4122288627d275ddeb2e3fbfe5a326002d43e8",
+      "captions": "docs/explore/assets/nature-of-light.vtt",
+      "poster": "docs/explore/assets/nature-of-light-poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "Ordinary project check passed; the approved encoded video has an audio stream, complete WebVTT captions, and no regeneration was performed."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, English WebVTT captions, poster, text fallback, and script-free collapsed inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party project and rendered media published by the owner under CC0-1.0; no third-party stock media; attribution and proof of use are not required.",
+        "credits": [
+          "Project and render — Ammar Hasan (voluntary credit; CC0-1.0)"
+        ]
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "First-party science explainer assembled from preserved generated Sora scene clips. The published cut is the approved native-dialogue version; its project archive carries the clips, combined narration, word timings, prompts, and portable authoring source.",
+        "lineage": "No recorded remix parent."
+      }
+    },
     {
       "id": "narova-skill-reel",
       "title": "Prompt. Voice. Motion.",
@@ -29,7 +93,9 @@
       "rights": {
         "status": "declared-compatible",
         "basis": "First-party Narova source and rendered media dedicated under CC0-1.0; no embedded third-party visual or audio assets; attribution and proof of use are not required.",
-        "credits": ["Narova project and render — Ammar Hasan (voluntary credit; CC0-1.0)"]
+        "credits": [
+          "Narova project and render — Ammar Hasan (voluntary credit; CC0-1.0)"
+        ]
       }
     },
     {
@@ -59,7 +125,9 @@
       "rights": {
         "status": "declared-compatible",
         "basis": "First-party Narova source and rendered media dedicated under CC0-1.0; no embedded third-party visual or audio assets; attribution and proof of use are not required.",
-        "credits": ["Narova project and render — Ammar Hasan (voluntary credit; CC0-1.0)"]
+        "credits": [
+          "Narova project and render — Ammar Hasan (voluntary credit; CC0-1.0)"
+        ]
       }
     }
   ]

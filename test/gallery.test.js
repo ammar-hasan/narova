@@ -15,7 +15,7 @@ const index = () => JSON.parse(fs.readFileSync(indexPath, 'utf8'));
 
 test('checked-in gallery projection is current and backed by verified archives', () => {
   const result = buildGallery({ root, check: true });
-  assert.equal(result.entries, 2);
+  assert.equal(result.entries, 4);
   assert.equal(result.assetCommit, loadPublicAssets(root).commit);
   for (const entry of index().entries) {
     const archive = inspectArchive(path.join(root, entry.archive));
@@ -31,9 +31,11 @@ test('each static entry presents watch, inspect, then remix with accessible medi
     const article = html.match(new RegExp(`<article class="gallery-entry" id="${entry.id}">([\\s\\S]*?)</article>`))?.[1];
     assert.ok(article, `missing ${entry.id}`);
     const watch = article.indexOf('>Watch</h3>');
-    const inspect = article.indexOf('>Inspect</h3>');
+    const inspect = article.indexOf('>Inspect source</strong>');
     const remix = article.indexOf('>Remix</h3>');
     assert.ok(watch >= 0 && watch < inspect && inspect < remix, `${entry.id} affordance order`);
+    assert.match(article, /<details class="gallery-step inspect">/);
+    assert.doesNotMatch(article, /<details class="gallery-step inspect" open>/);
     assert.match(article, /<video controls preload="metadata" poster="[^"]+">/);
     assert.match(article, /<track kind="captions"[^>]* default>/);
     assert.match(article, /<h4 class="subhead">Scene &amp; narration inventory<\/h4>/);
