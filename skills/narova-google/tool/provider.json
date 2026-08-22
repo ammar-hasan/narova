@@ -1,0 +1,22 @@
+{
+  "name": "google",
+  "displayName": "Google",
+  "protocol": "narova-tts-provider/v1",
+  "command": [
+    "python3",
+    "./worker.py"
+  ],
+  "requiredEnvironment": [
+    "GEMINI_API_KEY"
+  ],
+  "capabilities": {
+    "synthesis": true,
+    "voiceListing": true,
+    "languages": true,
+    "wordTimings": false
+  },
+  "deliveryCapabilities": {
+    "delivery-instruct": "honored",
+    "seed-stabilization": "ignored"
+  }
+}

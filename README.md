@@ -348,7 +348,8 @@ generate "<prompt>"` asks an explicitly registered video companion to produce
 a clip, then commits it to the project asset registry with a generation recipe,
 so it participates in the same provenance, cache identity, and release evidence
 as any other media. Sora lives in `narova-openai`; Runway lives in the separate
-`narova-runway` skill. Vendor APIs and credentials never enter core. This is an
+`narova-runway` skill; Google Veo lives in the separate `narova-google` skill.
+Vendor APIs and credentials never enter core. This is an
 optional scene input, never the product itself, and the network is used only
 when generation is invoked.
 
@@ -410,6 +411,7 @@ narova providers doctor <name>
 npx skills add ammar-hasan/narova --skill narova-elevenlabs -g
 npx skills add ammar-hasan/narova --skill narova-openai -g
 npx skills add ammar-hasan/narova --skill narova-runway -g
+npx skills add ammar-hasan/narova --skill narova-google -g
 ```
 
 For authored 3D work that needs intentional subject/world representation or

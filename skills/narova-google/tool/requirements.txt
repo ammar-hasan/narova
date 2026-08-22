@@ -1,0 +1,2 @@
+# No third-party Python packages are required.
+# The workers use the documented Gemini API through Python's stdlib.
