@@ -1,8 +1,8 @@
 {
   "format": "narova.public-assets/1",
   "repository": "https://github.com/ammar-hasan/narova-assets",
-  "commit": "03a9116737a58589df1d852d557f48a5082f1c83",
-  "catalogSha256": "2ad283f4afcbdd55065c9cf6d1bcf0ee189c6db77c28f58033b796483f034b60",
+  "commit": "fbf8e03e3848cd7ccd4b1c822bda47b1ff7f6845",
+  "catalogSha256": "ec9720d44c2ce076f77eb89f47f2100e4bcf94e56d830d0dd7a84a4d9ecc307e",
   "explore": {
     "narova-skill-reel": {
       "archive": "explore/narova-skill-reel/narova-skill-reel.narova",

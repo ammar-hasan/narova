@@ -185,11 +185,11 @@
       },
       "archive": {
         "path": "explore/product-walkthrough/product-walkthrough.narova",
-        "sha256": "8a28feef4c6738d8ab3a9fbcb68dce68cd7e52fb19975c352dfb60f597cbe40a",
-        "bytes": 3128585
+        "sha256": "1c83ac9d1cf589a801f6b69a9b30ae3cc21eaf656b74333f37e8bad27b0ffb8b",
+        "bytes": 3128586
       },
       "producingVersion": "0.39.0",
-      "archiveIdentity": "8a28feef4c6738d8ab3a9fbcb68dce68cd7e52fb19975c352dfb60f597cbe40a",
+      "archiveIdentity": "1c83ac9d1cf589a801f6b69a9b30ae3cc21eaf656b74333f37e8bad27b0ffb8b",
       "rights": {
         "basis": "First-party Narova product walkthrough and render.",
         "license": "CC0-1.0",
