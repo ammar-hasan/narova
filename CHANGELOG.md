@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Google provider companion (`narova-google`).** Two independently
+  registered workers behind one separately selectable skill: a `google` speech
+  worker on `narova-tts-provider/v1` (Gemini TTS; raw PCM wrapped locally into
+  mono 16-bit WAV) and a `veo` video worker on `narova-video-provider/v1`
+  (single-submission Veo generation). Standard-library Python only; the
+  credential environment value never appears in URLs, responses, recipes, or
+  error text and is sent solely in the provider-specific request header.
+  Synthesis and generation are billed network operations with no automatic
+  retry; generated videos may be SynthID-watermarked. Installing the skill
+  registers neither provider.
+
 ## [0.37.0] - 2026-08-22
 
 ### Added

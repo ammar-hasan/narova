@@ -2689,7 +2689,7 @@ async function main() {
         const videos = listProviders(VIDEO_PROVIDER_PROTOCOL);
         if (videos.length) {
           for (const provider of videos) lines.push(`  ${provider.name.padEnd(12)} ${provider.displayName}`);
-        } else lines.push('  (none — install narova-openai for Sora or narova-runway for Runway, then register its video manifest)');
+        } else lines.push('  (none — install narova-openai for Sora, narova-runway for Runway, or narova-google for Veo, then register its video manifest)');
         usageError(...lines);
       }
       try {

@@ -86,8 +86,9 @@ Walkthrough config, auth, semantic locator, security, timing, and layout details
 
 Optional cloud companions are installed and registered separately. Use
 `narova-elevenlabs` for ElevenLabs speech, `narova-openai` for OpenAI speech
-and Sora, or `narova-runway` for Runway video generation; none is a dependency
-of the main Narova skill. Sora and Runway use `narova-video-provider/v1`; the
+and Sora, `narova-runway` for Runway video generation, or `narova-google` for
+Google Gemini speech and Veo video generation; none is a dependency of the
+main Narova skill. Sora, Runway, and Veo use `narova-video-provider/v1`; the
 core owns staging and provenance while each companion owns its vendor API.
 Renderer providers are different: both are bundled, local, and free. See
 [`renderers.md`](renderers.md) for the portable scene tree and capability matrix.
