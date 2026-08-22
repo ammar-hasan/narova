@@ -30,6 +30,7 @@ DEFAULT_MODEL = "gemini-3.1-flash-tts-preview"
 DEFAULT_TIMEOUT = 60.0
 MAX_TEXT_LENGTH = 4096
 MAX_INSTRUCTIONS_LENGTH = 4096
+MAX_RESPONSE_BYTES = 64 * 1024 * 1024
 SUPPORTED_MODELS = {
     "gemini-3.1-flash-tts-preview",
 }
@@ -70,6 +71,13 @@ def api_key() -> str:
     return value
 
 
+def redact(text: str) -> str:
+    secret = os.environ.get("GEMINI_API_KEY")
+    if secret and text:
+        return text.replace(secret, "[redacted]")
+    return text
+
+
 def _safe_error_detail(body: bytes) -> str:
     try:
         value = json.loads(body.decode("utf-8", errors="replace"))
@@ -90,6 +98,7 @@ def _http_error(exc: urllib.error.HTTPError) -> ProviderError:
         detail = _safe_error_detail(exc.read(64 * 1024))
     except Exception:
         detail = ""
+    detail = redact(detail)
     if exc.code in {401, 403}:
         code = "authentication_failed"
         message = "Google authentication or model/voice permission was rejected"
@@ -154,7 +163,9 @@ def _voice(value: Any) -> str:
 
 
 def build_request(request: dict) -> tuple[dict, float]:
-    options = request.get("options") or {}
+    options = request.get("options", {})
+    if options is None:
+        options = {}
     if not isinstance(options, dict):
         raise ProviderError("invalid_options", "options must be a JSON object")
     known = {"model", "modelId", "instructions", "style", "requestTimeoutSeconds"}
@@ -226,6 +237,23 @@ def _api_url(model: str) -> str:
     return f"{API_BASE}/{API_VERSION}/models/{model}:generateContent"
 
 
+def _read_bounded(response, limit: int) -> bytes:
+    chunks = []
+    total = 0
+    while True:
+        chunk = response.read(256 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise ProviderError(
+                "invalid_response",
+                f"Google response exceeded the {limit} byte safety limit",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
+
+
 def download_speech(key: str, model: str, payload: dict, timeout: float) -> tuple[bytes, dict]:
     request = urllib.request.Request(
         _api_url(model),
@@ -238,7 +266,7 @@ def download_speech(key: str, model: str, payload: dict, timeout: float) -> tupl
         method="POST",
     )
     with _open(request, timeout) as response:
-        body = response.read()
+        body = _read_bounded(response, MAX_RESPONSE_BYTES)
     if not body:
         raise ProviderError("invalid_response", "Google returned an empty response")
     try:
@@ -316,6 +344,11 @@ def _pcm_to_wav(audio: bytes, mime_type: str | None) -> bytes:
 
 def write_wav(audio: bytes, mime_type: str | None, output: Path) -> None:
     if not audio.startswith(b"RIFF"):
+        if len(audio) < 2 or len(audio) % 2 != 0:
+            raise ProviderError(
+                "invalid_response",
+                "Google returned raw PCM with a truncated final sample",
+            )
         audio = _pcm_to_wav(audio, mime_type)
     temporary = None
     try:
@@ -326,10 +359,11 @@ def write_wav(audio: bytes, mime_type: str | None, output: Path) -> None:
             temporary = Path(destination.name)
         try:
             with wave.open(str(temporary), "rb") as source:
-                if source.getnchannels() != 1 or source.getnframes() < 1:
+                if (source.getnchannels() != 1 or source.getsampwidth() != 2
+                        or source.getnframes() < 1):
                     raise ProviderError(
                         "invalid_response",
-                        "Google returned audio that is not non-empty mono PCM",
+                        "Google returned audio that is not non-empty mono 16-bit PCM",
                     )
         except (EOFError, wave.Error) as exc:
             raise ProviderError("invalid_response", "Google returned an invalid WAV") from exc
@@ -342,7 +376,9 @@ def write_wav(audio: bytes, mime_type: str | None, output: Path) -> None:
 def synthesize(request: dict) -> dict:
     output = validate_output(request.get("output"))
     payload, timeout = build_request(request)
-    options = request.get("options") or {}
+    options = request.get("options", {})
+    if not isinstance(options, dict):
+        options = {}
     model = options.get("model", options.get("modelId", DEFAULT_MODEL))
     audio, metadata = download_speech(api_key(), model, payload, timeout)
     write_wav(audio, metadata.get("mimeType"), output)
@@ -389,7 +425,7 @@ def main() -> int:
                 "error": {"code": "invalid_json", "message": "request is not valid JSON"},
             })
         except ProviderError as exc:
-            log(f"{exc.code}: {exc.message}")
+            log(redact(f"{exc.code}: {exc.message}"))
             send({
                 "id": request_id,
                 "ok": False,

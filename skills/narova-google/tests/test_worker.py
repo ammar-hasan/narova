@@ -137,21 +137,34 @@ class TestRequestMapping(unittest.TestCase):
                 worker.build_request(request)
             self.assertEqual(error.exception.code, "invalid_request")
 
+    def test_falsy_non_object_options_are_rejected(self):
+        for options in ([], "", 0, False):
+            with self.subTest(options=options), self.assertRaises(worker.ProviderError) as error:
+                worker.build_request({
+                    "text": "Hello.", "speaker": "Kore", "language": None,
+                    "options": options,
+                })
+            self.assertEqual(error.exception.code, "invalid_options")
+
 
 class TestSynthesis(unittest.TestCase):
     def test_http_request_uses_gemini_endpoint_header_auth_and_json(self):
         seen = {}
 
         class Response:
+            def __init__(self):
+                self.body = json.dumps(gemini_response(
+                    "audio/L16;codec=pcm;rate=24000", b"\0\0" * 100)).encode()
+
             def __enter__(self):
                 return self
 
             def __exit__(self, *_args):
                 return False
 
-            def read(self):
-                return json.dumps(gemini_response(
-                    "audio/L16;codec=pcm;rate=24000", b"\0\0" * 100)).encode()
+            def read(self, _size=-1):
+                body, self.body = self.body, b""
+                return body
 
         def open_request(request, timeout):
             seen.update(request=request, timeout=timeout)
@@ -185,6 +198,16 @@ class TestSynthesis(unittest.TestCase):
         auth.read = mock.Mock(return_value=b"{}")
         self.assertEqual(worker._http_error(auth).code, "authentication_failed")
 
+    def test_credential_echoed_by_vendor_is_redacted(self):
+        secret = "leaky-secret-123"
+        body = json.dumps({"error": {"message": f"invalid key {secret}"}}).encode()
+        with mock.patch.dict(os.environ, {"GEMINI_API_KEY": secret}, clear=True):
+            error = urllib.error.HTTPError("url", 400, "bad", {}, None)
+            error.read = mock.Mock(return_value=body)
+            mapped = worker._http_error(error)
+            self.assertNotIn(secret, mapped.message)
+            self.assertIn("[redacted]", mapped.message)
+
     def test_raw_pcm_response_is_wrapped_into_mono_wav(self):
         with tempfile.TemporaryDirectory() as directory:
             output = Path(directory) / "out.wav"
@@ -210,6 +233,24 @@ class TestSynthesis(unittest.TestCase):
             self.assertFalse(output.exists())
             with self.assertRaises(worker.ProviderError) as error:
                 worker.write_wav(b"RIFF\x00\x00\x00\x00WAVEjunk", "audio/wav", output)
+            self.assertEqual(error.exception.code, "invalid_response")
+            self.assertFalse(output.exists())
+
+    def test_non_16_bit_or_truncated_pcm_is_rejected(self):
+        buffer = io.BytesIO()
+        with wave.open(buffer, "wb") as output:
+            output.setnchannels(1)
+            output.setsampwidth(1)
+            output.setframerate(24000)
+            output.writeframes(b"\0" * 10)
+        with tempfile.TemporaryDirectory() as directory:
+            output = Path(directory) / "out.wav"
+            with self.assertRaises(worker.ProviderError) as error:
+                worker.write_wav(buffer.getvalue(), "audio/wav", output)
+            self.assertEqual(error.exception.code, "invalid_response")
+            self.assertFalse(output.exists())
+            with self.assertRaises(worker.ProviderError) as error:
+                worker.write_wav(b"\0\0\0", None, output)
             self.assertEqual(error.exception.code, "invalid_response")
             self.assertFalse(output.exists())
 

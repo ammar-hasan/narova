@@ -56,6 +56,7 @@ class TestProtocolAndMapping(unittest.TestCase):
         text = payload["contents"][0]["parts"][0]["text"]
         self.assertIn("9:16", text)
         self.assertIn("x", text)
+        self.assertEqual(payload["generationConfig"]["durationSeconds"], 4)
         self.assertEqual(params["aspectRatio"], "9:16")
         self.assertEqual(params["durationSeconds"], 4)
         self.assertEqual(payload["generationConfig"]["seed"], 7)
@@ -79,20 +80,43 @@ class TestProtocolAndMapping(unittest.TestCase):
             worker.build_request({"prompt": "  ", "options": {}})
         self.assertEqual(error.exception.code, "invalid_request")
 
+    def test_falsy_non_object_options_and_fractional_seed_are_rejected(self):
+        for options in ([], "", 0, False, {"seed": 1.9}, {"seed": True}):
+            with self.subTest(options=options), self.assertRaises(worker.ProviderError) as error:
+                worker.build_request({"prompt": "x", "options": options})
+            self.assertEqual(error.exception.code, "invalid_options")
+
+    def test_bounded_read_enforces_limit(self):
+        class Response:
+            def __init__(self):
+                self.calls = 0
+
+            def read(self, _size):
+                self.calls += 1
+                return b"x" * 8 if self.calls <= 5 else b""
+
+        with self.assertRaises(worker.ProviderError) as error:
+            worker._read_bounded(Response(), 16)
+        self.assertEqual(error.exception.code, "invalid_response")
+
 
 class TestGeneration(unittest.TestCase):
     def test_http_request_uses_gemini_endpoint_header_auth_and_json(self):
         seen = {}
 
         class Response:
+            def __init__(self):
+                self.body = json.dumps(veo_response(b"video")).encode()
+
             def __enter__(self):
                 return self
 
             def __exit__(self, *_args):
                 return False
 
-            def read(self):
-                return json.dumps(veo_response(b"video")).encode()
+            def read(self, _size=-1):
+                body, self.body = self.body, b""
+                return body
 
         def opening(request, timeout):
             seen.update(request=request, timeout=timeout)

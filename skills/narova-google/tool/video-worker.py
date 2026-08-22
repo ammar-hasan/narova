@@ -27,6 +27,7 @@ DEFAULT_DURATION = 8
 DEFAULT_TIMEOUT = 300.0
 MAX_PROMPT_LENGTH = 32000
 MAX_VIDEO_BYTES = 1024 * 1024 * 1024
+MAX_RESPONSE_BYTES = (MAX_VIDEO_BYTES + 1) * 2
 SUPPORTED_MODELS = {
     "veo-3.1-generate-001",
     "veo-3.1-fast-generate-preview",
@@ -58,6 +59,13 @@ def api_key() -> str:
     return value
 
 
+def redact(text: str) -> str:
+    secret = os.environ.get("GEMINI_API_KEY")
+    if secret and text:
+        return text.replace(secret, "[redacted]")
+    return text
+
+
 def _safe_error_detail(body: bytes) -> str:
     try:
         value = json.loads(body.decode("utf-8", errors="replace"))
@@ -78,6 +86,7 @@ def _http_error(exc: urllib.error.HTTPError) -> ProviderError:
         detail = _safe_error_detail(exc.read(64 * 1024))
     except Exception:
         detail = ""
+    detail = redact(detail)
     if exc.code in {401, 403}:
         code, message = "authentication_failed", "Google authentication or Veo model access was rejected"
     elif exc.code == 429:
@@ -117,7 +126,9 @@ def build_request(request: dict) -> tuple[dict, float, dict]:
     prompt = prompt.strip()
     if len(prompt) > MAX_PROMPT_LENGTH:
         raise ProviderError("invalid_request", f"generation prompt must be at most {MAX_PROMPT_LENGTH} characters")
-    options = request.get("options") or {}
+    options = request.get("options", {})
+    if options is None:
+        options = {}
     if not isinstance(options, dict):
         raise ProviderError("invalid_options", "options must be a JSON object")
     unknown = sorted(set(options) - {"model", "durationSeconds", "aspectRatio", "seed", "requestTimeoutSeconds"})
@@ -152,6 +163,7 @@ def build_request(request: dict) -> tuple[dict, float, dict]:
         "generationConfig": {
             "responseModalities": ["VIDEO"],
             "responseMimeType": "video/mp4",
+            "durationSeconds": duration,
         },
     }
 
@@ -159,14 +171,35 @@ def build_request(request: dict) -> tuple[dict, float, dict]:
     if aspect_ratio:
         params["aspectRatio"] = aspect_ratio
     if "seed" in options:
-        params["seed"] = int(_number(options["seed"], "seed", 0, 2_147_483_647))
-        payload["generationConfig"]["seed"] = params["seed"]
+        seed = options["seed"]
+        if isinstance(seed, bool) or not isinstance(seed, (int, float)) or float(seed) != int(seed):
+            raise ProviderError("invalid_options", "Veo seed must be an integer")
+        seed = int(_number(seed, "seed", 0, 2_147_483_647))
+        params["seed"] = seed
+        payload["generationConfig"]["seed"] = seed
 
     return payload, timeout, params
 
 
 def _api_url(model: str) -> str:
     return f"{API_BASE}/{API_VERSION}/models/{model}:generateContent"
+
+
+def _read_bounded(response, limit: int) -> bytes:
+    chunks = []
+    total = 0
+    while True:
+        chunk = response.read(1024 * 1024)
+        if not chunk:
+            break
+        total += len(chunk)
+        if total > limit:
+            raise ProviderError(
+                "invalid_response",
+                f"Google response exceeded the {limit} byte safety limit",
+            )
+        chunks.append(chunk)
+    return b"".join(chunks)
 
 
 def generate_video(key: str, model: str, payload: dict, timeout: float) -> tuple[bytes, dict]:
@@ -181,7 +214,7 @@ def generate_video(key: str, model: str, payload: dict, timeout: float) -> tuple
         method="POST",
     )
     with _open(request, timeout) as response:
-        body = response.read()
+        body = _read_bounded(response, MAX_RESPONSE_BYTES)
     if not body:
         raise ProviderError("invalid_response", "Google returned an empty response")
     try:
@@ -219,6 +252,11 @@ def generate_video(key: str, model: str, payload: dict, timeout: float) -> tuple
 
     if video is None:
         raise ProviderError("invalid_response", "Google returned no inline video data")
+    if len(video) > MAX_VIDEO_BYTES:
+        raise ProviderError(
+            "invalid_response",
+            f"Google video exceeded the {MAX_VIDEO_BYTES} byte safety limit",
+        )
 
     metadata: dict[str, Any] = {}
     if mime_type:
@@ -290,7 +328,7 @@ def main() -> int:
         except json.JSONDecodeError:
             send({"id": request_id, "ok": False, "error": {"code": "invalid_json", "message": "request is not valid JSON"}})
         except ProviderError as exc:
-            log(f"{exc.code}: {exc.message}")
+            log(redact(f"{exc.code}: {exc.message}"))
             send({"id": request_id, "ok": False, "error": {"code": exc.code, "message": exc.message}})
         except Exception as exc:
             log(f"internal_error: {type(exc).__name__}")
