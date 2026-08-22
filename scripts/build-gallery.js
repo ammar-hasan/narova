@@ -8,9 +8,15 @@ const { inspectArchive, readArchiveBytes } = require('../tool/src/project-archiv
 const DEFAULT_ROOT = path.resolve(__dirname, '..');
 const INDEX_RELATIVE = 'docs/explore/gallery.json';
 const OUTPUT_RELATIVE = 'docs/explore/index.html';
+const PUBLIC_ASSETS_RELATIVE = 'docs/public-assets.json';
+const PUBLIC_ASSET_CATALOG_RELATIVE = 'docs/public-assets.catalog.json';
 const FORMAT = 'narova.gallery/1';
+const ASSET_FORMAT = 'narova.public-assets/1';
 const SITE = 'https://ammar-hasan.github.io/narova/';
+const ASSET_REPOSITORY = 'https://github.com/ammar-hasan/narova-assets';
+const ASSET_RAW_ROOT = 'https://raw.githubusercontent.com/ammar-hasan/narova-assets';
 const SHA256_RE = /^[a-f0-9]{64}$/;
+const GIT_COMMIT_RE = /^[a-f0-9]{40}$/;
 const MAX_PROJECTED_SOURCE_BYTES = 2 * 1024 * 1024;
 
 const sha256 = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
@@ -59,8 +65,46 @@ function regularFile(root, relative, label, extensions) {
   return { rel, absolute };
 }
 
-function pageHref(fileRel) {
-  return path.posix.relative('docs/explore', fileRel);
+function assetPath(value, label, extensions) {
+  const relative = plainString(value, label, 500).replace(/\\/g, '/');
+  if (relative.startsWith('/') || relative.split('/').some(part => !part || part === '.' || part === '..')) {
+    throw new Error(`${label} must be a confined asset-repository path`);
+  }
+  if (extensions && !extensions.some(ext => relative.toLowerCase().endsWith(ext))) {
+    throw new Error(`${label} has an unsupported extension: ${relative}`);
+  }
+  return relative;
+}
+
+function loadPublicAssets(root = DEFAULT_ROOT) {
+  const source = parseJson(fs.readFileSync(path.join(root, PUBLIC_ASSETS_RELATIVE)), PUBLIC_ASSETS_RELATIVE);
+  if (!source || typeof source !== 'object' || source.format !== ASSET_FORMAT) {
+    throw new Error(`public asset source format must be ${ASSET_FORMAT}`);
+  }
+  if (source.repository !== ASSET_REPOSITORY) throw new Error(`public asset repository must be ${ASSET_REPOSITORY}`);
+  if (!GIT_COMMIT_RE.test(source.commit || '')) throw new Error('public asset commit must be a full lowercase commit identity');
+  if (!SHA256_RE.test(source.catalogSha256 || '')) throw new Error('public asset catalogSha256 must be a lowercase SHA-256 digest');
+  if (!source.explore || typeof source.explore !== 'object' || Array.isArray(source.explore)) throw new Error('public asset source must contain Explore entries');
+  if (!source.demos || typeof source.demos !== 'object' || Array.isArray(source.demos)) throw new Error('public asset source must contain demo media');
+  const catalogBytes = fs.readFileSync(path.join(root, PUBLIC_ASSET_CATALOG_RELATIVE));
+  if (sha256(catalogBytes) !== source.catalogSha256) throw new Error('public asset catalog snapshot does not match catalogSha256');
+  const catalog = parseJson(catalogBytes, PUBLIC_ASSET_CATALOG_RELATIVE);
+  if (!catalog || catalog.format !== 'narova.asset-catalog/1' || !Array.isArray(catalog.entries)) throw new Error('public asset catalog snapshot has an unsupported format');
+  const catalogById = new Map();
+  const catalogPaths = new Set();
+  for (const entry of catalog.entries) {
+    const id = safeId(entry && entry.id);
+    if (catalogById.has(id)) throw new Error(`duplicate public asset catalog id: ${id}`);
+    catalogById.set(id, entry);
+    for (const key of ['video', 'media', 'poster', 'captions', 'archive']) {
+      if (entry[key] && typeof entry[key].path === 'string') catalogPaths.add(entry[key].path);
+    }
+  }
+  for (const [name, relative] of Object.entries(source.demos)) {
+    if (!catalogPaths.has(relative)) throw new Error(`public demo ${name} is absent from the catalog snapshot`);
+  }
+  const url = (relative, label, extensions) => `${ASSET_RAW_ROOT}/${source.commit}/${assetPath(relative, label, extensions)}`;
+  return { ...source, catalog, catalogById, url };
 }
 
 function assertMediaBytes(file, kind, label) {
@@ -115,7 +159,7 @@ function projectProjection(archiveFile, expectedSha, version) {
   return { summary, scenes, lineage, sourceMembers };
 }
 
-function validateEntry(root, entry, ids) {
+function validateEntry(root, entry, ids, publicAssets = loadPublicAssets(root)) {
   if (!entry || typeof entry !== 'object' || Array.isArray(entry)) throw new Error('gallery entry must be an object');
   const id = safeId(entry.id);
   if (ids.has(id)) throw new Error(`duplicate gallery entry id: ${id}`);
@@ -151,6 +195,27 @@ function validateEntry(root, entry, ids) {
   const rightsBasis = plainString(entry.rights.basis, `${id} rights basis`, 1000);
   if (!Array.isArray(entry.rights.credits) || !entry.rights.credits.length) throw new Error(`${id} must carry at least one credit`);
   const credits = entry.rights.credits.map((credit, index) => plainString(credit, `${id} credit ${index + 1}`, 500));
+  const published = publicAssets.explore[id];
+  if (!published || typeof published !== 'object' || Array.isArray(published)) throw new Error(`${id} has no pinned public asset record`);
+  const urls = {
+    archive: publicAssets.url(published.archive, `${id} public archive`, ['.narova']),
+    video: publicAssets.url(published.video, `${id} public video`, ['.mp4']),
+    captions: publicAssets.url(published.captions, `${id} public captions`, ['.vtt']),
+    poster: publicAssets.url(published.poster, `${id} public poster`, ['.jpg', '.jpeg', '.png', '.webp']),
+  };
+  if (path.posix.basename(published.archive) !== archiveName) throw new Error(`${id} public archive basename does not match the verified local archive`);
+  const catalogEntry = publicAssets.catalogById.get(id);
+  if (!catalogEntry || catalogEntry.kind !== 'explore') throw new Error(`${id} is absent from the pinned Explore catalog`);
+  for (const [key, local] of Object.entries({ archive, video, captions, poster })) {
+    const recorded = catalogEntry[key];
+    if (!recorded || recorded.path !== published[key]) throw new Error(`${id} ${key} path does not match the pinned catalog`);
+    const bytes = fs.readFileSync(local.absolute);
+    if (bytes.length !== recorded.bytes || sha256(bytes) !== recorded.sha256) throw new Error(`${id} ${key} local mirror does not match the pinned catalog`);
+  }
+  if (catalogEntry.archiveIdentity !== entry.archiveSha256 || catalogEntry.producingVersion !== producingVersion) {
+    throw new Error(`${id} archive identity/version does not match the pinned catalog`);
+  }
+  if (catalogEntry.rights?.license !== 'CC0-1.0') throw new Error(`${id} pinned catalog rights must be CC0-1.0`);
   const project = projectProjection(archive.absolute, entry.archiveSha256, producingVersion);
   const actualLineage = project.lineage
     ? `Recorded remix parent: ${JSON.stringify(project.lineage.parent)}`
@@ -159,7 +224,7 @@ function validateEntry(root, entry, ids) {
   return {
     id, title, description, producingVersion, archive, video, captions, poster,
     archiveSha256: entry.archiveSha256, releaseNote, provenanceSummary,
-    rightsBasis, credits, accessibilityNote, project,
+    rightsBasis, credits, accessibilityNote, project, urls,
   };
 }
 
@@ -192,10 +257,10 @@ function entryMarkup(entry, index) {
 
       <section class="gallery-step watch" aria-labelledby="${entry.id}-watch">
         <div class="step-label"><span>01</span><h3 id="${entry.id}-watch">Watch</h3></div>
-        <video controls preload="metadata" poster="${escapeHtml(pageHref(entry.poster.rel))}">
-          <source src="${escapeHtml(pageHref(entry.video.rel))}" type="video/mp4">
-          <track kind="captions" src="${escapeHtml(pageHref(entry.captions.rel))}" srclang="en" label="English" default>
-          Your browser cannot play this video. <a href="${escapeHtml(pageHref(entry.video.rel))}">Download the MP4</a>.
+        <video controls preload="metadata" poster="${escapeHtml(entry.urls.poster)}">
+          <source src="${escapeHtml(entry.urls.video)}" type="video/mp4">
+          <track kind="captions" src="${escapeHtml(entry.urls.captions)}" srclang="en" label="English" default>
+          Your browser cannot play this video. <a href="${escapeHtml(entry.urls.video)}">Download the MP4</a>.
         </video>
       </section>
 
@@ -235,14 +300,15 @@ function entryMarkup(entry, index) {
         <div class="step-label"><span>03</span><h3 id="${entry.id}-remix">Remix</h3></div>
         <p>Download the verified project, then run the exact local archive command.</p>
         <div class="remix-command"><code>${escapeHtml(command)}</code><button type="button" data-copy-command="${escapeHtml(command)}">Copy</button></div>
-        <a class="archive-download" href="${escapeHtml(pageHref(entry.archive.rel))}" download>Download ${escapeHtml(path.posix.basename(entry.archive.rel))} <span aria-hidden="true">↓</span></a>
+        <a class="archive-download" href="${escapeHtml(entry.urls.archive)}" download>Download ${escapeHtml(path.posix.basename(entry.archive.rel))} <span aria-hidden="true">↓</span></a>
         <p class="trust-note">Archives are untrusted input. Inspect first; building executes authored project source with your account's ambient authority.</p>
       </section>
     </article>`;
 }
 
-function renderGallery(index, entries) {
+function renderGallery(index, entries, publicAssets = loadPublicAssets(DEFAULT_ROOT)) {
   const canonical = `${SITE}explore/`;
+  const exploreShare = publicAssets.url(publicAssets.demos.exploreShare, 'Explore share image', ['.png']);
   return `<!DOCTYPE html>
 <html lang="en">
 <head>
@@ -256,7 +322,7 @@ function renderGallery(index, entries) {
 <meta property="og:description" content="Watch the render. Inspect the source. Remix the verified Narova project.">
 <meta property="og:type" content="website">
 <meta property="og:url" content="${canonical}">
-<meta property="og:image" content="${SITE}explore/assets/narova-explore-share.png">
+<meta property="og:image" content="${exploreShare}">
 <meta property="og:image:type" content="image/png">
 <meta property="og:image:width" content="1280">
 <meta property="og:image:height" content="720">
@@ -266,7 +332,7 @@ function renderGallery(index, entries) {
 <meta name="twitter:card" content="summary_large_image">
 <meta name="twitter:title" content="Narova Explore — every video is a project">
 <meta name="twitter:description" content="Watch the render. Inspect the source. Remix the verified Narova project.">
-<meta name="twitter:image" content="${SITE}explore/assets/narova-explore-share.png">
+<meta name="twitter:image" content="${exploreShare}">
 <meta name="twitter:image:alt" content="Narova prompt-to-video workflow preview">
 <link rel="icon" href="../assets/favicon.svg" type="image/svg+xml">
 <script type="application/ld+json">
@@ -312,7 +378,7 @@ ${JSON.stringify({
   <section class="curation-note">
     <p class="kicker">CURATED, NOT INGESTED</p>
     <h2>Static by design.</h2>
-    <p>This page is generated from a checked-in, human-reviewed index. Archives are verified before publication; browsers never unpack or execute project content. Gallery update: ${escapeHtml(index.updated)}.</p>
+    <p>This page is generated from a checked-in, human-reviewed index and pinned Narova asset revision <code>${escapeHtml(publicAssets.commit)}</code>. Archives are verified before publication; browsers never unpack or execute project content. Gallery update: ${escapeHtml(index.updated)}.</p>
   </section>
 </main>
 <footer class="footer"><span>© 2026 Narova · Apache-2.0</span><span><a href="../">Home</a> · <a href="../changelog/">Changelog</a> · <a href="https://github.com/ammar-hasan/narova">GitHub</a></span></footer>
@@ -333,10 +399,11 @@ function buildGallery({ root = DEFAULT_ROOT, indexPath, outputPath, check = fals
   plainString(index.updated, 'gallery updated date', 20);
   if (!/^\d{4}-\d{2}-\d{2}$/.test(index.updated)) throw new Error('gallery updated must use YYYY-MM-DD');
   if (!Array.isArray(index.entries) || !index.entries.length || index.entries.length > 100) throw new Error('gallery index must contain 1–100 entries');
-  regularFile(root, 'docs/explore/assets/narova-explore-share.png', 'explore share image', ['.png']);
+  const publicAssets = loadPublicAssets(root);
+  regularFile(root, 'docs/explore/assets/narova-explore-share.png', 'local Explore share mirror', ['.png']);
   const ids = new Set();
-  const entries = index.entries.map(entry => validateEntry(root, entry, ids));
-  const html = renderGallery(index, entries);
+  const entries = index.entries.map(entry => validateEntry(root, entry, ids, publicAssets));
+  const html = renderGallery(index, entries, publicAssets);
   if (check) {
     if (!fs.existsSync(outputFile) || fs.readFileSync(outputFile, 'utf8') !== html) {
       throw new Error(`${path.relative(root, outputFile)} is stale; run npm run gallery:build`);
@@ -345,7 +412,7 @@ function buildGallery({ root = DEFAULT_ROOT, indexPath, outputPath, check = fals
     fs.mkdirSync(path.dirname(outputFile), { recursive: true });
     fs.writeFileSync(outputFile, html);
   }
-  return { entries: entries.length, output: outputFile };
+  return { entries: entries.length, output: outputFile, assetCommit: publicAssets.commit };
 }
 
 if (require.main === module) {
@@ -354,4 +421,4 @@ if (require.main === module) {
   process.stdout.write(`gallery ${check ? 'verified' : 'built'}: ${result.entries} entries -> ${path.relative(DEFAULT_ROOT, result.output)}\n`);
 }
 
-module.exports = { FORMAT, buildGallery, validateEntry, renderGallery };
+module.exports = { FORMAT, ASSET_FORMAT, buildGallery, validateEntry, renderGallery, loadPublicAssets };

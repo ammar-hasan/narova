@@ -28,8 +28,8 @@
       },
       "rights": {
         "status": "declared-compatible",
-        "basis": "First-party Narova source and rendered media; no embedded third-party visual or audio assets.",
-        "credits": ["Narova project and render — Ammar Hasan"]
+        "basis": "First-party Narova source and rendered media dedicated under CC0-1.0; no embedded third-party visual or audio assets; attribution and proof of use are not required.",
+        "credits": ["Narova project and render — Ammar Hasan (voluntary credit; CC0-1.0)"]
       }
     },
     {
@@ -58,8 +58,8 @@
       },
       "rights": {
         "status": "declared-compatible",
-        "basis": "First-party Narova source and rendered media; no embedded third-party visual or audio assets.",
-        "credits": ["Narova project and render — Ammar Hasan"]
+        "basis": "First-party Narova source and rendered media dedicated under CC0-1.0; no embedded third-party visual or audio assets; attribution and proof of use are not required.",
+        "credits": ["Narova project and render — Ammar Hasan (voluntary credit; CC0-1.0)"]
       }
     }
   ]

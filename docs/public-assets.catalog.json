@@ -1,0 +1,193 @@
+{
+  "$schema": "schema/catalog.schema.json",
+  "format": "narova.asset-catalog/1",
+  "updated": "2026-08-22",
+  "entries": [
+    {
+      "kind": "explore",
+      "id": "narova-skill-reel",
+      "title": "Prompt. Voice. Motion.",
+      "summary": "The 30-second first-party reel that explains Narova through its own narrated, cue-driven pipeline.",
+      "video": {
+        "path": "explore/narova-skill-reel/video.mp4",
+        "sha256": "e9223eca17df65f84eacbbe546712eb244735e7fc76f9296a86baae8aacbb027",
+        "bytes": 3301283
+      },
+      "poster": {
+        "path": "explore/narova-skill-reel/poster.jpg",
+        "sha256": "61d462bdaf90515ac9009f0c42f3e7c9939bc5d45488ad193ea17beb3196bc39",
+        "bytes": 48730
+      },
+      "captions": {
+        "path": "explore/narova-skill-reel/captions.vtt",
+        "sha256": "8ae67289b52eb2058539874ae34c2290308dd10bb548b963f5115b0fa6cba011",
+        "bytes": 651
+      },
+      "archive": {
+        "path": "explore/narova-skill-reel/narova-skill-reel.narova",
+        "sha256": "24717f22f5e0eb4dac91f5b6949d7591b3eb4de11e2faf9b6a66c36e3a830b30",
+        "bytes": 21094
+      },
+      "producingVersion": "0.31.14",
+      "archiveIdentity": "24717f22f5e0eb4dac91f5b6949d7591b3eb4de11e2faf9b6a66c36e3a830b30",
+      "rights": {
+        "basis": "First-party Narova project and render with no embedded third-party visual or audio assets.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Narova contributors",
+        "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
+      "kind": "explore",
+      "id": "narova-one-command-demo",
+      "title": "One command, finished video",
+      "summary": "The built-in two-scene activation demo, synthesized and rendered locally through the ordinary Narova pipeline.",
+      "video": {
+        "path": "explore/narova-one-command-demo/video.mp4",
+        "sha256": "7e955f927568902de76105196da3ea69acdc2b4de2bed79971f5bac144c862b1",
+        "bytes": 489509
+      },
+      "poster": {
+        "path": "explore/narova-one-command-demo/poster.jpg",
+        "sha256": "e168141e5fe3bce0b47bf1e15b0b8aad81247ef5f1e2bad7218222c075e26f43",
+        "bytes": 48058
+      },
+      "captions": {
+        "path": "explore/narova-one-command-demo/captions.vtt",
+        "sha256": "394f977b1365d529454140df5fa9315a7c28d3aacef4357ebcab64d8f69e4329",
+        "bytes": 220
+      },
+      "archive": {
+        "path": "explore/narova-one-command-demo/narova-one-command-demo.narova",
+        "sha256": "25c25fa256a3a1d01b0c7e460bb608854a2eb0cc61c24c954d9bc708aaa4baa9",
+        "bytes": 9434
+      },
+      "producingVersion": "0.31.14",
+      "archiveIdentity": "25c25fa256a3a1d01b0c7e460bb608854a2eb0cc61c24c954d9bc708aaa4baa9",
+      "rights": {
+        "basis": "First-party Narova project and render with no embedded third-party visual or audio assets.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Narova contributors",
+        "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
+      "kind": "demo",
+      "id": "product-walkthrough",
+      "title": "Continuous product walkthrough",
+      "summary": "The approximately 83-second narrated Narova product walkthrough embedded on the website.",
+      "mediaType": "video",
+      "media": {
+        "path": "demos/product-walkthrough/video.mp4",
+        "sha256": "eec6fbc509830852c1a0ffa7e2866a9acf3d52bf3147be62fe55a08e1781d1d0",
+        "bytes": 4732762
+      },
+      "poster": {
+        "path": "demos/product-walkthrough/poster.jpg",
+        "sha256": "625925cbf859075939fad27fd4a41e897e28391677df1499db9d805d54748657",
+        "bytes": 73665
+      },
+      "captions": {
+        "path": "demos/product-walkthrough/captions.vtt",
+        "sha256": "e60f1609958c5e18ef8e953aff9e02233f0f1aff93d8057cab1d78c2208a8bb3",
+        "bytes": 2298
+      },
+      "rights": {
+        "basis": "First-party Narova product walkthrough and render.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Narova contributors",
+        "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
+      "kind": "demo",
+      "id": "click-highlight-proof",
+      "title": "Voiced click-highlight proof",
+      "summary": "The approximately 5.7-second real-browser click-highlight proof linked from the website.",
+      "mediaType": "video",
+      "media": {
+        "path": "demos/click-highlight-proof/video.mp4",
+        "sha256": "e07a839b24b738b57344bc68a8e2bd0461686a2cde7b91d85f1f97d0b83507fc",
+        "bytes": 351903
+      },
+      "rights": {
+        "basis": "First-party Narova walkthrough proof and render.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Narova contributors",
+        "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
+      "kind": "demo",
+      "id": "readme-preview",
+      "title": "Repository overview preview",
+      "summary": "The retained looping 960×540 GIF preview embedded in the Narova repository overview.",
+      "mediaType": "image",
+      "media": {
+        "path": "demos/readme-preview/preview.gif",
+        "sha256": "a45a8e9b65814b516be0b49248bdf5ce88980679f94bb3382b3e910b5e6e31de",
+        "bytes": 1404007
+      },
+      "rights": {
+        "basis": "First-party Narova repository preview.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Narova contributors",
+        "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
+      "kind": "demo",
+      "id": "explore-share",
+      "title": "Explore social image",
+      "summary": "The social-preview image for Narova Explore.",
+      "mediaType": "image",
+      "media": {
+        "path": "demos/explore-share/share.png",
+        "sha256": "648c128c1f68197eaf17d36cf795662535d6bc5323ea9f5fa1e800d2b1d9cba5",
+        "bytes": 1213505
+      },
+      "rights": {
+        "basis": "First-party Narova Explore social image.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Narova contributors",
+        "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    }
+  ]
+}

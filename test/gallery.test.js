@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const test = require('node:test');
-const { buildGallery, renderGallery, validateEntry } = require('../scripts/build-gallery');
+const { buildGallery, renderGallery, validateEntry, loadPublicAssets } = require('../scripts/build-gallery');
 const { inspectArchive } = require('../tool/src/project-archive');
 
 const root = path.resolve(__dirname, '..');
@@ -16,6 +16,7 @@ const index = () => JSON.parse(fs.readFileSync(indexPath, 'utf8'));
 test('checked-in gallery projection is current and backed by verified archives', () => {
   const result = buildGallery({ root, check: true });
   assert.equal(result.entries, 2);
+  assert.equal(result.assetCommit, loadPublicAssets(root).commit);
   for (const entry of index().entries) {
     const archive = inspectArchive(path.join(root, entry.archive));
     assert.equal(archive.sha256, entry.archiveSha256);
@@ -38,7 +39,8 @@ test('each static entry presents watch, inspect, then remix with accessible medi
     assert.match(article, /<h4 class="subhead">Scene &amp; narration inventory<\/h4>/);
     assert.match(article, /<h4 class="subhead">Authoring source<\/h4>/);
     assert.match(article, new RegExp(`narova remix [^<]*${entry.id}[^<]*\\.narova|narova remix ${path.basename(entry.archive).replace('.', '\\.')}`));
-    assert.match(article, new RegExp(`href="projects/${path.basename(entry.archive).replace('.', '\\.')}" download`));
+    assert.match(article, new RegExp(`href="https://raw\\.githubusercontent\\.com/ammar-hasan/narova-assets/[a-f0-9]{40}/explore/${entry.id}/${path.basename(entry.archive).replace('.', '\\.')}" download`));
+    assert.match(article, new RegExp(`https://raw\\.githubusercontent\\.com/ammar-hasan/narova-assets/[a-f0-9]{40}/explore/${entry.id}/video\\.mp4`));
     assert.match(article, new RegExp(entry.archiveSha256));
   }
 });
@@ -50,8 +52,19 @@ test('projection is static and carries no privacy-prohibited surface', () => {
   assert.match(html, /browsers never unpack or execute project content/i);
   assert.match(html, /<script src="\.\.\/app\.js"><\/script>/);
   assert.match(fs.readFileSync(path.join(root, 'docs/app.js'), 'utf8'), /\[data-copy-command\]/);
-  assert.match(html, /explore\/assets\/narova-explore-share\.png/);
+  assert.match(html, /raw\.githubusercontent\.com\/ammar-hasan\/narova-assets\/[a-f0-9]{40}\/demos\/explore-share\/share\.png/);
+  assert.match(html, /pinned Narova asset revision <code>[a-f0-9]{40}<\/code>/);
   assert.ok(fs.statSync(path.join(root, 'docs/explore/assets/narova-explore-share.png')).isFile());
+});
+
+test('public asset source is immutable, catalog-bound, and uses no moving branch', () => {
+  const assets = loadPublicAssets(root);
+  assert.equal(assets.repository, 'https://github.com/ammar-hasan/narova-assets');
+  assert.match(assets.commit, /^[a-f0-9]{40}$/);
+  assert.match(assets.catalogSha256, /^[a-f0-9]{64}$/);
+  for (const group of [assets.explore, assets.demos]) {
+    assert.doesNotMatch(JSON.stringify(group), /\/main\/|\/master\//);
+  }
 });
 
 test('curation rejects missing release evidence, rights, and digest identity', () => {
@@ -70,7 +83,7 @@ test('curation rejects missing release evidence, rights, and digest identity', (
   );
   assert.throws(
     () => validateEntry(root, { ...original, archiveSha256: '0'.repeat(64) }, new Set()),
-    /archive digest does not match/,
+    /archive (?:identity\/version does not match the pinned catalog|digest does not match)/,
   );
 });
 

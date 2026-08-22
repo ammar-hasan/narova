@@ -1,0 +1,28 @@
+{
+  "format": "narova.public-assets/1",
+  "repository": "https://github.com/ammar-hasan/narova-assets",
+  "commit": "9d560ca6a0229f1b7284d7c12a5d1fae0591f838",
+  "catalogSha256": "fa54738e13f660da2230073299c91ba5de6a5eb628aff5c4f0a91c49fb37a4f1",
+  "explore": {
+    "narova-skill-reel": {
+      "archive": "explore/narova-skill-reel/narova-skill-reel.narova",
+      "video": "explore/narova-skill-reel/video.mp4",
+      "poster": "explore/narova-skill-reel/poster.jpg",
+      "captions": "explore/narova-skill-reel/captions.vtt"
+    },
+    "narova-one-command-demo": {
+      "archive": "explore/narova-one-command-demo/narova-one-command-demo.narova",
+      "video": "explore/narova-one-command-demo/video.mp4",
+      "poster": "explore/narova-one-command-demo/poster.jpg",
+      "captions": "explore/narova-one-command-demo/captions.vtt"
+    }
+  },
+  "demos": {
+    "productWalkthroughVideo": "demos/product-walkthrough/video.mp4",
+    "productWalkthroughPoster": "demos/product-walkthrough/poster.jpg",
+    "productWalkthroughCaptions": "demos/product-walkthrough/captions.vtt",
+    "clickHighlightProof": "demos/click-highlight-proof/video.mp4",
+    "readmePreview": "demos/readme-preview/preview.gif",
+    "exploreShare": "demos/explore-share/share.png"
+  }
+}

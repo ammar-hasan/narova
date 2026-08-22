@@ -91,6 +91,41 @@ test('READMEs lead with the product category and distribution links', () => {
   assert.ok(fs.existsSync(path.join(root, 'AGENT_PROTOCOL.md')));
 });
 
+test('website and repository media use the pinned Narova asset revision', () => {
+  const assets = JSON.parse(read('docs/public-assets.json'));
+  const catalog = read('docs/public-assets.catalog.json');
+  const base = `https://raw.githubusercontent.com/ammar-hasan/narova-assets/${assets.commit}/`;
+  assert.match(assets.commit, /^[a-f0-9]{40}$/);
+  assert.doesNotMatch(base, /\/main\/|\/master\//);
+  assert.match(assets.catalogSha256, /^[a-f0-9]{64}$/);
+  assert.equal(JSON.parse(catalog).format, 'narova.asset-catalog/1');
+
+  const home = read('docs/index.html');
+  const changelog = read('docs/changelog/index.html');
+  const explore = read('docs/explore/index.html');
+  const repositoryReadme = read('README.md');
+  for (const relative of [
+    assets.explore['narova-skill-reel'].video,
+    assets.explore['narova-skill-reel'].poster,
+    assets.explore['narova-skill-reel'].captions,
+    assets.demos.productWalkthroughVideo,
+    assets.demos.productWalkthroughPoster,
+    assets.demos.productWalkthroughCaptions,
+    assets.demos.clickHighlightProof,
+  ]) assert.match(home, new RegExp(`${base}${relative}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  assert.match(changelog, new RegExp(`${base}${assets.explore['narova-skill-reel'].poster}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  for (const relative of [
+    assets.explore['narova-skill-reel'].video,
+    assets.demos.readmePreview,
+    assets.demos.productWalkthroughVideo,
+    assets.demos.clickHighlightProof,
+  ]) assert.match(repositoryReadme, new RegExp(`${base}${relative}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  for (const entry of Object.values(assets.explore)) {
+    for (const relative of Object.values(entry)) assert.match(explore, new RegExp(`${base}${relative}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+  }
+  assert.match(explore, new RegExp(`${base}${assets.demos.exploreShare}`.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')));
+});
+
 test('website metadata and hero present the skill without making people secondary', () => {
   const home = read('docs/index.html');
   const changelog = read('docs/changelog/index.html');
