@@ -9,13 +9,22 @@ const root = path.resolve(__dirname, '..');
 const skillDir = path.join(root, 'skills', 'narova-3d-production');
 const read = relativePath => fs.readFileSync(path.join(root, relativePath), 'utf8');
 
-test('3D-production companion is small, independent, and progressively disclosed', () => {
+test('3D-production companion stays optional and progressively discloses execution', () => {
   const topLevel = fs.readdirSync(skillDir).sort();
-  assert.deepEqual(topLevel, ['SKILL.md', 'agents', 'references']);
+  assert.deepEqual(topLevel.filter(name => name !== 'node_modules'), [
+    'SKILL.md',
+    'agents',
+    'package-lock.json',
+    'package.json',
+    'references',
+    'tests',
+    'tools',
+  ]);
 
   const references = fs.readdirSync(path.join(skillDir, 'references')).sort();
   assert.deepEqual(references, [
     'inspection.md',
+    'physical-reasoning.md',
     'scene-direction.md',
     'subjects-and-assets.md',
   ]);
@@ -23,15 +32,15 @@ test('3D-production companion is small, independent, and progressively disclosed
   const skill = read('skills/narova-3d-production/SKILL.md');
   assert.match(skill, /^name: narova-3d-production$/m);
   assert.match(skill, /^license: Apache-2.0$/m);
-  assert.match(skill, /^  version: "0\.2\.0"$/m);
+  assert.match(skill, /^  version: "0\.3\.0"$/m);
   assert.match(skill, /A straightforward scene may need none\./);
   assert.match(skill, /Do not perform a full-manual pass\./);
-  assert.match(skill, /adds no renderer, physics engine, command, schema,/);
+  assert.match(skill, /adds no core dependency, renderer, provider/);
   assert.match(skill, /Do not default the work to a palette/);
   assert.match(skill, /Do not silently turn a blockout/);
   assert.match(skill, /without its rationale/);
   assert.match(skill, /Never pretend this skill's prose/);
-  assert.ok(skill.split('\n').length < 100, 'primary skill body should stay concise');
+  assert.ok(skill.split('\n').length < 125, 'primary skill body should stay concise');
 
   for (const reference of references) {
     assert.match(skill, new RegExp(`references/${reference.replace('.', '\\.')}\\)`));
@@ -55,7 +64,7 @@ test('3D-production companion metadata routes narrowly and matches the skill', (
   assert.match(metadata, /\$narova-3d-production/);
 });
 
-test('public and core discovery preserve the optional no-runtime boundary', () => {
+test('public and core discovery preserve the optional no-core-runtime boundary', () => {
   const command = 'npx skills add ammar-hasan/narova --skill narova-3d-production -g';
   const repositoryReadme = read('README.md');
   const website = read('docs/index.html');
@@ -85,4 +94,21 @@ test('3D-production review isolates perception from author rationale', () => {
   assert.match(inspection, /deterministic or structured evidence/);
   assert.match(inspection, /automated visual critic/);
   assert.doesNotMatch(`${skill}\n${subjects}\n${inspection}`, /must use (?:Meshy|Blender|Three\.js)/i);
+});
+
+test('3D-production physical reasoning preserves premise, authorship, and evidence boundaries', () => {
+  const skill = read('skills/narova-3d-production/SKILL.md');
+  const physical = read('skills/narova-3d-production/references/physical-reasoning.md');
+  const packageJson = JSON.parse(read('skills/narova-3d-production/package.json'));
+
+  assert.match(physical, /Never assign one unrelated substitute to distinct principal roles/);
+  assert.match(physical, /initial state -> cause or intent -> approach\/path -> contact or constraint/);
+  assert.match(physical, /Authored kinematics/);
+  assert.match(physical, /Bounded rigid-body bake/);
+  assert.match(physical, /Specialist solver/);
+  assert.match(physical, /do not run the solver inside the renderer/i);
+  assert.match(physical, /`sceneState` is advisory evidence/);
+  assert.match(skill, /Do not persist or retrieve another project's concept/);
+  assert.match(skill, /Route cloth, fluids, fracture, robotics/);
+  assert.equal(packageJson.dependencies['@dimforge/rapier3d-deterministic-compat'], '0.20.0');
 });
