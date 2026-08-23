@@ -1,9 +1,15 @@
 {
   "format": "narova.public-assets/1",
   "repository": "https://github.com/ammar-hasan/narova-assets",
-  "commit": "fbf8e03e3848cd7ccd4b1c822bda47b1ff7f6845",
-  "catalogSha256": "ec9720d44c2ce076f77eb89f47f2100e4bcf94e56d830d0dd7a84a4d9ecc307e",
+  "commit": "4bd9489235ba86f8b2e0be6461d0c83f789d294f",
+  "catalogSha256": "ba41037530ff718b4fd8c042ef6566f57cafe4f8e5f14aad14fd96b5223e7b0d",
   "explore": {
+    "the-rainmakers-last-drop": {
+      "archive": "explore/the-rainmakers-last-drop/the-rainmakers-last-drop.narova",
+      "video": "explore/the-rainmakers-last-drop/video.mp4",
+      "poster": "explore/the-rainmakers-last-drop/poster.jpg",
+      "captions": "explore/the-rainmakers-last-drop/captions.vtt"
+    },
     "narova-skill-reel": {
       "archive": "explore/narova-skill-reel/narova-skill-reel.narova",
       "video": "explore/narova-skill-reel/video.mp4",

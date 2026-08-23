@@ -1,7 +1,39 @@
 {
   "format": "narova.gallery/1",
-  "updated": "2026-08-22",
+  "updated": "2026-08-23",
   "entries": [
+    {
+      "id": "the-rainmakers-last-drop",
+      "title": "The Rainmaker's Last Drop",
+      "summary": "A cinematic 3D mechanical fable in which one glass drop wakes a greenhouse machine and opens a flower.",
+      "archive": "docs/explore/projects/the-rainmakers-last-drop.narova",
+      "archiveSha256": "d5bdd436c369aad7945d4fd58fba111210962ce52d5b9a38498ca7e87fd1a7cf",
+      "producingVersion": "0.40.0",
+      "video": "docs/explore/assets/the-rainmakers-last-drop.mp4",
+      "videoSha256": "76f9934f1778e97dc5ad4cbee63ac3db783901ddb8f2fe0ef419abd84b4094d5",
+      "captions": "docs/explore/assets/the-rainmakers-last-drop.vtt",
+      "poster": "docs/explore/assets/the-rainmakers-last-drop-poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "The approved 60-second master passed its Narova 0.40.0 release check with zero warnings and passed the encoded motion audit; the publication archive also passes ordinary validation."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, complete English WebVTT captions, a representative poster, text fallback, and script-free collapsed inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party project, authored 3D scene, locally generated narration and ambience, and rendered media published under CC0-1.0; attribution and proof of use are not required.",
+        "credits": [
+          "The Rainmaker's Last Drop — Ammar Hasan (voluntary credit; CC0-1.0)"
+        ]
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "Original first-party mechanical fable rendered as one deterministic Three.js scene with locally generated Qwen narration, word timings, ambient bed, creative brief, scene-state evidence, and portable static authoring source included in the archive.",
+        "lineage": "No recorded remix parent."
+      }
+    },
     {
       "id": "nori-and-the-pocket-moon",
       "title": "Nori and the Pocket Moon",
