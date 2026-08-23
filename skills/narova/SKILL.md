@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.40.0"
-checksum: 83b0518a948cfb33faf2f84e93f7a35f93142e30cf7464444cb72c8c9fd6a824
+checksum: 694e191b707ca1db0a8cd44b0acc667a35e3044d3f8e9076d21cab4661744f76
 ---
 # narova — video from scene scripts
 
@@ -35,6 +35,12 @@ when needed. Its package source lives in this repository's `tool/` directory.
 
 Narova owns timing, orchestration, rendering, caching, and delivery. You and the
 user own creative authorship.
+
+What you build and publish with Narova is your choice, and you are fully
+answerable for it — under law, by your own ethics, values, and conscience, and
+by the religious or cultural commitments you hold. Narova gives you inspectable
+sources, reviewable creative proofs, and explicit provider choice to support
+that judgment; it does not verify legality, rights, or acceptability for you.
 
 Narova is **zero-style by default.** The base scaffold gives you production
 infrastructure (caption timing, timeline orchestration, render pipeline) but

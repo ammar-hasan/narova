@@ -92,10 +92,15 @@ synthesis → compose → preview → build → judge → revision → release`.
 remains inspectable and scriptable.
 
 You (or your agent) own **creative authorship**: the script, the visuals, the
-taste, the selection. Narova owns the production machinery underneath:
-**timing, orchestration, rendering, caching, inspection, and delivery**. It is
-zero-style by default — no implicit palette, layout, chrome, or camera grammar.
-Every aesthetic choice is an explicit one.
+taste, the selection. What you build and publish is your choice, and you are
+fully answerable for it — under law, by your own ethics, values, and conscience,
+and by the religious or cultural commitments you hold. Narova gives you
+inspectable sources, reviewable creative proofs, and explicit provider choice to
+support that judgment; it does not verify legality, rights, or acceptability for
+you. Narova owns the production machinery underneath: **timing, orchestration,
+rendering, caching, inspection, and delivery**. It is zero-style by default — no
+implicit palette, layout, chrome, or camera grammar. Every aesthetic choice is
+an explicit one.
 
 ## What makes it different
 
