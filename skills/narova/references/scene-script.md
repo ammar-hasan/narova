@@ -155,6 +155,60 @@ Phase 1 measurable probes are:
 - hierarchy proxy: `attention.dominant_region_share`; and
 - timed caption evidence: `caption.word_count`.
 
+For hidden programmatic facts that pixels cannot establish reliably, a project
+may attach one bounded state file to a scene and reference a named fact with
+`scene.state`:
+
+```js
+sceneState: [{ scene: "mechanism", file: "evidence/mechanism.state.json" }],
+assertions: [{
+  id: "camera-clearance",
+  class: "mechanical",
+  expect: "The camera remains outside solid geometry.",
+  scope: { scene: "mechanism" },
+  observe: [{
+    metric: "scene.state", ref: "minimum-clearance",
+    operator: "gte", value: 0,
+  }],
+}],
+```
+
+The JSON file uses `narova.scene-state/1`, names its producer, and contains
+ordered task-specific observations. Each observation has local scene time,
+`available`/`unavailable` status, a method, and either a value/unit with
+`MEASURED` or `INFERRED` basis, or an unavailable reason. Files are local,
+contained, and at most 1 MiB. Narova binds the exact state bytes into the built
+video's evidence receipt and `judge` uses only that bound snapshot.
+
+```json
+{
+  "schema": "narova.scene-state/1",
+  "producer": { "id": "mechanism-validator", "version": "1" },
+  "observations": [
+    {
+      "id": "minimum-clearance",
+      "time": { "start": 0, "end": 8 },
+      "status": "available",
+      "method": "minimum signed distance over deterministic samples",
+      "value": 0.12,
+      "unit": "scene-unit",
+      "basis": "MEASURED"
+    },
+    {
+      "id": "contact-state",
+      "time": { "at": 4.2 },
+      "status": "unavailable",
+      "method": "contact solver not supplied",
+      "reason": "producer cannot establish contact"
+    }
+  ]
+}
+```
+
+This is factual evidence—not a physics engine, renderer instruction, creative
+score, or proof that the state caused particular pixels. It changes no render,
+cache, revision, proof, validity, release, repair, or selection behavior.
+
 Operators are `eq`, `ne`, `lt`, `lte`, `gt`, `gte`, and inclusive `between`
 (two ascending values). `tolerance` is optional and non-negative; it expands
 the accepted comparison boundary in either direction, including inequalities. A probe

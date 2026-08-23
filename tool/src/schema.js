@@ -10,6 +10,7 @@ const {
 const { resolveWalkthroughs } = require('./walkthrough');
 const { validateVisual, validateThreeConfig } = require('./renderers/visual');
 const { validateElements, resolveElementsScene } = require('./compose/elements');
+const { ID_RE: STATE_ID_RE, resolveSceneState } = require('./scene-state');
 
 const DEFAULT_VOICE_COLORS = ['#2ee6d6', '#ff7eb6', '#ffd27a', '#46d98a'];
 const DEFAULT_TIMING = { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: null };
@@ -29,7 +30,7 @@ const ASSERTION_METRICS = new Set([
   'audio.silence_ratio', 'audio.mean_db', 'audio.peak_db',
   'video.motion_mean', 'video.motion_p95', 'video.static_ratio',
   'video.black_ratio', 'video.cut_count',
-  'attention.dominant_region_share', 'caption.word_count',
+  'attention.dominant_region_share', 'caption.word_count', 'scene.state',
 ]);
 const ASSERTION_OPERATORS = new Set(['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'between']);
 
@@ -593,6 +594,14 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   });
 
+  // Task-specific scene-state facts are advisory Video CI evidence. Resolve
+  // and validate their bounded source files after scene identities are known,
+  // but keep them out of every rendering and revision projection.
+  const sceneStateResult = resolveSceneState(raw.sceneState, baseDir, seen);
+  errs.push(...sceneStateResult.errors);
+  const sceneState = sceneStateResult.entries;
+  const sceneStateByScene = new Map(sceneState.map(entry => [entry.scene, entry]));
+
   // Creative assertions are creator-owned judgement inputs. They are resolved
   // with the project so `narova judge` sees the same effective scene/timeline,
   // but they never become rendering, cache, proof, or validity inputs.
@@ -697,6 +706,23 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
               if (!ASSERTION_METRICS.has(probe.metric)) {
                 errs.push(`${pat}.metric: expected one of ${[...ASSERTION_METRICS].join('|')}`);
               } else out.metric = probe.metric;
+              const stateProbe = probe.metric === 'scene.state';
+              if (stateProbe) {
+                if (typeof probe.ref !== 'string' || !STATE_ID_RE.test(probe.ref)) {
+                  errs.push(`${pat}.ref: required scene-state observation identifier`);
+                } else out.ref = probe.ref;
+                if (!normalized.scope || !normalized.scope.scene) {
+                  errs.push(`${pat}: scene.state requires assertion scope.scene`);
+                } else {
+                  const stateEntry = sceneStateByScene.get(normalized.scope.scene);
+                  if (!stateEntry) {
+                    errs.push(`${pat}.ref: scene "${normalized.scope.scene}" has no config.sceneState source`);
+                  } else if (typeof probe.ref === 'string'
+                      && !stateEntry.source.content.observations.some(item => item.id === probe.ref)) {
+                    errs.push(`${pat}.ref: "${probe.ref}" not found for scene "${normalized.scope.scene}"`);
+                  }
+                }
+              }
               if (!ASSERTION_OPERATORS.has(probe.operator)) {
                 errs.push(`${pat}.operator: expected one of ${[...ASSERTION_OPERATORS].join('|')}`);
               } else out.operator = probe.operator;
@@ -706,6 +732,15 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
                     || probe.value[1] < probe.value[0]) {
                   errs.push(`${pat}.value: between expects two ascending finite numbers`);
                 } else out.value = probe.value.slice();
+              } else if (stateProbe) {
+                const validScalar = (typeof probe.value === 'number' && Number.isFinite(probe.value))
+                  || typeof probe.value === 'boolean'
+                  || (typeof probe.value === 'string' && Boolean(probe.value.trim()));
+                if (!validScalar) {
+                  errs.push(`${pat}.value: expected a finite number, boolean, or non-empty string`);
+                } else if (!['eq', 'ne'].includes(probe.operator) && typeof probe.value !== 'number') {
+                  errs.push(`${pat}.value: ordered scene-state comparison requires a finite number`);
+                } else out.value = probe.value;
               } else if (typeof probe.value !== 'number' || !Number.isFinite(probe.value)) {
                 errs.push(`${pat}.value: expected a finite number`);
               } else out.value = probe.value;
@@ -713,7 +748,24 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
                 if (typeof probe.tolerance !== 'number' || !Number.isFinite(probe.tolerance)
                     || probe.tolerance < 0) {
                   errs.push(`${pat}.tolerance: expected a finite non-negative number`);
+                } else if (stateProbe && typeof probe.value !== 'number') {
+                  errs.push(`${pat}.tolerance: scene-state tolerance requires a numeric value`);
                 } else out.tolerance = probe.tolerance;
+              }
+              if (stateProbe && normalized.scope && normalized.scope.scene
+                  && typeof probe.ref === 'string') {
+                const stateEntry = sceneStateByScene.get(normalized.scope.scene);
+                const stateObservation = stateEntry && stateEntry.source.content.observations
+                  .find(item => item.id === probe.ref);
+                if (stateObservation && stateObservation.status === 'available') {
+                  const ordered = !['eq', 'ne'].includes(probe.operator);
+                  const expectedType = probe.operator === 'between' ? 'number' : typeof probe.value;
+                  if ((ordered && typeof stateObservation.value !== 'number')
+                      || (['eq', 'ne'].includes(probe.operator)
+                        && typeof stateObservation.value !== expectedType)) {
+                    errs.push(`${pat}.value: type does not match available state observation "${probe.ref}"`);
+                  }
+                }
               }
               normalized.observe.push(out);
             });
@@ -1324,7 +1376,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

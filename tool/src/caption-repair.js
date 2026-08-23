@@ -22,7 +22,7 @@ const SHA256 = /^[a-f0-9]{64}$/;
 const ELIGIBLE_CLASSES = new Set(['mechanical', 'accessibility']);
 const PROTECTED_KEYS = [
   'encodedArtifact', 'resolvedConfig', 'effectiveConfig', 'manifest', 'timings',
-  'proof', 'snapshotSource', 'nonCaptionEvidence',
+  'proof', 'snapshotSource', 'nonCaptionEvidence', 'sceneState',
 ];
 
 function stableValue(value) {
@@ -203,6 +203,7 @@ function prepareCaptionRepair({
     }
     const bindingPath = writeVideoCiBinding(candidateVideo, {
       outDir: candidateOut, projectDir: work,
+      sceneState: binding.context.sceneState || [],
     });
     const candidateBinding = JSON.parse(fs.readFileSync(bindingPath, 'utf8'));
     const candidateJudgement = judge(config, {
@@ -243,6 +244,10 @@ function prepareCaptionRepair({
       proof: protectedIdentity(proofBundle.proofIdentity, proofBundle.proofIdentity),
       snapshotSource: protectedIdentity(proofBundle.snapshotIdentity, proofBundle.snapshotIdentity),
       nonCaptionEvidence: protectedIdentity(evidenceIdentity, evidenceIdentity),
+      sceneState: protectedIdentity(
+        valueIdentity(binding.context.sceneState || []),
+        valueIdentity(candidateBinding.context.sceneState || []),
+      ),
     };
     if (PROTECTED_KEYS.some(key => !protectedIdentities[key].match
         || protectedIdentities[key].before == null || protectedIdentities[key].after == null)) {
