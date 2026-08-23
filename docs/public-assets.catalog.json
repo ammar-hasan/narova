@@ -1,7 +1,7 @@
 {
   "$schema": "schema/catalog.schema.json",
   "format": "narova.asset-catalog/1",
-  "updated": "2026-08-22",
+  "updated": "2026-08-23",
   "entries": [
     {
       "kind": "explore",
@@ -196,6 +196,46 @@
         "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
         "creator": "Narova contributors",
         "credit": "Narova contributors — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
+      "kind": "explore",
+      "id": "the-rainmakers-last-drop",
+      "title": "The Rainmaker's Last Drop",
+      "summary": "A cinematic 60-second 3D mechanical fable in which one glass drop wakes a greenhouse machine and opens a flower.",
+      "video": {
+        "path": "explore/the-rainmakers-last-drop/video.mp4",
+        "sha256": "76f9934f1778e97dc5ad4cbee63ac3db783901ddb8f2fe0ef419abd84b4094d5",
+        "bytes": 25828152
+      },
+      "poster": {
+        "path": "explore/the-rainmakers-last-drop/poster.jpg",
+        "sha256": "832cddb87b06ba80a83815b0a1fa54d625e83f4bd6d087924aa54a3143371746",
+        "bytes": 82035
+      },
+      "captions": {
+        "path": "explore/the-rainmakers-last-drop/captions.vtt",
+        "sha256": "891e33701e30a2a5ba035384faa584df5f8642593bfd82d57a802f21065613ba",
+        "bytes": 805
+      },
+      "archive": {
+        "path": "explore/the-rainmakers-last-drop/the-rainmakers-last-drop.narova",
+        "sha256": "d5bdd436c369aad7945d4fd58fba111210962ce52d5b9a38498ca7e87fd1a7cf",
+        "bytes": 19652596
+      },
+      "producingVersion": "0.40.0",
+      "archiveIdentity": "d5bdd436c369aad7945d4fd58fba111210962ce52d5b9a38498ca7e87fd1a7cf",
+      "rights": {
+        "basis": "First-party Narova project, locally generated narration and ambience, authored 3D scene, and rendered media.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Ammar Hasan",
+        "credit": "Ammar Hasan — voluntary, not required"
       },
       "review": {
         "release": "pass",
