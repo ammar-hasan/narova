@@ -47,7 +47,7 @@ function renderVideo(file) {
 
 function fixture(parent, name, {
   assertionClass = 'accessibility', expected = 2, captions = {}, captionState = 'missing',
-  legacyMarker = false,
+  legacyMarker = false, withSceneState = false,
 } = {}) {
   const project = path.join(parent, name);
   const out = path.join(project, 'out');
@@ -69,6 +69,19 @@ function fixture(parent, name, {
       related: { scene: 'opening', protected: ['video', 'timing', 'narration'] },
     }],
   };
+  if (withSceneState) {
+    const state = {
+      schema: 'narova.scene-state/1',
+      producer: { id: 'caption-fixture-validator', version: '1' },
+      observations: [{
+        id: 'camera-clearance', time: { start: 0, end: 1 }, status: 'available',
+        method: 'fixed fixture measurement', value: 0.5, unit: 'scene-unit', basis: 'MEASURED',
+      }],
+    };
+    fs.mkdirSync(project, { recursive: true });
+    fs.writeFileSync(path.join(project, 'scene-state.json'), `${JSON.stringify(state, null, 2)}\n`);
+    raw.sceneState = [{ scene: 'opening', file: 'scene-state.json' }];
+  }
   if (legacyMarker) raw.safeLayout = false;
   fs.mkdirSync(project, { recursive: true });
   fs.writeFileSync(path.join(project, 'reel.config.json'), `${JSON.stringify(raw, null, 2)}\n`);
@@ -91,7 +104,10 @@ function fixture(parent, name, {
   };
   fs.writeFileSync(path.join(out, 'manifest.json'), JSON.stringify(manifest));
   fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify(timings));
-  const { assetsDir: _assetsDir, ...serializable } = resolved;
+  const {
+    assetsDir: _assetsDir, assertions: _assertions, provenance: _provenance,
+    sceneState: _sceneState, ...serializable
+  } = resolved;
   fs.writeFileSync(path.join(out, 'config.resolved.json'), JSON.stringify(serializable, null, 2));
   const contact = path.join(review, 'contact-sheet.jpg');
   const frame = path.join(review, '0001.jpg');
@@ -104,7 +120,7 @@ function fixture(parent, name, {
   if (captionState === 'oversized') {
     fs.writeFileSync(path.join(out, 'captions.vtt'), `WEBVTT\n\n${'x'.repeat(1024 * 1024)}\n`);
   }
-  writeVideoCiBinding(video, { outDir: out, projectDir: project });
+  writeVideoCiBinding(video, { outDir: out, projectDir: project, config: resolved });
   if (legacyMarker) {
     fs.writeFileSync(path.join(out, '.restored-manifest.json'), JSON.stringify({
       manifestSha256: digest(path.join(out, 'manifest.json')),
@@ -172,6 +188,27 @@ test('caption repair creates a real aligned candidate while production stays byt
   assert.match(human.stdout, /Current production: unchanged/);
   assert.match(human.stdout, /unapproved candidate/);
   assert.deepEqual(tree(malformed.project), malformedBefore);
+});
+
+test('caption repair preserves receipt-bound scene-state evidence byte-for-byte', { skip: !MEDIA_AVAILABLE }, () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-caption-repair-state-'));
+  const releases = path.join(root, 'releases');
+  fs.mkdirSync(releases);
+  const { project, video } = fixture(root, 'project', { withSceneState: true });
+  const baselineBinding = JSON.parse(fs.readFileSync(`${video}.narova-ci.json`, 'utf8'));
+  assert.equal(baselineBinding.context.sceneState.length, 1);
+  const run = runner(releases);
+  const result = run([
+    'judge', '--repair', '--project', project,
+    '--judge-assertion', 'captions-present', '--repair-branch', 'state-preserved', '--json',
+  ]);
+  assert.equal(result.status, 0, result.stderr);
+  const candidate = JSON.parse(result.stdout).data.repairCandidate;
+  assert.equal(candidate.protectedIdentities.sceneState.match, true);
+  const candidateBinding = JSON.parse(fs.readFileSync(path.join(
+    releases, '.branches', 'state-preserved', 'video-ci', 'artifact.mp4.narova-ci.json',
+  ), 'utf8'));
+  assert.deepEqual(candidateBinding.context.sceneState, baselineBinding.context.sceneState);
 });
 
 test('caption repair rejects creative, disabled, unbound, and non-aligning cases without replacement', { skip: !MEDIA_AVAILABLE }, () => {

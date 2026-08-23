@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.39.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.40.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -507,6 +507,9 @@ export default {
     questions: ["Did unintended motion weaken the restraint?"],
     related: { scene: "title", source: "reel.config.mjs", protected: ["camera rhythm"] },
   }],
+  sceneState: [{                             // optional hidden mechanical/spatial evidence
+    scene: "title", file: "evidence/title.state.json",
+  }],                                        // bound to built video; never changes rendering
   theme: { accent: "#2ee6d6", bg: "#080d16" },   // optional
   timing: { gapSentence: 0.24, gapTurn: 0.44, lead: 0.16, tail: 0.58, tempo: 1.12 },
   scenes: [

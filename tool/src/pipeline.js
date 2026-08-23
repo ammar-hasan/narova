@@ -169,7 +169,10 @@ function writeStageInputs(config, outDir) {
   // Provenance declarations and creative assertions are advisory report inputs,
   // not Python/runtime inputs. Keeping them out also ensures either kind of edit cannot
   // invalidate a previously reviewed creative proof via this projection.
-  const { assetsDir: _assetsDir, provenance: _provenance, assertions: _assertions, ...serializableConfig } = config;
+  const {
+    assetsDir: _assetsDir, provenance: _provenance, assertions: _assertions,
+    sceneState: _sceneState, ...serializableConfig
+  } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
   return {
     manifest: manifestFile,
@@ -477,7 +480,7 @@ function build(config, opts = {}) {
       stageDurations: stageDurations(), log,
     });
     const videoCiEvidence = writeVideoCiBinding(mp4, {
-      outDir, projectDir: config.projectDir,
+      outDir, projectDir: config.projectDir, config,
     });
     artifact(videoCiEvidence, 'video-ci-evidence');
     return {
@@ -521,7 +524,7 @@ function build(config, opts = {}) {
     stageDurations: stageDurations(), log,
   });
   const videoCiEvidence = writeVideoCiBinding(mp4, {
-    outDir, projectDir: config.projectDir,
+    outDir, projectDir: config.projectDir, config,
   });
   artifact(videoCiEvidence, 'video-ci-evidence');
   return {

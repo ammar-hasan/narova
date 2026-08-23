@@ -10,7 +10,9 @@ const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
-const { SCHEMA: BINDING_SCHEMA, receiptPath } = require('./video-ci-binding');
+const {
+  SCHEMA: BINDING_SCHEMA, receiptPath, validateSceneStateContext,
+} = require('./video-ci-binding');
 
 const REPORT_SCHEMA = 'narova.judgement/1';
 const FAMILIES = Object.freeze([
@@ -387,6 +389,7 @@ function validateBindingContext(context) {
   }
   validateBindingSource(context.manifest, 'manifest');
   validateBindingSource(context.timings, 'timings');
+  if (context.sceneState != null) validateSceneStateContext(context.sceneState);
   if (!Array.isArray(context.captions)) throw new Error('binding captions are not an array');
   context.captions.forEach(source => validateBindingSource(source, 'caption'));
 }
@@ -816,7 +819,12 @@ function metricValue(metric, visual, audio, captions, config, scene, start, end)
 }
 
 function compareProbe(actual, probe) {
-  if (!Number.isFinite(actual)) return null;
+  if (typeof actual !== 'number' || !Number.isFinite(actual)) {
+    if (typeof actual !== typeof probe.value) return null;
+    if (probe.operator === 'eq') return actual === probe.value;
+    if (probe.operator === 'ne') return actual !== probe.value;
+    return null;
+  }
   const tolerance = probe.tolerance || 0;
   switch (probe.operator) {
     case 'eq': return Math.abs(actual - probe.value) <= tolerance;
@@ -828,6 +836,85 @@ function compareProbe(actual, probe) {
     case 'between': return actual >= (probe.value[0] - tolerance) && actual <= (probe.value[1] + tolerance);
     default: return null;
   }
+}
+
+function stateTime(observation, scene) {
+  const local = observation.time;
+  if (Number.isFinite(local.at)) {
+    return {
+      local: { at: local.at },
+      global: { at: scene.start + local.at },
+      insideScene: local.at <= (scene.end - scene.start) + 1e-9,
+    };
+  }
+  return {
+    local: { start: local.start, end: local.end },
+    global: { start: scene.start + local.start, end: scene.start + local.end },
+    insideScene: local.end <= (scene.end - scene.start) + 1e-9,
+  };
+}
+
+function stateProbeFact(probe, assertion, range, context) {
+  const sceneId = assertion.scope && assertion.scope.scene;
+  const binding = context.binding;
+  const unavailable = (reason, detail = {}) => ({
+    probe,
+    value: null,
+    result: null,
+    coverage: { ...range, fullyCovered: false, status: 'unavailable' },
+    source: binding && binding.path ? `${binding.path}#sceneState/${sceneId || 'unknown'}/${probe.ref || 'unknown'}`
+      : context.authoredSource,
+    unit: 'unavailable',
+    basis: 'UNAVAILABLE',
+    availability: 'unavailable',
+    sourceIdentity: { scene: sceneId || null, observation: probe.ref || null, reason, ...detail },
+  });
+  if (!sceneId) return unavailable('scene.state probe has no scene scope');
+  if (!binding || binding.used !== true) return unavailable('selected artifact has no usable bound scene-state evidence');
+  const entries = binding.document.context.sceneState || [];
+  const entry = entries.find(item => item.scene === sceneId);
+  if (!entry) return unavailable(`receipt has no scene-state source for scene "${sceneId}"`);
+  const producer = entry.source.content && entry.source.content.producer;
+  const baseIdentity = {
+    scene: sceneId,
+    observation: probe.ref,
+    sourcePath: entry.source.path,
+    sourceSha256: entry.source.sha256,
+    producer: producer ? { ...producer } : null,
+  };
+  const observation = entry.source.content.observations.find(item => item.id === probe.ref);
+  if (!observation) return unavailable(`receipt source has no observation "${probe.ref}"`, baseIdentity);
+  const identity = {
+    ...baseIdentity,
+    method: observation.method,
+    localTime: { ...observation.time },
+  };
+  const scene = context.scenes.find(item => item.id === sceneId);
+  if (!scene) return unavailable(`artifact timing has no scene "${sceneId}"`, identity);
+  const timing = stateTime(observation, scene);
+  identity.globalTime = timing.global;
+  if (observation.status !== 'available') {
+    return unavailable(observation.reason || 'producer marked state unavailable', identity);
+  }
+  const insideAssertion = Object.hasOwn(timing.global, 'at')
+    ? timing.global.at >= range.measuredStart - 1e-9 && timing.global.at <= range.measuredEnd + 1e-9
+    : timing.global.start >= range.measuredStart - 1e-9 && timing.global.end <= range.measuredEnd + 1e-9;
+  if (!timing.insideScene || !insideAssertion || !range.fullyCovered) {
+    return unavailable('state observation time is outside the bound scene, artifact, or assertion scope', identity);
+  }
+  const result = compareProbe(observation.value, probe);
+  if (result == null) return unavailable('bound state value cannot be compared with this probe', identity);
+  return {
+    probe,
+    value: observation.value,
+    result,
+    coverage: { ...range, fullyCovered: true, status: 'available' },
+    source: `${binding.path}#sceneState/${sceneId}/${probe.ref}`,
+    unit: observation.unit,
+    basis: observation.basis,
+    availability: 'available',
+    sourceIdentity: identity,
+  };
 }
 
 function relatedState(assertion, scenes, start, end) {
@@ -856,8 +943,11 @@ function relatedState(assertion, scenes, start, end) {
   };
 }
 
-function evidence(source, metric, value, unit, basis = 'MEASURED', availability = (value == null ? 'unavailable' : 'available')) {
-  return { source, metric, value, unit, basis, availability };
+function evidence(source, metric, value, unit, basis = 'MEASURED', availability = (value == null ? 'unavailable' : 'available'), sourceIdentity = null) {
+  return {
+    source, metric, value, unit, basis, availability,
+    ...(sourceIdentity ? { sourceIdentity } : {}),
+  };
 }
 
 function formatRange(range) {
@@ -903,30 +993,41 @@ function buildIntentObservations(config, context) {
       || null;
     const probes = assertion.observe || [];
     const facts = probes.map(probe => {
+      if (probe.metric === 'scene.state') {
+        return stateProbeFact(probe, assertion, range, context);
+      }
       const coverage = probeCoverage(probe.metric, range, context);
       const value = metricValue(
         probe.metric, visual, context.audio, context.captions, config, scene,
         range.measuredStart, range.measuredEnd,
       );
-      return { probe, value, coverage, result: coverage.fullyCovered ? compareProbe(value, probe) : null };
+      return {
+        probe, value, coverage,
+        result: coverage.fullyCovered ? compareProbe(value, probe) : null,
+        source: probe.metric.startsWith('audio.') ? context.artifact.path
+          : probe.metric.startsWith('caption.') ? (context.captions ? context.captions.path : context.authoredSource)
+            : context.artifact.path,
+        unit: metricUnit(probe.metric),
+        basis: 'MEASURED',
+        availability: coverage.fullyCovered && compareProbe(value, probe) != null
+          ? 'available'
+          : Number.isFinite(value) && coverage.status === 'partial' ? 'partial' : 'unavailable',
+      };
     });
     const scopeCoverage = combinedCoverage(facts.map(fact => fact.coverage), range);
     const available = facts.filter(fact => fact.result != null);
-    const measured = facts.filter(fact => Number.isFinite(fact.value));
     const unavailable = facts.filter(fact => fact.result == null);
     let outcome = 'UNCERTAIN';
     if (facts.some(fact => fact.result === false)) outcome = 'DIVERGED';
     else if (facts.length && unavailable.length === 0) outcome = 'ALIGNED';
     const evidenceRows = facts.map(fact => evidence(
-      fact.probe.metric.startsWith('audio.') ? context.artifact.path
-        : fact.probe.metric.startsWith('caption.') ? (context.captions ? context.captions.path : context.authoredSource)
-          : context.artifact.path,
+      fact.source,
       fact.probe.metric,
-      Number.isFinite(fact.value) ? round(fact.value) : null,
-      metricUnit(fact.probe.metric),
-      'MEASURED',
-      fact.result != null ? 'available'
-        : Number.isFinite(fact.value) && fact.coverage.status === 'partial' ? 'partial' : 'unavailable',
+      typeof fact.value === 'number' && Number.isFinite(fact.value) ? round(fact.value) : fact.value,
+      fact.unit,
+      fact.basis,
+      fact.availability,
+      fact.sourceIdentity,
     ));
     if (!facts.length) {
       evidenceRows.push(
@@ -937,7 +1038,7 @@ function buildIntentObservations(config, context) {
     }
     const deliberate = assertion.class === 'deliberate-choice' || assertion.class === 'deliberate-violation';
     const observed = facts.length
-      ? facts.map(fact => `${fact.probe.metric}=${Number.isFinite(fact.value) ? round(fact.value) : 'unavailable'} ${metricUnit(fact.probe.metric)} (${fact.probe.operator} ${JSON.stringify(fact.probe.value)})`).join('; ')
+      ? facts.map(fact => `${fact.probe.metric}${fact.probe.ref ? `:${fact.probe.ref}` : ''}=${fact.value == null ? 'unavailable' : JSON.stringify(typeof fact.value === 'number' ? round(fact.value) : fact.value)} ${fact.unit} (${fact.probe.operator} ${JSON.stringify(fact.probe.value)})`).join('; ')
       : 'Local built-in perceivers measured the scoped artifact, but no explicit measurable probe or semantic perceiver can establish the free-form expectation.';
     return {
       id: observationId(FAMILIES[0], index),
@@ -960,7 +1061,8 @@ function buildIntentObservations(config, context) {
       confidenceBasis: outcome === 'UNCERTAIN'
         ? 'Confidence covers only the availability of the declared local probes; it does not estimate artistic success.'
         : 'Confidence covers deterministic comparison of the declared probes against bounded artifact measurements, not the quality of the creative effect.',
-      classification: facts.length && measured.length ? 'MEASURED' : 'INFERRED',
+      classification: available.some(fact => fact.basis === 'INFERRED') ? 'INFERRED'
+        : available.length ? 'MEASURED' : 'INFERRED',
       outcome,
       relatedProductionState: relatedState(assertion, context.scenes, range.start, range.end),
       suggestedQuestions: assertion.questions && assertion.questions.length
@@ -1253,6 +1355,9 @@ function sourceCoverage(projectDir, outDir, config, timeline, captions, binding,
   ));
   const timingPath = timeline.path || null;
   const boundManifest = timeline.source === 'binding-manifest';
+  const boundSceneState = binding && binding.used && binding.document.context
+    && Array.isArray(binding.document.context.sceneState)
+    ? binding.document.context.sceneState : [];
   return {
     encodedArtifact: { available: true, grade: 'MEASURED' },
     evidenceBinding: {
@@ -1300,6 +1405,14 @@ function sourceCoverage(projectDir, outDir, config, timeline, captions, binding,
       used: timeline.source === 'binding-timings',
       reason: timeline.source !== 'binding-timings' && present(timings) ? 'current output timings are not bound to the selected artifact' : null,
     },
+    sceneState: {
+      available: boundSceneState.length > 0,
+      count: boundSceneState.length,
+      grade: boundSceneState.length ? 'RECORDED' : 'UNAVAILABLE',
+      used: boundSceneState.length > 0,
+      reason: !boundSceneState.length && (config.sceneState || []).length
+        ? 'selected artifact receipt has no bound scene-state evidence' : null,
+    },
     revisionHistory: inspectRevisionHistory(history),
     proofLineage: { available: proofLineage.length > 0, count: proofLineage.length, grade: proofLineage.length ? 'AUTHORED' : 'UNAVAILABLE' },
     intendedExceptions: { available: intendedExceptions.length > 0, count: intendedExceptions.length, grade: intendedExceptions.length ? 'AUTHORED' : 'UNAVAILABLE' },
@@ -1330,6 +1443,7 @@ function judge(config, opts = {}) {
     sampling: frameAnalysis.sampling,
     audio,
     captions,
+    binding,
     authoredSource: configSource.source,
   };
   const observations = [
@@ -1361,6 +1475,7 @@ function judge(config, opts = {}) {
         { id: frameAnalysis.sampling.implementation, kind: 'local-built-in', coverage: ['motion', 'state-change-proxy', 'luma', 'spatial-edge-proxy'] },
         { id: 'ffmpeg-silencedetect-volumedetect/v1', kind: 'local-built-in', coverage: ['silence', 'scoped-audio-level'], thresholdDb: SILENCE_DB, available: Boolean(artifact.streams.audio) },
         { id: 'caption-parser/v1', kind: 'local-built-in', coverage: ['sidecar-captions', 'embedded-text-subtitles', 'caption-timing', 'caption-word-count'], available: Boolean(captions && captions.available), reason: captions && !captions.available ? captions.reason : null },
+        { id: 'scene-state-evidence/v1', kind: 'local-built-in', coverage: ['task-specific-scene-state'], available: Boolean(binding.used && binding.document.context.sceneState && binding.document.context.sceneState.length), reason: binding.used && (!binding.document.context.sceneState || !binding.document.context.sceneState.length) ? 'matching artifact receipt has no scene-state snapshot' : !binding.used ? 'matching artifact receipt is unavailable' : null },
         { id: 'semantic-perception', kind: 'replaceable-provider', coverage: ['visual-meaning', 'entity-identity', 'human-attention'], available: false },
       ],
     },
@@ -1430,6 +1545,10 @@ function formatJudgement(report) {
     lines.push('Evidence:');
     for (const item of observation.evidence) {
       lines.push(`- [${item.basis}] ${item.metric}: ${displayValue(item.value, item.unit)} (${item.source}${item.availability !== 'available' ? `; ${item.availability}` : ''})`);
+      if (item.sourceIdentity) {
+        const identity = item.sourceIdentity;
+        lines.push(`  state source: scene=${identity.scene || 'unavailable'}; observation=${identity.observation || item.metric}; path=${identity.sourcePath || 'unavailable'}; sha256=${identity.sourceSha256 || 'unavailable'}; producer=${identity.producer ? `${identity.producer.id}@${identity.producer.version}` : 'unavailable'}; method=${identity.method || 'unavailable'}; local-time=${JSON.stringify(identity.localTime || null)}; global-time=${JSON.stringify(identity.globalTime || null)}${identity.reason ? `; reason=${identity.reason}` : ''}`);
+      }
     }
     lines.push(`Interpretation: ${observation.interpretation}`);
     lines.push(`Confidence: ${observation.confidence}`);

@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.40.0] - 2026-08-23
+
+### Added
+
+- **Artifact-bound scene-state evidence.** Projects can attach one bounded,
+  task-specific `narova.scene-state/1` file to a scene and compare named
+  numeric, boolean, or string facts through `scene.state` assertions. Builds
+  bind the exact state bytes to the video receipt; `judge` preserves producer,
+  method, local time, unit, availability, and `MEASURED`/`INFERRED` basis while
+  missing or unbound facts remain `UNCERTAIN`. State evidence changes no
+  rendering, cache, revision, proof, validity, release, repair, creative score,
+  or selection behavior and does not claim pixel causality.
+
 ## [0.39.0] - 2026-08-22
 
 ### Added

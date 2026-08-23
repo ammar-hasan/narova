@@ -5,6 +5,12 @@
 const crypto = require('crypto');
 const fs = require('fs');
 const path = require('path');
+const {
+  SCHEMA: SCENE_STATE_SCHEMA,
+  ID_RE,
+  receiptEntries,
+  validateSceneStateDocument,
+} = require('./scene-state');
 
 const SCHEMA = 'narova.video-ci-evidence/1';
 const MAX_SNAPSHOT_BYTES = 1024 * 1024;
@@ -39,18 +45,68 @@ function snapshotText(file, project, format) {
   return { ...identity, available: true, content: bytes.toString('utf8') };
 }
 
-function writeVideoCiBinding(video, { outDir, projectDir } = {}) {
+function validateBindingSource(source, kind) {
+  if (!source || typeof source !== 'object' || Array.isArray(source)) {
+    throw new Error(`${kind} binding source is not an object`);
+  }
+  const allowed = new Set(['path', 'bytes', 'sha256', 'available', 'format', 'content', 'reason']);
+  const unknown = Object.keys(source).filter(key => !allowed.has(key));
+  if (unknown.length) throw new Error(`${kind} binding source has unsupported field: ${unknown[0]}`);
+  if (typeof source.path !== 'string' || !source.path
+      || !Number.isInteger(source.bytes) || source.bytes < 0
+      || typeof source.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sha256)
+      || typeof source.available !== 'boolean') {
+    throw new Error(`${kind} binding source identity is invalid`);
+  }
+  if (source.available && !Object.hasOwn(source, 'content')) {
+    throw new Error(`${kind} binding source has no canonical content`);
+  }
+}
+
+function validateSceneStateContext(entries) {
+  if (!Array.isArray(entries)) throw new Error('binding sceneState is not an array');
+  const scenes = new Set();
+  entries.forEach((entry, index) => {
+    const at = `sceneState[${index}]`;
+    if (!entry || typeof entry !== 'object' || Array.isArray(entry)
+        || Object.keys(entry).some(key => !['scene', 'source'].includes(key))) {
+      throw new Error(`${at} binding entry is invalid`);
+    }
+    if (typeof entry.scene !== 'string' || !ID_RE.test(entry.scene) || scenes.has(entry.scene)) {
+      throw new Error(`${at}.scene binding identity is invalid or duplicate`);
+    }
+    scenes.add(entry.scene);
+    validateBindingSource(entry.source, 'scene-state');
+    if (path.isAbsolute(entry.source.path) || entry.source.path.split(/[\\/]/).includes('..')) {
+      throw new Error(`${at}.source.path is not project-relative`);
+    }
+    if (!entry.source.available || entry.source.format !== SCENE_STATE_SCHEMA) {
+      throw new Error(`${at}.source is not an available ${SCENE_STATE_SCHEMA} snapshot`);
+    }
+    const checked = validateSceneStateDocument(entry.source.content, `${at}.source.content`);
+    if (checked.errors.length) throw new Error(checked.errors[0]);
+  });
+}
+
+function writeVideoCiBinding(video, {
+  outDir, projectDir, config = null, sceneState: suppliedSceneState = null,
+} = {}) {
   const artifact = path.resolve(video);
   const output = path.resolve(outDir || path.dirname(artifact));
   const project = path.resolve(projectDir || path.dirname(output));
   const manifestFile = path.join(output, 'manifest.json');
   const timingFile = path.join(output, 'timings.json');
+  const sceneState = suppliedSceneState == null
+    ? receiptEntries(config)
+    : JSON.parse(JSON.stringify(suppliedSceneState));
+  validateSceneStateContext(sceneState);
   const receipt = {
     schema: SCHEMA,
     artifact: { path: path.basename(artifact), ...fileIdentity(artifact) },
     context: {
       manifest: snapshotJson(manifestFile, project),
       timings: snapshotJson(timingFile, project),
+      sceneState,
       captions: [
         snapshotText(path.join(output, 'captions.vtt'), project, 'vtt'),
         snapshotText(path.join(output, 'captions.srt'), project, 'srt'),
@@ -68,4 +124,6 @@ function writeVideoCiBinding(video, { outDir, projectDir } = {}) {
   return destination;
 }
 
-module.exports = { SCHEMA, receiptPath, writeVideoCiBinding };
+module.exports = {
+  SCHEMA, receiptPath, writeVideoCiBinding, validateSceneStateContext,
+};

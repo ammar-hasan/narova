@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.39.0"
-checksum: fd1f3327f23b5dfc7427e57a265e5b5dbd22eb293da0e3cbdef4eb8377c3ce8f
+  version: "0.40.0"
+checksum: 83b0518a948cfb33faf2f84e93f7a35f93142e30cf7464444cb72c8c9fd6a824
 ---
 # narova — video from scene scripts
 
@@ -84,7 +84,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.39.0"
+narova_required="@narova/narova@0.40.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -198,6 +198,9 @@ user's approval before any consequential external mutation.
    continuity, accessibility, brand, and factual constraints. Add inspectable
    `observe` probes only when a supported measurement actually represents the
    intent; leave interpretive intent as prose rather than inventing a score.
+   When a hidden mechanical or spatial fact matters, `sceneState` can bind one
+   task-specific local evidence file to a scene and `scene.state` can reference
+   its named fact. It is evidence only, never a physics or creative system.
    See `references/scene-script.md` §Creative assertions.
 5. Write `claims.md` — every factual claim must trace to a source. When the
    author knows a disclosure fact that artifacts cannot prove, optionally add

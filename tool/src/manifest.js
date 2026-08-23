@@ -45,7 +45,10 @@ function hashConfig(config) {
   // Authored provenance and creative assertions are advisory report inputs. They do not
   // affect synthesis, composition, rendering, creative-proof validity, or
   // revision identity, so they must not enter the execution fingerprint.
-  const { assetsDir: _a, provenance: _provenance, assertions: _assertions, projectDir = '.', ...serializable } = config;
+  const {
+    assetsDir: _a, provenance: _provenance, assertions: _assertions,
+    sceneState: _sceneState, projectDir = '.', ...serializable
+  } = config;
   // Resolved action-policy paths are absolute so the capture adapter can use
   // them from any working directory. Keep the config fingerprint portable:
   // moving an otherwise-identical project must not make every capture stale.
