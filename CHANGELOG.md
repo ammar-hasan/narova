@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.41.0] - 2026-08-23
+
 ### Added
 
 - **Task-local physical reasoning for authored 3D.** The optional
@@ -18,6 +20,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   specialist solvers remain explicit alternatives; core Narova, `sceneState`,
   creative authority, and default aesthetics are unchanged. The companion
   stores no cross-project creative memory.
+
+- **The Precious Thing in Explore.** The owner-approved 31-second authored 3D
+  fable now leads the seven-project watch → inspect → remix gallery. Its
+  byte-identical video, poster, WebVTT captions, portable Narova 0.40.0 project,
+  source, reusable local narration, timing data, and CC0-compatible rights are
+  pinned through one immutable public asset revision.
 
 ## [0.40.0] - 2026-08-23
 
