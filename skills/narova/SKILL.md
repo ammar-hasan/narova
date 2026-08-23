@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.40.0"
-checksum: 694e191b707ca1db0a8cd44b0acc667a35e3044d3f8e9076d21cab4661744f76
+checksum: 2a1f3653c2700eaad22c54df344ccb8f00f661d4d448cfd128afb16fcead5d4f
 ---
 # narova — video from scene scripts
 
@@ -294,7 +294,8 @@ user's approval before any consequential external mutation.
   3D authoring and rendering surface without another skill. When authored 3D
   needs specialist subject/asset, scene-direction, capability-routing, or
   evidence judgment, optionally compose with `narova-3d-production`; it adds
-  direction, not a renderer, physics engine, template, or default aesthetic.
+  direction and can separately bake bounded deterministic rigid-body motion,
+  but adds no core dependency, renderer, template, or default aesthetic.
 
 Read `references/gotchas.md` for the full list.
 
@@ -363,5 +364,6 @@ it as read-only output.
 
 Optional technical direction: install `narova-3d-production` independently for
 authored 3D work that needs intentional subject/world representation, optional
-production-capability routing, scene direction, or rationale-isolated
-inspection. Core Narova remains complete without it.
+production-capability routing, physical reasoning, a companion-local bounded
+rigid-body bake, scene direction, or rationale-isolated inspection.
+Core Narova remains complete without it.

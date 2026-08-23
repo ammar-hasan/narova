@@ -1,0 +1,14 @@
+{
+  "name": "@narova/3d-production-tools",
+  "version": "0.3.0",
+  "private": true,
+  "type": "commonjs",
+  "license": "Apache-2.0",
+  "scripts": {
+    "bake": "node tools/bake-rigid-body.js",
+    "test": "node --test tests/*.test.js"
+  },
+  "dependencies": {
+    "@dimforge/rapier3d-deterministic-compat": "0.20.0"
+  }
+}

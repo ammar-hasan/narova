@@ -13,16 +13,17 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.2.0"
-checksum: 6683f95a2793860a44a85a64ff3138f04c229704fb837592f922d1f6c843f7cb
+  version: "0.3.0"
+checksum: 1d07fccc7808733087636d7eae0974688ac619af898a368bd56b08ca361a4586
 ---
 
 # Narova 3D Production
 
 Add a small expert lens to authored 3D work. Keep the `narova` skill in charge
-of project authoring, assets, deterministic motion, rendering, review, release,
-and delivery. This companion adds no renderer, physics engine, command, schema,
-provider, dependency, or second workflow.
+of project authoring, assets, canonical time, rendering, review, release, and
+delivery. This companion can optionally bake bounded local rigid-body motion;
+it adds no core dependency, renderer, provider, hosted service, universal scene
+graph, or second production lifecycle.
 
 ## Direct lightly
 
@@ -42,6 +43,9 @@ provider, dependency, or second workflow.
    - read [scene direction](references/scene-direction.md) when space,
      appearance, staging, camera, visibility, interaction, or compositing is
      uncertain; and
+   - read [physical reasoning](references/physical-reasoning.md) when support,
+     locomotion, collision, constraints, gravity, coupled motion, or scientific
+     accuracy is a material risk; and
    - read [inspection](references/inspection.md) when the visual premise,
      movement, structured state, evidence limits, or a stop decision matters.
    A straightforward scene may need none. Do not perform a full-manual pass.
@@ -52,6 +56,24 @@ provider, dependency, or second workflow.
 5. **Finish through core Narova.** Use available specialist capabilities only
    when the chosen form needs them, then hand assets, deterministic motion,
    rendering, review, release, and delivery to the ordinary Narova lifecycle.
+
+## Bake rigid-body motion only when it helps
+
+Prefer authored motion when timing, exaggeration, or expressive control carries
+the idea. When gravity, support, collision, stacking, or a rigid constraint
+carries the idea, install this companion's local tool dependency and bake an
+explicit project-local recipe:
+
+```sh
+cd skills/narova-3d-production && npm ci --ignore-scripts
+node tools/bake-rigid-body.js /absolute/project physics.json physics-bake.json
+```
+
+Sample the bake with `tools/sample-bake.js` at canonical local scene time; do
+not advance a solver while rendering frames. The recipe and bake are execution
+inputs, never `sceneState` evidence. The built-in baker is limited to bounded
+rigid bodies and simple constraints. Route cloth, fluids, fracture, robotics,
+or engineering/scientific verification to an appropriate specialist.
 
 ## Keep confidence honest
 
@@ -75,3 +97,8 @@ narration, caption style, transition, platform, or aspect ratio. Minimal and
 rich scenes, graphic abstraction and articulated realism are all valid when
 intentional. Use hard constraints only where user intent, compatibility,
 evidence, or visible correctness would otherwise break.
+
+Do not persist or retrieve another project's concept, prompt, subjects, assets,
+world, palette, camera, style, or owner disposition. Let agents grow through
+current-task reasoning, executable consequences, and bounded proofs without
+anchoring the next work to a sibling solution.

@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Task-local physical reasoning for authored 3D.** The optional
+  `narova-3d-production` companion now protects principal-subject identity,
+  routes support/motion/contact/constraint risks progressively, and offers a
+  separately installed local deterministic rigid-body baker. The baker uses a
+  pinned deterministic adapter, validates bounded SI-unit recipes, writes
+  canonical time-indexed transforms/events atomically, and can be sampled in
+  any frame order without render-time solver stepping. Authored motion and
+  specialist solvers remain explicit alternatives; core Narova, `sceneState`,
+  creative authority, and default aesthetics are unchanged. The companion
+  stores no cross-project creative memory.
+
 ## [0.40.0] - 2026-08-23
 
 ### Added

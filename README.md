@@ -427,8 +427,12 @@ specialist direction, install the independent
 npx skills add ammar-hasan/narova --skill narova-3d-production -g
 ```
 
-It is a concise, high-freedom direction layer with conditional references; it
-adds no CLI or project behavior, and core Narova works identically without it.
+It is a concise, high-freedom direction layer with conditional references. For
+work where gravity, collision, support, or rigid constraints carry the idea, it
+also includes a separately installed deterministic rigid-body baker that writes
+project-local time-indexed transforms. The baker is optional, adds no Narova
+core dependency or renderer behavior, and core Narova works identically
+without it.
 
 ## Machine protocol
 
