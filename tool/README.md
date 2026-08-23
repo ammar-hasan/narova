@@ -13,6 +13,12 @@ The CLI and the Narova agent skill are separate artifacts. Installing this npm
 package adds the `narova`, `narova-setup`, and `narova-uninstall` commands; it
 does not install or modify agent instructions.
 
+What you build and publish with Narova is your choice, and you are fully
+answerable for it — under law, by your own ethics, values, and conscience, and
+by the religious or cultural commitments you hold. Narova gives you inspectable
+sources, reviewable creative proofs, and explicit provider choice to support
+that judgment; it does not verify legality, rights, or acceptability for you.
+
 The skill pins one compatible CLI release. After the skill is updated, its next
 session checks `narova --version` and reconciles this global package to that
 exact version before use.
