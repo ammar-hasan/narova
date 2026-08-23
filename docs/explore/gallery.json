@@ -3,6 +3,39 @@
   "updated": "2026-08-23",
   "entries": [
     {
+      "id": "the-precious-thing",
+      "title": "The Precious Thing",
+      "summary": "A low-poly 3D fable in which a lost corgi searches a park and finds its human companion again.",
+      "archive": "docs/explore/projects/the-precious-thing.narova",
+      "archiveSha256": "ae8b6499cb2f993ff0f11c576c0d126c616292d0d973e1b25be78042547b5698",
+      "producingVersion": "0.40.0",
+      "video": "docs/explore/assets/the-precious-thing.mp4",
+      "videoSha256": "cce0b90733c51aea6eb3b8488b34d3e4086981c9f925e864e2157c578d413236",
+      "captions": "docs/explore/assets/the-precious-thing.vtt",
+      "poster": "docs/explore/assets/the-precious-thing-poster.jpg",
+      "releaseCheck": {
+        "status": "pass",
+        "note": "The approved 31-second master passed Narova's release check with zero warnings and the encoded motion audit; publication preserves its exact bytes."
+      },
+      "accessibility": {
+        "status": "pass",
+        "note": "Visible controls, complete English WebVTT captions without an opaque card, a representative poster, text fallback, and script-free collapsed inspection are present."
+      },
+      "rights": {
+        "status": "declared-compatible",
+        "basis": "First-party script, narration, music, authored 3D park and human, rendered media, and a CC0 Gobkit corgi model are published under the gallery's CC0-compatible boundary; attribution and proof of use are not required.",
+        "credits": [
+          "The Precious Thing — Ammar Hasan (voluntary credit; CC0-1.0)",
+          "Corgi model — Gobkit / Ariescar (CC0-1.0; voluntary credit)"
+        ]
+      },
+      "provenance": {
+        "status": "complete",
+        "summary": "Original first-party lost-and-found fable rendered as one authored deterministic Three.js scene with local Piper narration, word timings, music bed, creative brief, motion evidence, CC0 corgi source record, and portable static authoring source included in the archive.",
+        "lineage": "No recorded remix parent."
+      }
+    },
+    {
       "id": "the-rainmakers-last-drop",
       "title": "The Rainmaker's Last Drop",
       "summary": "A cinematic 3D mechanical fable in which one glass drop wakes a greenhouse machine and opens a flower.",

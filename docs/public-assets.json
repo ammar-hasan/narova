@@ -1,9 +1,15 @@
 {
   "format": "narova.public-assets/1",
   "repository": "https://github.com/ammar-hasan/narova-assets",
-  "commit": "4bd9489235ba86f8b2e0be6461d0c83f789d294f",
-  "catalogSha256": "ba41037530ff718b4fd8c042ef6566f57cafe4f8e5f14aad14fd96b5223e7b0d",
+  "commit": "74c9f225512b22140b92ff7fbfd615031ec8306e",
+  "catalogSha256": "e67d4ec6eb09db89164663993810018e53acf759536a8bc42bdbd538c3e6aaff",
   "explore": {
+    "the-precious-thing": {
+      "archive": "explore/the-precious-thing/the-precious-thing.narova",
+      "video": "explore/the-precious-thing/video.mp4",
+      "poster": "explore/the-precious-thing/poster.jpg",
+      "captions": "explore/the-precious-thing/captions.vtt"
+    },
     "the-rainmakers-last-drop": {
       "archive": "explore/the-rainmakers-last-drop/the-rainmakers-last-drop.narova",
       "video": "explore/the-rainmakers-last-drop/video.mp4",

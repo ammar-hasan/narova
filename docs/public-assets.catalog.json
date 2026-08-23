@@ -244,6 +244,46 @@
       }
     },
     {
+      "kind": "explore",
+      "id": "the-precious-thing",
+      "title": "The Precious Thing",
+      "summary": "A 31-second low-poly 3D fable in which a lost corgi searches a park and finds its human companion again.",
+      "video": {
+        "path": "explore/the-precious-thing/video.mp4",
+        "sha256": "cce0b90733c51aea6eb3b8488b34d3e4086981c9f925e864e2157c578d413236",
+        "bytes": 3355507
+      },
+      "poster": {
+        "path": "explore/the-precious-thing/poster.jpg",
+        "sha256": "22f400a4383a0b4af47f4040d0702ce8da7a59a27e3967791189ccbb0b93fa94",
+        "bytes": 39109
+      },
+      "captions": {
+        "path": "explore/the-precious-thing/captions.vtt",
+        "sha256": "853ca28e26f2de4ebbcfa6c6a923320cdedc55da0a45aea421779208f0034392",
+        "bytes": 514
+      },
+      "archive": {
+        "path": "explore/the-precious-thing/the-precious-thing.narova",
+        "sha256": "ae8b6499cb2f993ff0f11c576c0d126c616292d0d973e1b25be78042547b5698",
+        "bytes": 2039108
+      },
+      "producingVersion": "0.40.0",
+      "archiveIdentity": "ae8b6499cb2f993ff0f11c576c0d126c616292d0d973e1b25be78042547b5698",
+      "rights": {
+        "basis": "First-party Narova project and render with locally generated Piper narration and music, an authored 3D park and human, and a CC0 Gobkit corgi model.",
+        "license": "CC0-1.0",
+        "licenseUrl": "https://creativecommons.org/publicdomain/zero/1.0/",
+        "creator": "Ammar Hasan",
+        "credit": "Ammar Hasan — voluntary, not required"
+      },
+      "review": {
+        "release": "pass",
+        "accessibility": "pass",
+        "provenance": "complete"
+      }
+    },
+    {
       "kind": "demo",
       "id": "click-highlight-proof",
       "title": "Voiced click-highlight proof",
