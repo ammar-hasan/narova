@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.41.0"
-checksum: 34a17d011f01c486fac8fb65f34c2c8e6d0cee2a37632d86ad45281145f245f5
+checksum: d382c13ba2fe7dd763fdf74b5fe6723dbce2daa836f3143b8a4b43058d18fb65
 ---
 # narova — video from scene scripts
 
@@ -220,8 +220,14 @@ user's approval before any consequential external mutation.
 9. `preview --detach` — show HyperFrames Studio; no-browser preview writes a draft MP4.
 10. `build --release` — preflights strict checks before synthesis, rechecks
    measured timing before compose/render, writes `out/video.mp4`, then runs the
-   temporal audit. Then run `narova judge` (or `narova judge --json`) to compare
-   the encoded result with assertions. Treat `ALIGNED`, `DIVERGED`, `OBSERVED`,
+   temporal audit. Use `narova witness` when you need a standalone,
+   machine-native `out/witness.json`: it records artifact-bound visual
+   measurements with explicit unavailable privileged channels, no score, and no
+   creative verdict. Ordinary `narova judge` invokes that built-in pixels-only
+   Witness path in memory automatically for artifacts from either bundled
+   renderer, then combines its visual facts with audio, captions, streams,
+   assertions, and bound scene state. Run `narova judge` (or `narova judge
+   --json`) to compare the evidence with assertions. Treat `ALIGNED`, `DIVERGED`, `OBSERVED`,
    and `UNCERTAIN` as evidence relationships, never artistic pass/fail states;
    build receipts bind timing/caption context to each rendered video's digest,
    and unbound optional context stays unavailable rather than being guessed;

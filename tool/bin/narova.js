@@ -16,7 +16,10 @@ const { runHf, previewUrl, startHfPreview, stopHfPreview, livePreviewPid, previe
 const { initProject } = require('../src/init');
 const { doctor } = require('../src/doctor');
 const { check, critique } = require('../src/check');
-const { judge, formatJudgement } = require('../src/judge');
+const { judge, formatJudgement, probeArtifact } = require('../src/judge');
+const {
+  formatWitness, publishWitnessBundle, verifyArtifactBytes, witnessArtifact,
+} = require('../src/witness');
 const { interventionPlan, formatInterventionPlan } = require('../src/intervention-plan');
 const {
   captureBranchExperiment, branchExperimentIdentity, verifyBranchExperiment,
@@ -187,7 +190,7 @@ function operationName(cmd, positionals, flags = {}) {
 }
 
 const PUBLIC_COMMANDS = new Set([
-  'help', 'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique', 'judge',
+  'help', 'init', 'demo', 'pack', 'open', 'remix', 'ingest', 'assets', 'compile', 'check', 'critique', 'witness', 'judge',
   'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
   'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
   'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
@@ -226,8 +229,8 @@ function validateInvocationFlags(flags, cmd) {
   if (flags['repair-branch'] != null && !(cmd === 'judge' && flags.repair)) {
     invocationError('--repair-branch is only valid with narova judge --repair');
   }
-  if (flags.video != null && cmd !== 'judge' && !(cmd === 'branch' && flags['judge-assertion'])) {
-    invocationError('--video is only valid with narova judge or focused narova branch save');
+  if (flags.video != null && cmd !== 'judge' && cmd !== 'witness' && !(cmd === 'branch' && flags['judge-assertion'])) {
+    invocationError('--video is only valid with narova witness, narova judge, or focused narova branch save');
   }
   const positiveNumber = (name, max = Infinity) => {
     if (flags[name] == null) return;
@@ -557,6 +560,11 @@ Commands:
                               creative brief (exit 3, subject non-pass)
   critique [profiles]  opt-in craft review; comma-separate creative, cinematic,
                            social-short, explainer, presentation, accessibility
+  witness              materialize artifact-bound visual perceptual evidence
+                           --video <file> selects a self-contained local video (default: out/video.mp4)
+                           --output <file> writes atomically (default: out/witness.json)
+                           pixels-only for both bundled renderer outputs; no score,
+                           taste judgement, gate, mutation, model, VLM, or network call
   judge                inspect the encoded artifact as an evidence mirror
                            --video <file> selects a self-contained local video (default: out/video.mp4)
                            --json returns narova.judgement/1 in narova.result/1
@@ -667,7 +675,7 @@ Options:
   --out <dir>              output dir (default <project>/out)
   --project <dir>          project dir (default .)
   --config <file>          explicit config path
-  --video <file>           judge/focused branch save: selected encoded artifact
+  --video <file>           witness/judge/focused branch save: selected encoded artifact
                            (default: <project>/out/video.mp4)
   --judge-assertion <id>   focused branch save or delegated caption repair
   --repair-branch <name>   judge --repair destination proof branch
@@ -1302,6 +1310,28 @@ async function main() {
       const profile = positionals[1] || flags.profile || 'all';
       const advice = critique(config, { profile, projectDir, outDir: outDirOf(flags, projectDir) });
       mData({ profile, advice });
+      return;
+    }
+
+    case 'witness': {
+      if (positionals[1] != null) {
+        invocationError('usage: narova witness [--video <file>] [--output <project-relative file>] [--json]');
+      }
+      const { config, projectDir } = await loadResolved(flags, { readOnly: true });
+      const out = outDirOf(flags, projectDir);
+      const defaultVideo = config.variant ? `video-${config.variant}.mp4` : 'video.mp4';
+      const artifact = probeArtifact(flags.video
+        ? path.resolve(projectDir, flags.video)
+        : path.join(out, defaultVideo));
+      const bundle = witnessArtifact(artifact);
+      const outputRef = String(flags.output || path.relative(projectDir, path.join(out, 'witness.json')));
+      const destination = resolveProjectFile(projectDir, outputRef, { mustExist: false });
+      const output = publishWitnessBundle(bundle, destination.absolute, {
+        verifyInputs: () => verifyArtifactBytes(artifact),
+      });
+      mData({ witness: bundle, output: destination.relative });
+      mArtifact(output, 'witness-evidence');
+      console.log(formatWitness(bundle, output));
       return;
     }
 

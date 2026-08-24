@@ -292,6 +292,17 @@ calls no hosted model, and accesses no network. Stillness, silence, darkness,
 and abrupt change may be deliberate; uncertainty is preferable to an
 unevidenced defect.
 
+`narova witness` is a built-in perceptual evidence subsystem. It decodes the
+encoded artifact and produces artifact-bound observations about luma, frame
+difference, and regional edge energy — bounded motion/state-change and spatial
+contrast proxies over the exact delivered bytes. The ordinary judge consumes
+Witness visual facts together with audio, captions, streams, assertions, and
+bound scene state; it does not independently recompute visual perception.
+Witness works for both bundled renderer outputs (HyperFrames and no-browser)
+and degrades honestly to pixels-only when privileged renderer state is
+unavailable. No score, taste gate, mutation, model, VLM, or network access on
+the default path. The creator retains full authority over every observation.
+
 `narova judge --plan` adds plural, unranked intervention options for each
 assertion-linked divergence or uncertainty — always including keeping the work
 unchanged — without selecting or executing one. One deliberately bounded repair

@@ -13,6 +13,9 @@ const { spawnSync } = require('child_process');
 const {
   SCHEMA: BINDING_SCHEMA, receiptPath, validateSceneStateContext,
 } = require('./video-ci-binding');
+const {
+  analyzeFrames, framesFromBundle, samplingFromBundle, visualMetrics, witnessArtifact,
+} = require('./witness');
 
 const REPORT_SCHEMA = 'narova.judgement/1';
 const FAMILIES = Object.freeze([
@@ -22,12 +25,6 @@ const FAMILIES = Object.freeze([
   'attention-visual-hierarchy',
   'temporal-behavior',
 ]);
-const FRAME_WIDTH = 64;
-const FRAME_HEIGHT = 36;
-const MAX_ANALYSIS_FRAMES = 600;
-const STATIC_THRESHOLD = 0.01;
-const CUT_THRESHOLD = 0.12;
-const BLACK_LUMA = 24 / 255;
 const SILENCE_DB = -50;
 const MAX_CONTEXT_BYTES = 1024 * 1024;
 const MEDIA_INPUT_OPTIONS = Object.freeze(['-protocol_whitelist', 'file,pipe']);
@@ -153,93 +150,6 @@ function verifyArtifactIdentity(artifact) {
   if (!stat.isFile() || stat.size !== artifact.bytes || hashBytes(artifact.path) !== artifact.sha256) {
     throw new Error('judge artifact bytes changed during analysis');
   }
-}
-
-function mean(buffer) {
-  if (!buffer.length) return 0;
-  let total = 0;
-  for (const value of buffer) total += value;
-  return total / buffer.length;
-}
-
-function frameDifference(a, b) {
-  if (!a || !b || a.length !== b.length || !a.length) return null;
-  let total = 0;
-  for (let i = 0; i < a.length; i++) total += Math.abs(a[i] - b[i]);
-  return total / (a.length * 255);
-}
-
-function edgeEnergy(buffer) {
-  const energy = new Array(9).fill(0);
-  for (let y = 1; y < FRAME_HEIGHT - 1; y++) {
-    for (let x = 1; x < FRAME_WIDTH - 1; x++) {
-      const at = (xx, yy) => buffer[(yy * FRAME_WIDTH) + xx];
-      const gx = -at(x - 1, y - 1) + at(x + 1, y - 1)
-        - (2 * at(x - 1, y)) + (2 * at(x + 1, y))
-        - at(x - 1, y + 1) + at(x + 1, y + 1);
-      const gy = -at(x - 1, y - 1) - (2 * at(x, y - 1)) - at(x + 1, y - 1)
-        + at(x - 1, y + 1) + (2 * at(x, y + 1)) + at(x + 1, y + 1);
-      const column = Math.min(2, Math.floor((x / FRAME_WIDTH) * 3));
-      const row = Math.min(2, Math.floor((y / FRAME_HEIGHT) * 3));
-      energy[(row * 3) + column] += Math.abs(gx) + Math.abs(gy);
-    }
-  }
-  return energy;
-}
-
-function analyzeFrames(file, duration, stream = null) {
-  const fps = Math.min(4, MAX_ANALYSIS_FRAMES / duration);
-  const selector = stream && Number.isInteger(stream.index) ? `0:${stream.index}` : '0:v:0';
-  const timelineOffset = stream && Number.isFinite(stream.timelineOffset) ? stream.timelineOffset : 0;
-  const result = run('ffmpeg', [
-    '-v', 'error', '-xerror', ...MEDIA_INPUT_OPTIONS, '-i', file, '-map', selector, '-an',
-    '-vf', `setpts=PTS-STARTPTS,fps=${fps.toFixed(8)},scale=${FRAME_WIDTH}:${FRAME_HEIGHT}:flags=area,format=gray`,
-    '-pix_fmt', 'gray', '-f', 'rawvideo', 'pipe:1',
-  ]);
-  let bytes = Buffer.isBuffer(result.stdout) ? result.stdout : Buffer.from(result.stdout || '');
-  const frameSize = FRAME_WIDTH * FRAME_HEIGHT;
-  if (bytes.length % frameSize !== 0) throw new Error('judge video decode returned an incomplete frame');
-  let count = Math.min(MAX_ANALYSIS_FRAMES, Math.floor(bytes.length / frameSize));
-  if (!count) {
-    // A valid sub-sample-length clip can fall entirely before the first fps
-    // output timestamp. Decode frame zero explicitly rather than turning that
-    // sampling detail into an artifact failure.
-    const first = run('ffmpeg', [
-      '-v', 'error', '-xerror', ...MEDIA_INPUT_OPTIONS, '-i', file, '-map', selector, '-an', '-frames:v', '1',
-      '-vf', `setpts=PTS-STARTPTS,scale=${FRAME_WIDTH}:${FRAME_HEIGHT}:flags=area,format=gray`,
-      '-pix_fmt', 'gray', '-f', 'rawvideo', 'pipe:1',
-    ]);
-    bytes = Buffer.isBuffer(first.stdout) ? first.stdout : Buffer.from(first.stdout || '');
-    count = Math.min(1, Math.floor(bytes.length / frameSize));
-  }
-  if (!count) throw new Error('judge could not decode any video frames');
-  const frames = [];
-  let prior = null;
-  for (let index = 0; index < count; index++) {
-    const gray = bytes.subarray(index * frameSize, (index + 1) * frameSize);
-    frames.push({
-      time: Math.min(duration, timelineOffset + (index / fps)),
-      luma: mean(gray) / 255,
-      difference: frameDifference(gray, prior),
-      edgeEnergy: edgeEnergy(gray),
-    });
-    prior = gray;
-  }
-  return {
-    frames,
-    sampling: {
-      implementation: 'local-frame-difference-and-edge-proxy/v1',
-      fps: round(fps, 8),
-      width: FRAME_WIDTH,
-      height: FRAME_HEIGHT,
-      frames: count,
-      maximumFrames: MAX_ANALYSIS_FRAMES,
-      timestampBasis: `selected stream normalized for sampling, then placed at container-relative offset ${round(timelineOffset, 6)}s; sample n occurs at offset+n/fps`,
-      staticThreshold: STATIC_THRESHOLD,
-      cutThreshold: CUT_THRESHOLD,
-      blackLumaThreshold: round(BLACK_LUMA, 6),
-    },
-  };
 }
 
 function parseSilences(log, duration) {
@@ -633,54 +543,6 @@ function captionEvidence(outDir, artifact, binding) {
   return candidates.length ? { ...candidates[0], alternatives: candidates.slice(1) } : null;
 }
 
-function percentile(values, ratio) {
-  if (!values.length) return 0;
-  const sorted = values.slice().sort((a, b) => a - b);
-  // Nearest-rank keeps high-percentile transition evidence visible even in a
-  // short scoped interval with only a handful of deterministic samples.
-  return sorted[Math.min(sorted.length - 1, Math.max(0, Math.ceil(sorted.length * ratio) - 1))];
-}
-
-function framesInRange(frames, start, end) {
-  return frames.filter(frame => frame.time >= start && frame.time < end);
-}
-
-function visualMetrics(frames, start, end) {
-  const selected = framesInRange(frames, start, end);
-  // The first selected frame has no comparison partner inside this scope. Its
-  // precomputed difference may cross the scope boundary, so only subsequent
-  // frames can establish scoped motion or state-change facts.
-  const differences = selected.slice(1).map(frame => frame.difference).filter(Number.isFinite);
-  // A sample exactly at a non-zero boundary may compare with the immediately
-  // preceding global sample. Count that pair only as an entry transition; it
-  // must not establish in-range motion/static character by itself.
-  const entryDifference = start > 0 && selected.length && Math.abs(selected[0].time - start) < 1e-6
-    && Number.isFinite(selected[0].difference) ? selected[0].difference : null;
-  const edgeTotals = new Array(9).fill(0);
-  for (const frame of selected) {
-    frame.edgeEnergy.forEach((value, index) => { edgeTotals[index] += value; });
-  }
-  const totalEdges = edgeTotals.reduce((sum, value) => sum + value, 0);
-  const dominantIndex = edgeTotals.indexOf(Math.max(...edgeTotals));
-  const regions = ['top-left', 'top-center', 'top-right', 'middle-left', 'center', 'middle-right', 'bottom-left', 'bottom-center', 'bottom-right'];
-  return {
-    motionMean: differences.length ? round(differences.reduce((sum, value) => sum + value, 0) / differences.length) : null,
-    motionP95: differences.length ? round(percentile(differences, 0.95)) : null,
-    staticRatio: differences.length ? round(differences.filter(value => value <= STATIC_THRESHOLD).length / differences.length) : null,
-    blackRatio: selected.length ? round(selected.filter(frame => frame.luma <= BLACK_LUMA).length / selected.length) : null,
-    cutCount: differences.length || Number.isFinite(entryDifference)
-      ? differences.filter(value => value >= CUT_THRESHOLD).length
-        + (Number.isFinite(entryDifference) && entryDifference >= CUT_THRESHOLD ? 1 : 0)
-      : null,
-    dominantRegion: selected.length ? (totalEdges > 0 ? regions[dominantIndex] : 'none') : null,
-    dominantRegionShare: selected.length ? round(totalEdges > 0 ? edgeTotals[dominantIndex] / totalEdges : 0) : null,
-    sampledFrames: selected.length,
-    comparedFramePairs: differences.length + (Number.isFinite(entryDifference) ? 1 : 0),
-    internalComparedFramePairs: differences.length,
-    entryDifference: round(entryDifference),
-  };
-}
-
 function intervalOverlap(aStart, aEnd, bStart, bEnd) {
   return Math.max(0, Math.min(aEnd, bEnd) - Math.max(aStart, bStart));
 }
@@ -746,8 +608,9 @@ function visualProbeCoverage(range, context) {
   const stream = context.artifact.streams.video;
   const streamStart = Number.isFinite(stream.timelineOffset) ? stream.timelineOffset : 0;
   let streamEnd = Number.isFinite(stream.duration) ? streamStart + stream.duration : null;
-  if (!Number.isFinite(streamEnd) && context.frames.length) {
-    const lastFrame = context.frames[context.frames.length - 1];
+  const witnessFrames = !Number.isFinite(streamEnd) ? framesFromBundle(context.witness) : [];
+  if (!Number.isFinite(streamEnd) && witnessFrames.length) {
+    const lastFrame = witnessFrames[witnessFrames.length - 1];
     const sampleStep = context.sampling && context.sampling.fps > 0 ? 1 / context.sampling.fps : 0;
     streamEnd = Math.min(context.artifact.duration, lastFrame.time + sampleStep);
   }
@@ -987,7 +850,7 @@ function buildIntentObservations(config, context) {
   }
   return assertions.map((assertion, index) => {
     const range = assertionRange(assertion, context.scenes, context.artifact.duration);
-    const visual = visualMetrics(context.frames, range.measuredStart, range.measuredEnd);
+    const visual = visualMetrics(context.witness, range.measuredStart, range.measuredEnd);
     const scene = (assertion.scope && assertion.scope.scene)
       || context.scenes.find(item => ((range.start + range.end) / 2) >= item.start && ((range.start + range.end) / 2) < item.end)?.id
       || null;
@@ -1077,7 +940,7 @@ function buildIntentObservations(config, context) {
 function buildNarrativeObservations(config, context) {
   return context.scenes.map((scene, index) => {
     const coverage = rangeCoverage(scene.start, scene.end, context.artifact.duration);
-    const visual = visualMetrics(context.frames, coverage.measuredStart, coverage.measuredEnd);
+    const visual = visualMetrics(context.witness, coverage.measuredStart, coverage.measuredEnd);
     const words = wordsInRange(
       context.captions, config, scene.id, coverage.measuredStart, coverage.measuredEnd,
       context.authoredSource,
@@ -1159,7 +1022,7 @@ function buildEntityObservations(config, context) {
 function buildAttentionObservations(context) {
   return context.scenes.map((scene, index) => {
     const coverage = rangeCoverage(scene.start, scene.end, context.artifact.duration);
-    const visual = visualMetrics(context.frames, coverage.measuredStart, coverage.measuredEnd);
+    const visual = visualMetrics(context.witness, coverage.measuredStart, coverage.measuredEnd);
     const available = visual.sampledFrames > 0;
     return {
       id: observationId(FAMILIES[3], index),
@@ -1205,7 +1068,7 @@ function motionCharacter(visual) {
 function buildTemporalObservations(context) {
   return context.scenes.map((scene, index) => {
     const coverage = rangeCoverage(scene.start, scene.end, context.artifact.duration);
-    const visual = visualMetrics(context.frames, coverage.measuredStart, coverage.measuredEnd);
+    const visual = visualMetrics(context.witness, coverage.measuredStart, coverage.measuredEnd);
     const silence = silenceRatio(context.audio, coverage.measuredStart, coverage.measuredEnd);
     const motionAvailable = visual.internalComparedFramePairs > 0;
     return {
@@ -1433,14 +1296,15 @@ function judge(config, opts = {}) {
   const binding = loadVideoCiBinding(artifact, outDir);
   const configSource = resolvedConfigSource(config, opts.configFile);
   const timeline = sceneTimeline(config, outDir, artifact.duration, binding);
-  const frameAnalysis = analyzeFrames(artifact.path, artifact.duration, artifact.streams.video);
+  const witness = witnessArtifact(artifact);
+  const sampling = samplingFromBundle(witness);
   const audio = analyzeAudio(artifact.path, artifact.duration, artifact.streams.audio);
   const captions = captionEvidence(outDir, artifact, binding);
   const context = {
     artifact,
     scenes: timeline.rows,
-    frames: frameAnalysis.frames,
-    sampling: frameAnalysis.sampling,
+    witness,
+    sampling,
     audio,
     captions,
     binding,
@@ -1467,12 +1331,20 @@ function judge(config, opts = {}) {
     validityEffect: 'none',
     mutation: 'none',
     artifact,
-    sampling: frameAnalysis.sampling,
+    sampling,
+    witness: {
+      schema: witness.schema,
+      bundleId: witness.bundleId,
+      artifact: witness.artifact,
+      coverage: witness.coverage,
+      summary: witness.summary,
+      effect: witness.effect,
+    },
     perception: {
       core: 'narova-evidence-normalization/v1',
       implementations: [
         { id: 'ffprobe-stream-facts/v1', kind: 'local-built-in', coverage: ['artifact-identity', 'stream-presence', 'duration', 'selected-stream-index'] },
-        { id: frameAnalysis.sampling.implementation, kind: 'local-built-in', coverage: ['motion', 'state-change-proxy', 'luma', 'spatial-edge-proxy'] },
+        { id: sampling.implementation, kind: 'local-built-in-witness', coverage: ['motion', 'state-change-proxy', 'luma', 'spatial-edge-proxy'], witnessBundleId: witness.bundleId },
         { id: 'ffmpeg-silencedetect-volumedetect/v1', kind: 'local-built-in', coverage: ['silence', 'scoped-audio-level'], thresholdDb: SILENCE_DB, available: Boolean(artifact.streams.audio) },
         { id: 'caption-parser/v1', kind: 'local-built-in', coverage: ['sidecar-captions', 'embedded-text-subtitles', 'caption-timing', 'caption-word-count'], available: Boolean(captions && captions.available), reason: captions && !captions.available ? captions.reason : null },
         { id: 'scene-state-evidence/v1', kind: 'local-built-in', coverage: ['task-specific-scene-state'], available: Boolean(binding.used && binding.document.context.sceneState && binding.document.context.sceneState.length), reason: binding.used && (!binding.document.context.sceneState || !binding.document.context.sceneState.length) ? 'matching artifact receipt has no scene-state snapshot' : !binding.used ? 'matching artifact receipt is unavailable' : null },
@@ -1571,6 +1443,7 @@ module.exports = {
   judge,
   formatJudgement,
   probeArtifact,
+  verifyArtifactIdentity,
   analyzeFrames,
   analyzeAudio,
   visualMetrics,

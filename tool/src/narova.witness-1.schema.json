@@ -1,0 +1,467 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://narova.invalid/schema/narova.witness-1.schema.json",
+  "title": "narova.witness/1 research prototype",
+  "type": "object",
+  "additionalProperties": false,
+  "required": [
+    "schema",
+    "bundleId",
+    "artifact",
+    "compiler",
+    "bindings",
+    "coverage",
+    "methods",
+    "resources",
+    "subjects",
+    "observations",
+    "summary",
+    "effect"
+  ],
+  "properties": {
+    "schema": { "const": "narova.witness/1" },
+    "bundleId": { "type": "string", "pattern": "^sha256:[a-f0-9]{64}$" },
+    "artifact": { "$ref": "#/$defs/artifact" },
+    "compiler": { "$ref": "#/$defs/compiler" },
+    "bindings": { "$ref": "#/$defs/bindings" },
+    "coverage": { "$ref": "#/$defs/coverage" },
+    "methods": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/method" }
+    },
+    "resources": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/resource" }
+    },
+    "subjects": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/subject" }
+    },
+    "observations": {
+      "type": "array",
+      "items": { "$ref": "#/$defs/observation" }
+    },
+    "summary": { "$ref": "#/$defs/summary" },
+    "effect": { "const": "NONE" },
+    "extensions": { "$ref": "#/$defs/extensions" }
+  },
+  "$defs": {
+    "sha256": {
+      "type": "object",
+      "required": ["algorithm", "digest"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" }
+      }
+    },
+    "artifact": {
+      "allOf": [{ "$ref": "#/$defs/sha256" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "bytes", "mediaType"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "mediaType": { "type": "string", "minLength": 1 },
+        "logicalName": { "type": "string", "minLength": 1 }
+      }
+    },
+    "compiler": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["name", "version", "implementation"],
+      "properties": {
+        "name": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "implementation": { "$ref": "#/$defs/sha256" }
+      }
+    },
+    "witnessSourceBinding": {
+      "allOf": [{ "$ref": "#/$defs/sha256" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["algorithm", "digest", "schema"],
+      "properties": {
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "schema": { "const": "narova.witness-source/1" }
+      }
+    },
+    "referenceBinding": {
+      "allOf": [{ "$ref": "#/$defs/sha256" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "algorithm", "digest", "projectScope"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^ref:" },
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "projectScope": { "type": "string", "pattern": "^project:" }
+      }
+    },
+    "bindings": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["witnessSource", "analysisOptions", "references"],
+      "properties": {
+        "witnessSource": { "$ref": "#/$defs/witnessSourceBinding" },
+        "analysisOptions": { "$ref": "#/$defs/sha256" },
+        "references": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/referenceBinding" }
+        }
+      }
+    },
+    "availability": {
+      "enum": ["AVAILABLE", "PARTIAL", "UNAVAILABLE"]
+    },
+    "channel": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["kind", "availability"],
+      "properties": {
+        "kind": { "type": "string", "minLength": 1 },
+        "availability": { "$ref": "#/$defs/availability" },
+        "resource": { "type": "string", "pattern": "^resource:" },
+        "reason": { "type": "string", "minLength": 1 },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "availability": { "const": "AVAILABLE" } } },
+          "then": { "required": ["resource"] },
+          "else": { "required": ["reason"] }
+        }
+      ]
+    },
+    "frameCoverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["analyzed", "propagated", "total"],
+      "properties": {
+        "analyzed": { "type": "integer", "minimum": 0 },
+        "propagated": { "type": "integer", "minimum": 0 },
+        "total": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "coverage": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["profile", "channels", "artifactFrames"],
+      "properties": {
+        "profile": {
+          "enum": ["DOM_PRIVILEGED", "THREE_PRIVILEGED", "BLENDER_PRIVILEGED", "PIXELS_ONLY", "MIXED"]
+        },
+        "channels": {
+          "type": "array",
+          "items": { "$ref": "#/$defs/channel" }
+        },
+        "artifactFrames": { "$ref": "#/$defs/frameCoverage" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "basis": {
+      "enum": ["MEASURED", "INFERRED", "LEARNED", "INTERPRETIVE"]
+    },
+    "method": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "kind", "version", "basis", "deterministic", "implementation", "options", "limitations"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^method:" },
+        "kind": { "type": "string", "minLength": 1 },
+        "version": { "type": "string", "minLength": 1 },
+        "basis": { "$ref": "#/$defs/basis" },
+        "deterministic": { "type": "boolean" },
+        "implementation": { "$ref": "#/$defs/sha256" },
+        "options": { "$ref": "#/$defs/sha256" },
+        "model": { "type": "string", "pattern": "^resource:" },
+        "calibration": { "type": "string", "pattern": "^resource:" },
+        "provider": { "type": "string", "minLength": 1 },
+        "networkUsed": { "type": "boolean" },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "sourceRole": {
+      "enum": ["ARTIFACT", "PRODUCTION_STATE", "AUTHORED_INTENT", "PROJECT_REFERENCE", "EXTERNAL"]
+    },
+    "resource": {
+      "allOf": [{ "$ref": "#/$defs/sha256" }],
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "role", "kind", "mediaType", "algorithm", "digest", "bytes"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^resource:" },
+        "role": { "$ref": "#/$defs/sourceRole" },
+        "kind": { "type": "string", "minLength": 1 },
+        "mediaType": { "type": "string", "minLength": 1 },
+        "algorithm": { "const": "sha256" },
+        "digest": { "type": "string", "pattern": "^[a-f0-9]{64}$" },
+        "bytes": { "type": "integer", "minimum": 0 },
+        "locator": { "type": "string", "minLength": 1 },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "subject": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["id", "adapterNamespace", "sourceId", "sourceResource"],
+      "properties": {
+        "id": { "type": "string", "pattern": "^subject:" },
+        "adapterNamespace": { "type": "string", "minLength": 1 },
+        "sourceId": { "type": "string", "minLength": 1 },
+        "semanticIdentity": { "type": "string", "minLength": 1 },
+        "sourceResource": { "type": "string", "pattern": "^resource:" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      }
+    },
+    "rationalTime": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["ticks", "timescale"],
+      "properties": {
+        "ticks": { "type": "integer" },
+        "timescale": { "type": "integer", "minimum": 1 }
+      }
+    },
+    "time": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["start", "end"],
+      "properties": {
+        "start": { "$ref": "#/$defs/rationalTime" },
+        "end": { "$ref": "#/$defs/rationalTime" },
+        "frameIndex": { "type": "integer", "minimum": 0 },
+        "sampling": { "enum": ["CANONICAL", "EVENT", "PROPAGATED", "EXTERNAL"] }
+      }
+    },
+    "region": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["space", "x", "y", "width", "height"],
+      "properties": {
+        "space": { "const": "ARTIFACT_DISPLAY_PIXELS_TOP_LEFT" },
+        "x": { "type": "number" },
+        "y": { "type": "number" },
+        "width": { "type": "number", "minimum": 0 },
+        "height": { "type": "number", "minimum": 0 },
+        "mask": { "type": "string", "pattern": "^resource:" }
+      }
+    },
+    "confidence": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["value", "meaning"],
+      "properties": {
+        "value": { "type": "number", "minimum": 0, "maximum": 1 },
+        "meaning": {
+          "enum": ["exact-calculation", "probability-within-declared-tolerance", "empirical-frequency", "uncalibrated-score"]
+        },
+        "calibration": { "type": "string", "pattern": "^resource:" }
+      }
+    },
+    "numberValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "number", "unit"],
+      "properties": {
+        "type": { "const": "number" },
+        "number": { "type": "number" },
+        "unit": { "type": "string", "minLength": 1 },
+        "range": {
+          "type": "object",
+          "additionalProperties": false,
+          "properties": {
+            "minimum": { "type": "number" },
+            "maximum": { "type": "number" }
+          }
+        }
+      }
+    },
+    "booleanValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "boolean"],
+      "properties": {
+        "type": { "const": "boolean" },
+        "boolean": { "type": "boolean" }
+      }
+    },
+    "enumValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "enum"],
+      "properties": {
+        "type": { "const": "enum" },
+        "enum": { "type": "string", "minLength": 1 }
+      }
+    },
+    "vectorValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "vector", "unit"],
+      "properties": {
+        "type": { "const": "vector" },
+        "vector": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "labels": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "unit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "distributionValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "distribution", "unit"],
+      "properties": {
+        "type": { "const": "distribution" },
+        "distribution": {
+          "type": "array",
+          "items": { "type": "number" }
+        },
+        "unit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "seriesValue": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["type", "series", "unit"],
+      "properties": {
+        "type": { "const": "series" },
+        "series": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "additionalProperties": false,
+            "required": ["time", "number"],
+            "properties": {
+              "time": { "$ref": "#/$defs/rationalTime" },
+              "number": { "type": "number" }
+            }
+          }
+        },
+        "unit": { "type": "string", "minLength": 1 }
+      }
+    },
+    "value": {
+      "oneOf": [
+        { "$ref": "#/$defs/numberValue" },
+        { "$ref": "#/$defs/booleanValue" },
+        { "$ref": "#/$defs/enumValue" },
+        { "$ref": "#/$defs/vectorValue" },
+        { "$ref": "#/$defs/distributionValue" },
+        { "$ref": "#/$defs/seriesValue" }
+      ]
+    },
+    "propagation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["originObservation", "method", "distanceFrames"],
+      "properties": {
+        "originObservation": { "type": "string", "pattern": "^observation:" },
+        "method": { "type": "string", "pattern": "^method:" },
+        "distanceFrames": { "type": "integer", "minimum": 0 },
+        "residualCheck": { "type": "string", "pattern": "^observation:" }
+      }
+    },
+    "observation": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": [
+        "id",
+        "kind",
+        "availability",
+        "basis",
+        "sourceRoles",
+        "method",
+        "confidence",
+        "limitations"
+      ],
+      "properties": {
+        "id": { "type": "string", "pattern": "^observation:" },
+        "kind": { "type": "string", "minLength": 1 },
+        "availability": { "$ref": "#/$defs/availability" },
+        "basis": { "$ref": "#/$defs/basis" },
+        "sourceRoles": {
+          "type": "array",
+          "minItems": 1,
+          "uniqueItems": true,
+          "items": { "$ref": "#/$defs/sourceRole" }
+        },
+        "method": { "type": "string", "pattern": "^method:" },
+        "subject": { "type": "string", "pattern": "^subject:" },
+        "scene": { "type": "string", "pattern": "^scene:" },
+        "time": { "$ref": "#/$defs/time" },
+        "region": { "$ref": "#/$defs/region" },
+        "value": { "$ref": "#/$defs/value" },
+        "reason": { "type": "string", "minLength": 1 },
+        "confidence": { "$ref": "#/$defs/confidence" },
+        "evidence": {
+          "type": "array",
+          "items": { "type": "string", "pattern": "^(resource|observation|ref):" }
+        },
+        "limitations": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "propagation": { "$ref": "#/$defs/propagation" },
+        "extensions": { "$ref": "#/$defs/extensions" }
+      },
+      "allOf": [
+        {
+          "if": { "properties": { "availability": { "const": "UNAVAILABLE" } } },
+          "then": {
+            "required": ["reason"],
+            "not": { "required": ["value"] }
+          },
+          "else": { "required": ["value"] }
+        },
+        {
+          "if": { "properties": { "availability": { "const": "PARTIAL" } } },
+          "then": { "required": ["reason"] }
+        }
+      ]
+    },
+    "basisCounts": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["MEASURED", "INFERRED", "LEARNED", "INTERPRETIVE"],
+      "properties": {
+        "MEASURED": { "type": "integer", "minimum": 0 },
+        "INFERRED": { "type": "integer", "minimum": 0 },
+        "LEARNED": { "type": "integer", "minimum": 0 },
+        "INTERPRETIVE": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "summary": {
+      "type": "object",
+      "additionalProperties": false,
+      "required": ["observations", "available", "partial", "unavailable", "byBasis", "escalations"],
+      "properties": {
+        "observations": { "type": "integer", "minimum": 0 },
+        "available": { "type": "integer", "minimum": 0 },
+        "partial": { "type": "integer", "minimum": 0 },
+        "unavailable": { "type": "integer", "minimum": 0 },
+        "byBasis": { "$ref": "#/$defs/basisCounts" },
+        "escalations": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "extensions": {
+      "type": "object",
+      "propertyNames": {
+        "pattern": "^[a-z0-9]+(?:[.-][a-z0-9]+)+$"
+      },
+      "additionalProperties": true
+    }
+  }
+}
+

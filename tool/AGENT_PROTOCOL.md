@@ -74,6 +74,7 @@ operation may add fields in a later schema-1 release.
 | `compile` | `{ manifest, scenes }` | `manifest`, `stage-input`, `compatibility-state` |
 | `check` | `{ level, warnings, errors, critique? }` | `report` when creative identity is requested |
 | `critique` | `{ profile, advice }` | none |
+| `witness` | `{ witness, output }` where `witness.schema` is `narova.witness/1` | `witness-evidence` |
 | `judge` | `{ judgement }`; plus `{ interventionPlan }` for `--plan`, or `{ repairCandidate, repairCandidateIdentity, branch }` for successful caption repair | repair success: `archive`, `proof-metadata`; otherwise none |
 | `plan` | the stage plan object | none |
 | `provenance` | the provenance report object | none |
@@ -123,6 +124,17 @@ operation may add fields in a later schema-1 release.
 | `voice sample list` | `{ samples[] }` | none |
 | `voice sample add` | `{ name, path }` | `voice-sample` |
 | `voice sample remove` | `{ name, removed }` | none |
+
+### Witness perceptual evidence
+
+`narova witness --json` decodes one self-contained local video and atomically
+materializes `out/witness.json` by default. The `witness` payload binds the exact
+artifact bytes and canonical bundle identity, reports a `PIXELS_ONLY` coverage
+profile for artifacts from either bundled renderer, and declares privileged
+DOM, visual-tree, mask, depth, and motion-vector channels unavailable rather
+than inventing them. Its observations are neutral measured series; it emits no
+`ALIGNED` or `DIVERGED` verdict, score, taste judgement, gate, repair, mutation,
+model/VLM use, or network call. The creator retains authority.
 
 ### Video CI judgement
 
@@ -273,8 +285,10 @@ within `narova.result/1`.
    correctness gate.
 6. Build: `narova build --json`, adding `--release` only after release checks
    pass. Use `artifacts` to locate videos, captions, and evidence.
-7. Perceive the encoded result: `narova judge --json`. Compare observations to
-   authored assertions; preserve intentional surprises and resolve uncertainty
+7. Perceive the encoded result: use `narova witness --json` when a standalone
+   machine-native visual evidence bundle is useful, then `narova judge --json`
+   to relate built-in Witness evidence plus audio/captions/streams/state to
+   authored assertions. Preserve intentional surprises and resolve uncertainty
    with direct review or a more capable explicit perceiver.
 8. For a risky assertion, create a current `shots --motion --proof` receipt,
    save each rendered attempt with `branch save --judge-assertion`, and compare
