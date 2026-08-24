@@ -84,7 +84,7 @@ operation may add fields in a later schema-1 release.
 | `captions` | `{ cues }` | `captions` or `caption-omission` |
 | `review` | the selected review report with `mode` | `contact-sheet` or `excerpt` when created |
 | `shots` | `{ times[], frames, proof, proofReceipt? }` | `frames`, `receipt` |
-| `build` | `{ mp4, seconds, renderer, deliverables[], companion, revision }`, or `{ builds[] }` for `--variants` | `video`, `captions` or `caption-omission`, `manifest`, `timings`, `audio`, `renderer-project`, `revision-ledger`, `deliverable`, `thumbnail`, `video-companion` |
+| `build` | `{ mp4, seconds, renderer, deliverables[], companion, revision, witness? }`, or `{ builds[] }` for `--variants`; `witness` appears only for explicit `--witness` and reports `AVAILABLE` or advisory `UNAVAILABLE` | `video`, `captions` or `caption-omission`, `manifest`, `timings`, `audio`, `renderer-project`, `revision-ledger`, `deliverable`, `thumbnail`, `video-companion`, optional `witness-evidence` |
 | `preview` | `{ renderer, detached, url?, pid?, port?, stopped? }` | `renderer-project`, `preview-state`, `preview-log`, or draft `video` |
 | `doctor` | `{ ok, checks[] }` | none |
 | `generate` | `{ provider, providerProtocol, providerVersion, output, spec }` | `generated-media`, `generation-recipe`, `registry` |
@@ -246,6 +246,7 @@ within `narova.result/1`.
 | `subject.non-pass` | error | Generic subject non-pass when no narrower code applies. |
 | `check.warning` | warning | Advisory check finding. |
 | `check.clip-truncation` | warning | A direct clip probes more than 50ms longer than its resolved scene; `minDur` can preserve the full clip. |
+| `advisory.witness.unavailable` | warning | Explicit build-time Witness publication was unavailable; the successful primary build is unchanged. |
 | `gate.release.captions-missing` | error | Narration exists but required caption publication evidence is absent. |
 | `gate.release.asset-provenance` | error | Tracked asset provenance verification failed. |
 | `gate.release.creative-brief` | error | Creative brief or required proof evidence is absent or invalid. |

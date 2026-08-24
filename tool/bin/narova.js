@@ -20,6 +20,7 @@ const { judge, formatJudgement, probeArtifact } = require('../src/judge');
 const {
   formatWitness, publishWitnessBundle, verifyArtifactBytes, witnessArtifact,
 } = require('../src/witness');
+const { publishBuildWitness } = require('../src/build-witness');
 const { loadVideoCiBinding, verifyVideoCiBinding } = require('../src/video-ci-binding');
 const { interventionPlan, formatInterventionPlan } = require('../src/intervention-plan');
 const {
@@ -218,7 +219,7 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'witness']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
 
@@ -603,6 +604,8 @@ Commands:
                           e.g. --companion 60MB; no size uses quick-review defaults;
                           never enforced, never gates, primary stays full quality
   build                synth + compose + selected renderer -> out/video.mp4
+                           --witness atomically adds out/witness.json after a
+                             successful build; advisory, local, and non-gating
   preview              HyperFrames Studio, or a no-browser draft preview MP4
   renderers list       list bundled local renderer providers and capabilities
   renderers doctor <name>  verify a renderer's local requirements
@@ -2214,6 +2217,29 @@ async function main() {
       if (flags.variant && flags.variants) {
         usageError('--variant and --variants are mutually exclusive — pick one');
       }
+      if (flags.witness && flags.variants) {
+        usageError('--witness currently supports one selected primary build; use --variant <id> instead of --variants');
+      }
+      const materializeBuildWitness = (built, out) => {
+        if (!flags.witness || !built || !built.mp4) return null;
+        try {
+          const published = publishBuildWitness(built.mp4, out);
+          mArtifact(published.output, 'witness-evidence');
+          console.log(`witness -> ${published.output} (advisory; creative authority unchanged)`);
+          return {
+            availability: 'AVAILABLE',
+            output: published.output,
+            bundleId: published.bundle.bundleId,
+            artifact: published.bundle.artifact,
+            coverage: published.bundle.coverage,
+          };
+        } catch (error) {
+          const message = `Witness evidence unavailable: ${error.message}; primary build is unchanged`;
+          console.error(`witness: ${message}`);
+          mDiag('warning', 'advisory.witness.unavailable', message);
+          return { availability: 'UNAVAILABLE', reason: 'WITNESS_PUBLICATION_FAILED' };
+        }
+      };
       const buildArtifacts = (built, out) => {
         if (!built) return;
         if (built.mp4) mArtifact(built.mp4, 'video');
@@ -2344,6 +2370,7 @@ async function main() {
         name: config.variant ? `video-${config.variant}.mp4` : undefined,
       });
       buildArtifacts(built, out);
+      const witness = materializeBuildWitness(built, out);
       mSetData({
         mp4: built.mp4,
         seconds: built.seconds,
@@ -2351,6 +2378,7 @@ async function main() {
         deliverables: built.deliverables || [],
         companion: built.companion || null,
         revision: built.revisions || null,
+        ...(witness ? { witness } : {}),
       });
       verifyMotionIfRequested(built, flags);
       if (config.renderer === 'hyperframes') await refreshPreviewIfLive(out);

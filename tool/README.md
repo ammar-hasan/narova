@@ -97,6 +97,13 @@ Agents can consume the versioned `narova.result/1` machine protocol (`--json`
 on every operation) with stable exit classes, diagnostics, and artifact
 records — no parsing of terminal prose.
 
+Use `narova witness` to inspect an existing encoded artifact, or explicitly run
+`narova build --witness` to add the same atomic `out/witness.json` evidence
+bundle after a successful primary build. Witness decodes pixels locally and
+returns structured facts, so the directing agent does not need its own vision
+capability. Evidence is advisory and creative-neutral; plain builds and all
+primary/cache/receipt identities remain unchanged.
+
 See the [project README](https://github.com/ammar-hasan/narova#readme) for the
 scene-script format, renderer choices, product walkthroughs, source grounding,
 proof branches, judge/assertions, and full workflow.

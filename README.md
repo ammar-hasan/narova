@@ -303,6 +303,15 @@ and degrades honestly to pixels-only when privileged renderer state is
 unavailable. No score, taste gate, mutation, model, VLM, or network access on
 the default path. The creator retains full authority over every observation.
 
+`narova build --witness` explicitly asks a successful primary build to also
+publish the same machine-native bundle at `out/witness.json`. This is advisory:
+failure to publish evidence does not fail or alter the video build. Plain builds
+remain dormant, and the flag changes no video, renderer, cache, proof, release,
+manifest, or canonical Video CI receipt identity. HyperFrames layout audit
+remains explicitly unavailable until Narova can bind the exact producing source
+and enforce local network containment; mutable post-build `out/hf-*` is never
+accepted as provenance.
+
 `narova judge --plan` adds plural, unranked intervention options for each
 assertion-linked divergence or uncertainty — always including keeping the work
 unchanged — without selecting or executing one. One deliberately bounded repair

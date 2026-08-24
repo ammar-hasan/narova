@@ -385,6 +385,21 @@ function visualNodeUnavailableReason(binding, candidate) {
   return 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL';
 }
 
+function layoutAuditUnavailableReason(binding) {
+  if (!binding || binding.grade === 'INVALID' || !binding.used) {
+    return 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL';
+  }
+  const manifest = binding.document && binding.document.context && binding.document.context.manifest;
+  const provider = manifest && manifest.available && manifest.content
+    && manifest.content.renderer && manifest.content.renderer.provider;
+  // This bounded public slice never executes HyperFrames source for rich
+  // capture because Narova does not yet own a portable hard-offline browser
+  // boundary. Report that prerequisite honestly before considering whether
+  // render-time provenance is also available.
+  if (provider === 'hyperframes') return 'LOCAL_CONTAINMENT_UNAVAILABLE';
+  return 'RENDERER_DOES_NOT_PROVIDE_CHANNEL';
+}
+
 function witnessArtifact(artifact, { binding = null } = {}) {
   if (!artifact || !artifact.path || !/^[a-f0-9]{64}$/.test(artifact.sha256 || '')
       || !Number.isSafeInteger(artifact.bytes) || artifact.bytes < 0
@@ -528,6 +543,7 @@ function witnessArtifact(artifact, { binding = null } = {}) {
         { kind: 'artifact.decoded-grayscale', availability: 'AVAILABLE', resource: 'resource:artifact' },
         { kind: 'dom.element-boxes', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
         { kind: 'dom.glyph-boxes', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
+        { kind: 'dom.layout-audit', availability: 'UNAVAILABLE', reason: layoutAuditUnavailableReason(binding) },
         privileged
           ? { kind: 'renderer.visual-node-boxes', availability: privileged.data.coverage.partial ? 'PARTIAL' : 'AVAILABLE', resource: privileged.resources[1].id,
             ...(privileged.data.coverage.partial ? { reason: 'BOUNDED_PRODUCTION_STATE_COVERAGE' } : {}),

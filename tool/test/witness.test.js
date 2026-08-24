@@ -20,10 +20,30 @@ const ROOT = path.resolve(__dirname, '..', '..');
 const BIN = path.join(ROOT, 'tool', 'bin', 'narova.js');
 const MEDIA_AVAILABLE = spawnSync('ffmpeg', ['-version'], { stdio: 'ignore' }).status === 0
   && spawnSync('ffprobe', ['-version'], { stdio: 'ignore' }).status === 0;
-const run = args => spawnSync(process.execPath, [BIN, ...args], {
-  encoding: 'utf8', env: { ...process.env, NAROVA_FIRST_RUN: '0' },
+const run = (args, extraEnv = {}) => spawnSync(process.execPath, [BIN, ...args], {
+  encoding: 'utf8', env: { ...process.env, NAROVA_FIRST_RUN: '0', ...extraEnv },
 });
 const digest = file => crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+
+function installFakeHyperFrames(dir) {
+  const bin = path.join(dir, 'bin');
+  fs.mkdirSync(bin);
+  const npx = path.join(bin, 'npx');
+  fs.writeFileSync(npx, `#!/usr/bin/env node
+const path = require('node:path');
+const { spawnSync } = require('node:child_process');
+const at = process.argv.indexOf('--output');
+if (at < 0 || !process.argv[at + 1]) process.exit(2);
+const output = path.resolve(process.cwd(), process.argv[at + 1]);
+const result = spawnSync('ffmpeg', [
+  '-y', '-v', 'error', '-f', 'lavfi', '-i', 'color=c=navy:s=160x90:r=30:d=1',
+  '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', output,
+]);
+process.exit(result.status == null ? 1 : result.status);
+`);
+  fs.chmodSync(npx, 0o755);
+  return bin;
+}
 
 let root;
 let video;
@@ -89,6 +109,8 @@ test('Witness emits deterministic, exact, pixels-only evidence with neutral auth
   assert.ok(frames.every(item => item.extensions['narova.frame-binding'].extractionMethod === first.methods[0].id));
   assert.ok(first.observations.every(item => frames.every(frame => item.evidence.includes(frame.id))));
   assert.equal(first.coverage.channels.find(item => item.kind === 'dom.element-boxes').availability, 'UNAVAILABLE');
+  assert.equal(first.coverage.channels.find(item => item.kind === 'dom.layout-audit').reason,
+    'ADAPTER_DOES_NOT_EXPOSE_CHANNEL');
   assert.equal(first.coverage.channels.find(item => item.kind === 'renderer.visual-node-boxes').availability, 'UNAVAILABLE');
   assert.equal(first.effect, 'NONE');
   assert.equal(first.summary.byBasis.LEARNED, 0);
@@ -216,7 +238,10 @@ test('stale receipt and HyperFrames degrade to the unchanged pixels-only path', 
     const browserBundle = witnessArtifact(hyperframes.artifact, { binding: hyperframes.binding });
     assert.equal(browserBundle.coverage.profile, 'PIXELS_ONLY');
     assert.equal(browserBundle.coverage.channels.find(item => item.kind === 'renderer.visual-node-boxes').availability, 'UNAVAILABLE');
-    assert.deepEqual(browserBundle, witnessArtifact(hyperframes.artifact));
+    assert.equal(browserBundle.coverage.channels.find(item => item.kind === 'dom.layout-audit').reason,
+      'LOCAL_CONTAINMENT_UNAVAILABLE');
+    assert.equal(witnessArtifact(hyperframes.artifact).coverage.channels
+      .find(item => item.kind === 'dom.layout-audit').reason, 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL');
     const cli = run(['witness', '--project', hyperframes.fixture, '--json']);
     assert.equal(cli.status, 0, cli.stderr);
     assert.equal(JSON.parse(cli.stdout).data.witness.coverage.profile, 'PIXELS_ONLY');
@@ -257,9 +282,18 @@ test('rich Witness publication rechecks the exact receipt before atomic commit',
   }
 });
 
-test('a real no-browser build exposes privileged state without changing build products', { skip: !MEDIA_AVAILABLE }, () => {
+test('build --witness publishes one advisory bundle without changing ordinary build identities', { skip: !MEDIA_AVAILABLE }, () => {
   const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-witness-real-no-browser-'));
   try {
+    const freezeDate = path.join(project, 'freeze-date.cjs');
+    fs.writeFileSync(freezeDate, `
+const NativeDate = Date;
+global.Date = class FrozenDate extends NativeDate {
+  constructor(...args) { super(...(args.length ? args : ['2026-08-24T00:00:00.000Z'])); }
+  static now() { return NativeDate.parse('2026-08-24T00:00:00.000Z'); }
+};
+`);
+    const frozenEnv = { NODE_OPTIONS: `--require=${freezeDate}` };
     fs.writeFileSync(path.join(project, 'reel.config.json'), `${JSON.stringify({
       title: 'Real renderer Witness', renderer: 'no-browser', size: '16:9', voices: {},
       scenes: [{
@@ -270,20 +304,90 @@ test('a real no-browser build exposes privileged state without changing build pr
         },
       }],
     })}\n`);
-    const built = run(['build', '--project', project, '--json']);
+    const built = run(['build', '--project', project, '--json'], frozenEnv);
     assert.equal(built.status, 0, built.stderr);
     const rendered = path.join(project, 'out', 'video.mp4');
     const receipt = `${rendered}.narova-ci.json`;
     const videoBefore = fs.readFileSync(rendered);
     const receiptBefore = fs.readFileSync(receipt);
-    const witnessed = run(['witness', '--project', project, '--json']);
+    assert.equal(fs.existsSync(path.join(project, 'out', 'witness.json')), false);
+
+    const witnessed = run(['build', '--witness', '--project', project, '--json'], frozenEnv);
     assert.equal(witnessed.status, 0, witnessed.stderr);
-    const bundle = JSON.parse(witnessed.stdout).data.witness;
+    const envelope = JSON.parse(witnessed.stdout);
+    assert.equal(envelope.data.witness.availability, 'AVAILABLE');
+    assert.ok(envelope.artifacts.some(item => item.role === 'witness-evidence'
+      && item.path.endsWith('out/witness.json')));
+    const witnessFile = path.join(project, 'out', 'witness.json');
+    const bundle = JSON.parse(fs.readFileSync(witnessFile, 'utf8'));
     assert.equal(bundle.coverage.profile, 'MIXED');
     assert.equal(bundle.resources.find(item => item.kind === 'renderer.visual-node-boxes')
       .extensions['narova.inline-json'].data.source.renderer.provider, 'no-browser');
     assert.deepEqual(fs.readFileSync(rendered), videoBefore);
     assert.deepEqual(fs.readFileSync(receipt), receiptBefore);
+
+    const witnessBeforeOptOut = fs.readFileSync(witnessFile);
+    const ordinaryAgain = run(['build', '--project', project, '--json'], frozenEnv);
+    assert.equal(ordinaryAgain.status, 0, ordinaryAgain.stderr);
+    assert.equal(Object.hasOwn(JSON.parse(ordinaryAgain.stdout).data, 'witness'), false);
+    assert.deepEqual(fs.readFileSync(rendered), videoBefore);
+    assert.deepEqual(fs.readFileSync(receipt), receiptBefore);
+    assert.deepEqual(fs.readFileSync(witnessFile), witnessBeforeOptOut);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('build --witness rejects plural variants before rendering', () => {
+  const result = run(['build', '--witness', '--variants', '--project', root, '--json']);
+  assert.equal(result.status, 2);
+  assert.match(result.stderr, /supports one selected primary build/);
+});
+
+test('HyperFrames build --witness stays pixels-only without exact render provenance', { skip: !MEDIA_AVAILABLE }, () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-witness-hf-build-'));
+  try {
+    const fakeBin = installFakeHyperFrames(project);
+    fs.writeFileSync(path.join(project, 'reel.config.json'), `${JSON.stringify({
+      title: 'HyperFrames Witness boundary', renderer: 'hyperframes', size: '16:9', voices: {},
+      scenes: [{ id: 'only', vo: [], dur: 1, body: '<div>Intentional layout</div>' }],
+    })}\n`);
+    const result = run(['build', '--witness', '--project', project, '--json'], {
+      PATH: `${fakeBin}${path.delimiter}${process.env.PATH || ''}`,
+    });
+    assert.equal(result.status, 0, result.stderr);
+    const envelope = JSON.parse(result.stdout);
+    assert.equal(envelope.data.witness.availability, 'AVAILABLE');
+    const bundle = JSON.parse(fs.readFileSync(path.join(project, 'out', 'witness.json'), 'utf8'));
+    assert.equal(bundle.coverage.profile, 'PIXELS_ONLY');
+    assert.equal(bundle.coverage.channels.find(item => item.kind === 'dom.layout-audit').reason,
+      'LOCAL_CONTAINMENT_UNAVAILABLE');
+    assert.equal(bundle.observations.some(item => item.kind.startsWith('dom.')), false);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
+test('build --witness publication failure is advisory and leaves the primary build successful', { skip: !MEDIA_AVAILABLE }, () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-witness-advisory-'));
+  try {
+    fs.mkdirSync(path.join(project, 'out', 'witness.json'), { recursive: true });
+    fs.writeFileSync(path.join(project, 'reel.config.json'), `${JSON.stringify({
+      title: 'Advisory Witness failure', renderer: 'no-browser', size: '16:9', voices: {},
+      scenes: [{ id: 'only', vo: [], dur: 1, visual: { type: 'rect', style: { background: '#222222' } } }],
+    })}\n`);
+    const result = run(['build', '--witness', '--project', project, '--json']);
+    assert.equal(result.status, 0, result.stderr);
+    const envelope = JSON.parse(result.stdout);
+    assert.equal(envelope.success, true);
+    assert.deepEqual(envelope.data.witness, {
+      availability: 'UNAVAILABLE', reason: 'WITNESS_PUBLICATION_FAILED',
+    });
+    assert.ok(envelope.diagnostics.some(item => item.severity === 'warning'
+      && item.code === 'advisory.witness.unavailable'));
+    assert.equal(envelope.artifacts.some(item => item.role === 'witness-evidence'), false);
+    assert.equal(fs.existsSync(path.join(project, 'out', 'video.mp4')), true);
+    assert.equal(fs.statSync(path.join(project, 'out', 'witness.json')).isDirectory(), true);
   } finally {
     fs.rmSync(project, { recursive: true, force: true });
   }
