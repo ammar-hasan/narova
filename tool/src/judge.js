@@ -11,7 +11,7 @@ const fs = require('fs');
 const path = require('path');
 const { spawnSync } = require('child_process');
 const {
-  SCHEMA: BINDING_SCHEMA, receiptPath, validateSceneStateContext,
+  loadVideoCiBinding,
 } = require('./video-ci-binding');
 const {
   analyzeFrames, framesFromBundle, samplingFromBundle, visualMetrics, witnessArtifact,
@@ -260,76 +260,6 @@ function scopedAudioLevels(audio, start, end) {
 function readJson(file) {
   try { return fs.existsSync(file) ? JSON.parse(fs.readFileSync(file, 'utf8')) : null; }
   catch { return null; }
-}
-
-function inside(root, file) {
-  const canonical = value => {
-    try { return fs.realpathSync(value); }
-    catch { return path.resolve(value); }
-  };
-  const relative = path.relative(canonical(root), canonical(file));
-  return relative && relative !== '..' && !relative.startsWith(`..${path.sep}`) && !path.isAbsolute(relative);
-}
-
-function validateBindingSource(source, kind) {
-  if (source == null) return;
-  if (!source || typeof source !== 'object' || Array.isArray(source)) {
-    throw new Error(`${kind} binding source is not an object`);
-  }
-  const allowed = new Set(['path', 'bytes', 'sha256', 'available', 'format', 'content', 'reason']);
-  const unknown = Object.keys(source).filter(key => !allowed.has(key));
-  if (unknown.length) throw new Error(`${kind} binding source has unsupported field: ${unknown[0]}`);
-  if (typeof source.path !== 'string' || !source.path
-      || !Number.isInteger(source.bytes) || source.bytes < 0
-      || typeof source.sha256 !== 'string' || !/^[a-f0-9]{64}$/.test(source.sha256)
-      || typeof source.available !== 'boolean') {
-    throw new Error(`${kind} binding source identity is invalid`);
-  }
-  if (source.available && !Object.hasOwn(source, 'content')) {
-    throw new Error(`${kind} binding source has no canonical content`);
-  }
-  if (kind === 'caption' && source.available && typeof source.content !== 'string') {
-    throw new Error('caption binding source content is not text');
-  }
-}
-
-function validateBindingContext(context) {
-  if (!context || typeof context !== 'object' || Array.isArray(context)) {
-    throw new Error('binding context is invalid');
-  }
-  validateBindingSource(context.manifest, 'manifest');
-  validateBindingSource(context.timings, 'timings');
-  if (context.sceneState != null) validateSceneStateContext(context.sceneState);
-  if (!Array.isArray(context.captions)) throw new Error('binding captions are not an array');
-  context.captions.forEach(source => validateBindingSource(source, 'caption'));
-}
-
-function loadVideoCiBinding(artifact, outDir) {
-  const candidate = receiptPath(artifact.path);
-  if (!inside(outDir, artifact.path) || !inside(outDir, candidate)) {
-    return { available: false, used: false, path: null, grade: 'UNAVAILABLE', reason: 'selected artifact has no project-output evidence binding' };
-  }
-  if (!fs.existsSync(candidate)) {
-    return { available: false, used: false, path: candidate, grade: 'UNAVAILABLE', reason: 'no evidence binding exists for the selected artifact' };
-  }
-  try {
-    const stat = fs.statSync(candidate);
-    if (!stat.isFile() || stat.size > MAX_CONTEXT_BYTES * 3) throw new Error('binding is not a bounded regular file');
-    const document = JSON.parse(fs.readFileSync(candidate, 'utf8'));
-    if (document.schema !== BINDING_SCHEMA) throw new Error('binding schema is unsupported');
-    if (!document.artifact || document.artifact.sha256 !== artifact.sha256
-        || document.artifact.bytes !== artifact.bytes
-        || document.artifact.path !== path.basename(artifact.path)) {
-      throw new Error('binding artifact identity does not match the selected bytes');
-    }
-    validateBindingContext(document.context);
-    return {
-      available: true, used: true, path: candidate, grade: 'RECORDED',
-      sha256: hashBytes(candidate), document,
-    };
-  } catch (error) {
-    return { available: true, used: false, path: candidate, grade: 'INVALID', reason: error.message };
-  }
 }
 
 function usableManifestScenes(document) {
@@ -1296,7 +1226,7 @@ function judge(config, opts = {}) {
   const binding = loadVideoCiBinding(artifact, outDir);
   const configSource = resolvedConfigSource(config, opts.configFile);
   const timeline = sceneTimeline(config, outDir, artifact.duration, binding);
-  const witness = witnessArtifact(artifact);
+  const witness = witnessArtifact(artifact, { binding });
   const sampling = samplingFromBundle(witness);
   const audio = analyzeAudio(artifact.path, artifact.duration, artifact.streams.audio);
   const captions = captionEvidence(outDir, artifact, binding);

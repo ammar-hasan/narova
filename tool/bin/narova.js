@@ -20,6 +20,7 @@ const { judge, formatJudgement, probeArtifact } = require('../src/judge');
 const {
   formatWitness, publishWitnessBundle, verifyArtifactBytes, witnessArtifact,
 } = require('../src/witness');
+const { loadVideoCiBinding, verifyVideoCiBinding } = require('../src/video-ci-binding');
 const { interventionPlan, formatInterventionPlan } = require('../src/intervention-plan');
 const {
   captureBranchExperiment, branchExperimentIdentity, verifyBranchExperiment,
@@ -1323,11 +1324,15 @@ async function main() {
       const artifact = probeArtifact(flags.video
         ? path.resolve(projectDir, flags.video)
         : path.join(out, defaultVideo));
-      const bundle = witnessArtifact(artifact);
+      const binding = loadVideoCiBinding(artifact, out);
+      const bundle = witnessArtifact(artifact, { binding });
       const outputRef = String(flags.output || path.relative(projectDir, path.join(out, 'witness.json')));
       const destination = resolveProjectFile(projectDir, outputRef, { mustExist: false });
       const output = publishWitnessBundle(bundle, destination.absolute, {
-        verifyInputs: () => verifyArtifactBytes(artifact),
+        verifyInputs: () => {
+          verifyArtifactBytes(artifact);
+          if (bundle.coverage.profile === 'MIXED') verifyVideoCiBinding(binding);
+        },
       });
       mData({ witness: bundle, output: destination.relative });
       mArtifact(output, 'witness-evidence');

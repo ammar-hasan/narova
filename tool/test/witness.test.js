@@ -12,6 +12,9 @@ const {
   canonicalize, expectedBundleId, publishWitnessBundle, validateWitnessBundle,
   verifyArtifactBytes, visualMetrics, witnessArtifact,
 } = require('../src/witness');
+const {
+  loadVideoCiBinding, verifyVideoCiBinding, writeVideoCiBinding,
+} = require('../src/video-ci-binding');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const BIN = path.join(ROOT, 'tool', 'bin', 'narova.js');
@@ -108,6 +111,184 @@ test('Witness emits deterministic, exact, pixels-only evidence with neutral auth
   assert.ok(whole.blackRatio > 0 && whole.blackRatio < 1);
 });
 
+function privilegedFixture(provider = 'no-browser') {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), `narova-witness-${provider}-`));
+  const out = path.join(fixture, 'out');
+  fs.mkdirSync(out);
+  const artifactFile = path.join(out, 'video.mp4');
+  fs.copyFileSync(video, artifactFile);
+  const manifest = {
+    renderer: { provider, providerVersion: 'fixture-renderer' },
+    format: { width: 160, height: 90, fps: 10 },
+    captions: { enabled: false, preset: 'subtitle' },
+    safeLayout: false,
+    scenes: [{
+      id: 'strange', index: 0, start: 0, duration: 2, transition: 'fade', vo: [],
+      visual: {
+        type: 'rect', style: { opacity: 0.5, overflow: 'hidden' },
+        children: [{ type: 'rect', style: { x: -120, y: 12, width: 80, height: 40, opacity: 0 } }],
+      },
+    }],
+  };
+  fs.writeFileSync(path.join(out, 'manifest.json'), `${JSON.stringify(manifest)}\n`);
+  fs.writeFileSync(path.join(out, 'timings.json'), '{}\n');
+  fs.writeFileSync(path.join(fixture, 'reel.config.json'), `${JSON.stringify({
+    title: 'Privileged fixture', renderer: provider, size: '16:9', voices: {},
+    scenes: [{ id: 'strange', vo: [], dur: 2, visual: manifest.scenes[0].visual }],
+  })}\n`);
+  const receipt = writeVideoCiBinding(artifactFile, {
+    outDir: out, projectDir: fixture, sceneState: [],
+  });
+  const artifact = probeArtifact(artifactFile);
+  const binding = loadVideoCiBinding(artifact, out);
+  return { fixture, out, artifactFile, manifest, receipt, artifact, binding };
+}
+
+test('no-browser receipt adds exactly bound neutral production state to narova.witness/1', { skip: !MEDIA_AVAILABLE }, () => {
+  const rich = privilegedFixture();
+  try {
+    const videoBefore = fs.readFileSync(rich.artifactFile);
+    const receiptBefore = fs.readFileSync(rich.receipt);
+    const first = witnessArtifact(rich.artifact, { binding: rich.binding });
+    fs.writeFileSync(path.join(rich.out, 'manifest.json'), '{"renderer":{"provider":"hyperframes"}}\n');
+    const second = witnessArtifact(rich.artifact, { binding: rich.binding });
+    assert.deepEqual(second, first);
+    const cli = run(['witness', '--project', rich.fixture, '--json']);
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(JSON.parse(cli.stdout).data.witness.coverage.profile, 'MIXED');
+    const judged = run(['judge', '--project', rich.fixture, '--json']);
+    assert.equal(judged.status, 0, judged.stderr);
+    assert.equal(JSON.parse(judged.stdout).data.judgement.witness.coverage.profile, 'MIXED');
+    validateWitnessBundle(first);
+    assert.equal(first.schema, 'narova.witness/1');
+    assert.equal(first.coverage.profile, 'MIXED');
+    const channel = first.coverage.channels.find(item => item.kind === 'renderer.visual-node-boxes');
+    assert.equal(channel.availability, 'AVAILABLE');
+    const observation = first.observations.find(item => item.kind === 'renderer.visual-node-boxes.bound-sample-count');
+    assert.equal(observation.basis, 'MEASURED');
+    assert.deepEqual(observation.sourceRoles, ['PRODUCTION_STATE']);
+    assert.equal(observation.confidence.value, 1);
+    const resource = first.resources.find(item => item.kind === 'renderer.visual-node-boxes');
+    const state = resource.extensions['narova.inline-json'].data;
+    assert.equal(state.source.artifact.digest, rich.artifact.sha256);
+    assert.equal(state.source.manifest.digest, rich.binding.document.context.manifest.sha256);
+    assert.ok(state.samples.every(item => item.frameResource.startsWith('resource:frame:')));
+    assert.ok(state.samples.some(item => item.nodes[1].effectiveOpacity === 0));
+    const whiteState = state.samples.find(item => item.time.ticks >= 100000000);
+    const luma = first.observations.find(item => item.kind === 'artifact.luma.mean-series')
+      .value.series.find(item => item.time.ticks === whiteState.time.ticks);
+    assert.equal(whiteState.nodes[1].effectiveOpacity, 0);
+    assert.ok(luma.number > 0.8);
+    assert.equal(first.observations.some(item => /visibility/.test(item.kind)), false);
+    assert.doesNotMatch(JSON.stringify(first), /"(?:score|qualityScore|beauty|recommendation|mutation|repair|verdict)"\s*:/i);
+    assert.deepEqual(fs.readFileSync(rich.artifactFile), videoBefore);
+    assert.deepEqual(fs.readFileSync(rich.receipt), receiptBefore);
+
+    const tampered = structuredClone(first);
+    tampered.resources.find(item => item.kind === 'renderer.visual-node-boxes')
+      .extensions['narova.inline-json'].data.samples[0].frameIndex += 1;
+    assert.throws(() => validateWitnessBundle(tampered), /inline resource.*digest/);
+    const rebound = structuredClone(first);
+    rebound.resources.find(item => item.kind === 'renderer.visual-node-boxes')
+      .extensions['narova.derivation-binding'].receipt.digest = '0'.repeat(64);
+    rebound.bundleId = expectedBundleId(rebound);
+    assert.throws(() => validateWitnessBundle(rebound), /invalid artifact or manifest binding/);
+  } finally {
+    fs.rmSync(rich.fixture, { recursive: true, force: true });
+  }
+});
+
+test('stale receipt and HyperFrames degrade to the unchanged pixels-only path', { skip: !MEDIA_AVAILABLE }, () => {
+  const stale = privilegedFixture();
+  const hyperframes = privilegedFixture('hyperframes');
+  const malformed = privilegedFixture();
+  try {
+    const document = JSON.parse(fs.readFileSync(stale.receipt, 'utf8'));
+    document.artifact.sha256 = '0'.repeat(64);
+    fs.writeFileSync(stale.receipt, `${JSON.stringify(document)}\n`);
+    const invalid = loadVideoCiBinding(stale.artifact, stale.out);
+    assert.equal(invalid.used, false);
+    const staleBundle = witnessArtifact(stale.artifact, { binding: invalid });
+    assert.equal(staleBundle.coverage.profile, 'PIXELS_ONLY');
+    assert.equal(staleBundle.coverage.channels.find(item => item.kind === 'renderer.visual-node-boxes').reason,
+      'ARTIFACT_BOUND_SOURCE_INVALID');
+
+    const browserBundle = witnessArtifact(hyperframes.artifact, { binding: hyperframes.binding });
+    assert.equal(browserBundle.coverage.profile, 'PIXELS_ONLY');
+    assert.equal(browserBundle.coverage.channels.find(item => item.kind === 'renderer.visual-node-boxes').availability, 'UNAVAILABLE');
+    assert.deepEqual(browserBundle, witnessArtifact(hyperframes.artifact));
+    const cli = run(['witness', '--project', hyperframes.fixture, '--json']);
+    assert.equal(cli.status, 0, cli.stderr);
+    assert.equal(JSON.parse(cli.stdout).data.witness.coverage.profile, 'PIXELS_ONLY');
+
+    const malformedReceipt = JSON.parse(fs.readFileSync(malformed.receipt, 'utf8'));
+    malformedReceipt.context.manifest.content.format = null;
+    fs.writeFileSync(malformed.receipt, `${JSON.stringify(malformedReceipt)}\n`);
+    const malformedBinding = loadVideoCiBinding(malformed.artifact, malformed.out);
+    assert.equal(malformedBinding.used, true);
+    const malformedBundle = witnessArtifact(malformed.artifact, { binding: malformedBinding });
+    assert.equal(malformedBundle.coverage.profile, 'PIXELS_ONLY');
+    assert.equal(malformedBundle.coverage.channels.find(item => item.kind === 'renderer.visual-node-boxes').reason,
+      'BOUND_NO_BROWSER_SOURCE_INVALID');
+  } finally {
+    fs.rmSync(stale.fixture, { recursive: true, force: true });
+    fs.rmSync(hyperframes.fixture, { recursive: true, force: true });
+    fs.rmSync(malformed.fixture, { recursive: true, force: true });
+  }
+});
+
+test('rich Witness publication rechecks the exact receipt before atomic commit', { skip: !MEDIA_AVAILABLE }, () => {
+  const rich = privilegedFixture();
+  try {
+    const bundle = witnessArtifact(rich.artifact, { binding: rich.binding });
+    const output = path.join(rich.out, 'witness.json');
+    fs.writeFileSync(output, '{"prior":true}\n');
+    const prior = fs.readFileSync(output);
+    fs.appendFileSync(rich.receipt, ' ');
+    assert.throws(() => publishWitnessBundle(bundle, output, {
+      verifyInputs: () => {
+        verifyArtifactBytes(rich.artifact);
+        verifyVideoCiBinding(rich.binding);
+      },
+    }), /binding changed during analysis/);
+    assert.deepEqual(fs.readFileSync(output), prior);
+  } finally {
+    fs.rmSync(rich.fixture, { recursive: true, force: true });
+  }
+});
+
+test('a real no-browser build exposes privileged state without changing build products', { skip: !MEDIA_AVAILABLE }, () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-witness-real-no-browser-'));
+  try {
+    fs.writeFileSync(path.join(project, 'reel.config.json'), `${JSON.stringify({
+      title: 'Real renderer Witness', renderer: 'no-browser', size: '16:9', voices: {},
+      scenes: [{
+        id: 'only', vo: [], dur: 1,
+        visual: {
+          type: 'rect', style: { background: '#111111' },
+          children: [{ type: 'rect', style: { x: 80, y: 60, width: 240, height: 120, opacity: 0.75 } }],
+        },
+      }],
+    })}\n`);
+    const built = run(['build', '--project', project, '--json']);
+    assert.equal(built.status, 0, built.stderr);
+    const rendered = path.join(project, 'out', 'video.mp4');
+    const receipt = `${rendered}.narova-ci.json`;
+    const videoBefore = fs.readFileSync(rendered);
+    const receiptBefore = fs.readFileSync(receipt);
+    const witnessed = run(['witness', '--project', project, '--json']);
+    assert.equal(witnessed.status, 0, witnessed.stderr);
+    const bundle = JSON.parse(witnessed.stdout).data.witness;
+    assert.equal(bundle.coverage.profile, 'MIXED');
+    assert.equal(bundle.resources.find(item => item.kind === 'renderer.visual-node-boxes')
+      .extensions['narova.inline-json'].data.source.renderer.provider, 'no-browser');
+    assert.deepEqual(fs.readFileSync(rendered), videoBefore);
+    assert.deepEqual(fs.readFileSync(receipt), receiptBefore);
+  } finally {
+    fs.rmSync(project, { recursive: true, force: true });
+  }
+});
+
 test('narova witness atomically materializes a machine-native bundle', { skip: !MEDIA_AVAILABLE }, () => {
   const result = run(['witness', '--project', root, '--json']);
   assert.equal(result.status, 0, result.stderr);
@@ -176,5 +357,5 @@ test('Judge consumes Witness identity and has no independent visual implementati
   assert.equal(visual.witnessBundleId, report.witness.bundleId);
   const source = fs.readFileSync(path.join(ROOT, 'tool', 'src', 'judge.js'), 'utf8');
   assert.doesNotMatch(source, /function\s+(?:analyzeFrames|visualMetrics|edgeEnergy|frameDifference)\s*\(/);
-  assert.match(source, /witnessArtifact\(artifact\)/);
+  assert.match(source, /witnessArtifact\(artifact, \{ binding \}\)/);
 });

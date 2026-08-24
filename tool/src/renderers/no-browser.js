@@ -1047,7 +1047,7 @@ module.exports = {
    * re-rendered, the rest are reused and concatenated. */
   cache: { mode: 'per-scene' },
   _internals: {
-    layoutTree, animatedState, renderCanvas, qualityOptions,
+    layoutTree, animatedState, transitionState, renderCanvas, qualityOptions,
     fontSupports, shapingFont, shapeRun, shapedLines, captionSafeInset, captionWordStyle, drawCaptions, gradientLine,
   },
 };

@@ -8,6 +8,9 @@ const crypto = require('node:crypto');
 const fs = require('node:fs');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
+const {
+  SCHEMA: VISUAL_NODE_SCHEMA, extractNoBrowserVisualNodes,
+} = require('./witness-no-browser');
 
 const SCHEMA = 'narova.witness/1';
 const FRAME_WIDTH = 64;
@@ -253,6 +256,10 @@ function implementationDigest() {
   return sha256(fs.readFileSync(__filename));
 }
 
+function visualNodeImplementationDigest() {
+  return sha256(fs.readFileSync(require.resolve('./witness-no-browser')));
+}
+
 function summarize(observations) {
   const byBasis = { MEASURED: 0, INFERRED: 0, LEARNED: 0, INTERPRETIVE: 0 };
   for (const observation of observations) byBasis[observation.basis] += 1;
@@ -266,7 +273,119 @@ function summarize(observations) {
   };
 }
 
-function witnessArtifact(artifact) {
+function compileNoBrowserChannel(artifact, analysis, binding) {
+  const manifestSource = binding && binding.used && binding.document && binding.document.context
+    ? binding.document.context.manifest : null;
+  if (!manifestSource || manifestSource.available !== true || !manifestSource.content
+      || !binding.sha256 || !/^[a-f0-9]{64}$/.test(binding.sha256)
+      || !manifestSource.content.renderer
+      || manifestSource.content.renderer.provider !== 'no-browser') return null;
+  const input = {
+    manifest: manifestSource.content,
+    artifact: { algorithm: 'sha256', digest: artifact.sha256, bytes: artifact.bytes },
+    manifestIdentity: { algorithm: 'sha256', digest: manifestSource.sha256, bytes: manifestSource.bytes },
+    samples: analysis.frames.map(frame => ({
+      frameIndex: frame.index,
+      frameResource: `resource:frame:${String(frame.index).padStart(6, '0')}`,
+      time: rationalTime(frame.time),
+    })),
+  };
+  let data;
+  try { data = extractNoBrowserVisualNodes(input); }
+  catch (error) {
+    return {
+      unavailable: /^no-browser Witness /.test(error && error.message || '')
+        ? 'BOUND_NO_BROWSER_SOURCE_INVALID' : 'NO_BROWSER_EXTRACTION_FAILED',
+    };
+  }
+  if (!data.samples.some(sample => sample.availability === 'AVAILABLE')) {
+    return { unavailable: 'BOUND_NO_BROWSER_VISUAL_TREE_UNAVAILABLE' };
+  }
+  const serialized = canonicalize(data);
+  const options = {
+    schema: VISUAL_NODE_SCHEMA,
+    ...data.options,
+    sampling: 'bounded selection from exact decoded artifact frame resources',
+  };
+  const optionsRef = digestRef(canonicalize(options));
+  const method = {
+    id: 'method:renderer.visual-node-boxes:v1',
+    kind: 'narova.renderer.visual-node-boxes',
+    version: '1',
+    basis: 'MEASURED',
+    deterministic: true,
+    implementation: { algorithm: 'sha256', digest: visualNodeImplementationDigest() },
+    options: optionsRef,
+    provider: `@narova/narova:no-browser@${data.source.renderer.version || 'version-unavailable'}`,
+    networkUsed: false,
+    limitations: data.limitations,
+  };
+  const resources = [{
+    id: 'resource:production.manifest',
+    role: 'PRODUCTION_STATE',
+    kind: 'renderer-manifest-snapshot',
+    mediaType: 'application/json',
+    algorithm: 'sha256',
+    digest: manifestSource.sha256,
+    bytes: manifestSource.bytes,
+    locator: 'narova.video-ci-evidence/1#/context/manifest',
+    extensions: {
+      'narova.source-binding': {
+        artifact: input.artifact,
+        receipt: { algorithm: 'sha256', digest: binding.sha256 },
+      },
+    },
+  }, {
+    id: 'resource:production.visual-node-boxes',
+    role: 'PRODUCTION_STATE',
+    kind: 'renderer.visual-node-boxes',
+    mediaType: 'application/json',
+    algorithm: 'sha256',
+    digest: sha256(serialized),
+    bytes: Buffer.byteLength(serialized),
+    extensions: {
+      'narova.inline-json': { schema: VISUAL_NODE_SCHEMA, data },
+      'narova.derivation-binding': {
+        artifact: input.artifact,
+        manifest: input.manifestIdentity,
+        receipt: { algorithm: 'sha256', digest: binding.sha256 },
+        method: method.id,
+        options: optionsRef,
+      },
+    },
+  }];
+  const availableSamples = data.samples.length - data.coverage.unavailableSamples;
+  const observation = {
+    id: 'observation:renderer.visual-node-boxes',
+    kind: 'renderer.visual-node-boxes.bound-sample-count',
+    availability: data.coverage.partial ? 'PARTIAL' : 'AVAILABLE',
+    ...(data.coverage.partial ? { reason: 'BOUNDED_OR_UNAVAILABLE_PRODUCTION_STATE_SAMPLES' } : {}),
+    basis: 'MEASURED',
+    sourceRoles: ['PRODUCTION_STATE'],
+    method: method.id,
+    value: { type: 'number', number: availableSamples, unit: 'bound-samples' },
+    confidence: { value: 1, meaning: 'exact-calculation' },
+    evidence: resources.map(resource => resource.id),
+    limitations: data.limitations,
+    extensions: { 'narova.channel-coverage': data.coverage },
+  };
+  return { data, method, observation, optionsRef, resources };
+}
+
+function visualNodeUnavailableReason(binding, candidate) {
+  if (candidate && candidate.unavailable) return candidate.unavailable;
+  if (!binding) return 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL';
+  if (binding.grade === 'INVALID') return 'ARTIFACT_BOUND_SOURCE_INVALID';
+  if (!binding.used) return 'ARTIFACT_BOUND_SOURCE_UNAVAILABLE';
+  const manifest = binding.document && binding.document.context && binding.document.context.manifest;
+  if (manifest && manifest.available && manifest.content && manifest.content.renderer
+      && manifest.content.renderer.provider === 'no-browser') {
+    return 'BOUND_NO_BROWSER_SOURCE_UNAVAILABLE_OR_INVALID';
+  }
+  return 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL';
+}
+
+function witnessArtifact(artifact, { binding = null } = {}) {
   if (!artifact || !artifact.path || !/^[a-f0-9]{64}$/.test(artifact.sha256 || '')
       || !Number.isSafeInteger(artifact.bytes) || artifact.bytes < 0
       || !Number.isFinite(artifact.duration) || artifact.duration <= 0) {
@@ -361,7 +480,27 @@ function witnessArtifact(artifact) {
       ['3x3 regional edge energy is not gaze, salience, composition quality, or readability'],
     )),
   ].sort((left, right) => left.id.localeCompare(right.id));
-  const sourceMarker = canonicalize({
+  const privilegedCandidate = compileNoBrowserChannel(artifact, analysis, binding);
+  const privileged = privilegedCandidate && !privilegedCandidate.unavailable ? privilegedCandidate : null;
+  if (privileged) observations.push(privileged.observation);
+  observations.sort((left, right) => left.id.localeCompare(right.id));
+  const sourceMarker = canonicalize(privileged ? {
+    schema: 'narova.witness-source/1',
+    profile: 'MIXED',
+    artifact: { algorithm: 'sha256', digest: artifact.sha256, bytes: artifact.bytes },
+    receipt: { algorithm: 'sha256', digest: binding.sha256 },
+    manifest: {
+      algorithm: 'sha256',
+      digest: binding.document.context.manifest.sha256,
+      bytes: binding.document.context.manifest.bytes,
+    },
+    channel: {
+      schema: VISUAL_NODE_SCHEMA,
+      digest: privileged.resources[1].digest,
+      method: privileged.method.id,
+      options: privileged.optionsRef,
+    },
+  } : {
     schema: 'narova.witness-source/1',
     profile: 'PIXELS_ONLY',
     privilegedChannels: 'UNAVAILABLE',
@@ -384,12 +523,16 @@ function witnessArtifact(artifact) {
       references: [],
     },
     coverage: {
-      profile: 'PIXELS_ONLY',
+      profile: privileged ? 'MIXED' : 'PIXELS_ONLY',
       channels: [
         { kind: 'artifact.decoded-grayscale', availability: 'AVAILABLE', resource: 'resource:artifact' },
         { kind: 'dom.element-boxes', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
         { kind: 'dom.glyph-boxes', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
-        { kind: 'renderer.visual-node-boxes', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
+        privileged
+          ? { kind: 'renderer.visual-node-boxes', availability: privileged.data.coverage.partial ? 'PARTIAL' : 'AVAILABLE', resource: privileged.resources[1].id,
+            ...(privileged.data.coverage.partial ? { reason: 'BOUNDED_PRODUCTION_STATE_COVERAGE' } : {}),
+            extensions: { 'narova.channel-coverage': privileged.data.coverage } }
+          : { kind: 'renderer.visual-node-boxes', availability: 'UNAVAILABLE', reason: visualNodeUnavailableReason(binding, privilegedCandidate) },
         { kind: 'renderer.instance-mask', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
         { kind: 'renderer.depth', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
         { kind: 'renderer.motion-vectors', availability: 'UNAVAILABLE', reason: 'ADAPTER_DOES_NOT_EXPOSE_CHANNEL' },
@@ -397,17 +540,19 @@ function witnessArtifact(artifact) {
       artifactFrames: { analyzed: analysis.frames.length, propagated: 0, total: analysis.frames.length },
       extensions: { 'narova.sampling': analysis.sampling },
     },
-    methods: [method],
+    methods: [method, ...(privileged ? [privileged.method] : [])],
     resources: [{
       id: 'resource:artifact', role: 'ARTIFACT', kind: 'encoded-video',
       mediaType: type, algorithm: 'sha256', digest: artifact.sha256, bytes: artifact.bytes,
-    }, ...frameResources],
+    }, ...frameResources, ...(privileged ? privileged.resources : [])],
     subjects: [],
     observations,
     summary: summarize(observations),
     effect: 'NONE',
     extensions: {
-      'narova.renderer-compatibility': { artifactOnly: ['hyperframes', 'no-browser'] },
+      'narova.renderer-compatibility': privileged
+        ? { artifactOnly: ['hyperframes'], productionState: ['no-browser'] }
+        : { artifactOnly: ['hyperframes', 'no-browser'] },
     },
   };
   const bundle = { ...payload, bundleId: expectedBundleId(payload) };
@@ -465,6 +610,7 @@ function validateWitnessBundle(bundle) {
   }
   const frameResources = bundle.resources.filter(item => item.kind === 'decoded-grayscale-frame');
   const frameIndexes = new Set();
+  const framesById = new Map();
   for (const resource of frameResources) {
     const binding = resource.extensions && resource.extensions['narova.frame-binding'];
     const method = binding && bundle.methods.find(item => item.id === binding.extractionMethod);
@@ -479,10 +625,50 @@ function validateWitnessBundle(bundle) {
       throw new Error(`Witness frame resource ${resource.id} has an invalid artifact or extraction binding`);
     }
     frameIndexes.add(binding.frameIndex);
+    framesById.set(resource.id, binding);
   }
   const artifactFrames = bundle.coverage && bundle.coverage.artifactFrames;
   if (!artifactFrames || artifactFrames.analyzed !== frameResources.length) {
     throw new Error('Witness frame coverage does not match its bound frame resources');
+  }
+  for (const resource of bundle.resources) {
+    const inline = resource.extensions && resource.extensions['narova.inline-json'];
+    if (!inline) continue;
+    const serialized = canonicalize(inline.data);
+    if (resource.digest !== sha256(serialized) || resource.bytes !== Buffer.byteLength(serialized)) {
+      throw new Error(`Witness inline resource ${resource.id} does not match its digest or byte count`);
+    }
+    if (resource.kind !== 'renderer.visual-node-boxes') continue;
+    const data = inline.data;
+    const manifest = bundle.resources.find(item => item.id === 'resource:production.manifest');
+    const derivation = resource.extensions && resource.extensions['narova.derivation-binding'];
+    const sourceBinding = manifest && manifest.extensions && manifest.extensions['narova.source-binding'];
+    const derivationMethod = derivation && bundle.methods.find(item => item.id === derivation.method);
+    if (inline.schema !== VISUAL_NODE_SCHEMA || !data || data.schema !== VISUAL_NODE_SCHEMA
+        || !data.source || data.source.artifact.algorithm !== bundle.artifact.algorithm
+        || data.source.artifact.digest !== bundle.artifact.digest
+        || data.source.artifact.bytes !== bundle.artifact.bytes
+        || !manifest || data.source.manifest.algorithm !== manifest.algorithm
+        || data.source.manifest.digest !== manifest.digest
+        || data.source.manifest.bytes !== manifest.bytes
+        || !derivation || !derivation.artifact || !derivation.manifest || !derivation.receipt
+        || !derivation.options || !sourceBinding || !sourceBinding.artifact || !sourceBinding.receipt
+        || !derivationMethod
+        || canonicalize(derivation.artifact) !== canonicalize(data.source.artifact)
+        || canonicalize(derivation.manifest) !== canonicalize(data.source.manifest)
+        || canonicalize(derivation.receipt) !== canonicalize(sourceBinding.receipt)
+        || canonicalize(derivation.options) !== canonicalize(derivationMethod.options)
+        || canonicalize(sourceBinding.artifact) !== canonicalize(data.source.artifact)
+        || !Array.isArray(data.samples)) {
+      throw new Error('Witness visual-node resource has an invalid artifact or manifest binding');
+    }
+    for (const sample of data.samples) {
+      const frame = framesById.get(sample.frameResource);
+      if (!frame || frame.frameIndex !== sample.frameIndex
+          || canonicalize(frame.time) !== canonicalize(sample.time)) {
+        throw new Error('Witness visual-node sample has an invalid decoded-frame binding');
+      }
+    }
   }
   for (const item of bundle.observations) {
     if (!methods.has(item.method)) throw new Error(`Witness observation ${item.id} has an unknown method`);
@@ -502,7 +688,8 @@ function validateWitnessBundle(bundle) {
     }
   }
   for (const channel of bundle.coverage && bundle.coverage.channels || []) {
-    if (channel.availability === 'AVAILABLE' && !resources.has(channel.resource)) throw new Error(`Witness channel ${channel.kind} has dangling evidence`);
+    if (channel.resource && !resources.has(channel.resource)) throw new Error(`Witness channel ${channel.kind} has dangling evidence`);
+    if (channel.availability === 'AVAILABLE' && !channel.resource) throw new Error(`Witness channel ${channel.kind} has no available evidence`);
     if (channel.availability !== 'AVAILABLE' && !channel.reason) throw new Error(`Witness channel ${channel.kind} has no unavailable reason`);
   }
   const expectedSummary = summarize(bundle.observations);
