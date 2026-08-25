@@ -1,0 +1,22 @@
+{
+  "name": "mimo",
+  "displayName": "Xiaomi MiMo",
+  "protocol": "narova-tts-provider/v1",
+  "command": [
+    "python3",
+    "./worker.py"
+  ],
+  "requiredEnvironment": [
+    "MIMO_API_KEY"
+  ],
+  "capabilities": {
+    "synthesis": true,
+    "voiceListing": true,
+    "languages": true,
+    "wordTimings": false
+  },
+  "deliveryCapabilities": {
+    "delivery-instruct": "honored",
+    "seed-stabilization": "ignored"
+  }
+}
