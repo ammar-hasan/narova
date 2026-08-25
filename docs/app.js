@@ -308,6 +308,11 @@
     "npx skills add ammar-hasan/narova --skill narova-google -g",
     document.getElementById("copyGoogleLabel")
   );
+  bindCopy(
+    "copyMimo",
+    "npx skills add ammar-hasan/narova --skill narova-mimo -g",
+    document.getElementById("copyMimoLabel")
+  );
   document.querySelectorAll("[data-copy-command]").forEach(function (button) {
     bindCopy(button, button.getAttribute("data-copy-command"), null);
   });

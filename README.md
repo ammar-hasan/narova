@@ -417,6 +417,7 @@ npx skills add ammar-hasan/narova --skill narova-elevenlabs -g
 npx skills add ammar-hasan/narova --skill narova-openai -g
 npx skills add ammar-hasan/narova --skill narova-runway -g
 npx skills add ammar-hasan/narova --skill narova-google -g
+npx skills add ammar-hasan/narova --skill narova-mimo -g
 ```
 
 For authored 3D work that needs intentional subject/world representation or

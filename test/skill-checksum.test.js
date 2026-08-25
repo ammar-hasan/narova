@@ -20,7 +20,7 @@ const ROOT = path.join(__dirname, '..');
 test('every first-party skill carries a license and a matching checksum', () => {
   const failures = verifyAllSkills(ROOT);
   assert.deepEqual(failures, [], `skill integrity failures: ${failures.join('; ')}`);
-  assert.equal(SKILL_GLOBS.length, 7, 'all seven first-party skills are covered');
+  assert.equal(SKILL_GLOBS.length, 8, 'all eight first-party skills are covered');
 });
 
 test('canonical content excludes the checksum/signature lines (self-consistent)', () => {

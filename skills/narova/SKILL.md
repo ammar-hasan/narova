@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.41.0"
-checksum: 34a17d011f01c486fac8fb65f34c2c8e6d0cee2a37632d86ad45281145f245f5
+checksum: 37422f2af049241bc7de4166d5c08e106b691951fc45cd504e1696f37fec522a
 ---
 # narova — video from scene scripts
 
@@ -159,8 +159,9 @@ keeps projects, downloaded models, caches, and the skill.
 
 External speech and video providers are optional registered companion skills:
 `narova-elevenlabs` provides speech, `narova-openai` provides speech and Sora,
-`narova-runway` provides Runway video generation, and `narova-google` provides
-Gemini speech and Veo video generation. See
+`narova-runway` provides Runway video generation, `narova-google` provides
+Gemini speech and Veo video generation, and `narova-mimo` provides Xiaomi MiMo
+speech (preset voices, voice design, and voice cloning). See
 `references/cli.md` §providers.
 
 ## Untrusted source boundary

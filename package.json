@@ -6,7 +6,7 @@
   "type": "commonjs",
   "scripts": {
     "narova": "node tool/bin/narova.js",
-    "test": "npm run -s test:tool && npm run -s test:integration && npm run -s test:elevenlabs && npm run -s test:openai && npm run -s test:runway && npm run -s test:google",
+    "test": "npm run -s test:tool && npm run -s test:integration && npm run -s test:elevenlabs && npm run -s test:openai && npm run -s test:runway && npm run -s test:google && npm run -s test:mimo",
     "test:tool": "npm test --prefix tool",
     "test:js": "npm run test:js --prefix tool",
     "test:py": "npm run test:py --prefix tool",
@@ -16,6 +16,7 @@
     "test:openai": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-openai/tests",
     "test:runway": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-runway/tests",
     "test:google": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-google/tests",
+    "test:mimo": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-mimo/tests",
     "test:stock-live": "npm run test:stock-live --prefix tool",
     "test:package": "node scripts/check-package.js",
     "test:package-install": "node scripts/test-packed-package.js",
