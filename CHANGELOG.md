@@ -49,7 +49,9 @@ versions follow [Semantic Versioning](https://semver.org/).
   verify the declared FFmpeg and FFprobe prerequisites before running the full
   conformance suite. Audio-level measurement and its fixtures use explicit
   bounded FFmpeg worker counts, so missing tools fail visibly and parallel
-  review cannot create an unbounded decoder/filter-thread fan-out.
+  review cannot create an unbounded decoder/filter-thread fan-out. Decoder-
+  corruption and timestamp-offset fixtures now construct those conditions
+  explicitly instead of depending on codec concealment or muxer defaults.
 - **Readable default subtitle plates.** An authored dark caption plate now
   supplies its own light subtitle foreground, preventing light-theme dark text
   from becoming dark-on-dark. Plates remain opt-in and later authored CSS keeps

@@ -551,8 +551,11 @@ test('decoder corruption is an operation failure instead of confident partial ev
     const bytes = fs.readFileSync(target);
     const mediaStart = bytes.indexOf(Buffer.from('mdat')) + 4;
     assert.ok(mediaStart > 4);
-    const middle = mediaStart + Math.floor((bytes.length - mediaStart) / 2);
-    for (let index = middle; index < Math.min(bytes.length, middle + 4000); index++) bytes[index] ^= 0xff;
+    // Preserve the fast-start metadata so probing can still bind the artifact,
+    // but deterministically destroy the complete media payload. Corrupting a
+    // small arbitrary window is codec/interleaving dependent and may be hidden
+    // by decoder error concealment.
+    bytes.fill(0xff, mediaStart);
     fs.writeFileSync(target, bytes);
 
     const result = run(['judge', '--project', fixture.root, '--json']);
@@ -636,6 +639,7 @@ test('video stream offsets and incomplete assertion scopes preserve artifact tim
       '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono:d=2',
       '-itsoffset', '1', '-f', 'lavfi', '-i', 'color=c=red:s=160x90:r=10:d=1',
       '-map', '1:v', '-map', '0:a', '-c:v', 'mpeg4', '-q:v', '5', '-c:a', 'aac',
+      '-copyts',
       path.join(fixture.out, 'video.mp4'),
     ], { encoding: 'utf8' });
     assert.equal(generated.status, 0, generated.stderr);
