@@ -65,6 +65,14 @@ function hasMainAncestryGuard(source) {
   )));
 }
 
+function hasRequiredMediaToolSetup(source) {
+  return [
+    'sudo apt-get install --yes ffmpeg',
+    'ffmpeg -version',
+    'ffprobe -version',
+  ].every(command => source.split(/\r?\n/).some(line => line.trim() === command));
+}
+
 function releaseVersionsFromMarkdown(source) {
   return [...source.matchAll(/^## \[([^\]]+)\](?: - \d{4}-\d{2}-\d{2})?$/gm)]
     .map(match => match[1])
@@ -163,6 +171,7 @@ if (!agentProtocol.includes('Machine schema: **`narova.result/1`**')) {
 }
 
 const publishWorkflow = fs.readFileSync(path.join(root, '.github/workflows/publish.yml'), 'utf8');
+const ciWorkflow = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
 for (const required of [
   'id-token: write',
   'fetch-depth: 0',
@@ -177,6 +186,11 @@ if (!hasMainAncestryGuard(publishWorkflow)) {
 }
 if (/NPM_TOKEN|NODE_AUTH_TOKEN/.test(publishWorkflow)) {
   throw new Error('publish workflow must use npm Trusted Publishing without a token fallback');
+}
+for (const [name, workflow] of [['CI', ciWorkflow], ['publish', publishWorkflow]]) {
+  if (!hasRequiredMediaToolSetup(workflow)) {
+    throw new Error(`${name} workflow must install and verify the required FFmpeg and FFprobe tools`);
+  }
 }
 
 if (process.env.GITHUB_REF_TYPE === 'tag') {
@@ -197,6 +211,7 @@ module.exports = {
   assertReleaseChronology,
   checkRelease,
   hasMainAncestryGuard,
+  hasRequiredMediaToolSetup,
   releaseVersionsFromMarkdown,
   releaseVersionsFromWebsite,
 };

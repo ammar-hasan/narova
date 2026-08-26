@@ -45,6 +45,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ### Fixed
 
+- **Complete media release gates.** CI and npm publication now provision and
+  verify the declared FFmpeg and FFprobe prerequisites before running the full
+  conformance suite. Audio-level measurement and its fixtures use explicit
+  bounded FFmpeg worker counts, so missing tools fail visibly and parallel
+  review cannot create an unbounded decoder/filter-thread fan-out.
 - **Readable default subtitle plates.** An authored dark caption plate now
   supplies its own light subtitle foreground, preventing light-theme dark text
   from becoming dark-on-dark. Plates remain opt-in and later authored CSS keeps

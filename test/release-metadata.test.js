@@ -5,9 +5,14 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const { assertReleaseChronology, hasMainAncestryGuard } = require('../scripts/check-release');
+const {
+  assertReleaseChronology,
+  hasMainAncestryGuard,
+  hasRequiredMediaToolSetup,
+} = require('../scripts/check-release');
 
 const workflowPath = path.join(__dirname, '..', '.github', 'workflows', 'publish.yml');
+const ciWorkflowPath = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
 
 test('publish workflow ancestry guard compares the tag commit to origin/main', () => {
   const workflow = fs.readFileSync(workflowPath, 'utf8');
@@ -47,6 +52,17 @@ test('a commented ancestry command does not satisfy the release guard', () => {
     hasMainAncestryGuard('# if ! git merge-base --is-ancestor "$tag_commit" origin/main; then'),
     false,
   );
+});
+
+test('CI and publishing provision and verify required media tools', () => {
+  for (const pathToWorkflow of [ciWorkflowPath, workflowPath]) {
+    const workflow = fs.readFileSync(pathToWorkflow, 'utf8');
+    assert.equal(hasRequiredMediaToolSetup(workflow), true);
+    assert.equal(
+      hasRequiredMediaToolSetup(workflow.replace('ffprobe -version', '# ffprobe -version')),
+      false,
+    );
+  }
 });
 
 test('release metadata requires exact Markdown and website chronology parity', () => {

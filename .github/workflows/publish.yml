@@ -27,6 +27,12 @@ jobs:
           node-version: 24
           registry-url: https://registry.npmjs.org
           package-manager-cache: false
+      - name: Install required media tools
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes ffmpeg
+          ffmpeg -version
+          ffprobe -version
       - name: Require the tagged commit to be on main
         run: |
           tag_commit="$(git rev-list -n 1 "$GITHUB_REF")"
