@@ -41,6 +41,7 @@ jobs:
             exit 1
           fi
       - run: npm ci --prefix tool
+      - run: npm ci --ignore-scripts --prefix skills/narova-3d-production
       - run: npm run version:sync
       - run: git diff --exit-code
       - run: npm run release:check

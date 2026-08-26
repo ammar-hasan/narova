@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const {
   assertReleaseChronology,
+  hasCompleteTestDependencySetup,
   hasMainAncestryGuard,
   hasRequiredMediaToolSetup,
 } = require('../scripts/check-release');
@@ -60,6 +61,20 @@ test('CI and publishing provision and verify required media tools', () => {
     assert.equal(hasRequiredMediaToolSetup(workflow), true);
     assert.equal(
       hasRequiredMediaToolSetup(workflow.replace('ffprobe -version', '# ffprobe -version')),
+      false,
+    );
+  }
+});
+
+test('CI and publishing clean-install every dependency-bearing release suite', () => {
+  for (const pathToWorkflow of [ciWorkflowPath, workflowPath]) {
+    const workflow = fs.readFileSync(pathToWorkflow, 'utf8');
+    assert.equal(hasCompleteTestDependencySetup(workflow), true);
+    assert.equal(
+      hasCompleteTestDependencySetup(workflow.replace(
+        'npm ci --ignore-scripts --prefix skills/narova-3d-production',
+        'npm test --prefix skills/narova-3d-production',
+      )),
       false,
     );
   }

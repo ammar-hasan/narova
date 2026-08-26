@@ -73,6 +73,16 @@ function hasRequiredMediaToolSetup(source) {
   ].every(command => source.split(/\r?\n/).some(line => line.trim() === command));
 }
 
+function hasCompleteTestDependencySetup(source) {
+  const runCommands = source.split(/\r?\n/)
+    .map(line => line.match(/^\s*-\s+run:\s+(.+?)\s*$/)?.[1])
+    .filter(Boolean);
+  return [
+    'npm ci --prefix tool',
+    'npm ci --ignore-scripts --prefix skills/narova-3d-production',
+  ].every(command => runCommands.includes(command));
+}
+
 function releaseVersionsFromMarkdown(source) {
   return [...source.matchAll(/^## \[([^\]]+)\](?: - \d{4}-\d{2}-\d{2})?$/gm)]
     .map(match => match[1])
@@ -191,6 +201,9 @@ for (const [name, workflow] of [['CI', ciWorkflow], ['publish', publishWorkflow]
   if (!hasRequiredMediaToolSetup(workflow)) {
     throw new Error(`${name} workflow must install and verify the required FFmpeg and FFprobe tools`);
   }
+  if (!hasCompleteTestDependencySetup(workflow)) {
+    throw new Error(`${name} workflow must clean-install every dependency-bearing release suite`);
+  }
 }
 
 if (process.env.GITHUB_REF_TYPE === 'tag') {
@@ -210,6 +223,7 @@ if (require.main === module) checkRelease();
 module.exports = {
   assertReleaseChronology,
   checkRelease,
+  hasCompleteTestDependencySetup,
   hasMainAncestryGuard,
   hasRequiredMediaToolSetup,
   releaseVersionsFromMarkdown,
