@@ -558,6 +558,100 @@ test('shots review modes are mutually exclusive', () => {
   assert.match(r.stderr, /--at, --motion, and --beats are mutually exclusive/);
 });
 
+/* Scaffold with a real synthetic full.wav for audio-level review tests. */
+function projectWithAudio() {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const proj = path.join(dir, 'p');
+  run(['init', proj]);
+  const audioDir = path.join(proj, 'out', 'audio');
+  fs.mkdirSync(audioDir, { recursive: true });
+  const r = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
+    '-c:a', 'pcm_s16le', path.join(audioDir, 'full.wav'),
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${r.stderr}`);
+  return proj;
+}
+
+test('review --audio-levels reports measured facts', () => {
+  const proj = projectWithAudio();
+  const r = run(['review', '--audio-levels', '--project', proj]);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /audio-levels \(advisory/);
+  assert.match(r.stdout, /integrated loudness:/);
+  assert.match(r.stdout, /clipped samples: 0/);
+});
+
+test('review --audio-levels --json emits narova.result/1 envelope', () => {
+  const proj = projectWithAudio();
+  const r = run(['review', '--audio-levels', '--project', proj, '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const envelope = JSON.parse(r.stdout);
+  assert.equal(envelope.schema, 'narova.result/1');
+  assert.equal(envelope.data.mode, 'audio-levels');
+  assert.ok(envelope.data.facts);
+  assert.equal(typeof envelope.data.digest, 'string');
+});
+
+test('review --audio-levels honors --audio and --interval', () => {
+  const proj = projectWithAudio();
+  const otherDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
+  const other = path.join(otherDir, 'loud.wav');
+  const gen = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1,volume=20dB',
+    '-c:a', 'pcm_s16le', other,
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (gen.status !== 0) throw new Error(`ffmpeg fixture failed: ${gen.stderr}`);
+  const r = run(['review', '--audio-levels', '--project', proj, '--audio', other, '--interval', '0.2,0.8']);
+  assert.equal(r.status, 0, r.stderr);
+  assert.match(r.stdout, /interval 0\.20s–0\.80s/);
+  assert.match(r.stdout, /clipped samples: [1-9]/);
+});
+
+test('audio-level selectors are rejected outside their exact review mode', () => {
+  const wrongMode = run(['check', '--audio-levels']);
+  assert.equal(wrongMode.status, 2);
+  assert.match(wrongMode.stderr, /--audio-levels is only valid with narova review/);
+
+  const orphanSelector = run(['review', '--audio', 'full.wav']);
+  assert.equal(orphanSelector.status, 2);
+  assert.match(orphanSelector.stderr, /only valid with narova review --audio-levels/);
+});
+
+test('review --audio-levels rejects partially numeric intervals', () => {
+  const proj = projectWithAudio();
+  const r = run(['review', '--audio-levels', '--project', proj, '--interval', '1x,2y']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--interval needs 0 ≤ start < end/);
+});
+
+test('review --audio-levels rejects an empty explicit audio selector', () => {
+  const proj = projectWithAudio();
+  const r = run(['review', '--audio-levels', '--project', proj, '--audio=']);
+  assert.equal(r.status, 2);
+  assert.match(r.stderr, /--audio needs a non-empty file path/);
+});
+
+test('review --audio-levels preserves silent peaks in machine output', () => {
+  const proj = projectWithAudio();
+  const silence = path.join(proj, 'out', 'audio', 'silence.wav');
+  const gen = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error',
+    '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono:d=1',
+    '-c:a', 'pcm_s16le', silence,
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (gen.status !== 0) throw new Error(`ffmpeg fixture failed: ${gen.stderr}`);
+
+  const r = run(['review', '--audio-levels', '--project', proj, '--audio', 'audio/silence.wav', '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const envelope = JSON.parse(r.stdout);
+  assert.equal(envelope.data.facts.integratedLoudness, '-inf');
+  assert.equal(envelope.data.facts.truePeak, '-inf');
+  assert.equal(envelope.data.facts.samplePeak, '-inf');
+});
+
 test('captions rewrites out/captions.{srt,vtt} from timings.json', () => {
   const proj = projectWithTimings();
   const r = run(['captions', '--project', proj]);

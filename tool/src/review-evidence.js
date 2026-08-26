@@ -16,10 +16,12 @@
  *                          expensive render or an owner handoff. */
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawn, spawnSync } = require('child_process');
 const { ensureDir } = require('./util');
 const { composeData } = require('./compose/data');
+const { hashFile } = require('./manifest');
 
 /* NAR-007-023 — [{ clip, scenes[], beats }] ordered by descending reuse. */
 function clipCoverage(config) {
@@ -252,4 +254,356 @@ function formatTakes(index) {
   return [`narration take index (${index.sentences.length} sentences${index.identities ? `; identities from ${index.identities}` : '; take identities unavailable'}):`, ...lines].join('\n');
 }
 
-module.exports = { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes };
+/* NAR-007-053 — measured audio-level facts from existing audio, advisory only.
+ * Reports integrated loudness (LUFS), loudness range (LU), true peak (dBTP),
+ * sample peak (dBFS), and a clipping-sample count over the whole file or a
+ * caller-declared interval. Every fact carries a declared measurement basis
+ * and is bound to the source file digest. */
+async function audioLevelFacts(outDir, opts = {}) {
+  const { audio: explicitAudio, interval, clippingThresholdDb = -1.0 } = opts;
+  const hasExplicitAudio = explicitAudio !== undefined && explicitAudio !== null;
+  if (hasExplicitAudio && String(explicitAudio).length === 0) {
+    return {
+      reason: 'audio file path is empty',
+      file: null,
+      basis: null,
+      facts: null,
+    };
+  }
+  let file = hasExplicitAudio ? explicitAudio : null;
+  if (!hasExplicitAudio) {
+    const candidates = [
+      path.join(outDir, 'audio', 'mix.wav'),
+      path.join(outDir, 'audio', 'full.wav'),
+    ];
+    file = candidates.find(f => fs.existsSync(f)) || null;
+  } else {
+    file = path.isAbsolute(file) ? file : path.resolve(outDir, file);
+  }
+  if (!file || !fs.existsSync(file)) {
+    return {
+      reason: hasExplicitAudio
+        ? `audio file not found: ${explicitAudio}`
+        : 'no out/audio/mix.wav or full.wav — run synth/build first',
+      file: file || null,
+      basis: null,
+      facts: null,
+    };
+  }
+  const absFile = file;
+  try {
+    if (!fs.statSync(absFile).isFile()) {
+      return {
+        reason: `audio path is not a regular file: ${hasExplicitAudio ? explicitAudio : absFile}`,
+        file: absFile,
+        basis: null,
+        facts: null,
+      };
+    }
+  } catch {
+    return {
+      reason: `audio file could not be inspected: ${hasExplicitAudio ? explicitAudio : absFile}`,
+      file: absFile,
+      basis: null,
+      facts: null,
+    };
+  }
+
+  if (!Number.isFinite(clippingThresholdDb)) {
+    return {
+      reason: `invalid clipping threshold: ${clippingThresholdDb}`,
+      file: absFile,
+      basis: null,
+      facts: null,
+    };
+  }
+
+  let intervalError = null;
+  let start = null;
+  let end = null;
+  if (interval) {
+    const parts = String(interval).split(',').map(s => s.trim());
+    if (parts.length !== 2) {
+      intervalError = `invalid interval "${interval}": expected start,end`;
+    } else {
+      const s = parts[0] === '' ? NaN : Number(parts[0]);
+      const e = parts[1] === '' ? NaN : Number(parts[1]);
+      if (!Number.isFinite(s) || !Number.isFinite(e) || s < 0 || e <= s) {
+        intervalError = `invalid interval "${interval}": expected 0 ≤ start < end`;
+      } else {
+        start = s;
+        end = e;
+      }
+    }
+  }
+  if (intervalError) {
+    return {
+      reason: intervalError,
+      file: absFile,
+      basis: null,
+      facts: null,
+    };
+  }
+
+  const basis = {
+    gating: 'BS.1770-4',
+    integratedLoudnessMethod: 'ITU-R BS.1770-4 gated integrated loudness',
+    loudnessRangeMethod: 'EBU Tech 3342 loudness range',
+    truePeakOversampling: 4,
+    samplePeakMethod: '20 log10(max(abs(decoded sample)))',
+    loudnessUnit: 'LUFS',
+    rangeUnit: 'LU',
+    peakUnit: 'dBTP',
+    samplePeakUnit: 'dBFS',
+    clippingThresholdDb,
+    clippingThresholdUnit: 'dBFS sample',
+    clippingCountScope: 'all channels summed',
+    clippingCountMethod: 'count(abs(decoded sample) >= 10^(threshold dBFS / 20))',
+    interval: start != null ? { start, end } : null,
+  };
+
+  // Measure one private snapshot so hashing, loudness, peaks, and sample counts
+  // cannot reopen different byte instances if the selected path is replaced.
+  // The source is compared to that snapshot before and after measurement; the
+  // temporary copy never enters project state or any product identity.
+  let snapshotDir = null;
+  try {
+    snapshotDir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-audio-facts-'));
+    const snapshotFile = path.join(snapshotDir, `artifact${path.extname(absFile)}`);
+    fs.copyFileSync(absFile, snapshotFile);
+    const digest = hashFile(snapshotFile);
+    if (hashFile(absFile) !== digest) {
+      return {
+        reason: `audio changed while preparing measurement: ${hasExplicitAudio ? explicitAudio : absFile}`,
+        file: absFile,
+        basis: null,
+        facts: null,
+      };
+    }
+
+    // Trim before the ebur128 filter so loudness and true peak reflect only the
+    // requested interval. Frame logs are suppressed; the summary is bounded.
+    const af = start != null
+      ? `atrim=start=${start}:end=${end},ebur128=peak=true:framelog=quiet`
+      : 'ebur128=peak=true:framelog=quiet';
+    const eburArgs = ['-hide_banner', '-i', snapshotFile, '-af', af, '-f', 'null', '-'];
+    const ebur = spawnSync('ffmpeg', eburArgs, {
+      encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024,
+    });
+    const text = String(ebur.stderr || '');
+    if (ebur.error || ebur.status !== 0) {
+      return {
+        reason: `audio could not be decoded: ${hasExplicitAudio ? explicitAudio : absFile}`,
+        file: absFile,
+        basis: null,
+        facts: null,
+      };
+    }
+
+    const lastMatch = (re) => {
+      const matches = [...text.matchAll(re)];
+      if (!matches.length) return null;
+      return matches[matches.length - 1][1];
+    };
+
+    const integratedSummary = lastGroups(
+      /Integrated loudness:\s+I:\s+(-inf|-?\d+\.\d+)\s+LUFS\s+Threshold:\s+(-inf|-?\d+\.\d+)\s+LUFS/g,
+      text,
+    );
+    const rawIntegratedLoudness = parseDecibel(integratedSummary?.[1]);
+    const integratedThreshold = parseDecibel(integratedSummary?.[2]);
+    const rangeSummary = lastGroups(
+      /Loudness range:\s+LRA:\s+(-inf|-?\d+\.\d+)\s+LU\s+Threshold:\s+(-inf|-?\d+\.\d+)\s+LUFS\s+LRA low:\s+(-inf|-?\d+\.\d+)\s+LUFS\s+LRA high:\s+(-inf|-?\d+\.\d+)\s+LUFS/g,
+      text,
+    );
+    const rawLoudnessRange = parseDecibel(rangeSummary?.[1]);
+    const rangeThreshold = parseDecibel(rangeSummary?.[2]);
+    const rangeLow = parseDecibel(rangeSummary?.[3]);
+    const rangeHigh = parseDecibel(rangeSummary?.[4]);
+    // True peak is the maximum across all channels in the measurement; the
+    // summary reports it. Sample peak is measured directly from decoded samples
+    // in the same pass that counts threshold crossings.
+    const summaryTruePeak = parseDecibel(lastMatch(/True peak:\s+Peak:\s+(-inf|-?\d+\.\d+)\s+dBFS/g));
+    const truePeak = summaryTruePeak != null ? summaryTruePeak : maxPeakFromLines(text, 'TPK');
+    let sampleFacts;
+    try {
+      sampleFacts = await measureDecodedSamples(snapshotFile, { start, end, clippingThresholdDb });
+    } catch {
+      return {
+        reason: `audio could not be decoded: ${hasExplicitAudio ? explicitAudio : absFile}`,
+        file: absFile,
+        basis: null,
+        facts: null,
+      };
+    }
+    if (sampleFacts.sampleCount === 0) {
+      return {
+        reason: start == null
+          ? `audio contains no decoded samples: ${hasExplicitAudio ? explicitAudio : absFile}`
+          : `audio interval contains no decoded samples: ${interval}`,
+        file: absFile,
+        basis: null,
+        facts: null,
+      };
+    }
+    if (hashFile(absFile) !== digest) {
+      return {
+        reason: `audio changed during measurement: ${hasExplicitAudio ? explicitAudio : absFile}`,
+        file: absFile,
+        basis: null,
+        facts: null,
+      };
+    }
+
+    // FFmpeg uses -70.0 LUFS when BS.1770 has no gated block. Preserve actual
+    // digital silence as -inf; for a finite-peak short/gated-out signal the
+    // integrated fact is unavailable rather than a fabricated -70 LUFS.
+    const integratedLoudness = rawIntegratedLoudness === -70 && integratedThreshold === 0
+      ? (sampleFacts.samplePeak === -Infinity ? -Infinity : null)
+      : rawIntegratedLoudness;
+    // FFmpeg prints an all-zero LRA summary when no three-second short-term
+    // block survives gating. That is absence of a measurement, not 0 LU.
+    const loudnessRange = rawLoudnessRange === 0
+        && rangeThreshold === 0 && rangeLow === 0 && rangeHigh === 0
+      ? null
+      : rawLoudnessRange;
+
+    return {
+      file: absFile,
+      digest,
+      basis,
+      facts: {
+        integratedLoudness,
+        loudnessRange,
+        truePeak,
+        samplePeak: sampleFacts.samplePeak,
+        clippingSamples: sampleFacts.clippingSamples,
+      },
+    };
+  } catch {
+    return {
+      reason: `audio could not be snapshotted for measurement: ${hasExplicitAudio ? explicitAudio : absFile}`,
+      file: absFile,
+      basis: null,
+      facts: null,
+    };
+  } finally {
+    if (snapshotDir) {
+      try { fs.rmSync(snapshotDir, { recursive: true, force: true }); }
+      catch { /* advisory facts are already bound; temporary cleanup is best-effort */ }
+    }
+  }
+}
+
+function parseDecibel(value) {
+  if (value == null) return null;
+  if (value === '-inf') return -Infinity;
+  const v = parseFloat(value);
+  return Number.isFinite(v) ? v : null;
+}
+
+function lastGroups(regex, text) {
+  const matches = [...text.matchAll(regex)];
+  return matches.length ? matches[matches.length - 1] : null;
+}
+
+function maxPeakFromLines(text, prefix) {
+  const re = new RegExp(`${prefix}:\\s+((?:-inf|-?\\d+\\.\\d+)(?:\\s+(?:-inf|-?\\d+\\.\\d+))*)\\s+dBFS`, 'g');
+  let max = -Infinity;
+  let hasFinite = false;
+  for (const m of text.matchAll(re)) {
+    for (const token of m[1].trim().split(/\s+/)) {
+      if (token === '-inf') continue;
+      const v = parseFloat(token);
+      if (Number.isFinite(v)) {
+        max = Math.max(max, v);
+        hasFinite = true;
+      }
+    }
+  }
+  return hasFinite ? max : -Infinity;
+}
+
+function measureDecodedSamples(filePath, { start, end, clippingThresholdDb }) {
+  return new Promise((resolve, reject) => {
+    const threshold = Math.pow(10, clippingThresholdDb / 20);
+    const args = ['-hide_banner', '-loglevel', 'error', '-i', filePath];
+    if (start != null) {
+      args.push('-ss', String(start), '-t', String(Math.max(0, end - start)));
+    }
+    args.push('-f', 'f32le', '-acodec', 'pcm_f32le', '-');
+
+    const proc = spawn('ffmpeg', args, {
+      stdio: ['ignore', 'pipe', 'ignore'], timeout: 120000,
+    });
+    let clippingSamples = 0;
+    let sampleCount = 0;
+    let maxAbsoluteSample = 0;
+    let invalidSample = false;
+    let remainder = Buffer.alloc(0);
+    let settled = false;
+
+    proc.stdout.on('data', (chunk) => {
+      const buf = Buffer.concat([remainder, chunk]);
+      const completeBytes = buf.length - (buf.length % 4);
+      for (let offset = 0; offset < completeBytes; offset += 4) {
+        const absolute = Math.abs(buf.readFloatLE(offset));
+        if (!Number.isFinite(absolute)) {
+          invalidSample = true;
+          continue;
+        }
+        sampleCount += 1;
+        maxAbsoluteSample = Math.max(maxAbsoluteSample, absolute);
+        if (absolute >= threshold) clippingSamples += 1;
+      }
+      remainder = buf.subarray(completeBytes);
+    });
+
+    proc.on('error', (error) => {
+      if (settled) return;
+      settled = true;
+      reject(error);
+    });
+    proc.on('close', (code) => {
+      if (settled) return;
+      settled = true;
+      if (code !== 0 || remainder.length !== 0 || invalidSample) {
+        reject(new Error(`ffmpeg exited ${code} while counting clipped samples`));
+      } else {
+        resolve({
+          clippingSamples,
+          sampleCount,
+          samplePeak: maxAbsoluteSample === 0 ? -Infinity : 20 * Math.log10(maxAbsoluteSample),
+        });
+      }
+    });
+  });
+}
+
+function fmtFact(v) {
+  if (v == null) return 'unavailable';
+  if (!Number.isFinite(v)) return v > 0 ? '+inf' : '-inf';
+  return v.toFixed(2);
+}
+
+function formatAudioLevels(report) {
+  if (report.reason) return `audio-levels: ${report.reason}`;
+  const { file, digest, basis, facts } = report;
+  const interval = basis.interval
+    ? ` (interval ${basis.interval.start.toFixed(2)}s–${basis.interval.end.toFixed(2)}s)`
+    : '';
+  return [
+    `audio-levels (advisory — numbers describe rendered audio, not a target or verdict):${interval}`,
+    `  file: ${file}`,
+    `  digest: ${digest}`,
+    `  basis: ${basis.integratedLoudnessMethod}; ${basis.loudnessRangeMethod}; true peak ${basis.truePeakOversampling}× oversampled`,
+    `  sample peak: ${basis.samplePeakMethod}; clipping threshold ${basis.clippingThresholdDb} ${basis.clippingThresholdUnit}; ${basis.clippingCountMethod}; ${basis.clippingCountScope}`,
+    `  integrated loudness: ${fmtFact(facts.integratedLoudness)} ${basis.loudnessUnit}`,
+    `  loudness range: ${fmtFact(facts.loudnessRange)} ${basis.rangeUnit}`,
+    `  true peak: ${fmtFact(facts.truePeak)} ${basis.peakUnit}`,
+    `  measured sample peak: ${fmtFact(facts.samplePeak)} ${basis.samplePeakUnit}`,
+    `  clipped samples: ${facts.clippingSamples}`,
+  ].join('\n');
+}
+
+module.exports = { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes, audioLevelFacts, formatAudioLevels };

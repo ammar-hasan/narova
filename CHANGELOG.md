@@ -6,6 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Artifact-bound audio level facts.** `narova review --audio-levels` reports
+  integrated loudness, loudness range, true peak, sample peak, and samples at
+  or above a declared clipping threshold for an existing mix or caller-selected
+  audio interval. The advisory includes the complete artifact digest and its
+  measurement basis; it supplies no target, score, gate, recommendation, or
+  automatic correction.
+
 ## [0.41.0] - 2026-08-23
 
 ### Added

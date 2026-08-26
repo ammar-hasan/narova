@@ -685,7 +685,7 @@ narova judge --repair create only a delegated caption-sidecar proof candidate
 narova branch save    optionally preserve a rendered proof for one assertion
 narova branch compare compare 2–3 preserved proofs; no ranking or selection
 narova branch set     record the proof decision (approved/rejected/archived)
-narova review         observability suite (contact sheets, silences, takes)
+narova review         observability suite (contact sheets, silences, takes, audio levels)
 narova critique       optional craft guidance; not a correctness gate
 narova generate       AI clip generation via an explicitly selected provider
 narova voices         list or download voices

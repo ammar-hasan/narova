@@ -29,7 +29,7 @@ const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = r
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
 const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
-const { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes } = require('../src/review-evidence');
+const { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes, audioLevelFacts, formatAudioLevels } = require('../src/review-evidence');
 const { ingest } = require('../src/ingest');
 const {
   creditLines, creditEntries, formatCredits, downloadAsset, inferKind, readAssetLock, registerAsset,
@@ -214,9 +214,9 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval']);
 
 function validateInvocationFlags(flags, cmd) {
   if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
@@ -228,6 +228,12 @@ function validateInvocationFlags(flags, cmd) {
   }
   if (flags.video != null && cmd !== 'judge' && !(cmd === 'branch' && flags['judge-assertion'])) {
     invocationError('--video is only valid with narova judge or focused narova branch save');
+  }
+  if (flags['audio-levels'] != null && cmd !== 'review') {
+    invocationError('--audio-levels is only valid with narova review');
+  }
+  if ((flags.audio != null || flags.interval != null) && !(cmd === 'review' && flags['audio-levels'])) {
+    invocationError('--audio and --interval are only valid with narova review --audio-levels');
   }
   const positiveNumber = (name, max = Infinity) => {
     if (flags[name] == null) return;
@@ -590,6 +596,8 @@ Commands:
   review --excerpt <terms>  one short audio clip per term from synthesized audio
   review --silences [s]  advisory silence-gap report (threshold seconds, default 1.0)
   review --takes        advisory narration take index (timing, sentence file, take identity)
+  review --audio-levels [--audio <file>] [--interval start,end]
+                          advisory loudness/peak/clipping facts from existing audio
   --companion [size]    also write a compressed companion of the video for quick review
                           e.g. --companion 60MB; no size uses quick-review defaults;
                           never enforced, never gates, primary stays full quality
@@ -2045,12 +2053,48 @@ async function main() {
     }
 
     case 'review': {
-      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt, flags.silences, flags.takes].filter(Boolean).length;
+      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt, flags.silences, flags.takes, flags['audio-levels']].filter(Boolean).length;
       if (modes === 0) {
-        usageError('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes');
+        usageError('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes | --audio-levels');
       }
       if (modes > 1) {
         usageError('review modes are mutually exclusive');
+      }
+      if (flags['audio-levels']) {
+        if (flags.audio === '') {
+          usageError('--audio needs a non-empty file path');
+        }
+        if (flags.audio != null && typeof flags.audio !== 'string') {
+          usageError('--audio needs a file path');
+        }
+        if (flags.interval != null && typeof flags.interval !== 'string') {
+          usageError('--interval needs start,end seconds');
+        }
+        if (flags.interval != null) {
+          const parts = String(flags.interval).split(',').map(s => s.trim());
+          if (parts.length !== 2) {
+            usageError('--interval needs start,end seconds');
+          }
+          const start = parts[0] === '' ? NaN : Number(parts[0]);
+          const end = parts[1] === '' ? NaN : Number(parts[1]);
+          if (!Number.isFinite(start) || !Number.isFinite(end) || start < 0 || end <= start) {
+            usageError('--interval needs 0 ≤ start < end');
+          }
+        }
+        const { projectDir } = await loadResolved(flags, { readOnly: true });
+        const report = await audioLevelFacts(outDirOf(flags, projectDir), { audio: flags.audio, interval: flags.interval });
+        console.log(formatAudioLevels(report));
+        console.log('advisory evidence — values describe the rendered audio, not a target or verdict');
+        const machineFacts = report.facts && Object.fromEntries(
+          Object.entries(report.facts).map(([key, value]) => [
+            key,
+            value === -Infinity ? '-inf'
+              : value === Infinity ? '+inf'
+                : value,
+          ]),
+        );
+        mSetData({ mode: 'audio-levels', ...report, ...(machineFacts ? { facts: machineFacts } : {}) });
+        return;
       }
       if (flags.silences) {
         const threshold = flags.silences === true ? 1.0 : Number(flags.silences);

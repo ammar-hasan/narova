@@ -53,6 +53,7 @@ absent optional keys are reported as skips.
 | `narova compose` | config + timings + audio → the selected renderer project (`out/hf-*` or `out/no-browser-*`) + SRT/VTT, then prints the scene table. HyperFrames also consumes fresh walkthrough captures and restarts a live detached Studio. | usually under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) with the selected renderer. `--at t1,t2,…` picks explicit times. No-browser needs no browser. | seconds |
+| `narova review --audio-levels [--audio <file>] [--interval start,end]` | report advisory integrated loudness, loudness range, true peak, decoded-sample peak, and threshold-crossing sample count from existing audio. The report names the complete artifact digest and measurement basis; it supplies no target, verdict, mutation, or gate. Relative `--audio` paths resolve from the selected output directory. | bounded local decode |
 | `narova build` | synth + compose + selected local renderer → `out/video.mp4` (+ captions). Variants and deliverables work with both providers. | synth cost + local render |
 | `narova preview` | HyperFrames: compose and open Studio. No-browser: render `out/preview-no-browser.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
@@ -132,6 +133,10 @@ Renderer providers are different: both are bundled, local, and free. See
 - `--beats` — `shots`: arrival/resolved state of every narration sentence,
   both sides of named markers, and scene coverage for silent work. Mutually
   exclusive with `--at` and `--motion`.
+- `--audio-levels` — `review`: measure existing audio without changing it.
+  `--audio <file>` selects an artifact (relative paths start at `out/`), and
+  `--interval start,end` scopes the facts to non-negative seconds with end
+  greater than start. Both selectors are valid only with this review mode.
 - `--port N` — Studio port (default 3002; auto-detects next available if 3002 is in use).
 - `--detach` / `preview --stop` — start or stop persistent Studio.
 - `--voice-a <s>`, `--voice-b <s>` — replace the first two voices (add more voices directly in the config).
