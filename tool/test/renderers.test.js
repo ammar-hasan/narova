@@ -211,13 +211,13 @@ test('no-browser honors disabled, subtitle, pop, rise, and slam caption behavior
 test('no-browser draws the shared caption size and plate presentation', () => {
   const { drawCaptions } = getRenderer('no-browser')._internals;
   function context() {
-    const calls = { fills: 0, fonts: [] };
+    const calls = { fills: 0, fonts: [], fillStyles: [] };
     const target = {
       save() {}, restore() {}, beginPath() {}, moveTo() {}, lineTo() {},
       quadraticCurveTo() {}, closePath() {}, fill() { calls.fills += 1; },
       fillText() {}, measureText(text) { return { width: text.length * 8 }; },
       set font(value) { calls.fonts.push(value); },
-      set fillStyle(_) {}, set globalAlpha(_) {}, set textBaseline(_) {},
+      set fillStyle(value) { calls.fillStyles.push(value); }, set globalAlpha(_) {}, set textBaseline(_) {},
       set textAlign(_) {}, set direction(_) {},
     };
     return { target, calls };
@@ -247,6 +247,7 @@ test('no-browser draws the shared caption size and plate presentation', () => {
   }, 0.5, {});
   assert.equal(authored.calls.fills, 1);
   assert.ok(authored.calls.fonts.includes('800 22px sans-serif'));
+  assert.deepEqual(authored.calls.fillStyles.slice(-2), ['rgba(3,7,14,0.86)', '#ffffff']);
 });
 
 test('no-browser compose carries captions:false into its project timeline', () => {

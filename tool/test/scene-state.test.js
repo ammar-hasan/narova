@@ -202,9 +202,14 @@ test('judge uses only artifact-bound state, preserves basis, and degrades missin
   const firstReport = JSON.parse(first.stdout).data.judgement;
   assert.equal(firstReport.score, null);
   assert.equal(firstReport.validityEffect, 'none');
-  const assertionRows = firstReport.observations.filter(item => item.assertion)
+  const assertionRows = firstReport.observations.filter(item => (
+    item.assertion && item.assessmentTarget === 'declared-probes'
+  ))
     .map(item => item.assertion.id);
   assert.deepEqual(assertionRows, ['clearance', 'contained', 'phase', 'contact', 'too-wide']);
+  assert.equal(firstReport.observations.filter(item => (
+    item.assertion && item.assessmentTarget === 'free-form-correspondence'
+  )).length, 5);
   const byId = id => firstReport.observations.find(item => item.assertion && item.assertion.id === id);
   assert.equal(byId('clearance').outcome, 'ALIGNED');
   assert.equal(byId('contained').evidence[0].value, true);

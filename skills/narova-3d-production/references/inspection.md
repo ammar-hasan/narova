@@ -44,6 +44,16 @@ and animation state, collision or constraint state, and build/release results.
 Use artifact-only review for recognition, hierarchy, causal reading,
 completeness, emotional effect, and taste.
 
+Keep proxy names literal. A non-black or average-luminance result establishes
+only that sampled pixels were not mostly black; frame difference or variance
+establishes only sampled change; camera clearance establishes only the tested
+distance; and a ray reaching a target establishes only that ray's geometric
+path. None of these alone proves useful framing, subject visibility, readable
+materials, room comprehension, route continuity, or narration-to-picture
+correspondence. If direct artifact evidence or a capable perceiver is absent,
+retain those audience-level questions as unverified even when every proxy
+holds. Do not turn the uncertainty into a recommendation or creative gate.
+
 An automated visual critic can flag issues or rank candidates, but keep it
 advisory until its judgments have been compared with independent owner
 judgments on this kind of task. Never pass the author's explanation to it as
@@ -59,6 +69,26 @@ Start with the smallest evidence set that could disprove the material claims:
 - inspect available scene values, object transforms, camera samples,
   constraints, or other structured state when a hidden spatial or physical
   claim depends on them.
+
+For DCC shots, inspect the exact source that will render. A master scene cannot
+establish a shot file's collection, object, camera, or render-visibility state.
+Choose the frames that matter to the current shot explicitly; the bounded
+adapter can sample distant frames and render sparse proofs without selecting
+them for you. Its camera transforms and deltas, render-enabled counts, light and
+color-management values, world state, and requested object bounds remain
+program facts. Compare those facts with actual proof frames; neither side alone
+establishes useful framing, audience visibility, completeness, or smoothness.
+
+When vision is unavailable, explicitly requested proof-pixel facts can expose
+the decoded output's luma distribution, threshold fractions, saturation, alpha,
+and channel ranges. Requested-object projection can expose where evaluated
+bounds fall relative to the normalized camera frame. Read those values as
+literal attributed information only. Near-dark pixels do not by themselves
+mean a scene is too dark; bright pixels do not mean clipping is unwanted;
+saturation does not prove colour separation; projected bounds do not prove
+visible pixels, silhouette, recognition, hierarchy, or useful composition. The
+companion provides no target band or recommendation. The authoring agent keeps
+the uncertainty and decides what, if anything, follows.
 
 Use core Narova's ordinary proof, shot, check, preview, and release evidence.
 Do not invent an inspection artifact or claim the companion adds a validator.

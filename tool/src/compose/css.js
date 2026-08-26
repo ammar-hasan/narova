@@ -90,7 +90,7 @@ body{background:var(--bg);color:var(--ink);font-family:var(--sans);-webkit-font-
 
 /* clips */
 .scene{position:absolute;inset:0;z-index:1}
-.broll{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:.52;pointer-events:none}
+.broll{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0;opacity:1;pointer-events:none}
 .walkthrough-media{position:absolute;z-index:0;pointer-events:none;opacity:var(--walkthrough-opacity,1);object-position:var(--walkthrough-position,50% 50%);background:#05070b}
 .walkthrough-full{inset:0;width:100%;height:100%}
 .walkthrough-window{left:4.5%;right:4.5%;top:calc(5% + clamp(30px,4.5vw,44px));bottom:var(--walkthrough-bottom,clamp(112px,20vh,190px));width:91%;height:calc(95% - clamp(30px,4.5vw,44px) - var(--walkthrough-bottom,clamp(112px,20vh,190px)));border-radius:0 0 clamp(10px,1.6vw,18px) clamp(10px,1.6vw,18px)}
@@ -289,7 +289,10 @@ function captionPresentationCss(captions = {}) {
   const rules = [];
   if (captions.size != null) rules.push(`.caption2{font-size:${captions.size}px}`);
   if (captions.plate === true) {
-    rules.push('.caption2{background:rgba(3,7,14,.86);border-radius:.42em;padding:.42em .75em}');
+    // The built-in plate is dark. Keep the default subtitle foreground local
+    // to the plate so light-mode --ink cannot become dark-on-dark. Author CSS
+    // is appended after this block and can still replace the local token.
+    rules.push('.caption2{--ink:#f4f7fb;background:rgba(3,7,14,.86);border-radius:.42em;padding:.42em .75em}');
   }
   return rules.join('\n');
 }

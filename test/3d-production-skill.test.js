@@ -23,6 +23,8 @@ test('3D-production companion stays optional and progressively discloses executi
 
   const references = fs.readdirSync(path.join(skillDir, 'references')).sort();
   assert.deepEqual(references, [
+    'dcc-environment.md',
+    'frame-encoding.md',
     'inspection.md',
     'physical-reasoning.md',
     'scene-direction.md',
@@ -32,7 +34,7 @@ test('3D-production companion stays optional and progressively discloses executi
   const skill = read('skills/narova-3d-production/SKILL.md');
   assert.match(skill, /^name: narova-3d-production$/m);
   assert.match(skill, /^license: Apache-2.0$/m);
-  assert.match(skill, /^  version: "0\.3\.0"$/m);
+  assert.match(skill, /^  version: "0\.6\.0"$/m);
   assert.match(skill, /A straightforward scene may need none\./);
   assert.match(skill, /Do not perform a full-manual pass\./);
   assert.match(skill, /adds no core dependency, renderer, provider/);
@@ -40,7 +42,12 @@ test('3D-production companion stays optional and progressively discloses executi
   assert.match(skill, /Do not silently turn a blockout/);
   assert.match(skill, /without its rationale/);
   assert.match(skill, /Never pretend this skill's prose/);
-  assert.ok(skill.split('\n').length < 125, 'primary skill body should stay concise');
+  assert.match(skill, /DCC environment and operations/);
+  assert.match(skill, /availability\s+alone is not suitability/);
+  assert.match(skill, /A committed DCC result enters ordinary Narova/);
+  assert.match(skill, /Inspect the exact shot source that will render/);
+  assert.match(skill, /Narova does not choose\s+the frames/);
+  assert.ok(skill.split('\n').length < 145, 'primary skill body should stay concise');
 
   for (const reference of references) {
     assert.match(skill, new RegExp(`references/${reference.replace('.', '\\.')}\\)`));
@@ -111,4 +118,26 @@ test('3D-production physical reasoning preserves premise, authorship, and eviden
   assert.match(skill, /Do not persist or retrieve another project's concept/);
   assert.match(skill, /Route cloth, fluids, fracture, robotics/);
   assert.equal(packageJson.dependencies['@dimforge/rapier3d-deterministic-compat'], '0.20.0');
+});
+
+test('3D-production DCC operations stay optional, bounded, and capability-honest', () => {
+  const skill = read('skills/narova-3d-production/SKILL.md');
+  const dcc = read('skills/narova-3d-production/references/dcc-environment.md');
+  const packageJson = JSON.parse(read('skills/narova-3d-production/package.json'));
+
+  assert.match(skill, /Never install or transmit implicitly/);
+  assert.match(dcc, /`suitable`,\s+`unsuitable`, or `unknown`/);
+  assert.match(dcc, /never downloads, installs, or selects a remote executor/);
+  assert.match(dcc, /Scene assembly\/modification, arbitrary simulation, and managed installation/);
+  assert.match(dcc, /replace the\s+destination atomically/);
+  assert.match(dcc, /explicit stop route/);
+  assert.match(dcc, /`workload\.sampleFrames`/);
+  assert.match(dcc, /do not establish motion between samples/);
+  assert.match(dcc, /pixelMeasurements/);
+  assert.match(dcc, /20,000,000 pixels/);
+  assert.match(dcc, /no target band or\s+recommendation/i);
+  assert.match(skill, /decoded-pixel distributions/);
+  assert.match(skill, /coarse requested-object camera projection/);
+  assert.equal(packageJson.scripts.dcc, 'node tools/blender-dcc.js');
+  assert.equal(packageJson.version, '0.6.0');
 });

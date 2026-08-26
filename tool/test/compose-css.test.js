@@ -99,9 +99,13 @@ test('caption plate and size are authored overrides while defaults emit no overr
   const baseline = composeCss({}, voices, size);
   assert.equal((baseline.match(/\.caption2\{font-size:/g) || []).length, 1);
   assert.doesNotMatch(baseline, /\.caption2\{background:/);
-  const explicit = composeCss({}, voices, size, '', 'dark', true, false, false, { plate: true, size: 22 });
-  assert.match(explicit, /\.caption2\{font-size:22px\}/);
-  assert.match(explicit, /\.caption2\{background:rgba\(3,7,14,\.86\)/);
+  for (const mode of ['dark', 'light']) {
+    const explicit = composeCss({}, voices, size, '', mode, true, false, false, { plate: true, size: 22 });
+    assert.match(explicit, /\.caption2\{font-size:22px\}/);
+    assert.match(explicit, /\.caption2\{--ink:#f4f7fb;background:rgba\(3,7,14,\.86\)/);
+  }
+  const overridden = composeCss({}, voices, size, '.caption2{--ink:#ff00ff}', 'light', true, false, false, { plate: true });
+  assert.ok(overridden.trimEnd().endsWith('.caption2{--ink:#ff00ff}'));
 });
 
 test('zero-style canvas is full-frame with no centering, gutter, max-width, or caption reserve', () => {
@@ -174,6 +178,13 @@ test('mark layer styles use theme tokens only (mode-aware by construction)', () 
 test('broll video covers the scene and sits below chrome z-index', () => {
   const css = composeCss({}, voices, size);
   assert.match(css, /\.broll\{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;z-index:0/);
+});
+
+test('unqualified root clip paints full-frame cover at full opacity (regression: was .52)', () => {
+  const css = composeCss({}, voices, size);
+  const broll = css.slice(css.indexOf('.broll{'), css.indexOf('}', css.indexOf('.broll{')) + 1);
+  assert.match(broll, /opacity:1/);
+  assert.doesNotMatch(broll, /opacity:\.52/);
 });
 
 test('series badge uses theme tokens for brand-consistent color', () => {

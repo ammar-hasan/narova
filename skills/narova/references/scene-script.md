@@ -217,10 +217,12 @@ should encode only a condition the metric genuinely represents. Do not turn
 goal into an arbitrary numeric target. Keep such intent in `expect`; the local
 judge will return `UNCERTAIN` when it lacks a capable semantic perceiver.
 
-Run `narova judge` after the relevant artifact exists. `ALIGNED` means every
-available explicit probe held; `DIVERGED` means one did not; `OBSERVED`
-describes a property without testing an assertion; `UNCERTAIN` means the
-relationship could not be established. None means good/bad or pass/fail.
+Run `narova judge` after the relevant artifact exists. A probe observation is
+`ALIGNED` when every available explicit probe held and `DIVERGED` when one did
+not. That outcome applies only to the named probes: without capable evidence,
+Judge emits a separate `UNCERTAIN` observation for the free-form expectation
+and perceptual questions. `OBSERVED` describes a property without testing an
+assertion. None means good/bad or pass/fail.
 Successful builds record a per-video evidence receipt that binds shared timing,
 manifest, and caption context to that video's digest. A video without a
 matching receipt is still inspected, but unbound

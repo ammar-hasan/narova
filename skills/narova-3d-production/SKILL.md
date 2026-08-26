@@ -13,8 +13,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.3.0"
-checksum: 1d07fccc7808733087636d7eae0974688ac619af898a368bd56b08ca361a4586
+  version: "0.6.0"
+checksum: cad4c393fc11fb51c22fc16a70529f8f8a79fe094a855456098d3f627db8925a
 ---
 
 # Narova 3D Production
@@ -75,6 +75,44 @@ inputs, never `sceneState` evidence. The built-in baker is limited to bounded
 rigid bodies and simple constraints. Route cloth, fluids, fracture, robotics,
 or engineering/scientific verification to an appropriate specialist.
 
+## Use an optional DCC target only when the chosen form needs it
+
+For Blender-specific work, read [DCC environment and operations](references/dcc-environment.md).
+Assess the installed target and workload; availability alone is not suitability.
+Never install or transmit implicitly, pretend unsupported breadth is available,
+or silently degrade a required subject, relationship, behavior, or deliverable.
+
+Inspect the exact shot source that will render. Sparse frames expose shot-local
+program facts. Explicit proof requests can expose decoded-pixel distributions
+and coarse requested-object camera projection. Narova does not choose the frames,
+set target bands, infer what the audience sees, declare completeness or
+smoothness, or recommend a creative correction.
+
+A committed DCC result enters ordinary Narova as an authored local media asset;
+core still owns time, audio, composition, proof, release, and delivery. No house
+template, style, camera, realism, or prior-project memory is imposed.
+
+## Understand and encode a committed frame sequence
+
+After an agent commits frames, the companion can encode a bounded MP4. It
+explains observable effects without ranking or selecting; the agent supplies
+every creative encoding value.
+
+Interpolation modes and their observable consequences:
+
+| Mode | What FFmpeg does | Observable effect |
+|------|------------------|-------------------|
+| `hold` | Holds, drops, or duplicates source frames to match output FPS | No motion-estimated frames; motion may appear stepped when rates differ |
+| `blend` | Creates intermediate frames by blending adjacent source frames | Motion may appear smoother; blur or ghosting can appear |
+| `motion-compensated` | Synthesizes intermediate frames from estimated motion | Motion may appear smoother; distortion can appear at occlusions, fast motion, or scene changes |
+
+```sh
+node tools/frame-sequence-to-mp4.js /absolute/project encode-request.json encode-receipt.json
+```
+
+Read [frame encoding reference](references/frame-encoding.md) for the complete
+request, neutral consequence descriptions, validation, and receipt format.
+
 ## Keep confidence honest
 
 Connect decisions to what was rendered or otherwise inspected. Keep factual
@@ -82,7 +120,10 @@ checks separate from perceptual judgment. Do not give the perceptual reviewer
 the author's plan, symbol mapping, or run report. Treat an automated visual
 critic as advice until it has agreed with independent owner judgments on this
 kind of work. Render success does not prove recognition, collision, physical
-simulation, target visibility, taste, or hidden scene state.
+simulation, target visibility, taste, or hidden scene state. Non-black frames,
+motion, clearance, sightlines, render-enabled state, camera deltas, projected
+bounds, decoded-pixel distributions, and sparse samples prove only their named
+properties; [inspection](references/inspection.md) owns broader claims.
 
 If the chosen form needs sourcing, generation, refinement, rigging, animation,
 simulation, or inspection that no available capability supplies, change the
@@ -98,7 +139,5 @@ rich scenes, graphic abstraction and articulated realism are all valid when
 intentional. Use hard constraints only where user intent, compatibility,
 evidence, or visible correctness would otherwise break.
 
-Do not persist or retrieve another project's concept, prompt, subjects, assets,
-world, palette, camera, style, or owner disposition. Let agents grow through
-current-task reasoning, executable consequences, and bounded proofs without
-anchoring the next work to a sibling solution.
+Do not persist or retrieve another project's concept, prompt, subjects, assets, world,
+palette, camera, style, or owner disposition. Let agents grow through current-task reasoning, executable consequences, and bounded proofs without anchoring the next work to a sibling solution.

@@ -54,6 +54,7 @@ function focused(report, assertionId) {
   if (!assertion) throw new Error(`assertion "${assertionId}" was not found in the resolved project`);
   const observations = (report.observations || []).filter(item => (
     item && item.assertion && item.assertion.id === assertionId
+      && item.assessmentTarget !== 'free-form-correspondence'
   ));
   if (observations.length !== 1) {
     throw new Error(`assertion "${assertionId}" does not have one focused judgement observation`);

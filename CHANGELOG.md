@@ -14,6 +14,39 @@ versions follow [Semantic Versioning](https://semver.org/).
   audio interval. The advisory includes the complete artifact digest and its
   measurement basis; it supplies no target, score, gate, recommendation, or
   automatic correction.
+- **Optional bounded Blender operations for authored 3D.** The
+  `narova-3d-production` companion can now assess an existing Blender target,
+  inspect `.blend` scenes, render validated proof stills/short sequences and
+  bounded final-shot frames, and preserve editable source through versioned
+  receipts. The adapter stages outputs privately, publishes atomically, reports
+  unknown workload facts honestly, cleans up timed-out process trees, and never
+  installs Blender or transmits project data. Core Narova remains complete
+  without the companion and continues to own final audiovisual composition.
+  Exact-shot inspection can now sample caller-selected frames and named objects,
+  reporting literal camera, render, light, color, world, and bounds state; sparse
+  proofs render only the caller's selected frames without choosing or judging
+  creative values.
+- **Explicit frame-sequence handoff for authored 3D.** The optional companion
+  can validate a committed PNG sequence and encode it to MP4 after the agent
+  explicitly supplies every timing, interpolation, scaling, codec, pixel-format,
+  and quality choice. It probes and hashes staged media before atomic publication,
+  records the selected controls and bounded FFmpeg identity, and never ranks or
+  recommends a creative treatment.
+
+### Fixed
+
+- **Readable default subtitle plates.** An authored dark caption plate now
+  supplies its own light subtitle foreground, preventing light-theme dark text
+  from becoming dark-on-dark. Plates remain opt-in and later authored CSS keeps
+  authority.
+- **Evidence-scoped Judge outcomes.** Measured assertion probes retain their
+  exact `ALIGNED` or `DIVERGED` result, while unavailable free-form expectation
+  and perceptual-question correspondence is now reported separately as
+  `UNCERTAIN`. Judge remains scoreless, read-only, and non-prescriptive.
+- **Full-opacity direct clips.** HyperFrames now paints an unqualified root
+  `scene.clip` at opacity `1`, matching the no-browser renderer and removing an
+  undeclared translucent wash. Clip fit, looping, timing, audio, captions,
+  layer order, transitions, and authored overlays are unchanged.
 
 ## [0.41.0] - 2026-08-23
 

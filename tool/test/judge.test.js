@@ -230,10 +230,18 @@ test('judge emits a deterministic scoreless five-family mirror and preserves eve
 
   const aligned = report.observations.find(item => item.assertion && item.assertion.id === 'silent-opening');
   assert.equal(aligned.outcome, 'ALIGNED');
+  assert.equal(aligned.assessmentTarget, 'declared-probes');
   assert.equal(aligned.classification, 'MEASURED');
   assert.equal(aligned.relatedProductionState.scene, 'opening');
   assert.equal(aligned.relatedProductionState.source.basis, 'AUTHORED');
-  assert.match(aligned.interpretation, /intentional exception without judging its style/);
+  assert.match(aligned.interpretation, /establishes only those probe comparisons/);
+  const alignedMeaning = report.observations.find(item => item.id === `${aligned.id}-semantic`);
+  assert.equal(alignedMeaning.outcome, 'UNCERTAIN');
+  assert.equal(alignedMeaning.assessmentTarget, 'free-form-correspondence');
+  assert.equal(alignedMeaning.evidence[0].metric, 'semantic.correspondence');
+  assert.equal(alignedMeaning.evidence[0].availability, 'unavailable');
+  assert.deepEqual(alignedMeaning.suggestedQuestions, ['Did unintended motion undermine the stillness?']);
+  assert.equal(report.families.find(family => family.family === 'intent-rendered-correspondence').coverage, 'partial');
 
   const diverged = report.observations.find(item => item.assertion && item.assertion.id === 'unexpected-audio');
   assert.equal(diverged.outcome, 'DIVERGED');
@@ -355,7 +363,10 @@ test('judge --plan returns the full judgement and deterministic plural options w
   assert.ok(plan.optionSets.length >= 2);
   assert.ok(plan.optionSets.every(set => ['DIVERGED', 'UNCERTAIN'].includes(set.outcome)));
   assert.ok(plan.optionSets.every(set => set.options.length >= 3 && set.options[0].stance === 'keep-unchanged'));
-  assert.equal(plan.optionSets.some(set => set.assertion.id === 'silent-opening'), false);
+  const silentMeaning = plan.optionSets.find(set => set.assertion.id === 'silent-opening');
+  assert.ok(silentMeaning);
+  assert.match(silentMeaning.observationId, /-semantic$/);
+  assert.equal(silentMeaning.outcome, 'UNCERTAIN');
   assert.equal(plan.optionSets.some(set => set.observationId.startsWith('temporal-')), false);
 
   const mechanical = plan.optionSets.find(set => set.assertion.id === 'unexpected-audio');

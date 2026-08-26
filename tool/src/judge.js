@@ -985,7 +985,7 @@ function buildIntentObservations(config, context) {
       suggestedQuestions: ['Should any decisive finished-artifact intent be recorded as an explicit assertion?'],
     }];
   }
-  return assertions.map((assertion, index) => {
+  return assertions.flatMap((assertion, index) => {
     const range = assertionRange(assertion, context.scenes, context.artifact.duration);
     const visual = visualMetrics(context.frames, range.measuredStart, range.measuredEnd);
     const scene = (assertion.scope && assertion.scope.scene)
@@ -1036,13 +1036,13 @@ function buildIntentObservations(config, context) {
         evidence(context.artifact.path, 'audio.silence_ratio', silenceRatio(context.audio, range.measuredStart, range.measuredEnd), 'ratio'),
       );
     }
-    const deliberate = assertion.class === 'deliberate-choice' || assertion.class === 'deliberate-violation';
     const observed = facts.length
       ? facts.map(fact => `${fact.probe.metric}${fact.probe.ref ? `:${fact.probe.ref}` : ''}=${fact.value == null ? 'unavailable' : JSON.stringify(typeof fact.value === 'number' ? round(fact.value) : fact.value)} ${fact.unit} (${fact.probe.operator} ${JSON.stringify(fact.probe.value)})`).join('; ')
       : 'Local built-in perceivers measured the scoped artifact, but no explicit measurable probe or semantic perceiver can establish the free-form expectation.';
-    return {
+    const probeObservation = {
       id: observationId(FAMILIES[0], index),
       family: FAMILIES[0],
+      assessmentTarget: facts.length ? 'declared-probes' : 'declared-expectation',
       timeRange: formatRange(range),
       scopeCoverage: {
         status: scopeCoverage.status,
@@ -1053,9 +1053,9 @@ function buildIntentObservations(config, context) {
       observed,
       evidence: evidenceRows,
       interpretation: outcome === 'ALIGNED'
-        ? `The declared measurable condition survived the encoded artifact${deliberate ? '; this supports the intentional exception without judging its style' : ''}.`
+        ? 'All available named probes hold. This establishes only those probe comparisons, not the free-form expectation, its perceptual consequence, or any suggested question.'
         : outcome === 'DIVERGED'
-          ? `The encoded artifact differs from the declared measurable condition${deliberate ? '; the creative choice remains authoritative, but its execution is not the declared one' : ''}.`
+          ? 'At least one named probe is contradicted by the encoded artifact. This establishes only the probe difference, not its creative consequence.'
           : 'Available evidence cannot establish whether the intended creative effect survived rendering.',
       confidence: outcome === 'UNCERTAIN' ? (available.length ? 0.35 : 0.1) : 0.99,
       confidenceBasis: outcome === 'UNCERTAIN'
@@ -1065,12 +1065,40 @@ function buildIntentObservations(config, context) {
         : available.length ? 'MEASURED' : 'INFERRED',
       outcome,
       relatedProductionState: relatedState(assertion, context.scenes, range.start, range.end),
+      suggestedQuestions: [],
+    };
+    if (!facts.length) return [probeObservation];
+    return [probeObservation, {
+      id: `${observationId(FAMILIES[0], index)}-semantic`,
+      family: FAMILIES[0],
+      assessmentTarget: 'free-form-correspondence',
+      timeRange: formatRange(range),
+      scopeCoverage: {
+        status: 'unavailable',
+        measuredRange: { start: 0, end: 0 },
+      },
+      assertion: { ...assertion },
+      intent: assertion.expect,
+      observed: 'The named probes do not establish the free-form expectation or its perceptual consequence, and no active semantic perceiver supplied that missing relationship.',
+      evidence: [evidence(
+        'semantic-perception',
+        'semantic.correspondence',
+        null,
+        'unavailable',
+        'UNAVAILABLE',
+        'unavailable',
+      )],
+      interpretation: 'Available evidence cannot establish whether the broader expected result survived rendering. The measured probe observation remains separate.',
+      confidence: 0.1,
+      confidenceBasis: 'No active semantic perceiver or other declared evidence establishes this relationship; confidence does not estimate artistic success.',
+      classification: 'INFERRED',
+      outcome: 'UNCERTAIN',
+      perceptionCoverage: 'unavailable',
+      relatedProductionState: relatedState(assertion, context.scenes, range.start, range.end),
       suggestedQuestions: assertion.questions && assertion.questions.length
         ? assertion.questions.slice()
-        : [outcome === 'DIVERGED'
-          ? 'Was the rendered difference intentional, or should the declared execution be restored?'
-          : 'Did the measured property create the effect you intended?'],
-    };
+        : ['Did the measured properties create the finished-artifact condition you intended?'],
+    }];
   });
 }
 

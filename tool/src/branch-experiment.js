@@ -88,6 +88,7 @@ function captureBranchExperiment(report, assertionId, metadataDir, projectDir, o
   if (!assertion) throw new Error(`assertion "${focusAssertion}" was not found in the resolved project`);
   const observations = (report.observations || []).filter(item => (
     item && item.assertion && item.assertion.id === focusAssertion
+      && item.assessmentTarget !== 'free-form-correspondence'
   ));
   if (observations.length !== 1) {
     throw new Error(`assertion "${focusAssertion}" does not have one focused judgement observation`);
