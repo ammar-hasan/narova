@@ -6,6 +6,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+
+- **Joined audio mix and delivery proof views.** `narova review --audio-levels`
+  can now return an ordered, digest-bound set of labeled windows, join authored
+  bed/SFX declarations and resolved global windows to measured total-mix facts,
+  or directly measure one selected encoded audio member from a delivered
+  container. Every view is advisory and read-only; unavailable facts and
+  ambiguous members stay explicit, and no view invents a target, score,
+  verdict, recommendation, or repair.
+
+### Fixed
+
+- **External-narration scene anchors.** Scene-anchored SFX now resolve to the
+  scene's global start plus the authored offset in the external-narration mixer,
+  matching the validated authoring contract and the primary mixer.
+
 ## [0.42.0] - 2026-08-26
 
 ### Added

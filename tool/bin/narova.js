@@ -29,7 +29,12 @@ const { auditMotion, formatMotionAudit, auditProofFrames, formatProofAudit } = r
 const { writeProofReceipt, verifyProofReceipt, clearProofReceipt, writeProofBundle, verifyProofBundle } = require('../src/proof-receipt');
 const { hashFile } = require('../src/manifest');
 const { beatReviewTimes, motionReviewTimes } = require('../src/review-times');
-const { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes, audioLevelFacts, formatAudioLevels } = require('../src/review-evidence');
+const {
+  clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences,
+  takeIndex, formatTakes, audioLevelFacts, formatAudioLevels,
+  parseAudioWindows, audioWindowFacts, formatAudioWindows, audioMixMap, formatAudioMixMap,
+  deliveredAudioFacts, formatDeliveredAudio,
+} = require('../src/review-evidence');
 const { ingest } = require('../src/ingest');
 const {
   creditLines, creditEntries, formatCredits, downloadAsset, inferKind, readAssetLock, registerAsset,
@@ -71,6 +76,15 @@ const mData = fields => machine.data(fields);
 const mSetData = payload => machine.setData(payload);
 const mArtifact = (path, role) => machine.artifact(path, role);
 const mDiag = (severity, code, message, subject) => machine.diag(severity, code, message, subject);
+const machineAudioData = value => {
+  if (value === -Infinity) return '-inf';
+  if (value === Infinity) return '+inf';
+  if (Array.isArray(value)) return value.map(machineAudioData);
+  if (value && typeof value === 'object') {
+    return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, machineAudioData(child)]));
+  }
+  return value;
+};
 
 /* Provider command arrays are execution internals and may contain legacy
  * inline credentials. Machine payloads expose only public provider facts. */
@@ -214,9 +228,9 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels']);
-const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map']);
+const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows']);
 
 function validateInvocationFlags(flags, cmd) {
   if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
@@ -232,8 +246,10 @@ function validateInvocationFlags(flags, cmd) {
   if (flags['audio-levels'] != null && cmd !== 'review') {
     invocationError('--audio-levels is only valid with narova review');
   }
-  if ((flags.audio != null || flags.interval != null) && !(cmd === 'review' && flags['audio-levels'])) {
-    invocationError('--audio and --interval are only valid with narova review --audio-levels');
+  const audioProofSelector = flags.audio != null || flags.interval != null || flags.windows != null
+    || flags['mix-map'] != null || flags.delivered != null || flags.member != null;
+  if (audioProofSelector && !(cmd === 'review' && flags['audio-levels'])) {
+    invocationError('--audio, --interval, --windows, --mix-map, --delivered, and --member are only valid with narova review --audio-levels');
   }
   const positiveNumber = (name, max = Infinity) => {
     if (flags[name] == null) return;
@@ -598,6 +614,9 @@ Commands:
   review --takes        advisory narration take index (timing, sentence file, take identity)
   review --audio-levels [--audio <file>] [--interval start,end]
                           advisory loudness/peak/clipping facts from existing audio
+                          --windows '<JSON array>' joins ordered labeled intervals
+                          --mix-map joins resolved bed/SFX declarations to total-mix intervals
+                          --delivered [file] [--member <stream-index>] measures an encoded member directly
   --companion [size]    also write a compressed companion of the video for quick review
                           e.g. --companion 60MB; no size uses quick-review defaults;
                           never enforced, never gates, primary stays full quality
@@ -2061,6 +2080,11 @@ async function main() {
         usageError('review modes are mutually exclusive');
       }
       if (flags['audio-levels']) {
+        const specialized = [flags.windows != null, Boolean(flags['mix-map']), flags.delivered != null].filter(Boolean).length;
+        if (specialized > 1) usageError('--windows, --mix-map, and --delivered are mutually exclusive');
+        if (flags.interval != null && specialized) usageError('--interval cannot be combined with --windows, --mix-map, or --delivered');
+        if (flags.audio != null && (flags['mix-map'] || flags.delivered != null)) usageError('--audio cannot be combined with --mix-map or --delivered');
+        if (flags.member != null && flags.delivered == null) usageError('--member is only valid with --delivered');
         if (flags.audio === '') {
           usageError('--audio needs a non-empty file path');
         }
@@ -2081,19 +2105,44 @@ async function main() {
             usageError('--interval needs 0 ≤ start < end');
           }
         }
-        const { projectDir } = await loadResolved(flags, { readOnly: true });
-        const report = await audioLevelFacts(outDirOf(flags, projectDir), { audio: flags.audio, interval: flags.interval });
-        console.log(formatAudioLevels(report));
+        let windows = null;
+        if (flags.windows != null) {
+          try { windows = JSON.parse(String(flags.windows)); }
+          catch { usageError('--windows needs a JSON array of {label,start,end} objects'); }
+          const parsedWindows = parseAudioWindows(windows);
+          if (parsedWindows.reason) usageError(`--windows ${parsedWindows.reason}`);
+          windows = parsedWindows.rows;
+        }
+        let member = null;
+        if (flags.member != null) {
+          member = Number(flags.member);
+          if (!Number.isInteger(member) || member < 0) usageError('--member needs a non-negative container stream index');
+        }
+        const { config, projectDir } = await loadResolved(flags, { readOnly: true });
+        const out = outDirOf(flags, projectDir);
+        let report;
+        let mode;
+        if (windows != null) {
+          mode = 'audio-windows';
+          report = await audioWindowFacts(out, { audio: flags.audio, windows });
+          console.log(formatAudioWindows(report));
+        } else if (flags['mix-map']) {
+          mode = 'audio-mix-map';
+          const timingsFile = path.join(out, 'timings.json');
+          const timings = fs.existsSync(timingsFile) ? JSON.parse(fs.readFileSync(timingsFile, 'utf8')) : null;
+          report = await audioMixMap(config, out, timings);
+          console.log(formatAudioMixMap(report));
+        } else if (flags.delivered != null) {
+          mode = 'delivered-audio-levels';
+          report = await deliveredAudioFacts(out, { delivered: flags.delivered, member });
+          console.log(formatDeliveredAudio(report));
+        } else {
+          mode = 'audio-levels';
+          report = await audioLevelFacts(out, { audio: flags.audio, interval: flags.interval });
+          console.log(formatAudioLevels(report));
+        }
         console.log('advisory evidence — values describe the rendered audio, not a target or verdict');
-        const machineFacts = report.facts && Object.fromEntries(
-          Object.entries(report.facts).map(([key, value]) => [
-            key,
-            value === -Infinity ? '-inf'
-              : value === Infinity ? '+inf'
-                : value,
-          ]),
-        );
-        mSetData({ mode: 'audio-levels', ...report, ...(machineFacts ? { facts: machineFacts } : {}) });
+        mSetData(machineAudioData({ mode, ...report }));
         return;
       }
       if (flags.silences) {

@@ -260,7 +260,7 @@ function formatTakes(index) {
  * caller-declared interval. Every fact carries a declared measurement basis
  * and is bound to the source file digest. */
 async function audioLevelFacts(outDir, opts = {}) {
-  const { audio: explicitAudio, interval, clippingThresholdDb = -1.0 } = opts;
+  const { audio: explicitAudio, interval, clippingThresholdDb = -1.0, streamIndex = null } = opts;
   const hasExplicitAudio = explicitAudio !== undefined && explicitAudio !== null;
   if (hasExplicitAudio && String(explicitAudio).length === 0) {
     return {
@@ -317,6 +317,14 @@ async function audioLevelFacts(outDir, opts = {}) {
       facts: null,
     };
   }
+  if (streamIndex != null && (!Number.isInteger(streamIndex) || streamIndex < 0)) {
+    return {
+      reason: `invalid audio stream index: ${streamIndex}`,
+      file: absFile,
+      basis: null,
+      facts: null,
+    };
+  }
 
   let intervalError = null;
   let start = null;
@@ -360,6 +368,7 @@ async function audioLevelFacts(outDir, opts = {}) {
     clippingCountScope: 'all channels summed',
     clippingCountMethod: 'count(abs(decoded sample) >= 10^(threshold dBFS / 20))',
     interval: start != null ? { start, end } : null,
+    streamSelector: streamIndex == null ? 'default decoded audio member' : `container stream ${streamIndex}`,
   };
 
   // Measure one private snapshot so hashing, loudness, peaks, and sample counts
@@ -388,7 +397,9 @@ async function audioLevelFacts(outDir, opts = {}) {
       : 'ebur128=peak=true:framelog=quiet';
     const eburArgs = [
       '-hide_banner', '-filter_threads', '1', '-threads', '1',
-      '-i', snapshotFile, '-af', af, '-f', 'null', '-',
+      '-i', snapshotFile,
+      ...(streamIndex == null ? [] : ['-map', `0:${streamIndex}`]),
+      '-af', af, '-f', 'null', '-',
     ];
     const ebur = spawnSync('ffmpeg', eburArgs, {
       encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024,
@@ -430,7 +441,7 @@ async function audioLevelFacts(outDir, opts = {}) {
     const truePeak = summaryTruePeak != null ? summaryTruePeak : maxPeakFromLines(text, 'TPK');
     let sampleFacts;
     try {
-      sampleFacts = await measureDecodedSamples(snapshotFile, { start, end, clippingThresholdDb });
+      sampleFacts = await measureDecodedSamples(snapshotFile, { start, end, clippingThresholdDb, streamIndex });
     } catch {
       return {
         reason: `audio could not be decoded: ${hasExplicitAudio ? explicitAudio : absFile}`,
@@ -527,13 +538,14 @@ function maxPeakFromLines(text, prefix) {
   return hasFinite ? max : -Infinity;
 }
 
-function measureDecodedSamples(filePath, { start, end, clippingThresholdDb }) {
+function measureDecodedSamples(filePath, { start, end, clippingThresholdDb, streamIndex = null }) {
   return new Promise((resolve, reject) => {
     const threshold = Math.pow(10, clippingThresholdDb / 20);
     const args = [
       '-hide_banner', '-loglevel', 'error',
       '-filter_threads', '1', '-threads', '1', '-i', filePath,
     ];
+    if (streamIndex != null) args.push('-map', `0:${streamIndex}`);
     if (start != null) {
       args.push('-ss', String(start), '-t', String(Math.max(0, end - start)));
     }
@@ -612,4 +624,290 @@ function formatAudioLevels(report) {
   ].join('\n');
 }
 
-module.exports = { clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences, takeIndex, formatTakes, audioLevelFacts, formatAudioLevels };
+function parseAudioWindows(windows) {
+  if (!Array.isArray(windows) || windows.length === 0) {
+    return { reason: 'audio windows must be a non-empty JSON array' };
+  }
+  const labels = new Set();
+  const rows = [];
+  for (let i = 0; i < windows.length; i++) {
+    const row = windows[i];
+    if (!row || typeof row !== 'object' || Array.isArray(row)) {
+      return { reason: `audio window ${i + 1} must be an object` };
+    }
+    const label = typeof row.label === 'string' ? row.label.trim() : '';
+    if (!label) return { reason: `audio window ${i + 1} needs a non-empty label` };
+    if (labels.has(label)) return { reason: `duplicate audio window label: ${label}` };
+    if (!Number.isFinite(row.start) || !Number.isFinite(row.end) || row.start < 0 || row.end <= row.start) {
+      return { reason: `audio window ${label} needs 0 ≤ start < end` };
+    }
+    labels.add(label);
+    rows.push({ label, start: row.start, end: row.end });
+  }
+  return { rows };
+}
+
+/* NAR-007-054 — one ordered receipt over caller-labeled intervals. Each row
+ * delegates to the literal NAR-007-053 primitive and the receipt is accepted
+ * only when every row names the same artifact bytes. */
+async function audioWindowFacts(outDir, opts = {}) {
+  const parsed = parseAudioWindows(opts.windows);
+  if (parsed.reason) return { reason: parsed.reason, file: null, digest: null, basis: null, windows: [] };
+  const rows = [];
+  let identity = null;
+  let basis = null;
+  for (const window of parsed.rows) {
+    const measured = await audioLevelFacts(outDir, {
+      audio: opts.audio,
+      interval: `${window.start},${window.end}`,
+      clippingThresholdDb: opts.clippingThresholdDb,
+      streamIndex: opts.streamIndex,
+    });
+    if (measured.reason) {
+      return { reason: `${window.label}: ${measured.reason}`, file: measured.file, digest: null, basis: null, windows: [] };
+    }
+    if (identity && (identity.file !== measured.file || identity.digest !== measured.digest)) {
+      return { reason: 'audio changed between labeled-window measurements', file: measured.file, digest: null, basis: null, windows: [] };
+    }
+    identity ||= { file: measured.file, digest: measured.digest };
+    basis ||= { ...measured.basis, interval: null };
+    rows.push({ label: window.label, interval: { start: window.start, end: window.end }, facts: measured.facts });
+  }
+  return {
+    file: identity.file,
+    digest: identity.digest,
+    basis,
+    windows: rows,
+  };
+}
+
+function formatAudioWindows(report) {
+  if (report.reason) return `audio-windows: ${report.reason}`;
+  const b = report.basis;
+  const lines = [
+    'audio-windows (advisory — measured facts only; labels carry no inferred meaning):',
+    `  file: ${report.file}`,
+    `  digest: ${report.digest}`,
+    `  basis: ${b.integratedLoudnessMethod}; ${b.loudnessRangeMethod}; true peak ${b.truePeakOversampling}× oversampled`,
+  ];
+  for (const row of report.windows) {
+    lines.push(`  ${row.label}  ${row.interval.start.toFixed(2)}s–${row.interval.end.toFixed(2)}s`);
+    lines.push(`    integrated ${fmtFact(row.facts.integratedLoudness)} ${b.loudnessUnit}; range ${fmtFact(row.facts.loudnessRange)} ${b.rangeUnit}; true peak ${fmtFact(row.facts.truePeak)} ${b.peakUnit}; sample peak ${fmtFact(row.facts.samplePeak)} ${b.samplePeakUnit}; clipped samples ${row.facts.clippingSamples}`);
+  }
+  return lines.join('\n');
+}
+
+function probeAudio(file) {
+  const result = spawnSync('ffprobe', [
+    '-v', 'error', '-show_entries',
+    'format=duration:stream=index,codec_type,codec_name,sample_rate,channels,duration:stream_disposition=default:stream_tags=language,title',
+    '-of', 'json', file,
+  ], { encoding: 'utf8', timeout: 30000, maxBuffer: 4 * 1024 * 1024 });
+  if (result.error || result.status !== 0) return { reason: 'artifact could not be decoded' };
+  try {
+    const document = JSON.parse(result.stdout);
+    return {
+      duration: Number(document.format?.duration),
+      members: (document.streams || []).filter(s => s.codec_type === 'audio').map(s => ({
+        index: s.index, codec: s.codec_name || null,
+        sampleRate: Number(s.sample_rate) || null, channels: Number(s.channels) || null,
+        duration: Number.isFinite(Number(s.duration)) ? Number(s.duration) : null,
+        default: s.disposition?.default === 1,
+        language: s.tags?.language || null, title: s.tags?.title || null,
+      })),
+    };
+  } catch { return { reason: 'artifact metadata was invalid' }; }
+}
+
+function selectAudioMember(members, requested = null) {
+  if (members.length === 0) return { reason: 'has no audio member' };
+  if (requested != null) {
+    const member = members.find(candidate => candidate.index === requested);
+    return member
+      ? { member, selectionBasis: 'caller-selected container stream index' }
+      : { reason: `has no audio member at stream ${requested}` };
+  }
+  if (members.length === 1) return { member: members[0], selectionBasis: 'only audio member' };
+  const defaults = members.filter(candidate => candidate.default);
+  return defaults.length === 1
+    ? { member: defaults[0], selectionBasis: 'unique default-disposition audio member' }
+    : { reason: `has ${members.length} audio members and no unique default` };
+}
+
+/* NAR-007-056 — directly decode one selected member from the delivered
+ * container. The container digest comes from that same direct measurement. */
+async function deliveredAudioFacts(outDir, opts = {}) {
+  const selected = opts.delivered === true || opts.delivered == null
+    ? path.join(outDir, 'video.mp4') : opts.delivered;
+  const file = path.isAbsolute(selected) ? selected : path.resolve(outDir, selected);
+  if (!fs.existsSync(file)) return { reason: `delivered artifact not found: ${selected}`, file, member: null, facts: null };
+  const before = hashFile(file);
+  const probed = probeAudio(file);
+  if (probed.reason) return { reason: probed.reason, file, member: null, facts: null };
+  const selection = selectAudioMember(probed.members, opts.member);
+  if (selection.reason) {
+    const hint = opts.member == null && probed.members.length > 1 ? '; select --member <stream-index>' : '';
+    return { reason: `delivered artifact ${selection.reason}${hint}`, file, members: probed.members, member: null, facts: null };
+  }
+  const { member, selectionBasis } = selection;
+  const measured = await audioLevelFacts(outDir, { audio: file, streamIndex: member.index });
+  if (measured.reason) return { reason: measured.reason, file, member, selectionBasis, facts: null };
+  if (before !== measured.digest || hashFile(file) !== measured.digest) {
+    return { reason: 'delivered artifact changed during member measurement', file, member: null, facts: null };
+  }
+  return {
+    file, digest: measured.digest, member, selectionBasis,
+    basis: measured.basis, facts: measured.facts,
+  };
+}
+
+function formatDeliveredAudio(report) {
+  if (report.reason) return `delivered-audio: ${report.reason}`;
+  const m = report.member;
+  return [
+    'delivered-audio (advisory — directly measured encoded/muxed member; no intermediate facts substituted):',
+    `  file: ${report.file}`,
+    `  digest: ${report.digest}`,
+    `  member: stream ${m.index}; codec ${m.codec || 'unavailable'}; ${m.channels ?? 'unavailable'} channel(s); ${m.sampleRate ?? 'unavailable'} Hz; default=${m.default}`,
+    `  selection: ${report.selectionBasis}`,
+    `  integrated loudness: ${fmtFact(report.facts.integratedLoudness)} ${report.basis.loudnessUnit}`,
+    `  loudness range: ${fmtFact(report.facts.loudnessRange)} ${report.basis.rangeUnit}`,
+    `  true peak: ${fmtFact(report.facts.truePeak)} ${report.basis.peakUnit}`,
+    `  measured sample peak: ${fmtFact(report.facts.samplePeak)} ${report.basis.samplePeakUnit}`,
+    `  clipped samples: ${report.facts.clippingSamples}`,
+  ].join('\n');
+}
+
+/* NAR-007-055 — declaration facts joined to achieved total-mix intervals.
+ * The finished mix is deliberately measured as a sum; no row is described as
+ * an isolated or perceptually audible source contribution. */
+async function audioMixMap(config, outDir, timings) {
+  const mixFile = path.join(outDir, 'audio', 'mix.wav');
+  let mixDigest = null;
+  if (fs.existsSync(mixFile)) {
+    try { mixDigest = hashFile(mixFile); }
+    catch { mixDigest = null; }
+  }
+  const declarations = [];
+  const sceneStarts = new Map();
+  let total = 0;
+  for (const scene of config.scenes || []) {
+    sceneStarts.set(scene.id, Math.round(total * 1000) / 1000);
+    const duration = Number(timings?.[scene.id]?.dur);
+    if (!Number.isFinite(duration) || duration <= 0) {
+      return { reason: `timings unavailable for scene ${scene.id}`, mix: null, declarations: [], caveat: null };
+    }
+    total = Math.round((total + duration) * 1000) / 1000;
+  }
+  if (config.bed) declarations.push({
+    kind: 'bed', declarationIndex: 0, source: config.bed.file,
+    gain: config.bed.volume, fadeIn: config.bed.fadeIn, fadeOut: config.bed.fadeOut,
+    anchor: { basis: 'project start', at: 0 }, window: { start: 0, end: total },
+  });
+  for (let i = 0; i < (config.sfx || []).length; i++) {
+    const effect = config.sfx[i];
+    const anchorStart = effect.scene == null ? 0 : sceneStarts.get(effect.scene);
+    const start = Number.isFinite(anchorStart) ? anchorStart + effect.at : null;
+    let duration = null;
+    let sourceSelection = null;
+    let sourceUnavailable = null;
+    if (fs.existsSync(effect.file)) {
+      const sourceProbe = probeAudio(effect.file);
+      if (sourceProbe.reason) sourceUnavailable = sourceProbe.reason;
+      else {
+        sourceSelection = selectAudioMember(sourceProbe.members);
+        if (sourceSelection.reason) sourceUnavailable = `source ${sourceSelection.reason}`;
+        else {
+          const measuredDuration = sourceSelection.member.duration ?? sourceProbe.duration;
+          if (Number.isFinite(measuredDuration) && measuredDuration > 0) duration = measuredDuration;
+          else sourceUnavailable = 'source audio duration is unavailable';
+        }
+      }
+    }
+    declarations.push({
+      kind: 'sfx', declarationIndex: i, source: effect.file, gain: effect.volume,
+      fadeIn: null, fadeOut: null,
+      anchor: effect.scene == null
+        ? { basis: 'global timeline', scene: null, at: effect.at }
+        : { basis: 'scene start plus offset', scene: effect.scene, sceneStart: anchorStart ?? null, at: effect.at },
+      window: start == null || duration == null ? null : { start, end: Math.min(total, start + duration) },
+      sourceSelection,
+      sourceUnavailable,
+    });
+  }
+  const rows = [];
+  for (const declaration of declarations) {
+    let sourceIdentity = null;
+    let unavailable = null;
+    if (!fs.existsSync(declaration.source)) unavailable = 'source file is missing';
+    else {
+      try {
+        const sourceDigest = hashFile(declaration.source);
+        const sourceProbe = probeAudio(declaration.source);
+        const selection = declaration.sourceSelection || (!sourceProbe.reason ? selectAudioMember(sourceProbe.members) : null);
+        if (sourceProbe.reason) unavailable = `source ${sourceProbe.reason}`;
+        else if (selection?.reason) unavailable = `source ${selection.reason}`;
+        else sourceIdentity = {
+          file: declaration.source, digest: sourceDigest,
+          member: selection?.member || null,
+          selectionBasis: selection?.selectionBasis || null,
+        };
+      }
+      catch { unavailable = 'source file could not be identified'; }
+    }
+    unavailable ||= declaration.sourceUnavailable;
+    let achieved = null;
+    if (!fs.existsSync(mixFile)) unavailable ||= 'finished mix artifact is missing';
+    else if (!declaration.window || declaration.window.end <= declaration.window.start) unavailable ||= 'global mix window could not be resolved';
+    else {
+      const measured = await audioLevelFacts(outDir, {
+        audio: mixFile, interval: `${declaration.window.start},${declaration.window.end}`,
+      });
+      if (measured.reason) unavailable ||= measured.reason;
+      else if (mixDigest != null && measured.digest !== mixDigest) unavailable ||= 'finished mix changed during measurement';
+      else achieved = { digest: measured.digest, basis: measured.basis, facts: measured.facts };
+    }
+    rows.push({ ...declaration, sourceIdentity, achieved, unavailable });
+  }
+  if (mixDigest != null) {
+    try {
+      if (hashFile(mixFile) !== mixDigest) {
+        return { reason: 'finished mix changed during measurement', mix: mixFile, mixDigest: null, declarations: rows, caveat: null };
+      }
+    } catch {
+      return { reason: 'finished mix changed or disappeared during measurement', mix: mixFile, mixDigest: null, declarations: rows, caveat: null };
+    }
+  }
+  return {
+    mix: fs.existsSync(mixFile) ? mixFile : null, mixDigest,
+    declarations: rows,
+    caveat: 'Each achieved interval measures the total finished mix, including all overlapping material; it does not isolate or prove the audible contribution, clarity, masking, or balance of the named source.',
+  };
+}
+
+function formatAudioMixMap(report) {
+  if (report.reason) return `audio-mix-map: ${report.reason}`;
+  const lines = ['audio-mix-map (advisory declaration and total-mix facts; no target or verdict):'];
+  lines.push(`  finished mix: ${report.mix || 'unavailable'}`);
+  lines.push(`  mix digest: ${report.mixDigest || 'unavailable'}`);
+  if (report.declarations.length === 0) lines.push('  no bed or effect declarations');
+  for (const row of report.declarations) {
+    lines.push(`  ${row.kind}${row.kind === 'sfx' ? `[${row.declarationIndex}]` : ''}: ${row.source}`);
+    lines.push(`    source digest: ${row.sourceIdentity?.digest || 'unavailable'}`);
+    if (row.sourceIdentity?.member) lines.push(`    source member: stream ${row.sourceIdentity.member.index}; ${row.sourceIdentity.selectionBasis}`);
+    lines.push(`    declared gain: ${row.gain}; fades: in=${row.fadeIn ?? 'not declared'} out=${row.fadeOut ?? 'not declared'}`);
+    lines.push(`    anchor: ${row.anchor.basis}${row.anchor.scene ? ` scene=${row.anchor.scene}` : ''} at=${row.anchor.at}s`);
+    lines.push(`    global window: ${row.window ? `${row.window.start.toFixed(2)}s–${row.window.end.toFixed(2)}s` : 'unavailable'}`);
+    if (row.achieved) lines.push(`    total mix: true peak ${fmtFact(row.achieved.facts.truePeak)} ${row.achieved.basis.peakUnit}; sample peak ${fmtFact(row.achieved.facts.samplePeak)} ${row.achieved.basis.samplePeakUnit}; integrated ${fmtFact(row.achieved.facts.integratedLoudness)} ${row.achieved.basis.loudnessUnit}; range ${fmtFact(row.achieved.facts.loudnessRange)} ${row.achieved.basis.rangeUnit}; clipped samples ${row.achieved.facts.clippingSamples}; digest ${row.achieved.digest}`);
+    if (row.unavailable) lines.push(`    unavailable: ${row.unavailable}`);
+  }
+  lines.push(`  caveat: ${report.caveat}`);
+  return lines.join('\n');
+}
+
+module.exports = {
+  clipCoverage, formatCoverage, contactSheet, termExcerpts, silenceGaps, formatSilences,
+  takeIndex, formatTakes, audioLevelFacts, formatAudioLevels,
+  parseAudioWindows, audioWindowFacts, formatAudioWindows, audioMixMap, formatAudioMixMap,
+  deliveredAudioFacts, formatDeliveredAudio,
+};

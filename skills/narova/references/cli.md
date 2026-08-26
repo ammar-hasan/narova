@@ -54,6 +54,9 @@ absent optional keys are reported as skips.
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) with the selected renderer. `--at t1,t2,…` picks explicit times. No-browser needs no browser. | seconds |
 | `narova review --audio-levels [--audio <file>] [--interval start,end]` | report advisory integrated loudness, loudness range, true peak, decoded-sample peak, and threshold-crossing sample count from existing audio. The report names the complete artifact digest and measurement basis; it supplies no target, verdict, mutation, or gate. Relative `--audio` paths resolve from the selected output directory. | bounded local decode |
+| `narova review --audio-levels --windows '<JSON>' [--audio <file>]` | measure an ordered non-empty JSON array of `{ "label", "start", "end" }` windows over one exact artifact. Labels remain caller identifiers; short/gated-out windows retain available peak/sample facts and mark gated facts unavailable. Duplicate labels and malformed intervals fail plainly. | bounded local decode per window |
+| `narova review --audio-levels --mix-map` | join project-order bed/SFX declarations, source digests, authored gains/fades/anchors, resolved global windows, and achieved facts over the corresponding interval of `out/audio/mix.wav`. Every achieved row describes the total overlapping mix, never an isolated source or a claim about audibility, clarity, masking, or balance. | bounded local decode per declaration |
+| `narova review --audio-levels --delivered [file] [--member <stream-index>]` | directly decode the selected encoded/muxed audio member (default artifact `out/video.mp4`). A sole member or unique default is selected explicitly; otherwise choose its container stream index. The receipt binds the container digest, member facts, and selection basis and never copies intermediate WAV facts. | bounded local decode |
 | `narova build` | synth + compose + selected local renderer → `out/video.mp4` (+ captions). Variants and deliverables work with both providers. | synth cost + local render |
 | `narova preview` | HyperFrames: compose and open Studio. No-browser: render `out/preview-no-browser.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
@@ -136,7 +139,11 @@ Renderer providers are different: both are bundled, local, and free. See
 - `--audio-levels` — `review`: measure existing audio without changing it.
   `--audio <file>` selects an artifact (relative paths start at `out/`), and
   `--interval start,end` scopes the facts to non-negative seconds with end
-  greater than start. Both selectors are valid only with this review mode.
+  greater than start. `--windows '<JSON>'` joins labeled intervals,
+  `--mix-map` resolves authored bed/SFX declarations against the finished mix,
+  and `--delivered [file] --member <stream-index>` measures an encoded member
+  directly. The three specialized selectors are mutually exclusive. All are
+  valid only with this review mode and none changes project or artifact state.
 - `--port N` — Studio port (default 3002; auto-detects next available if 3002 is in use).
 - `--detach` / `preview --stop` — start or stop persistent Studio.
 - `--voice-a <s>`, `--voice-b <s>` — replace the first two voices (add more voices directly in the config).

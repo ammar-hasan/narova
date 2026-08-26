@@ -81,7 +81,7 @@ operation may add fields in a later schema-1 release.
 | `synth` | `{ out, reused }` | `audio`, `timings`, `manifest` |
 | `compose` | `{ scenes, total, renderer, cues }` | `renderer-project`, `captions` or `caption-omission`, `manifest` |
 | `captions` | `{ cues }` | `captions` or `caption-omission` |
-| `review` | the selected review report with `mode` | `contact-sheet` or `excerpt` when created |
+| `review` | the selected review report with `mode`. Audio modes are additive: `audio-levels` reports one artifact/interval; `audio-windows` reports one file/digest/basis plus ordered `{ label, interval, facts }` rows; `audio-mix-map` reports the finished mix identity, ordered resolved declarations, source identities, windows, achieved total-mix facts, unavailable states, and the overlap caveat; `delivered-audio-levels` reports the delivered container digest, exact member identity, selection basis, measurement basis, and directly decoded facts. Non-finite audio facts use `"-inf"`/`"+inf"`; unavailable facts are `null`. | `contact-sheet` or `excerpt` when created |
 | `shots` | `{ times[], frames, proof, proofReceipt? }` | `frames`, `receipt` |
 | `build` | `{ mp4, seconds, renderer, deliverables[], companion, revision }`, or `{ builds[] }` for `--variants` | `video`, `captions` or `caption-omission`, `manifest`, `timings`, `audio`, `renderer-project`, `revision-ledger`, `deliverable`, `thumbnail`, `video-companion` |
 | `preview` | `{ renderer, detached, url?, pid?, port?, stopped? }` | `renderer-project`, `preview-state`, `preview-log`, or draft `video` |

@@ -554,6 +554,12 @@ function compileTimeline(config, opts = {}) {
 function mixExternalAudio(config, narrationPath, audioDir, log) {
   const { sh, probe } = require('./util');
   const totalDur = config.scenes.reduce((n, s) => n + (s.dur || 0), 0);
+  const sceneStarts = new Map();
+  let sceneClock = 0;
+  for (const scene of config.scenes) {
+    sceneStarts.set(scene.id, Math.round(sceneClock * 1000) / 1000);
+    sceneClock += scene.dur || 0;
+  }
   const process = config.narrationSource?.process;
 
   // Apply voice processing to the narration before mixing with bed/sfx.
@@ -612,7 +618,11 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
   for (const sfx of (config.sfx || [])) {
     inputs.push('-i', sfx.file);
     const vol = sfx.volume ?? 0.8;
-    const delay = sfx.at ?? 0;
+    const sceneStart = sfx.scene == null ? 0 : sceneStarts.get(sfx.scene);
+    if (!Number.isFinite(sceneStart)) {
+      throw new Error(`config.sfx scene anchor is unavailable: ${sfx.scene}`);
+    }
+    const delay = sceneStart + (sfx.at ?? 0);
     filters.push(`[${inputIdx}:a]adelay=${Math.round(delay * 1000)}|${Math.round(delay * 1000)},volume=${vol}[sfx${inputIdx}]`);
     inputIdx++;
   }
@@ -730,4 +740,4 @@ function configFromManifest(manifest, resolvedConfig) {
   };
 }
 
-module.exports = { build, synth, writeStageInputs, commitFingerprint, resolveReuse, audioFingerprint, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline, configFromManifest };
+module.exports = { build, synth, writeStageInputs, commitFingerprint, resolveReuse, audioFingerprint, findPython, ensureVenv, TOOL_ROOT, compileTimeline, enrichTimeline, configFromManifest, mixExternalAudio };

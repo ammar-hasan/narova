@@ -47,6 +47,33 @@ synth stage (`narova_tts`) does the work; compose picks up the result.
 - A missing/unreadable `file` fails the synth naming the file. Fix the path;
   there is no silent skip.
 
+## Read-only mix and delivery proof
+
+The existing level review can expose several exact evidence views without
+changing authoring or media:
+
+```bash
+narova review --audio-levels --windows '[{"label":"opening","start":0,"end":2.4}]'
+narova review --audio-levels --mix-map
+narova review --audio-levels --delivered youtube.mp4
+narova review --audio-levels --delivered multilingual.mkv --member 2
+```
+
+- `--windows` preserves the JSON array order and binds every row to one artifact
+  digest. A short interval can report peak/sample facts while gated loudness or
+  range is explicitly unavailable.
+- `--mix-map` reports bed first, then SFX in authored order, with source digest,
+  gain/fades, resolved scene/global anchor, global window, and facts measured
+  over that interval of the finished mix. Those numbers describe the sum of all
+  overlapping material; they do not isolate the named source or prove that it is
+  audible, clear, masked, or balanced.
+- `--delivered` measures the encoded member in the container itself. One member
+  or one unique default can be selected automatically; otherwise pass the exact
+  container stream index with `--member`. Intermediate `mix.wav` facts are never
+  substituted for delivery evidence.
+- These are literal advisory facts, never targets, scores, gates,
+  recommendations, automatic normalization, or repair.
+
 ## External narration (pre-recorded audio)
 
 When you already have voice audio from an external source (a cleaned

@@ -8,7 +8,10 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { spawnSync } = require('node:child_process');
-const { audioLevelFacts, formatAudioLevels } = require('../src/review-evidence');
+const {
+  audioLevelFacts, formatAudioLevels, audioWindowFacts, formatAudioWindows,
+  audioMixMap, formatAudioMixMap, deliveredAudioFacts, formatDeliveredAudio,
+} = require('../src/review-evidence');
 
 function fixtureFailure(result) {
   return [
@@ -316,4 +319,141 @@ test('audioLevelFacts accepts a clipping threshold override', async () => {
   const report = await audioLevelFacts(dir, { audio, clippingThresholdDb: -1.0 });
   assert.equal(report.facts.clippingSamples, 0);
   assert.equal(report.basis.clippingThresholdDb, -1.0);
+});
+
+test('audioWindowFacts preserves caller order, one identity, and unavailable gated cells', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const audio = makeFixture(dir, 'windows.wav', 'sine=frequency=1000:duration=2');
+  const before = fs.readFileSync(audio);
+  const report = await audioWindowFacts(dir, { audio, windows: [
+    { label: 'later', start: 1, end: 1.8 },
+    { label: 'tiny', start: 0, end: 0.05 },
+    { label: 'earlier', start: 0.2, end: 0.8 },
+  ] });
+
+  assert.deepEqual(report.windows.map(row => row.label), ['later', 'tiny', 'earlier']);
+  assert.equal(report.digest, require('../src/manifest').hashFile(audio));
+  assert.equal(report.windows[1].facts.integratedLoudness, null);
+  assert.equal(report.windows[1].facts.loudnessRange, null);
+  assert.equal(typeof report.windows[1].facts.truePeak, 'number');
+  assert.deepEqual(fs.readFileSync(audio), before, 'review must not mutate the artifact');
+  assert.match(formatAudioWindows(report), /labels carry no inferred meaning/);
+  assert.match(formatAudioWindows(report), /integrated unavailable LUFS/);
+});
+
+test('audioWindowFacts rejects malformed windows and duplicate labels before reporting rows', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const audio = makeFixture(dir, 'windows.wav', 'sine=frequency=1000:duration=1');
+  const duplicate = await audioWindowFacts(dir, { audio, windows: [
+    { label: 'same', start: 0, end: 0.2 }, { label: 'same', start: 0.2, end: 0.4 },
+  ] });
+  assert.match(duplicate.reason, /duplicate/);
+  assert.deepEqual(duplicate.windows, []);
+  const malformed = await audioWindowFacts(dir, { audio, windows: [{ label: 'bad', start: 1, end: 0 }] });
+  assert.match(malformed.reason, /0 ≤ start < end/);
+});
+
+test('audioMixMap joins project-order declarations to honest total-mix windows', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const out = path.join(root, 'out');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  const bed = makeFixture(root, 'bed.wav', 'sine=frequency=220:duration=8');
+  const isolated = makeFixture(root, 'isolated.wav', 'sine=frequency=880:duration=0.5');
+  const overlap = makeFixture(root, 'overlap.wav', 'sine=frequency=1320:duration=1');
+  makeFixture(path.join(out, 'audio'), 'mix.wav', 'sine=frequency=440:duration=5');
+  const config = {
+    scenes: [{ id: 'intro' }, { id: 'main' }],
+    bed: { file: bed, volume: 0.2, fadeIn: 0.4, fadeOut: 1.2 },
+    sfx: [
+      { file: isolated, scene: null, at: 0.5, volume: 0.7 },
+      { file: overlap, scene: 'main', at: 0.25, volume: 0.8 },
+    ],
+  };
+  const report = await audioMixMap(config, out, { intro: { dur: 2 }, main: { dur: 3 } });
+
+  assert.deepEqual(report.declarations.map(row => row.kind), ['bed', 'sfx', 'sfx']);
+  assert.deepEqual(report.declarations[0].window, { start: 0, end: 5 });
+  assert.deepEqual(report.declarations[1].window, { start: 0.5, end: 1 });
+  assert.deepEqual(report.declarations[2].window, { start: 2.25, end: 3.25 });
+  assert.equal(report.declarations[2].anchor.sceneStart, 2);
+  assert.ok(report.declarations.every(row => row.sourceIdentity?.digest));
+  assert.ok(report.declarations.every(row => row.achieved?.digest === report.mixDigest));
+  assert.match(report.caveat, /total finished mix/);
+  assert.match(report.caveat, /does not isolate or prove/);
+  const human = formatAudioMixMap(report);
+  assert.doesNotMatch(human, /recommended|pass|fail/i);
+});
+
+test('audioMixMap leaves a vanished source explicit instead of substituting it', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const out = path.join(root, 'out');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  makeFixture(path.join(out, 'audio'), 'mix.wav', 'sine=frequency=440:duration=1');
+  const missing = path.join(root, 'vanished.wav');
+  const report = await audioMixMap({
+    scenes: [{ id: 'one' }], bed: null,
+    sfx: [{ file: missing, scene: null, at: 0, volume: 1 }],
+  }, out, { one: { dur: 1 } });
+  assert.equal(report.declarations[0].sourceIdentity, null);
+  assert.match(report.declarations[0].unavailable, /missing/);
+});
+
+test('audioMixMap leaves a multi-member source without a unique default ambiguous', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const out = path.join(root, 'out');
+  fs.mkdirSync(path.join(out, 'audio'), { recursive: true });
+  makeFixture(path.join(out, 'audio'), 'mix.wav', 'sine=frequency=440:duration=1');
+  const a = makeFixture(root, 'a.wav', 'sine=frequency=440:duration=1');
+  const b = makeFixture(root, 'b.wav', 'sine=frequency=880:duration=1');
+  const multi = path.join(root, 'multi.mkv');
+  const encoded = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-i', a, '-i', b, '-map', '0:a', '-map', '1:a',
+    '-c:a', 'pcm_s16le', '-disposition:a:0', '0', '-disposition:a:1', '0', multi,
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (encoded.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(encoded)}`);
+  const report = await audioMixMap({
+    scenes: [{ id: 'one' }], bed: null,
+    sfx: [{ file: multi, scene: null, at: 0, volume: 1 }],
+  }, out, { one: { dur: 1 } });
+  assert.equal(report.declarations[0].sourceIdentity, null);
+  assert.equal(report.declarations[0].window, null);
+  assert.match(report.declarations[0].unavailable, /no unique default/);
+});
+
+test('deliveredAudioFacts measures the encoded member instead of copying intermediate WAV facts', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const intermediate = makeFixture(dir, 'mix.wav', 'sine=frequency=1000:duration=2,volume=20dB');
+  const delivered = path.join(dir, 'delivered.mp4');
+  const encoded = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-i', intermediate, '-af', 'volume=-12dB',
+    '-c:a', 'aac', '-b:a', '128k', '-vn', delivered,
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (encoded.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(encoded)}`);
+
+  const mixFacts = await audioLevelFacts(dir, { audio: intermediate });
+  const report = await deliveredAudioFacts(dir, { delivered });
+  assert.equal(report.selectionBasis, 'only audio member');
+  assert.equal(report.member.codec, 'aac');
+  assert.ok(report.facts.truePeak < mixFacts.facts.truePeak - 6,
+    `delivered=${report.facts.truePeak} intermediate=${mixFacts.facts.truePeak}`);
+  assert.equal(report.digest, require('../src/manifest').hashFile(delivered));
+  assert.match(formatDeliveredAudio(report), /no intermediate facts substituted/);
+});
+
+test('deliveredAudioFacts rejects ambiguous members and honors an explicit stream index', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-review-'));
+  const a = makeFixture(dir, 'a.wav', 'sine=frequency=440:duration=1');
+  const b = makeFixture(dir, 'b.wav', 'sine=frequency=880:duration=1,volume=-12dB');
+  const delivered = path.join(dir, 'multi.mkv');
+  const encoded = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-i', a, '-i', b, '-map', '0:a', '-map', '1:a',
+    '-c:a', 'aac', '-disposition:a:0', '0', '-disposition:a:1', '0', delivered,
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (encoded.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(encoded)}`);
+
+  const ambiguous = await deliveredAudioFacts(dir, { delivered });
+  assert.match(ambiguous.reason, /no unique default/);
+  const selected = await deliveredAudioFacts(dir, { delivered, member: 1 });
+  assert.equal(selected.member.index, 1);
+  assert.equal(selected.selectionBasis, 'caller-selected container stream index');
 });

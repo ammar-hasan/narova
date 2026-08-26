@@ -661,6 +661,86 @@ test('review --audio-levels preserves silent peaks in machine output', () => {
   assert.equal(envelope.data.facts.samplePeak, '-inf');
 });
 
+test('review --audio-levels --windows emits ordered joined machine facts', () => {
+  const proj = projectWithAudio();
+  const windows = JSON.stringify([
+    { label: 'second', start: 0.5, end: 0.9 },
+    { label: 'tiny', start: 0, end: 0.05 },
+  ]);
+  const r = run(['review', '--audio-levels', '--windows', windows, '--project', proj, '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const envelope = JSON.parse(r.stdout);
+  assert.equal(envelope.data.mode, 'audio-windows');
+  assert.deepEqual(envelope.data.windows.map(row => row.label), ['second', 'tiny']);
+  assert.equal(envelope.data.windows[1].facts.integratedLoudness, null);
+  assert.equal(typeof envelope.data.digest, 'string');
+});
+
+test('review --audio-levels --delivered measures the selected encoded member', () => {
+  const proj = projectWithAudio();
+  const source = path.join(proj, 'out', 'audio', 'full.wav');
+  const delivered = path.join(proj, 'out', 'delivery.mp4');
+  const encoded = spawnSync('ffmpeg', [
+    '-hide_banner', '-loglevel', 'error', '-i', source, '-af', 'volume=-9dB',
+    '-c:a', 'aac', '-vn', delivered,
+  ], { encoding: 'utf8', timeout: 30000 });
+  if (encoded.status !== 0) throw new Error(`ffmpeg fixture failed: ${ffmpegFixtureFailure(encoded)}`);
+  const r = run(['review', '--audio-levels', '--delivered', 'delivery.mp4', '--project', proj, '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const envelope = JSON.parse(r.stdout);
+  assert.equal(envelope.data.mode, 'delivered-audio-levels');
+  assert.equal(envelope.data.member.codec, 'aac');
+  assert.equal(envelope.data.selectionBasis, 'only audio member');
+  assert.equal(typeof envelope.data.digest, 'string');
+});
+
+test('review --audio-levels --mix-map exposes resolved declaration and total-mix facts', () => {
+  const proj = projectWithAudio();
+  const assets = path.join(proj, 'assets');
+  const out = path.join(proj, 'out');
+  fs.mkdirSync(assets, { recursive: true });
+  for (const [name, source] of [['bed.wav', 'sine=frequency=220:duration=4'], ['hit.wav', 'sine=frequency=880:duration=0.2']]) {
+    const made = spawnSync('ffmpeg', [
+      '-hide_banner', '-loglevel', 'error', '-f', 'lavfi', '-i', source,
+      '-c:a', 'pcm_s16le', path.join(assets, name),
+    ], { encoding: 'utf8', timeout: 30000 });
+    if (made.status !== 0) throw new Error(`ffmpeg fixture failed: ${ffmpegFixtureFailure(made)}`);
+  }
+  fs.copyFileSync(path.join(out, 'audio', 'full.wav'), path.join(out, 'audio', 'mix.wav'));
+  fs.writeFileSync(path.join(out, 'timings.json'), JSON.stringify({ opening: { dur: 1, turns: [], words: [] } }));
+  const configFile = path.join(proj, 'reel.config.mjs');
+  const config = fs.readFileSync(configFile, 'utf8').replace(
+    '  timing: {',
+    '  bed: { file: "assets/bed.wav", volume: 0.2, fadeIn: 0.1, fadeOut: 0.2 },\n  sfx: [{ file: "assets/hit.wav", scene: "opening", at: 0.5, volume: 0.8 }],\n  timing: {',
+  );
+  fs.writeFileSync(configFile, config);
+
+  const r = run(['review', '--audio-levels', '--mix-map', '--project', proj, '--json']);
+  assert.equal(r.status, 0, r.stderr);
+  const envelope = JSON.parse(r.stdout);
+  assert.equal(envelope.data.mode, 'audio-mix-map');
+  assert.deepEqual(envelope.data.declarations.map(row => row.kind), ['bed', 'sfx']);
+  assert.equal(envelope.data.declarations[1].window.start, 0.5);
+  assert.match(envelope.data.caveat, /does not isolate or prove/);
+});
+
+test('audio proof selectors reject conflicting and orphaned combinations', () => {
+  const proj = projectWithAudio();
+  const conflict = run(['review', '--audio-levels', '--windows', '[]', '--delivered', '--project', proj]);
+  assert.equal(conflict.status, 2);
+  assert.match(conflict.stderr, /mutually exclusive/);
+  const orphan = run(['review', '--windows', '[]', '--project', proj]);
+  assert.equal(orphan.status, 2);
+  assert.match(orphan.stderr, /only valid with narova review --audio-levels/);
+  const duplicate = run([
+    'review', '--audio-levels', '--windows',
+    JSON.stringify([{ label: 'same', start: 0, end: 0.2 }, { label: 'same', start: 0.2, end: 0.4 }]),
+    '--project', proj,
+  ]);
+  assert.equal(duplicate.status, 2);
+  assert.match(duplicate.stderr, /duplicate audio window label/);
+});
+
 test('captions rewrites out/captions.{srt,vtt} from timings.json', () => {
   const proj = projectWithTimings();
   const r = run(['captions', '--project', proj]);
