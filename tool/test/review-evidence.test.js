@@ -10,15 +10,25 @@ const path = require('node:path');
 const { spawnSync } = require('node:child_process');
 const { audioLevelFacts, formatAudioLevels } = require('../src/review-evidence');
 
+function fixtureFailure(result) {
+  return [
+    `status=${result.status}`,
+    `signal=${result.signal || 'none'}`,
+    `error=${result.error?.message || 'none'}`,
+    `stderr=${String(result.stderr || '').trim() || 'none'}`,
+  ].join(' ');
+}
+
 function makeFixture(dir, name, source) {
   const out = path.join(dir, name);
   const r = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', source,
-    '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '1',
+    '-c:a', 'pcm_s16le', '-ar', '48000', '-ac', '1', '-threads', '1',
     out,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${r.stderr}`);
+  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(r)}`);
   return out;
 }
 
@@ -137,12 +147,13 @@ test('audioLevelFacts scopes loudness and peaks to a level-changing interval', a
   // not inherit peaks or loudness from the clipped second half.
   const r = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=2,volume=-20dB',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=2,volume=20dB',
     '-filter_complex', '[0:a][1:a]concat=n=2:v=0:a=1[a]',
-    '-map', '[a]', '-c:a', 'pcm_s16le', '-ar', '48000', out,
+    '-map', '[a]', '-c:a', 'pcm_s16le', '-ar', '48000', '-threads', '1', out,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${r.stderr}`);
+  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(r)}`);
 
   const first = await audioLevelFacts(dir, { audio: out, interval: '0,1.5' });
   const second = await audioLevelFacts(dir, { audio: out, interval: '2.5,4' });
@@ -158,12 +169,13 @@ test('audioLevelFacts parses multichannel peaks', async () => {
   const out = path.join(dir, 'stereo.wav');
   const r = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
     '-filter_complex', '[0:a][1:a]amerge=inputs=2[a]',
-    '-map', '[a]', '-c:a', 'pcm_s16le', '-ar', '48000', out,
+    '-map', '[a]', '-c:a', 'pcm_s16le', '-ar', '48000', '-threads', '1', out,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${r.stderr}`);
+  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(r)}`);
 
   const report = await audioLevelFacts(dir, { audio: out });
   assert.equal(typeof report.facts.truePeak, 'number');
@@ -200,10 +212,11 @@ test('audioLevelFacts preserves a valid integrated loudness rounded to -70 LUFS'
   const audio = path.join(dir, 'near-gate.wav');
   const generated = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=5,volume=-48.9dB',
-    '-c:a', 'pcm_f32le', '-ar', '48000', '-ac', '1', audio,
+    '-c:a', 'pcm_f32le', '-ar', '48000', '-ac', '1', '-threads', '1', audio,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (generated.status !== 0) throw new Error(`ffmpeg fixture failed: ${generated.stderr}`);
+  if (generated.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(generated)}`);
   const report = await audioLevelFacts(dir, { audio });
 
   assert.equal(report.facts.integratedLoudness, -70);
@@ -246,10 +259,11 @@ test('audioLevelFacts rejects non-finite decoded samples', async () => {
   const audio = path.join(dir, 'nan.wav');
   const generated = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'aevalsrc=nan:s=48000:d=1',
-    '-c:a', 'pcm_f32le', audio,
+    '-c:a', 'pcm_f32le', '-threads', '1', audio,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (generated.status !== 0) throw new Error(`ffmpeg fixture failed: ${generated.stderr}`);
+  if (generated.status !== 0) throw new Error(`ffmpeg fixture failed: ${fixtureFailure(generated)}`);
   const report = await audioLevelFacts(dir, { audio });
 
   assert.match(report.reason, /could not be decoded/);

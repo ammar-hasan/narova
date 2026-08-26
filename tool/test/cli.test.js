@@ -14,6 +14,12 @@ const { buildHashes, hashFile } = require('../src/manifest');
 
 const BIN = path.join(__dirname, '..', 'bin', 'narova.js');
 const run = (args, opts = {}) => spawnSync('node', [BIN, ...args], { encoding: 'utf8', ...opts });
+const ffmpegFixtureFailure = result => [
+  `status=${result.status}`,
+  `signal=${result.signal || 'none'}`,
+  `error=${result.error?.message || 'none'}`,
+  `stderr=${String(result.stderr || '').trim() || 'none'}`,
+].join(' ');
 
 test('--version prints a semver', () => {
   const r = run(['--version']);
@@ -567,10 +573,11 @@ function projectWithAudio() {
   fs.mkdirSync(audioDir, { recursive: true });
   const r = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1',
-    '-c:a', 'pcm_s16le', path.join(audioDir, 'full.wav'),
+    '-c:a', 'pcm_s16le', '-threads', '1', path.join(audioDir, 'full.wav'),
   ], { encoding: 'utf8', timeout: 30000 });
-  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${r.stderr}`);
+  if (r.status !== 0) throw new Error(`ffmpeg fixture failed: ${ffmpegFixtureFailure(r)}`);
   return proj;
 }
 
@@ -600,10 +607,11 @@ test('review --audio-levels honors --audio and --interval', () => {
   const other = path.join(otherDir, 'loud.wav');
   const gen = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'sine=frequency=1000:duration=1,volume=20dB',
-    '-c:a', 'pcm_s16le', other,
+    '-c:a', 'pcm_s16le', '-threads', '1', other,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (gen.status !== 0) throw new Error(`ffmpeg fixture failed: ${gen.stderr}`);
+  if (gen.status !== 0) throw new Error(`ffmpeg fixture failed: ${ffmpegFixtureFailure(gen)}`);
   const r = run(['review', '--audio-levels', '--project', proj, '--audio', other, '--interval', '0.2,0.8']);
   assert.equal(r.status, 0, r.stderr);
   assert.match(r.stdout, /interval 0\.20s–0\.80s/);
@@ -639,10 +647,11 @@ test('review --audio-levels preserves silent peaks in machine output', () => {
   const silence = path.join(proj, 'out', 'audio', 'silence.wav');
   const gen = spawnSync('ffmpeg', [
     '-hide_banner', '-loglevel', 'error',
+    '-filter_threads', '1', '-filter_complex_threads', '1',
     '-f', 'lavfi', '-i', 'anullsrc=r=48000:cl=mono:d=1',
-    '-c:a', 'pcm_s16le', silence,
+    '-c:a', 'pcm_s16le', '-threads', '1', silence,
   ], { encoding: 'utf8', timeout: 30000 });
-  if (gen.status !== 0) throw new Error(`ffmpeg fixture failed: ${gen.stderr}`);
+  if (gen.status !== 0) throw new Error(`ffmpeg fixture failed: ${ffmpegFixtureFailure(gen)}`);
 
   const r = run(['review', '--audio-levels', '--project', proj, '--audio', 'audio/silence.wav', '--json']);
   assert.equal(r.status, 0, r.stderr);

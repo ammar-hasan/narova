@@ -386,7 +386,10 @@ async function audioLevelFacts(outDir, opts = {}) {
     const af = start != null
       ? `atrim=start=${start}:end=${end},ebur128=peak=true:framelog=quiet`
       : 'ebur128=peak=true:framelog=quiet';
-    const eburArgs = ['-hide_banner', '-i', snapshotFile, '-af', af, '-f', 'null', '-'];
+    const eburArgs = [
+      '-hide_banner', '-filter_threads', '1', '-threads', '1',
+      '-i', snapshotFile, '-af', af, '-f', 'null', '-',
+    ];
     const ebur = spawnSync('ffmpeg', eburArgs, {
       encoding: 'utf8', timeout: 120000, maxBuffer: 4 * 1024 * 1024,
     });
@@ -527,7 +530,10 @@ function maxPeakFromLines(text, prefix) {
 function measureDecodedSamples(filePath, { start, end, clippingThresholdDb }) {
   return new Promise((resolve, reject) => {
     const threshold = Math.pow(10, clippingThresholdDb / 20);
-    const args = ['-hide_banner', '-loglevel', 'error', '-i', filePath];
+    const args = [
+      '-hide_banner', '-loglevel', 'error',
+      '-filter_threads', '1', '-threads', '1', '-i', filePath,
+    ];
     if (start != null) {
       args.push('-ss', String(start), '-t', String(Math.max(0, end - start)));
     }
