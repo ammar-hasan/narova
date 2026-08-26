@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const path = require('node:path');
 const test = require('node:test');
 
-const { hasMainAncestryGuard } = require('../scripts/check-release');
+const { assertReleaseChronology, hasMainAncestryGuard } = require('../scripts/check-release');
 
 const workflowPath = path.join(__dirname, '..', '.github', 'workflows', 'publish.yml');
 
@@ -46,5 +46,27 @@ test('a commented ancestry command does not satisfy the release guard', () => {
   assert.equal(
     hasMainAncestryGuard('# if ! git merge-base --is-ancestor "$tag_commit" origin/main; then'),
     false,
+  );
+});
+
+test('release metadata requires exact Markdown and website chronology parity', () => {
+  const markdown = [
+    '## [Unreleased]',
+    '## [2.0.0] - 2026-08-26',
+    '## [1.0.0] - 2026-08-25',
+  ].join('\n');
+  const website = [
+    '<span class="rel-version" data-narova-version>2.0.0</span>',
+    '<span class="rel-version">1.0.0</span>',
+  ].join('\n');
+
+  assert.doesNotThrow(() => assertReleaseChronology(markdown, website));
+  assert.throws(
+    () => assertReleaseChronology(markdown, website.replace('1.0.0', '0.9.0')),
+    /versions\/order do not match/,
+  );
+  assert.throws(
+    () => assertReleaseChronology(`${markdown}\n## [1.0.0] - 2026-08-25`, website),
+    /duplicate release headings/,
   );
 });

@@ -65,6 +65,32 @@ function hasMainAncestryGuard(source) {
   )));
 }
 
+function releaseVersionsFromMarkdown(source) {
+  return [...source.matchAll(/^## \[([^\]]+)\](?: - \d{4}-\d{2}-\d{2})?$/gm)]
+    .map(match => match[1])
+    .filter(value => value !== 'Unreleased');
+}
+
+function releaseVersionsFromWebsite(source) {
+  return [...source.matchAll(/class="rel-version"[^>]*>v?([^<]+)</g)]
+    .map(match => match[1].trim());
+}
+
+function assertReleaseChronology(markdown, website) {
+  const canonical = releaseVersionsFromMarkdown(markdown);
+  const projected = releaseVersionsFromWebsite(website);
+  const duplicates = values => values.filter((value, index) => values.indexOf(value) !== index);
+  if (duplicates(canonical).length) {
+    throw new Error(`CHANGELOG.md has duplicate release headings: ${[...new Set(duplicates(canonical))].join(', ')}`);
+  }
+  if (duplicates(projected).length) {
+    throw new Error(`website changelog has duplicate release entries: ${[...new Set(duplicates(projected))].join(', ')}`);
+  }
+  if (JSON.stringify(projected) !== JSON.stringify(canonical)) {
+    throw new Error('website changelog release versions/order do not match CHANGELOG.md');
+  }
+}
+
 function checkRelease() {
 const root = path.resolve(__dirname, '..');
 const readJson = file => JSON.parse(fs.readFileSync(path.join(root, file), 'utf8'));
@@ -120,6 +146,8 @@ const changelog = fs.readFileSync(path.join(root, 'CHANGELOG.md'), 'utf8');
 if (!new RegExp(`^## \\[${version.replace(/\./g, '\\.')}\\] - \\d{4}-\\d{2}-\\d{2}$`, 'm').test(changelog)) {
   throw new Error(`CHANGELOG.md has no dated ${version} release entry`);
 }
+const websiteChangelog = fs.readFileSync(path.join(root, 'docs', 'changelog', 'index.html'), 'utf8');
+assertReleaseChronology(changelog, websiteChangelog);
 
 const agentProtocol = fs.readFileSync(path.join(root, 'AGENT_PROTOCOL.md'), 'utf8');
 const packagedAgentProtocol = fs.readFileSync(path.join(root, 'tool', 'AGENT_PROTOCOL.md'), 'utf8');
@@ -165,4 +193,10 @@ process.stdout.write(`release metadata ok: @narova/narova@${version}\n`);
 
 if (require.main === module) checkRelease();
 
-module.exports = { checkRelease, hasMainAncestryGuard };
+module.exports = {
+  assertReleaseChronology,
+  checkRelease,
+  hasMainAncestryGuard,
+  releaseVersionsFromMarkdown,
+  releaseVersionsFromWebsite,
+};

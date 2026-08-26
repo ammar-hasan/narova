@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.42.0] - 2026-08-26
+
 ### Added
 
 - **Artifact-bound audio level facts.** `narova review --audio-levels` reports
@@ -32,6 +34,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   and quality choice. It probes and hashes staged media before atomic publication,
   records the selected controls and bounded FFmpeg identity, and never ranks or
   recommends a creative treatment.
+- **Xiaomi MiMo speech companion.** The separately installed `narova-mimo`
+  skill adds one standard-library provider worker for Xiaomi MiMo V2.5-TTS
+  preset synthesis, natural-language voice design, and reference-audio voice
+  cloning. It registers only on explicit setup, submits each billed request
+  once with no automatic retry, keeps credentials out of URLs and observable
+  output, verifies returned audio before publication, and records bounded
+  provider/voice-mode provenance. Core Narova remains local-first and complete
+  without this companion.
 
 ### Fixed
 
@@ -174,6 +184,7 @@ versions follow [Semantic Versioning](https://semver.org/).
 - **Bullet collection after tables.** Bullets following a `## Claims` table
   still count toward the ledger.
 
+## [0.36.0] - 2026-08-21
 
 ### Added
 
@@ -224,12 +235,6 @@ versions follow [Semantic Versioning](https://semver.org/).
   The checksum detects accidental edits and corruption; it is not a signature.
   The cryptographic signing process is documented as the next step but is not
   yet implemented.
-
-## [0.34.0] - 2026-08-21
-
-## [Unreleased]
-
-## [0.35.0] - 2026-08-21
 
 ## [0.34.0] - 2026-08-21
 
@@ -2113,7 +2118,31 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/main...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.42.0...HEAD
+[0.42.0]: https://github.com/ammar-hasan/narova/compare/v0.41.0...v0.42.0
+[0.41.0]: https://github.com/ammar-hasan/narova/compare/v0.40.0...v0.41.0
+[0.40.0]: https://github.com/ammar-hasan/narova/compare/v0.39.0...v0.40.0
+[0.39.0]: https://github.com/ammar-hasan/narova/compare/v0.38.0...v0.39.0
+[0.38.0]: https://github.com/ammar-hasan/narova/compare/v0.37.0...v0.38.0
+[0.37.0]: https://github.com/ammar-hasan/narova/compare/v0.36.0...v0.37.0
+[0.36.0]: https://github.com/ammar-hasan/narova/compare/v0.35.0...v0.36.0
+[0.35.0]: https://github.com/ammar-hasan/narova/compare/v0.34.0...v0.35.0
+[0.34.0]: https://github.com/ammar-hasan/narova/compare/v0.33.0...v0.34.0
+[0.33.0]: https://github.com/ammar-hasan/narova/compare/v0.32.1...v0.33.0
+[0.32.1]: https://github.com/ammar-hasan/narova/compare/v0.32.0...v0.32.1
+[0.32.0]: https://github.com/ammar-hasan/narova/compare/v0.31.14...v0.32.0
+[0.31.14]: https://github.com/ammar-hasan/narova/compare/v0.31.13...v0.31.14
+[0.31.13]: https://github.com/ammar-hasan/narova/compare/v0.31.12...v0.31.13
+[0.31.12]: https://github.com/ammar-hasan/narova/compare/v0.31.11...v0.31.12
+[0.31.11]: https://github.com/ammar-hasan/narova/compare/v0.31.10...v0.31.11
+[0.31.10]: https://github.com/ammar-hasan/narova/compare/v0.31.9...v0.31.10
+[0.31.9]: https://github.com/ammar-hasan/narova/compare/v0.31.8...v0.31.9
+[0.31.8]: https://github.com/ammar-hasan/narova/compare/v0.31.7...v0.31.8
+[0.31.7]: https://github.com/ammar-hasan/narova/compare/v0.31.6...v0.31.7
+[0.31.6]: https://github.com/ammar-hasan/narova/compare/v0.31.5...v0.31.6
+[0.31.5]: https://github.com/ammar-hasan/narova/compare/v0.31.4...v0.31.5
+[0.31.4]: https://github.com/ammar-hasan/narova/compare/v0.31.3...v0.31.4
+[0.31.3]: https://github.com/ammar-hasan/narova/compare/v0.31.1...v0.31.3
 [0.13.0]: https://github.com/ammar-hasan/narova/compare/v0.12.0...HEAD
 [0.12.0]: https://github.com/ammar-hasan/narova/compare/be28b04...HEAD
 [0.11.0]: https://github.com/ammar-hasan/narova/compare/ae2945d...be28b04
