@@ -1,5 +1,8 @@
 'use strict';
-/* `narova ingest <url>` — the mechanical first pass of URL sourcing
+/* `narova ingest <source>` — the mechanical first pass of URL sourcing or an
+ * explicit bounded local-PDF page selection.
+ *
+ * URL mode remains the existing first pass
  * (references/url-to-source.md): fetch the page, extract metadata + content
  * images, download the best assets into <project>/assets/, take a best-effort
  * headless-Chrome screenshot, append sources.md, seed a claims.md skeleton.
@@ -12,6 +15,7 @@ const { ensureDir, which } = require('./util');
 const {
   readAssetLock, registerAssets, resolveProjectFile, withAssetMutation,
 } = require('./asset-registry');
+const { ingestPdf } = require('./pdf-ingest');
 
 const FETCH_TIMEOUT_MS = 20000;
 const SHOT_TIMEOUT_MS = 30000;
@@ -255,7 +259,7 @@ key claims — sourcing is checkable; balance is not.
 
 /* Full first pass. opts: { projectDir = '.', log = console.log, fetch, chrome,
  * spawnSync } — fetch/chrome/spawnSync are injectable so tests stay offline. */
-async function ingest(url, opts = {}) {
+async function ingestWeb(url, opts = {}) {
   const { projectDir = '.', log = console.log, fetch: fetchImpl } = opts;
   const dir = path.resolve(projectDir);
   // Fail before network/file mutations when an existing registry is malformed.
@@ -394,8 +398,19 @@ async function ingest(url, opts = {}) {
   }
 }
 
+async function ingest(source, opts = {}) {
+  if (/^https?:\/\//i.test(source)) {
+    if (opts.pages != null) throw new Error('--pages is only valid with an explicit regular local PDF');
+    return ingestWeb(source, opts);
+  }
+  if (/^[a-z][a-z0-9+.-]*:\/\//i.test(source)) {
+    throw new Error('ingest accepts an HTTP(S) page or a regular local PDF with --pages <1,3-5>');
+  }
+  return ingestPdf(source, opts.pages, { ...opts, ensureClaimsSkeleton });
+}
+
 module.exports = {
-  ingest, fetchPage, parsePage, collectImages, downloadImages,
+  ingest, ingestWeb, fetchPage, parsePage, collectImages, downloadImages,
   findChrome, screenshotPage, themeSuggestions, slugify, writeSources,
   ensureClaimsSkeleton, normalizeHex,
 };

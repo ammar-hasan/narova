@@ -15,8 +15,9 @@ const normWord = s => String(s).toLowerCase()
 
 /* Build { total, scenes, groups, preset } from the resolved config +
  * timings.json.
- * scenes[i]: { id, start, dur, turns, transition? }  (turns stay scene-local;
- * runtime adds start; transition passes through from the scene config)
+ * scenes[i]: { id, start, dur, turns, sentences, transition? }  (turns stay
+ * scene-local; resolved sentence/word cue spans use composition coordinates;
+ * transition passes through from the scene config)
  * groups[i]: { who, label, start, end, words:[{w,t0,t1,kw?}] }  (global time,
  * one per sentence — the caption "line" unit, same grouping the old player
  * used via si; kw=1 marks an emphasis keyword)
@@ -42,11 +43,34 @@ function composeData(config, timings, captionsEnabled = true) {
   const groups = [];
   for (const sc of scenes) {
     const t = timings[sc.id];
-    const by = new Map();
-    for (const w of (t.words || [])) {
-      if (!by.has(w.si)) by.set(w.si, []);
-      by.get(w.si).push(w);
+    const groupWords = words => {
+      const grouped = new Map();
+      for (const w of words) {
+        if (!grouped.has(w.si)) grouped.set(w.si, []);
+        grouped.get(w.si).push(w);
+      }
+      return grouped;
+    };
+    const by = groupWords(t.words || []);
+    // A compatibility-only external browser projection may retain raw caption
+    // words while cueWords carries their normalized timing view. Ordinary
+    // synthesized timing uses the same collection for both consumers.
+    if (t.cueWords != null && !Array.isArray(t.cueWords)) {
+      throw new Error(`timings.json: cueWords for scene "${sc.id}" must be an array`);
     }
+    const cueBy = t.cueWords ? groupWords(t.cueWords) : by;
+    // Cue evidence is independent of caption visibility and maxWords chunking.
+    // Keep sentence identity and word order exactly as timings.json provides
+    // them; lookup validation in runtime reports absent or unusable evidence.
+    sc.sentences = [...cueBy.entries()].map(([si, ws]) => ({
+      sentenceIndex: si,
+      words: ws.map(w => ({
+        token: w.w,
+        speaker: w.who,
+        start: r3(sc.start + w.t0),
+        end: r3(sc.start + w.t1),
+      })),
+    }));
     for (const [si, ws] of by.entries()) {
       const who = ws[0].who;
       const label = (config.voices[who] && config.voices[who].label) || who;

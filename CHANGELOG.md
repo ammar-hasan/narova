@@ -6,6 +6,42 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.44.0] - 2026-08-29
+
+### Added
+
+- **Bounded local PDF source evidence.** `narova ingest <local.pdf> --pages
+  <1,3-5>` now renders only explicitly selected one-based physical pages at
+  144 dpi, preserves available literal embedded text, and records page-level
+  hashes and parser/renderer provenance in the existing asset and source
+  ledgers. Intake is local and mechanical: it does not follow links, execute
+  document actions, unlock passwords, use OCR or models, infer meaning, author
+  claims, or select creative material.
+- **Resolved sentence and word choreography cues.** Browser-authored
+  choreography can read index-addressed `sentenceCue` and `wordCue` spans from
+  normalized resolved timing evidence even when captions are hidden. Full
+  renders expose global coordinates and isolated scene renders rebase the same
+  spans locally. Missing or invalid evidence throws instead of guessing or
+  returning scene entry; the helpers do not search text, infer semantic beats,
+  select motion, or claim that estimated timing is aligned.
+- **Exact-context authored JavaScript feedback.** `narova check` and every
+  HyperFrames composition path now compile project choreography, JavaScript
+  imports, scene choreography/scripts, and raw Three.js modules without
+  executing them. Syntax failures identify the logical source and parser
+  location before render; synchronous uncaught initialization failures retain
+  source attribution and cannot expose a successful partial timeline. Valid
+  creative code keeps its existing scope and order, raw escape hatches remain
+  unrestricted, and the implementation adds no parser dependency, rewriting,
+  selector policy, complexity rule, or aesthetic gate.
+
+### Fixed
+
+- **External-browser cue compatibility.** Normalized external word evidence for
+  the new indexed helpers is kept separate from the accepted raw browser
+  standard-caption projection. Existing external-narration numeric cues retain
+  scene-entry fallback when no turn was previously projected, caption output
+  remains compatible, and no cache identity or migration changes.
+
 ## [0.43.0] - 2026-08-26
 
 ### Added
@@ -2145,7 +2181,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.43.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.44.0...HEAD
+[0.44.0]: https://github.com/ammar-hasan/narova/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/ammar-hasan/narova/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/ammar-hasan/narova/compare/v0.41.0...v0.42.0
 [0.41.0]: https://github.com/ammar-hasan/narova/compare/v0.40.0...v0.41.0

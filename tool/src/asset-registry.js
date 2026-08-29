@@ -258,7 +258,7 @@ function validateLock(value, file = ASSET_LOCK_FILE) {
     }
     assertAllowedKeys(asset.origin, new Set([
       'mode', 'provider', 'itemId', 'model',
-      'sourcePage', 'sourcePageHash', 'sourceUrl', 'sourceUrlHash',
+      'sourcePage', 'sourcePageHash', 'sourceUrl', 'sourceUrlHash', 'pdf',
     ]), `${at}.origin`);
     for (const key of ['provider', 'itemId', 'model']) validateOptionalString(asset.origin[key], `${at}.origin.${key}`);
     for (const key of ['sourcePage', 'sourceUrl']) {
@@ -270,6 +270,39 @@ function validateLock(value, file = ASSET_LOCK_FILE) {
       const hash = asset.origin[`${key}Hash`];
       if (hash !== undefined && (typeof hash !== 'string' || !/^[a-f0-9]{64}$/.test(hash))) {
         throw new Error(`${at}.origin.${key}Hash must be a lowercase SHA-256 digest`);
+      }
+    }
+    if (asset.origin.mode === 'local-pdf' && asset.origin.pdf === undefined) {
+      throw new Error(`${at}.origin.pdf is required when origin.mode is local-pdf`);
+    }
+    if (asset.origin.pdf !== undefined && asset.origin.mode !== 'local-pdf') {
+      throw new Error(`${at}.origin.pdf requires origin.mode local-pdf`);
+    }
+    if (asset.origin.pdf !== undefined) {
+      const pdf = asset.origin.pdf;
+      if (!isRecord(pdf)) throw new Error(`${at}.origin.pdf must be an object`);
+      assertAllowedKeys(pdf, new Set([
+        'sourceBasename', 'sourceSha256', 'sourceBytes', 'documentPageCount',
+        'physicalPage', 'parser', 'renderer', 'textAvailability',
+      ]), `${at}.origin.pdf`);
+      for (const key of ['sourceBasename', 'parser', 'renderer']) {
+        if (typeof pdf[key] !== 'string' || !pdf[key].trim()) {
+          throw new Error(`${at}.origin.pdf.${key} must be a non-empty string`);
+        }
+      }
+      if (typeof pdf.sourceSha256 !== 'string' || !/^[a-f0-9]{64}$/.test(pdf.sourceSha256)) {
+        throw new Error(`${at}.origin.pdf.sourceSha256 must be a lowercase SHA-256 digest`);
+      }
+      if (!Number.isInteger(pdf.sourceBytes) || pdf.sourceBytes < 1) {
+        throw new Error(`${at}.origin.pdf.sourceBytes must be a positive integer`);
+      }
+      for (const key of ['documentPageCount', 'physicalPage']) {
+        if (!Number.isInteger(pdf[key]) || pdf[key] < 1) {
+          throw new Error(`${at}.origin.pdf.${key} must be a positive integer`);
+        }
+      }
+      if (!['available', 'unavailable'].includes(pdf.textAvailability)) {
+        throw new Error(`${at}.origin.pdf.textAvailability must be available or unavailable`);
       }
     }
     if (!isRecord(asset.rights) || typeof asset.rights.status !== 'string' || !asset.rights.status.trim()) {

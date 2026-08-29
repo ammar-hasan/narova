@@ -1182,6 +1182,18 @@ test('a clean choreography file produces no determinism warnings (the selective-
   assert.ok(!lines.some(l => l.startsWith('warn:') && !l.startsWith('warn: scene cache:')), lines.join('\n'));
 });
 
+test('authored JavaScript syntax is a correctness failure in ordinary check mode', () => {
+  const diagnostics = [];
+  const { ok, lines } = run({
+    ...base([{ id: 's', body: '<p>x</p>', vo: [{ who: 'a', text: 'one' }] }]),
+    choreography: 'if (!sc) { return; }',
+  }, { diagnostics });
+  assert.equal(ok, false);
+  assert.ok(lines.some(line => /fail: authored JavaScript syntax error in config\.choreography at 1:12/.test(line)), lines.join('\n'));
+  assert.ok(!lines.some(line => line.startsWith('ok:')), lines.join('\n'));
+  assert.ok(diagnostics.some(item => item.severity === 'error' && item.code === 'subject.non-pass'));
+});
+
 test('project choreography announces the selective-render downgrade (NAR-004-022)', () => {
   const { lines } = run(choreoConfig('var T = function (k) { return sc.start + sc.turns[k]; };'));
   const hit = lines.find(l => l.includes('downgrades HyperFrames caching to whole-video mode'));

@@ -11,6 +11,7 @@ const path = require('node:path');
 const { resolveConfig } = require('../src/schema');
 const { writeProofReceipt } = require('../src/proof-receipt');
 const { buildHashes, hashFile } = require('../src/manifest');
+const { writePdf } = require('./helpers/pdf-fixture');
 
 const BIN = path.join(__dirname, '..', 'bin', 'narova.js');
 const run = (args, opts = {}) => spawnSync('node', [BIN, ...args], { encoding: 'utf8', ...opts });
@@ -37,7 +38,34 @@ test('help shows on no command, help, and -h', () => {
     assert.match(r.stdout, /critique \[profiles\]/);
     assert.match(r.stdout, /assets import/);
     assert.match(r.stdout, /assets search/);
+    assert.match(r.stdout, /local PDF: require --pages/);
   }
+});
+
+test('ingest dispatches only the two explicit HTTP and selected-local-PDF forms', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-pdf-'));
+  const project = path.join(root, 'project');
+  run(['init', project]);
+  const source = writePdf(path.join(root, 'source.pdf'), ['Physical one', 'Physical two']);
+
+  const missingPages = run(['ingest', source, '--project', project]);
+  assert.equal(missingPages.status, 2);
+  assert.match(missingPages.stderr, /requires --pages/);
+
+  const pagesOnHttp = run(['ingest', 'https://example.com', '--pages', '1', '--project', project]);
+  assert.equal(pagesOnHttp.status, 2);
+  assert.match(pagesOnHttp.stderr, /only valid with a regular local PDF/);
+
+  const pagesElsewhere = run(['check', '--pages', '1', '--project', project]);
+  assert.equal(pagesElsewhere.status, 2);
+  assert.match(pagesElsewhere.stderr, /only valid with narova ingest/);
+
+  const ingested = run(['ingest', source, '--pages', '2', '--project', project]);
+  assert.equal(ingested.status, 0, ingested.stderr);
+  assert.match(ingested.stdout, /physical pages: 2 of 2/);
+  assert.match(ingested.stdout, /embedded text available/);
+  assert.equal(fs.readdirSync(path.join(project, 'assets')).some(file => /physical-page-0002\.png$/.test(file)), true);
+  assert.equal(fs.readdirSync(path.join(project, 'assets')).some(file => /physical-page-0002\.txt$/.test(file)), true);
 });
 
 test('action-scoped help prints the action usage, not global help (NAR-009-036)', () => {

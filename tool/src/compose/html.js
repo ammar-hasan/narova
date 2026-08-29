@@ -6,6 +6,7 @@
  * timeline registered under the root's data-composition-id. */
 const { runtimeScript } = require('./runtime');
 const { threeHeadScripts, threeSceneBody, threeModuleSceneBody, hasThreeScenes, hasThreeModels } = require('./three');
+const { authorReadyScript, collectMainAuthorJavaScript, escapeInlineScript, renderMainAuthorJavaScript } = require('../author-js');
 const path = require('path');
 const { capturePaths, readCaptureManifest } = require('../walkthrough');
 
@@ -182,12 +183,12 @@ function composeDoc(config, size, data, css) {
   // terminate the block early.
   const dataJson = JSON.stringify(data).replace(/</g, '\\u003c');
 
-  // Project choreography (config.choreography, resolved by schema.js) is raw
-  // timeline code, so "<" cannot be blanket-escaped the way it is for DATA —
-  // that would break every `a < b`. Only a literal "</script" can terminate the
-  // block, and "<\/script" is identical to the JS parser inside the string and
-  // regex literals where it can legitimately appear.
-  const choreography = String(config.choreography || '').replace(/<\/script/gi, '<\\/script');
+  // Keep each authored source identifiable while preserving the historic
+  // shared classic-script scope and execution order. Only literal closing
+  // script tags are escaped; comparisons and every other expression remain
+  // byte-for-byte author-controlled.
+  const authorBlocks = collectMainAuthorJavaScript(config, { data });
+  const choreography = escapeInlineScript(renderMainAuthorJavaScript(authorBlocks).code);
 
   // The caption preset is carried twice: in DATA (runtime.js picks its word
   // tweens off it) and as a cap-preset-* class on the stage (css.js picks its
@@ -228,7 +229,7 @@ ${sceneClips}
 </div>
 <script>
 var DATA = ${dataJson};
-${runtimeScript()}${choreography ? `\n/* project choreography */\n${choreography}` : ''}
+${runtimeScript({ deferTimeline: true })}${choreography}${authorReadyScript()}
 </script>
 </body>
 </html>
@@ -309,6 +310,15 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   //     inside this scene's window becomes a scene-local time; markers outside
   //     the window are dropped (no element in this scene can fire them).
   const sceneTurns = scData.turns || [];
+  const localSentences = (scData.sentences || []).map(sentence => ({
+    sentenceIndex: sentence.sentenceIndex,
+    words: (sentence.words || []).map(word => ({
+      token: word.token,
+      speaker: word.speaker,
+      start: r3(word.start - globalStart),
+      end: r3(word.end - globalStart),
+    })),
+  }));
   const localMarkers = {};
   for (const [mk, mv] of Object.entries(config.markers || {})) {
     if (typeof mv === 'number' && mv >= globalStart && mv <= globalStart + sceneDur) {
@@ -323,6 +333,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
       start: 0,
       dur: sceneDur,
       turns: sceneTurns,
+      sentences: localSentences,
       transition: scData.transition || 'fade',
       _firstScene: isFirstScene,
     }],
@@ -337,7 +348,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   // beyond the isolated project's duration and the canvas would never animate.
   const enrichedScene = { ...scene };
   const s = enrichedScene;
-  const scLocal = { start: 0, dur: sceneDur, turns: sceneTurns, markers: localMarkers, groups: sceneGroups };
+  const scLocal = { start: 0, dur: sceneDur, turns: sceneTurns, sentences: localSentences, markers: localMarkers, groups: sceneGroups };
   let body = String(s.body || '');
   if (s._threeModuleContents) {
     body = threeModuleSceneBody(s, scLocal, size.w, size.h) + (body || '');
@@ -401,27 +412,10 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
     ? `<div class="series-badge">Part ${config.series.part}${config.series.total ? ` / ${config.series.total}` : ''}</div>`
     : '';
 
-  // Choreography: project + scene-specific + imported JS (same as composeDoc).
-  let mergedChoreography = config.choreography || '';
-  if (s._choreographyFileContents) {
-    mergedChoreography += '\n/* scene-choreography:' + s.id + ' */\n' + s._choreographyFileContents;
-  }
-  if (s._scriptFileContents) {
-    // _scStart is the scene's anchor on the CURRENT timeline. The full render
-    // sets it to the global start; this isolated project's timeline is t=0, so
-    // _scStart=0 makes `_scStart + offset` resolve to the same scene-local
-    // offset the author intended.
-    mergedChoreography += '\n/* scene-script:' + s.id + ' */\n(function(){ var _scStart=0, _scDur=' + sceneDur + ';\n' + s._scriptFileContents + '\n})();\n';
-  }
-  if (config.imports) {
-    for (const [name, imported] of Object.entries(config.imports)) {
-      if (!imported || !imported.contents) continue;
-      if ((imported.file || '').toLowerCase().endsWith('.js')) {
-        mergedChoreography += '\n/* import:' + name + ' */\n' + imported.contents;
-      }
-    }
-  }
-  const choreography = mergedChoreography ? '\n/* project choreography */\n' + mergedChoreography.replace(/<\/script/gi, '<\\/script') : '';
+  // The isolated project uses the same authored source records but rebases its
+  // scene-script wrapper to t=0.
+  const authorBlocks = collectMainAuthorJavaScript(config, { data, sceneIndex: sceneIdx });
+  const choreography = escapeInlineScript(renderMainAuthorJavaScript(authorBlocks).code);
 
   return `<!doctype html>
 <!-- GENERATED by narova compose (per-scene) — do not edit. -->
@@ -454,7 +448,7 @@ ${mediaClip}
 </div>
 <script>
 var DATA = ${dataJson};
-${runtimeScript()}${choreography}
+${runtimeScript({ deferTimeline: true })}${choreography}
 (function(){
   var bar = document.getElementById('progress-bar');
   if (bar) {
@@ -463,6 +457,7 @@ ${runtimeScript()}${choreography}
     tl.fromTo(bar, { scaleX: p0 }, { scaleX: p1, duration: ${fmt(sceneDur)}, ease: 'none' }, 0);
   }
 })();
+${authorReadyScript()}
 </script>
 </body>
 </html>`;

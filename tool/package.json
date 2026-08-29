@@ -1,6 +1,6 @@
 {
   "name": "@narova/narova",
-  "version": "0.43.0",
+  "version": "0.44.0",
   "description": "Open video production system for humans and agents — local-first CLI for directable, reproducible video: scene scripts, deterministic rendering, local speech, word-synced captions, product walkthroughs, AI clips, revisions, and provenance.",
   "keywords": [
     "video",
@@ -73,7 +73,8 @@
   "optionalDependencies": {
     "@fontsource/noto-sans-arabic": "5.3.0",
     "@napi-rs/canvas": "1.0.3",
-    "fontkit": "2.0.4"
+    "fontkit": "2.0.4",
+    "pdfjs-dist": "4.8.69"
   },
   "license": "Apache-2.0"
 }

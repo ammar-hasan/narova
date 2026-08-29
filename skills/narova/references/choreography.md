@@ -17,14 +17,24 @@ The file is read at compose time and inlined into the composition document
 immediately after the built-in animators are registered. It is local and
 inlined, never fetched — the same trust model as `theme.css`.
 
+`narova check`, compose, shots, and build compile the exact browser script
+shape without executing it. A syntax error stops before rendering and names
+the logical source plus its line and column when the parser provides them.
+Project choreography and JavaScript imports remain classic-script code;
+`scene.scriptFile` retains its existing function body. Narova does not rewrite,
+sandbox, size-gate, or judge selectors and programming style. This preflight is
+only the confidence boundary between executable and non-executable code.
+
 ## What is in scope
 
 | Name | What it is |
 |---|---|
 | `tl` | the paused GSAP timeline the renderer seeks |
-| `DATA` | `{ total, scenes: [{ id, start, dur, turns, transition }] }` |
+| `DATA` | `{ total, scenes: [{ id, start, dur, turns, sentences, transition }] }` |
 | `gsap` | the GSAP global |
 | `cueTime(sc, el, i)` | the same turn resolution the built-in animators use |
+| `sentenceCue(sc, sentenceIndex)` | a copied resolved sentence timing span |
+| `wordCue(sc, sentenceIndex, wordIndex)` | a copied resolved word timing span |
 
 ## Anchor to turns, never to wall-clock
 
@@ -38,6 +48,35 @@ var T = function (k, d) { return sc.start + sc.turns[k] + (d || 0); };
 tl.to("#scene-overflow .evict", { y: 1050, rotation: -80, scale: 1.22,
   duration: 1.7, ease: "power2.in" }, T(1, 1.45));
 ```
+
+When a visual event must follow a particular resolved sentence or word rather
+than a whole voice turn, address the timing evidence by index:
+
+```js
+var sc = DATA.scenes.find(function (s) { return s.id === "assembly"; });
+var phrase = sentenceCue(sc, 2);
+var adjective = wordCue(sc, 2, 1);
+
+tl.set("#scene-assembly .first-link", { opacity: 1 }, phrase.start);
+tl.to("#scene-assembly .second-link", { x: 0, duration: 0.5 }, adjective.start);
+tl.set("#scene-assembly .compound", { opacity: 1 }, adjective.end + 0.1);
+```
+
+Both results contain millisecond-rounded `start`, `end`, `duration`, `scene`,
+and `sentenceIndex`; a word result also contains `wordIndex`, `token`, and
+`speaker`. Full renders use global composition seconds. An isolated scene uses
+the equivalent scene-local seconds, so the same choreography retains its
+internal timing. These lookups remain available when visible captions are off.
+
+Indices are deliberate: Narova does not search or normalize text, decide which
+word matters, infer a semantic beat, bind an element, or choose an animation.
+Missing, invalid, or untimed evidence throws with the scene and indices instead
+of silently returning scene entry. Resolve the correct index from the current
+timing artifact, then choose the motion and any offset yourself.
+
+The values are called *resolved timing*. They may be estimated, supplied, or
+acoustically aligned according to the project's existing timing source. The
+lookup does not upgrade that evidence or claim acoustic alignment.
 
 Register everything at absolute times on `tl`. Do not create your own timeline,
 and do not use `setTimeout`, `requestAnimationFrame`, `Date`, `Math.random`, or
@@ -93,6 +132,9 @@ a `tl.set()` before the tween:
 ## What `check` enforces
 
 - the `choreography` path must exist (`resolveConfig` throws if it does not)
+- every emitted choreography, JavaScript import, scene script, and raw Three.js
+  module must compile in its actual browser context; syntax failures name the
+  source and fail ordinary check as well as render paths
 - references to `Date`, `Math.random`, `requestAnimationFrame`, `setTimeout`,
   or `fetch` warn
 - a file over 32KB warns — choreography that large is usually logic that
