@@ -5,9 +5,12 @@ const assert = require('node:assert');
 const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
-const { compose } = require('../src/compose');
+const { spawnSync } = require('node:child_process');
+const { compose, composeSceneProject } = require('../src/compose');
 const { HYPERFRAMES_VERSION } = require('../src/hf');
 const { writeStageInputs, resolveReuse, commitFingerprint } = require('../src/pipeline');
+
+const HAS_FFMPEG = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status === 0;
 
 const config = {
   title: 'IO Test',
@@ -28,6 +31,13 @@ function tmpOut(withInputs = true) {
     fs.writeFileSync(path.join(dir, 'audio', 'full.wav'), 'RIFFfake');
   }
   return dir;
+}
+
+function inlinedData(dir) {
+  const html = fs.readFileSync(path.join(dir, 'index.html'), 'utf8');
+  const match = html.match(/var DATA = (\{.*\});\nwindow\.__timelines/);
+  assert.ok(match, 'generated document contains inlined composition data');
+  return JSON.parse(match[1]);
 }
 
 test('compose writes index.html, the audio copy, and a pinned package.json', () => {
@@ -76,6 +86,100 @@ test('compose is a clean regeneration (second run overwrites)', () => {
 test('compose without synth outputs fails with the run-synth-first hint', () => {
   const out = tmpOut(false);
   assert.throws(() => compose(config, out), /run `narova synth` first/);
+});
+
+test('compose preflights authored JavaScript before creating a render project', () => {
+  const out = tmpOut();
+  assert.throws(() => compose({ ...config, choreography: 'if (!sc) { return; }' }, out),
+    /config\.choreography at 1:12 — Illegal return statement/);
+  assert.ok(!fs.readdirSync(out).some(name => name.startsWith('hf-')),
+    'a non-executable author source must fail before render-project writes');
+});
+
+test('compose does not execute syntactically valid author code during preflight', () => {
+  const out = tmpOut();
+  const result = compose({ ...config, choreography: 'throw new Error("runtime proof");' }, out);
+  const html = fs.readFileSync(path.join(result.dir, 'index.html'), 'utf8');
+  assert.match(html, /window\.__narovaAuthorState\.source="config\.choreography"/);
+  assert.match(html, /throw new Error\("runtime proof"\)/);
+});
+
+test('compose preserves a raw Three module throw for attributed browser execution', () => {
+  const out = tmpOut();
+  const result = compose({
+    ...config,
+    scenes: [{
+      ...config.scenes[0],
+      _threeModuleContents: 'throw new Error("three runtime proof");',
+    }],
+  }, out);
+  const html = fs.readFileSync(path.join(result.dir, 'index.html'), 'utf8');
+  assert.match(html, /scene \\"only\\" threeModule/);
+  assert.match(html, /throw new Error\("three runtime proof"\)/);
+  assert.ok(html.indexOf('boots[i]()') < html.indexOf("window.__timelines['main']=tl"),
+    'raw module initialization must finish before public timeline readiness');
+});
+
+test('compose queues a valid raw Three module without changing its author body', () => {
+  const out = tmpOut();
+  const authorBody = 'scene.add(new THREE.Mesh(new THREE.BoxGeometry(1,1,1),new THREE.MeshBasicMaterial({color:0x44aaff})));';
+  const result = compose({
+    ...config,
+    scenes: [{ ...config.scenes[0], _threeModuleContents: authorBody }],
+  }, out);
+  const html = fs.readFileSync(path.join(result.dir, 'index.html'), 'utf8');
+  assert.ok(html.includes(authorBody));
+  assert.match(html, /__narovaRegisterThreeBoot\(boot\)/);
+});
+
+test('external word helpers preserve legacy browser turns and caption projection', {
+  skip: HAS_FFMPEG ? false : 'ffmpeg required for isolated-scene audio trim',
+}, () => {
+  const out = tmpOut(false);
+  const audio = path.join(out, 'external.wav');
+  const generated = spawnSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'anullsrc=r=8000:cl=mono', '-t', '5', audio], { encoding: 'utf8' });
+  assert.equal(generated.status, 0, generated.stderr || 'failed to create external narration fixture');
+  const external = {
+    ...config,
+    title: 'External compatibility',
+    scenes: [
+      { id: 'first', dur: 2, body: '<p data-cue="0">one</p>', vo: [{ who: 'a', text: 'One.' }] },
+      { id: 'second', dur: 3, body: '<p data-cue="0">two</p>', vo: [{ who: 'a', text: 'Two.' }] },
+    ],
+    narrationSource: {
+      file: audio,
+      wordTimings: [
+        { start: 0.5, end: 0.9, text: 'One.', words: [{ text: 'One.', start: 0.5, end: 0.9 }] },
+        { start: 2.75, end: 3.2, text: 'Two.', words: [{ text: 'Two.', start: 2.75, end: 3.2 }] },
+      ],
+    },
+  };
+
+  try {
+    const full = compose(external, out);
+    const fullData = inlinedData(full.dir);
+    assert.deepEqual(fullData.scenes.map(scene => scene.turns), [[], []],
+      'raw external browser projection keeps numeric turn cues unresolved');
+    assert.deepEqual(fullData.scenes[1].sentences[0], {
+      sentenceIndex: 0,
+      words: [{ token: 'Two.', speaker: 'a', start: 2.75, end: 3.2 }],
+    }, 'new helper evidence is normalized in global composition time');
+    assert.equal(fullData.groups[0].start, null,
+      'legacy standard-caption projection retains raw external word coordinates');
+    assert.deepEqual(fullData.groups[0].words, [{ t0: null, t1: null }],
+      'legacy standard-caption projection does not silently gain normalized text/timing');
+
+    const isolated = composeSceneProject(external, out, 1);
+    const isolatedData = inlinedData(isolated.dir);
+    assert.deepEqual(isolatedData.scenes[0].turns, []);
+    assert.deepEqual(isolatedData.scenes[0].sentences[0], {
+      sentenceIndex: 0,
+      words: [{ token: 'Two.', speaker: 'a', start: 0.75, end: 1.2 }],
+    }, 'isolated helper evidence rebases without changing legacy turn behavior');
+  } finally {
+    fs.rmSync(out, { recursive: true, force: true });
+  }
 });
 
 test('Python stage manifests do not leak the machine-local assets path', () => {

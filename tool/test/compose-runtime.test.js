@@ -12,8 +12,17 @@ const DATA = {
   total: 9,
   preset: 'karaoke',
   scenes: [
-    { id: 's1', start: 0, dur: 5, turns: [0.16, 2.5] },
-    { id: 's2', start: 5, dur: 4, turns: [0.16] },
+    { id: 's1', start: 0, dur: 5, turns: [0.16, 2.5], sentences: [
+      { sentenceIndex: 0, words: [
+        { token: 'Hi', speaker: 'a', start: 0.16, end: 0.5 },
+        { token: 'there.', speaker: 'a', start: 0.5, end: 1 },
+      ] },
+    ] },
+    { id: 's2', start: 5, dur: 4, turns: [0.16], sentences: [
+      { sentenceIndex: 0, words: [
+        { token: 'Bye.', speaker: 'b', start: 5.16, end: 5.7 },
+      ] },
+    ] },
   ],
   groups: [
     { who: 'a', label: 'A', start: 0.16, end: 5.16,
@@ -52,7 +61,7 @@ function makeNode(tag, attrs = {}) {
   return node;
 }
 
-function runScript({ sceneEls = {}, data = DATA } = {}) {
+function runScript({ sceneEls = {}, data = DATA, runtimeOpts = {}, tail = '' } = {}) {
   const calls = [];
   const tl = {
     set: (target, vars, at) => { calls.push({ op: 'set', target, vars, at }); return tl; },
@@ -74,9 +83,10 @@ function runScript({ sceneEls = {}, data = DATA } = {}) {
     },
     createTextNode: t => ({ text: t }),
   };
-  const window = {};
-  new Function('window', 'document', 'gsap', 'DATA', runtimeScript())(window, document, gsap, data);
-  return { calls, window, capStage, tl };
+  const listeners = {};
+  const window = { addEventListener: (name, fn) => { listeners[name] = fn; } };
+  new Function('window', 'document', 'gsap', 'DATA', runtimeScript(runtimeOpts) + tail)(window, document, gsap, data);
+  return { calls, window, capStage, tl, listeners };
 }
 
 /* A scene element whose querySelectorAll returns canned nodes for the runtime's
@@ -89,6 +99,154 @@ function sceneEl(targets = [], drifts = []) {
 test('registers one paused timeline under __timelines.main', () => {
   const { window, tl } = runScript();
   assert.equal(window.__timelines.main, tl);
+});
+
+test('sentenceCue and wordCue return copied resolved spans by index', () => {
+  const { window } = runScript();
+  assert.deepEqual(window.sentenceCue(DATA.scenes[0], 0), {
+    scene: 's1', sentenceIndex: 0, start: 0.16, end: 1, duration: 0.84,
+  });
+  assert.deepEqual(window.wordCue('s1', 0, 1), {
+    scene: 's1', sentenceIndex: 0, wordIndex: 1,
+    start: 0.5, end: 1, duration: 0.5, token: 'there.', speaker: 'a',
+  });
+  const first = window.wordCue('s1', 0, 1);
+  first.start = 99;
+  assert.equal(window.wordCue('s1', 0, 1).start, 0.5, 'results do not expose mutable timing arrays');
+});
+
+test('cue lookups remain available with captions hidden and make no alignment claim', () => {
+  const hidden = { ...DATA, preset: false };
+  const { window } = runScript({ data: hidden });
+  const cue = window.wordCue('s2', 0, 0);
+  assert.equal(cue.start, 5.16);
+  assert.equal('aligned' in cue, false);
+  assert.equal('basis' in cue, false);
+});
+
+test('isolated cue spans equal full spans rebased by the scene start', () => {
+  const full = runScript().window.wordCue('s2', 0, 0);
+  const isolatedData = {
+    ...DATA,
+    total: 4,
+    scenes: [{ id: 's2', start: 0, dur: 4, turns: [0.16], sentences: [
+      { sentenceIndex: 0, words: [
+        { token: 'Bye.', speaker: 'b', start: 0.16, end: 0.7 },
+      ] },
+    ] }],
+    groups: [],
+  };
+  const local = runScript({ data: isolatedData }).window.wordCue('s2', 0, 0);
+  assert.equal(Math.round((full.start - DATA.scenes[1].start) * 1000) / 1000, local.start);
+  assert.equal(Math.round((full.end - DATA.scenes[1].start) * 1000) / 1000, local.end);
+});
+
+test('cue lookups follow changed timing evidence without choreography edits', () => {
+  const changed = JSON.parse(JSON.stringify(DATA));
+  changed.scenes[0].sentences[0].words[1].start = 0.625;
+  changed.scenes[0].sentences[0].words[1].end = 1.125;
+  const cue = runScript({ data: changed }).window.wordCue('s1', 0, 1);
+  assert.deepEqual({ start: cue.start, end: cue.end }, { start: 0.625, end: 1.125 });
+});
+
+test('production copied constants resolve directly from word evidence', () => {
+  const evidence = {
+    total: 14,
+    preset: false,
+    groups: [],
+    scenes: [{ id: 'assembly', start: 0, dur: 14, turns: [], sentences: [
+      { sentenceIndex: 2, words: [
+        { token: 'رَجُلٌ', speaker: 'talib', start: 3.471, end: 4.139 },
+        { token: 'حَسَنٌ', speaker: 'talib', start: 4.65, end: 5.829 },
+      ] },
+      { sentenceIndex: 3, words: [
+        { token: 'نہیں!', speaker: 'ustad', start: 9.694, end: 10.085 },
+      ] },
+      { sentenceIndex: 5, words: [
+        { token: 'الرَّجُلُ', speaker: 'ustad', start: 11.759, end: 12.334 },
+      ] },
+      { sentenceIndex: 6, words: [
+        { token: 'یہ', speaker: 'ustad', start: 12.971, end: 13.187 },
+        { token: 'تام', speaker: 'ustad', start: 13.187, end: 13.474 },
+      ] },
+    ] }],
+  };
+  const { window } = runScript({ data: evidence });
+  assert.deepEqual([
+    window.wordCue('assembly', 2, 0).start,
+    window.wordCue('assembly', 2, 1).start,
+    window.wordCue('assembly', 2, 1).end,
+    window.wordCue('assembly', 3, 0).end,
+    window.wordCue('assembly', 5, 0).start,
+    window.wordCue('assembly', 6, 1).start,
+  ], [3.471, 4.65, 5.829, 10.085, 11.759, 13.187]);
+});
+
+test('cue lookups throw attributed index and timing errors instead of guessing', () => {
+  const { window } = runScript();
+  assert.throws(() => window.sentenceCue('missing', 0), /scene "missing", sentence 0.*scene timing is unavailable/);
+  assert.throws(() => window.sentenceCue('s1', -1), /sentence -1.*non-negative integer/);
+  assert.throws(() => window.sentenceCue('s1', 0.5), /sentence 0\.5.*non-negative integer/);
+  assert.throws(() => window.sentenceCue('s1', 9), /sentence 9.*sentence timing is unavailable/);
+  assert.throws(() => window.wordCue('s1', 0, 9), /sentence 0, word 9.*word timing is unavailable/);
+  assert.throws(() => window.wordCue('s1', 0, -1), /word -1.*non-negative integer/);
+  assert.throws(() => window.wordCue('s1', 0, 'there.'), /word "there\.".*non-negative integer/,
+    'text lookup is intentionally unsupported even when the token exists');
+  const invalid = JSON.parse(JSON.stringify(DATA));
+  invalid.scenes[0].sentences[0].words[0].end = invalid.scenes[0].sentences[0].words[0].start;
+  assert.throws(() => runScript({ data: invalid }).window.wordCue('s1', 0, 0),
+    /finite end after its start/);
+});
+
+test('honestly untimed narration reports unavailable cue evidence', () => {
+  const untimed = {
+    total: 2,
+    preset: false,
+    groups: [],
+    scenes: [{ id: 'voice', start: 0, dur: 2, turns: [], sentences: [] }],
+  };
+  assert.throws(() => runScript({ data: untimed }).window.wordCue('voice', 0, 0),
+    /scene "voice", sentence 0, word 0.*sentence timing is unavailable/);
+});
+
+test('deferred runtime exposes the timeline only after authored initialization is ready', () => {
+  const pending = runScript({ runtimeOpts: { deferTimeline: true } });
+  assert.equal(pending.window.__timelines.main, undefined);
+  pending.window.__narovaAuthorState.ready = true;
+  assert.equal(pending.window.__timelines.main, pending.tl);
+});
+
+test('deferred runtime attributes an author source that did not finish initialization', () => {
+  const pending = runScript({ runtimeOpts: { deferTimeline: true } });
+  pending.window.__narovaAuthorState.source = 'config.choreography';
+  assert.throws(() => pending.window.__timelines.main,
+    /authored JavaScript failed in config\.choreography — synchronous initialization did not complete/);
+});
+
+test('author-caught initialization errors can still publish the timeline', () => {
+  const tail = `
+window.__narovaAuthorState.source='config.choreography';
+try { throw new Error('expected'); } catch (error) { tl.to({}, { duration: 0.1 }, 0); }
+window.__narovaAuthorState.source=null;
+window.__narovaAuthorState.ready=true;
+window.__timelines['main']=tl;`;
+  const handled = runScript({ runtimeOpts: { deferTimeline: true }, tail });
+  assert.equal(handled.window.__narovaAuthorState.error, null);
+  assert.equal(handled.window.__timelines.main, handled.tl);
+});
+
+test('deferred runtime turns an attributed author failure into a timeline access failure', () => {
+  const pending = runScript({ runtimeOpts: { deferTimeline: true } });
+  pending.window.__narovaAuthorState.source = 'scene "one" choreographyFile';
+  const original = console.error;
+  console.error = () => {};
+  try {
+    pending.listeners.error({ error: new Error('boom'), lineno: 7, colno: 9 });
+  } finally {
+    console.error = original;
+  }
+  assert.throws(() => pending.window.__timelines.main,
+    /authored JavaScript failed in scene "one" choreographyFile at 7:9 — boom/);
 });
 
 test('caption DOM: one group per sentence, one span per word', () => {

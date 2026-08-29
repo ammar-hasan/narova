@@ -9,6 +9,7 @@ const path = require('node:path');
 const { REGISTRY } = require('../src/diagnostic-codes');
 const { resolveConfig } = require('../src/schema');
 const { audioFingerprint, timingsFingerprint } = require('../src/audio-fingerprint');
+const { writePdf } = require('./helpers/pdf-fixture');
 
 const ROOT = path.resolve(__dirname, '..', '..');
 const BIN = path.join(ROOT, 'tool', 'bin', 'narova.js');
@@ -131,6 +132,30 @@ test('successful project operations expose data and created artifacts without st
     assert.equal(result.status, 0, `${args.join(' ')}: ${result.stderr}`);
     envelope(result);
   }
+});
+
+test('local PDF ingest exposes bounded evidence without leaking its machine-local source path', () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-machine-pdf-'));
+  const project = path.join(root, 'project');
+  const sourceDir = path.join(root, 'private-source-location');
+  fs.mkdirSync(sourceDir);
+  const source = writePdf(path.join(sourceDir, 'research.pdf'), ['Selected evidence']);
+  assert.equal(run(['init', project]).status, 0);
+
+  const result = run(['ingest', source, '--pages', '1', '--project', project, '--json']);
+  assert.equal(result.status, 0, result.stderr);
+  const parsed = envelope(result);
+  assert.equal(parsed.operation, 'ingest');
+  assert.equal(parsed.data.sourceType, 'local-pdf');
+  assert.equal(parsed.data.sourceBasename, 'research.pdf');
+  assert.deepEqual(parsed.data.selectedPhysicalPages, [1]);
+  assert.equal(parsed.data.pages[0].physicalPage, 1);
+  assert.equal(parsed.data.pages[0].text.availability, 'available');
+  assert.ok(parsed.artifacts.some(item => item.role === 'asset' && item.path.endsWith('.png')));
+  assert.ok(parsed.artifacts.some(item => item.role === 'asset' && item.path.endsWith('.txt')));
+  assert.ok(parsed.artifacts.some(item => item.role === 'registry'));
+  assert.equal(JSON.stringify(parsed).includes(sourceDir), false);
+  assert.match(result.stdout.trim(), /^\{[\s\S]*\}$/);
 });
 
 test('every public command can return a pre-dispatch usage envelope and is documented', () => {

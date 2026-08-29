@@ -230,9 +230,10 @@ function preDispatchOperation(argv) {
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows']);
 
 function validateInvocationFlags(flags, cmd) {
+  if (flags.pages != null && cmd !== 'ingest') invocationError('--pages is only valid with narova ingest and a regular local PDF');
   if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
   if (flags['judge-assertion'] != null && cmd !== 'branch' && !(cmd === 'judge' && flags.repair)) {
     invocationError('--judge-assertion is only valid with focused branch save or judge --repair');
@@ -546,9 +547,10 @@ Commands:
                            --dir <target>; --inspect validates without writing
   remix <source>        copy a local project/archive or github:<owner>/<repo>[#ref]
                            into a fresh project with recorded parent lineage
-  ingest <url>          fetch a source page: download images into assets/,
-                           screenshot it (if Chrome), append sources.md,
-                           seed claims.md — the mechanical pass of url-to-source
+  ingest <source>       HTTP(S): download page images, optionally screenshot,
+                           append sources.md, and seed claims.md
+                         local PDF: require --pages <1,3-5>, render physical
+                           pages + literal embedded text without network/OCR
   assets import <file>  register an existing project-local creative asset
   assets download <url> download atomically with --output <project-relative path>
   assets providers      list built-in stock catalogues and credential readiness
@@ -566,7 +568,7 @@ Commands:
   compile               compile reel.config -> out/manifest.json
                            (versioned intermediate representation; also written
                            automatically by synth, compose, and build)
-  check                validate config fast — no TTS, no browser
+  check                validate config + compile browser-authored JS without running it
                             --strict: verify every claim in claims.md ledger
                             --creative-identity: also emit out/creative-identity.json
                               (advisory identity fingerprint + rationale verification;
@@ -943,13 +945,30 @@ async function main() {
     }
 
     case 'ingest': {
-      const url = positionals[1];
-      if (!url) usageError('usage: narova ingest <url> [--project <dir>]');
+      const source = positionals[1];
+      if (!source) usageError('usage: narova ingest <http(s)-url|local.pdf> [--pages <1,3-5>] [--project <dir>]');
+      const httpSource = /^https?:\/\//i.test(source);
+      if (httpSource && flags.pages != null) usageError('--pages is only valid with a regular local PDF');
+      if (!httpSource && flags.pages == null) {
+        usageError('local PDF ingest requires --pages <1,3-5>; otherwise supply an HTTP(S) page');
+      }
       const { dir: projectDir } = await loadProjectConfig(flags.project || '.', flags.config);
-      const result = await ingest(url, { projectDir });
+      const result = await ingest(source, { projectDir, pages: flags.pages });
       if (result) {
-        mData({
-          url: result.finalUrl || url,
+        mData(result.kind === 'local-pdf' ? {
+          sourceType: 'local-pdf',
+          sourceBasename: result.sourceBasename,
+          sourceSha256: result.sourceSha256,
+          sourceBytes: result.sourceBytes,
+          documentPageCount: result.documentPageCount,
+          selectedPhysicalPages: result.selectedPages,
+          pages: result.pages,
+          parser: result.parser,
+          renderer: result.renderer,
+          claimsCreated: result.claimsCreated,
+        } : {
+          sourceType: 'http-page',
+          url: result.finalUrl || source,
           slug: result.slug,
           images: result.images,
           screenshot: result.screenshot && result.screenshot.ok ? result.screenshot.path : null,

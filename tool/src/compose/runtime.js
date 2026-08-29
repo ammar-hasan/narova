@@ -10,11 +10,126 @@
  * word times instead of CSS transitions: a transition runs on the wall clock
  * and would not reproduce under seek-based frame rendering. */
 
-/* Returns the script body; `DATA` is inlined by html.js just above it. */
-function runtimeScript() {
-  return `window.__timelines = window.__timelines || {};
+/* Returns the script body; `DATA` is inlined by html.js just above it.
+ * Generated documents defer public timeline readiness until their authored
+ * synchronous initialization has completed. Direct callers keep the historic
+ * immediate registration behavior. */
+function runtimeScript(opts = {}) {
+  const authorHandshake = opts.deferTimeline ? `
+window.__narovaAuthorState = {
+  source: null,
+  ready: false,
+  error: null,
+  record: function(source, error, line, column) {
+    var reason = error && error.message ? error.message : String(error || 'unknown error');
+    this.error = { source: source || this.source || 'unknown authored source', reason: reason, line: line || null, column: column || null };
+  },
+  describe: function() {
+    if (!this.error) return null;
+    var at = this.error.line ? ' at ' + this.error.line + (this.error.column ? ':' + this.error.column : '') : '';
+    return 'authored JavaScript failed in ' + this.error.source + at + ' — ' + this.error.reason;
+  }
+};
+window.addEventListener('error', function(event) {
+  var state = window.__narovaAuthorState;
+  if (state && state.source && !state.error) {
+    state.record(state.source, event.error || event.message, event.lineno, event.colno);
+    console.error('[narova] ' + state.describe());
+  }
+});` : '';
+  const timelineRegistration = opts.deferTimeline ? `Object.defineProperty(window.__timelines, 'main', {
+  configurable: true,
+  enumerable: true,
+  get: function() {
+    var state = window.__narovaAuthorState;
+    if (state && state.error) {
+      throw new Error(state.describe());
+    }
+    if (state && !state.ready && state.source) {
+      throw new Error('authored JavaScript failed in ' + state.source + ' — synchronous initialization did not complete');
+    }
+    return state && state.ready ? tl : undefined;
+  },
+  set: function(value) { tl = value; }
+});` : `window.__timelines['main'] = tl;`;
+  return `window.__timelines = window.__timelines || {};${authorHandshake}
 var tl = gsap.timeline({ paused: true });
+${opts.deferTimeline ? `window.__narovaBuildingTimeline=tl;
+window.__narovaRegisterThreeBoot=function(boot){
+  if(typeof boot!=='function')return;
+  if(window.__narovaAuthorState.ready)boot();
+  else (window.__narovaThreeBoots=window.__narovaThreeBoots||[]).push(boot);
+};` : ''}
 var stage = document.getElementById('cap-stage');
+
+// Read-only choreography lookups over the resolved word evidence that already
+// drives captions. Keep the implementation inside an IIFE so adding these
+// globals does not add helper bindings that can collide with authored lexical
+// names in the shared classic-script scope.
+(function(){
+  function sceneId(scene) {
+    return typeof scene === 'string' ? scene : scene && scene.id;
+  }
+  function cueError(scene, sentenceIndex, wordIndex, reason) {
+    var id = sceneId(scene);
+    var address = 'scene ' + JSON.stringify(id == null ? '<invalid>' : id)
+      + ', sentence ' + JSON.stringify(sentenceIndex);
+    if (wordIndex !== undefined) address += ', word ' + JSON.stringify(wordIndex);
+    return new Error('cue timing error for ' + address + ' — ' + reason);
+  }
+  function resolvedScene(scene, sentenceIndex, wordIndex) {
+    var id = sceneId(scene);
+    var found = DATA.scenes.find(function(candidate){ return candidate.id === id; });
+    if (!found) throw cueError(scene, sentenceIndex, wordIndex, 'scene timing is unavailable');
+    return found;
+  }
+  function resolvedSentence(scene, sentenceIndex, wordIndex) {
+    if (!Number.isInteger(sentenceIndex) || sentenceIndex < 0) {
+      throw cueError(scene, sentenceIndex, wordIndex, 'sentence index must be a non-negative integer');
+    }
+    var foundScene = resolvedScene(scene, sentenceIndex, wordIndex);
+    var sentence = (foundScene.sentences || []).find(function(candidate){
+      return candidate.sentenceIndex === sentenceIndex;
+    });
+    if (!sentence || !Array.isArray(sentence.words) || sentence.words.length === 0) {
+      throw cueError(foundScene, sentenceIndex, wordIndex, 'resolved sentence timing is unavailable');
+    }
+    return { scene: foundScene, sentence: sentence };
+  }
+  function span(scene, sentenceIndex, wordIndex, start, end, extra) {
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
+      throw cueError(scene, sentenceIndex, wordIndex, 'resolved timing must have a finite end after its start');
+    }
+    var result = {
+      scene: scene.id,
+      sentenceIndex: sentenceIndex,
+      start: start,
+      end: end,
+      duration: Math.round((end - start) * 1000) / 1000
+    };
+    if (wordIndex !== undefined) result.wordIndex = wordIndex;
+    if (extra) {
+      result.token = extra.token;
+      result.speaker = extra.speaker;
+    }
+    return result;
+  }
+  window.sentenceCue = function(scene, sentenceIndex) {
+    var resolved = resolvedSentence(scene, sentenceIndex);
+    var words = resolved.sentence.words;
+    return span(resolved.scene, sentenceIndex, undefined,
+      words[0].start, words[words.length - 1].end);
+  };
+  window.wordCue = function(scene, sentenceIndex, wordIndex) {
+    if (!Number.isInteger(wordIndex) || wordIndex < 0) {
+      throw cueError(scene, sentenceIndex, wordIndex, 'word index must be a non-negative integer');
+    }
+    var resolved = resolvedSentence(scene, sentenceIndex, wordIndex);
+    var word = resolved.sentence.words[wordIndex];
+    if (!word) throw cueError(resolved.scene, sentenceIndex, wordIndex, 'resolved word timing is unavailable');
+    return span(resolved.scene, sentenceIndex, wordIndex, word.start, word.end, word);
+  };
+})();
 
 // caption style preset (config.captions.preset; html.js mirrors it as a
 // cap-preset-* class on the stage). karaoke/rise are pure class-flip looks;
@@ -332,7 +447,7 @@ if (document.getElementById('progress-bar')) {
   tl.fromTo('#progress-bar', { scaleX: 0 }, { scaleX: 1, duration: DATA.total, ease: 'none' }, 0);
 }
 tl.to({}, { duration: DATA.total }, 0); // anchor: timeline spans the full video
-window.__timelines['main'] = tl;`;
+${timelineRegistration}`;
 }
 
 module.exports = { runtimeScript };

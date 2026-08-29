@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.43.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.44.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -308,11 +308,14 @@ See the exact assertion, judge, plan, and repair contracts in
 **Source-grounded claims.** Every factual claim in the narration must trace to
 a source. Narova's `check` detects a supported class of numeric and superlative
 claims and requires them to be ledged (`claims.md`); release checking fails
-unledgered claims. Agents interpret selected sources; `ingest` handles the
-mechanical pass — fetching the page metadata, extracting up to five images, and
-optionally capturing a browser screenshot. This heuristic proves neither that
-every claim was detected nor that a source is correct; for contested topics the
-ledger should preserve the major relevant perspectives.
+unledgered claims. Agents interpret selected sources; `ingest` handles two
+bounded mechanical passes: an HTTP(S) page fetch with up to five images and an
+optional browser screenshot, or explicitly selected physical pages from a
+regular local PDF as PNG evidence plus available embedded text. PDF intake does
+not follow links, execute actions, use OCR, interpret claims, or choose creative
+material. These heuristics prove neither that every claim was detected nor that
+a source is correct; for contested topics the ledger should preserve the major
+relevant perspectives.
 
 **Assets and provenance.** The small asset lifecycle stays explicit:
 
@@ -666,7 +669,8 @@ narova demo           build the one-command sample film end to end
 narova pack           write a deterministic .narova project archive
 narova open <archive> verify, inspect, or materialize an untrusted archive
 narova remix <source> copy a local project/archive or public github: locator
-narova ingest <url>   bounded mechanical source pass → sources.md/claims.md
+narova ingest <url>   bounded HTTP(S) source pass → sources.md/claims.md
+narova ingest <pdf> --pages <1,3-5>   selected local PDF evidence
 narova check          validate the config (fast, no side effects) + claim sniffing
 narova plan           compare config vs the last manifest; classify what changed
 narova diff           per-scene revision impact vs the latest recorded revision

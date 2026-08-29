@@ -1008,13 +1008,16 @@ test('raw Three modules expose measured local word, sentence, marker, and turn a
   assert.match(html, /atMarker:function/);
 });
 
-test('threeModuleSetupJs inlines author code safely (try/catch) and seeds deterministically', () => {
+test('threeModuleSetupJs attributes and rethrows uncaught author errors, and seeds deterministically', () => {
   const body = 'throw new Error("boom");';
   const js1 = threeModuleSetupJs('s1', null, body, 0, 3, 800, 600, []);
   const js2 = threeModuleSetupJs('s1', null, body, 0, 3, 800, 600, []);
-  // A throw is contained, never silently blank — and the same scene reproduces.
+  // A throw is attributed and rethrown, never converted into a successful
+  // blank canvas — and the same scene reproduces.
   assert.match(js1, /try\{/);
   assert.match(js1, /catch\(e\)/);
+  assert.match(js1, /_authorState\.record\(_authorSource,e\);console\.error\('\[narova\] '/);
+  assert.match(js1, /throw e/);
   assert.equal(js1, js2, 'same scene id + body must produce identical bootstrap');
 });
 

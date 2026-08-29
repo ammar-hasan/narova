@@ -12,6 +12,7 @@ const { composeCss } = require('./css');
 const { composeDoc, composeSceneDoc } = require('./html');
 const { collectModelAssets, collectTextureAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
+const { preflightAuthorJavaScript } = require('../author-js');
 
 const GSAP_VENDOR_DIR = path.join(__dirname, '..', '..', 'vendor', 'gsap');
 const GSAP_SRC = path.join(GSAP_VENDOR_DIR, 'gsap.min.js');
@@ -43,7 +44,20 @@ function synthesizeExternalTimings(config) {
   for (const s of config.scenes) {
     const sceneEnd = cursor + (s.dur || 0);
     const sceneCues = cues.filter(c => c.start < sceneEnd && c.end > cursor);
-    timings[s.id] = { dur: s.dur || 0, words: sceneCues.flatMap(c => c.words) };
+    const sceneVo = s.vo || [];
+    const cueWords = sceneCues.flatMap((cue, si) => (cue.words || []).map(word => ({
+      w: word.text || word.w || '',
+      t0: Math.max(0, word.start - cursor),
+      t1: Math.max(0, word.end - cursor),
+      who: cue.who || sceneVo[si]?.who || sceneVo[0]?.who || Object.keys(config.voices || {})[0] || 'a',
+      si,
+    })));
+    // Keep the pinned browser external-caption/turn projection intact: its
+    // raw authored word shape produced no composition turns and flowed to the
+    // legacy standard overlay unchanged. The indexed helper surface consumes
+    // a separate normalized view so adopting neither helper changes no pixels.
+    const words = sceneCues.flatMap(cue => cue.words);
+    timings[s.id] = { dur: s.dur || 0, words, cueWords };
     cursor = sceneEnd;
   }
   return timings;
@@ -71,40 +85,30 @@ function compose(config, outDir) {
 
   const size = config.size;
   const data = composeData(config, timings, config.captionsEnabled !== false);
+  preflightAuthorJavaScript(config, { data });
 
-  // Merge per-scene file-referenced CSS and choreography into the project.
+  // Merge per-scene file-referenced CSS into the project. Authored JavaScript
+  // remains structured until html.js emits it so diagnostics retain its
+  // logical source and exact execution context.
   let mergedExtraCss = config.themeCss || '';
-  let mergedChoreography = config.choreography || '';
   for (const s of config.scenes) {
     if (s._cssFileContents) mergedExtraCss += '\n/* scene-css:' + s.id + ' */\n' + s._cssFileContents;
-    if (s._choreographyFileContents) mergedChoreography += '\n/* scene:' + s.id + ' */\n' + s._choreographyFileContents;
-    if (s._scriptFileContents) {
-      const scData = data.scenes.find(d => d.id === s.id);
-      const scStart = scData ? scData.start : 0;
-      const scDur = scData ? scData.dur : (s.dur || 0);
-      mergedChoreography += `\n/* scene-script:${s.id} */
-(function(){
-  var _scStart=${scStart}, _scDur=${scDur};
-${s._scriptFileContents}
-})();\n`;
-    }
   }
-  // Append import module contents: CSS-like files → extra CSS, JS-like files → choreography.
+  // Append imported CSS. JavaScript imports are emitted from their structured
+  // source records by html.js.
   if (config.imports) {
     for (const [name, imported] of Object.entries(config.imports)) {
       if (!imported || !imported.contents) continue;
       const ext = path.extname(imported.file || '').toLowerCase();
       if (ext === '.css') {
         mergedExtraCss += '\n/* import:' + name + ' */\n' + imported.contents;
-      } else if (ext === '.js') {
-        mergedChoreography += '\n/* import:' + name + ' */\n' + imported.contents;
       }
       // .json, .html, .svg imports are available on the config object for
       // scene body HTML and element references at authoring time.
     }
   }
   const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true, config.captions || {});
-  const composeConfig = { ...config, themeCss: mergedExtraCss, choreography: mergedChoreography };
+  const composeConfig = { ...config, themeCss: mergedExtraCss };
   const html = composeDoc(composeConfig, size, data, css);
 
   const slugTitle = slug(config.title || 'narova');
@@ -229,6 +233,7 @@ function composeSceneProject(config, outDir, sceneIdx) {
   const scene = config.scenes[sceneIdx];
   const scData = data.scenes.find(d => d.id === scene.id);
   if (!scData) throw new Error(`composeSceneProject: no data for scene "${scene.id}"`);
+  preflightAuthorJavaScript(config, { data, sceneIndex: sceneIdx });
 
   let mergedExtraCss = config.themeCss || '';
   // Include this scene's cssFile so an isolated span sees the same styles the

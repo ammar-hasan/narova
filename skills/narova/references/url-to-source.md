@@ -24,6 +24,28 @@ It does not replace this document. The agent still does the judgment work:
 classify the source (§1), inspect the authoritative material beyond what a
 single fetch sees (§2), and fill in the claims ledger (§3) before scripting.
 
+### Selected local PDF evidence
+
+For a regular local PDF, make the page choice explicit:
+
+```bash
+narova ingest ./paper.pdf --pages 1,3-5
+```
+
+The page selector always means one-based **physical file-order pages**, not
+printed page labels. It accepts comma-separated indices and ascending ranges,
+preserves their expanded order, and rejects duplicate or ambiguous selections.
+Narova renders only those pages at 144 dpi, writes collision-safe PNG evidence
+and a text sidecar when literal embedded text is available, and records source,
+page, output, parser, renderer, byte, and digest facts in the project ledgers.
+
+This is deliberately a mechanical evidence pass. It does not copy or modify the
+source, access the network, follow links, run PDF actions or JavaScript, unlock
+passwords, perform OCR, infer printed labels, interpret meaning, author claims,
+or decide which material belongs in the video. Inspect every selected PNG,
+compare it with the source, and fill `claims.md` yourself. Select at most 24
+pages per invocation; split a larger review into intentional passes.
+
 ## 1. Classify the source
 
 - **Product, company, or organization site** → brand-led promo/explainer.

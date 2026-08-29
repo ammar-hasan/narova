@@ -1,7 +1,7 @@
 'use strict';
 const { test } = require('node:test');
 const assert = require('node:assert');
-const { composeDoc, escapeHtml, namespaceIds } = require('../src/compose/html');
+const { composeDoc, composeSceneDoc, escapeHtml, namespaceIds } = require('../src/compose/html');
 const { composeData } = require('../src/compose/data');
 
 const config = {
@@ -20,6 +20,12 @@ const size = { w: 640, h: 360 };
 
 function doc() {
   return composeDoc(config, size, composeData(config, timings), '/*css*/');
+}
+
+function inlinedData(html) {
+  const match = html.match(/var DATA = (\{.*\});\nwindow\.__timelines/);
+  assert.ok(match, 'generated document contains one-line DATA JSON');
+  return JSON.parse(match[1]);
 }
 
 test('document starts with the doctype (hyperframes lint requirement)', () => {
@@ -43,6 +49,17 @@ test('scene clips chain and carry class="clip"', () => {
   const h = doc();
   assert.match(h, /<section id="scene-s1" class="clip scene" data-start="0" data-duration="5" data-track-index="1">/);
   assert.match(h, /<section id="scene-s2" class="clip scene" data-start="5" data-duration="4" data-track-index="1">/);
+});
+
+test('isolated documents rebase resolved cue evidence to scene-local time', () => {
+  const data = composeData(config, timings, false);
+  const full = inlinedData(composeDoc({ ...config, captionsEnabled: false }, size, data, ''));
+  const isolated = inlinedData(composeSceneDoc({ ...config, captionsEnabled: false }, 1, size, data, ''));
+  const globalWord = full.scenes[1].sentences[0].words[0];
+  const localWord = isolated.scenes[0].sentences[0].words[0];
+  assert.deepEqual(localWord, { token: '</script>', speaker: 'a', start: 0.1, end: 0.5 });
+  assert.equal(localWord.start, Math.round((globalWord.start - full.scenes[1].start) * 1000) / 1000);
+  assert.equal(localWord.end, Math.round((globalWord.end - full.scenes[1].start) * 1000) / 1000);
 });
 
 test('audio is a direct root child without clip class', () => {
@@ -220,10 +237,13 @@ test('choreography is inlined after the runtime, in the same script block', () =
   const h = composeDoc({ ...config, choreography: CHOREO }, size, composeData(config, timings), '');
   const block = h.slice(h.indexOf('<script>\nvar DATA'), h.indexOf('</script>\n</body>'));
   assert.ok(block.includes(CHOREO), 'choreography must be inlined');
-  // Must land after the timeline is registered, so the built-in animators are
-  // already on `tl` when project code adds to it.
-  assert.ok(block.indexOf(CHOREO) > block.indexOf("window.__timelines['main'] = tl;"),
-    'choreography must follow runtimeScript(), not precede it');
+  // The managed timeline exists before author code, but its public readiness
+  // flips only after synchronous author initialization has completed.
+  assert.ok(block.indexOf(CHOREO) > block.indexOf("Object.defineProperty(window.__timelines, 'main'"),
+    'choreography must follow managed runtime initialization');
+  assert.ok(block.indexOf(CHOREO) < block.lastIndexOf('window.__narovaAuthorState.ready=true'),
+    'timeline readiness must follow authored initialization');
+  assert.match(block, /window\.__narovaAuthorState\.source="config\.choreography"/);
 });
 
 test('no choreography leaves the script block untouched', () => {

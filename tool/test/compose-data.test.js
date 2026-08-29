@@ -51,6 +51,26 @@ test('words group by sentence with speaker + label', () => {
   assert.equal(d.groups[0].words.length, 2);
 });
 
+test('resolved cue evidence stays per scene and independent of caption presentation', () => {
+  const d = composeData({ ...config, captions: { maxWords: 1 } }, timings, false);
+  assert.equal(d.preset, false);
+  assert.equal(d.groups.length, 4, 'caption chunking still follows maxWords');
+  assert.deepEqual(d.scenes[0].sentences, [
+    {
+      sentenceIndex: 0,
+      words: [
+        { token: 'Hello', speaker: 'a', start: 0.16, end: 0.5 },
+        { token: 'world.', speaker: 'a', start: 0.5, end: 1 },
+      ],
+    },
+    {
+      sentenceIndex: 1,
+      words: [{ token: 'Reply.', speaker: 'b', start: 5.2, end: 5.9 }],
+    },
+  ]);
+  assert.equal(d.scenes[1].sentences[0].words[0].start, r3(10.101 + 0.16));
+});
+
 test('each group ends at the next group start or its scene boundary', () => {
   const d = composeData(config, timings);
   // Groups within the same scene: end when the next starts.

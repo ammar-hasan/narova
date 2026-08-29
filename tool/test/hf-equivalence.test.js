@@ -55,6 +55,13 @@ function opaqueBg(color) {
 function buildProject(outDir) {
   fs.mkdirSync(path.join(outDir, 'audio'), { recursive: true });
   silentWav(path.join(outDir, 'audio', 'full.wav'), 6);
+  fs.writeFileSync(path.join(outDir, 'choreography.js'), `
+var cueScene = DATA.scenes.find(function(scene){ return scene.id === 's2'; });
+if (cueScene) {
+  var spokenWord = wordCue(cueScene, 0, 0);
+  tl.set('#scene-s2 .word-cue', { opacity: 0 }, 0);
+  tl.set('#scene-s2 .word-cue', { opacity: 1 }, spokenWord.start);
+}`);
   fs.writeFileSync(path.join(outDir, 'timings.json'), JSON.stringify({
     total: 5,
     s1: { dur: 2, turns: [0.2], words: [{ w: 'One.', t0: 0.2, t1: 0.6, si: 0 }] },
@@ -62,12 +69,13 @@ function buildProject(outDir) {
   }));
   return resolveConfig({
     title: 'HFEquiv', size: '16:9', markers: { reveal: 3.5 }, captions: false,
+    choreography: 'choreography.js',
     voices: { a: { label: 'A', color: '#0ff', backend: 'piper', speaker: 'x' } },
     scenes: [
       { id: 's1', dur: 2, vo: [{ who: 'a', text: 'One.' }],
         body: `${opaqueBg('#1a2030')}<h1 style="position:absolute;inset:0;display:flex;align-items:center;justify-content:center;color:#fff;font-size:90px;margin:0">ONE</h1>` },
       { id: 's2', dur: 3, vo: [{ who: 'a', text: 'Two.' }],
-        body: `${opaqueBg('#241030')}<p class="cue" data-cue="marker:reveal" style="position:absolute;top:12%;left:0;right:0;text-align:center;color:#fff;font-size:64px;font-weight:800;margin:0">REVEALED</p>`,
+        body: `${opaqueBg('#241030')}<p class="cue" data-cue="marker:reveal" style="position:absolute;top:12%;left:0;right:0;text-align:center;color:#fff;font-size:64px;font-weight:800;margin:0">REVEALED</p><p class="word-cue" style="position:absolute;bottom:12%;left:0;right:0;text-align:center;color:#ffcc33;font-size:54px;font-weight:800;margin:0">WORD CUE</p>`,
         three: { camera: { position: [0, 0, 5] }, lights: [{ type: 'ambient', intensity: 1.2 }],
           objects: [{ type: 'cube', size: 1.4, color: '#ffcc33', animate: [
             { property: 'rotation.y', from: 0, to: 6.28, duration: 2, at: 0.5 }] }] } },
@@ -138,8 +146,9 @@ test('HyperFrames: isolated scene-2 frame matches full render at the same relati
 
     // Compare the frame at 2.0s INTO scene 2 (= global 4.0s in the full render).
     // By then: the entrance transition has settled, the marker element has
-    // revealed (marker fires at local 1.5 / global 3.5), and the cube is mid-
-    // rotation at the SAME angle in both (0.75 through its 2s tween).
+    // revealed (marker fires at local 1.5 / global 3.5), the index-addressed
+    // word cue is visible (local 0.2 / global 2.2), and the cube is mid-rotation
+    // at the SAME angle in both (0.75 through its 2s tween).
     const localT = 2.0, globalT = 4.0;
     const fullPng = path.join(out, 'full.png'), spanPng = path.join(out, 'span.png');
     extractFrame(fullMp4, globalT, fullPng);

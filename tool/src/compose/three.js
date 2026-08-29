@@ -271,7 +271,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
   // boot(): wait for the ESM bootstrap (window.THREE) and the GSAP timeline
   // (built after DOM parse) with a bounded number of attempts — an unbounded
   // poll would hang the renderer forever.
-  let js = `(function(){var _try=0;function boot(){var tl=window.__timelines['main'];`;
+  let js = `(function(){var _try=0;function boot(){var tl=window.__narovaBuildingTimeline||(window.__timelines&&window.__timelines['main']);`;
   js += `if(!tl||!window.THREE){if(++_try>200){console.error('narova-three: THREE or GSAP timeline never became ready');return;}setTimeout(boot,50);return;}`;
   js += `var THREE=window.THREE;`;
   js += `var cvs=document.getElementById(${esc('three-' + sceneId)});`;
@@ -535,7 +535,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
   // rather than freezing the composition.
   js += `Promise.all(_pending).then(function(){_render();}).catch(function(){_render();});`;
   js += `setTimeout(_render,3000);`;
-  js += `}boot();})();`;
+  js += `}if(typeof window.__narovaRegisterThreeBoot==='function')window.__narovaRegisterThreeBoot(boot);else (window.__narovaThreeBoots=window.__narovaThreeBoots||[]).push(boot);})();`;
   return js;
 }
 
@@ -596,7 +596,7 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   // Deterministic seed derived from the scene id (same scheme as particles).
   const seed = (hashString('threeModule:' + sceneId) >>> 0);
 
-  let js = `(function(){var _try=0;function boot(){var tl=window.__timelines['main'];`;
+  let js = `(function(){var _try=0;function boot(){var tl=window.__narovaBuildingTimeline||(window.__timelines&&window.__timelines['main']);`;
   js += `if(!tl||!window.THREE){if(++_try>200){console.error('narova-three: THREE or GSAP timeline never became ready');return;}setTimeout(boot,50);return;}`;
   js += `var THREE=window.THREE;`;
   js += `var cvs=document.getElementById(${esc('three-' + sceneId)});`;
@@ -669,11 +669,12 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   js += `var _renderFns=[],_afterRenderFns=[];`;
   js += `function _render(){var i;for(i=0;i<_renderFns.length;i++)_renderFns[i]();renderer.render(scene,camera);for(i=0;i<_afterRenderFns.length;i++)_afterRenderFns[i]();}`;
   js += `function onBeforeRender(fn){if(typeof fn==='function')_renderFns.push(fn);}function onRender(fn){onBeforeRender(fn);}function onAfterRender(fn){if(typeof fn==='function')_afterRenderFns.push(fn);}`;
-  // Author module body. Wrapped so a throw is reported, not swallowed, and
-  // never silently produces a blank canvas.
-  js += `try{`;
+  // Author module body. Its source marker is diagnostic state only: it does not
+  // wrap, rewrite, or constrain the module. An uncaught synchronous exception
+  // poisons timeline readiness instead of being swallowed into a blank canvas.
+  js += `var _authorState=window.__narovaAuthorState;var _authorSource=${esc(`scene "${sceneId}" threeModule`)};if(_authorState)_authorState.source=_authorSource;try{`;
   js += `/* scene.threeModule: ${esc(sceneId)} */\n${moduleContents}\n`;
-  js += `}catch(e){console.error('narova threeModule "${esc(sceneId)}" threw:',e);}`;
+  js += `if(_authorState)_authorState.source=null;}catch(e){if(_authorState&&_authorState.record){_authorState.record(_authorSource,e);console.error('[narova] '+_authorState.describe());}throw e;}`;
   // Frame driver: walk the timeline across the scene span, rendering on seek.
   js += `var T={n:0};tl.to(T,{n:${fmt(sceneDur * 30)},duration:${fmt(sceneDur)},ease:'none',onUpdate:_render},${fmt(sceneStart)});`;
   // Resting frame: wait for any module-pushed async loads, then paint. The
@@ -681,7 +682,7 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   // composition.
   js += `Promise.all(pending).then(_render).catch(_render);`;
   js += `setTimeout(_render,3000);`;
-  js += `}boot();})();`;
+  js += `}if(typeof window.__narovaRegisterThreeBoot==='function')window.__narovaRegisterThreeBoot(boot);else (window.__narovaThreeBoots=window.__narovaThreeBoots||[]).push(boot);})();`;
   return js;
 }
 

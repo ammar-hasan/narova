@@ -1,11 +1,12 @@
 'use strict';
 /* Fast config check: summarize a resolved config and lint scene bodies.
- * No TTS, no browser, no writes — resolveConfig has already thrown on hard
- * errors, so everything here is a warning (exit stays 0).
+ * No TTS, no browser, no writes. Most findings are advisory; browser-authored
+ * JavaScript syntax is a correctness failure because the emitted composition
+ * cannot initialize at all.
  *
  * Modes (second argument to check()):
- *   check(config)          — default: warnings only, exit 0
- *   check(config, {strict:true})  — stricter validation, still exit 0
+ *   check(config)          — default advisories + executable syntax preflight
+ *   check(config, {strict:true})  — stricter advisory validation + preflight
  *   check(config, {release:true}) — all checks, non-pass findings exit 3
  *
  * Release mode elevates: remote assets, unresolved references, unsupported HTML,
@@ -24,6 +25,7 @@ const { isBuiltinBackend, MARKUP_FAMILIES, deliveryCapabilitiesFor } = require('
 const { getSpeechProvider } = require('./providers');
 const creativeIdentity = require('./creative-identity');
 const { assertRegistered } = require('./diagnostic-codes');
+const { preflightAuthorJavaScript } = require('./author-js');
 
 /* Factual-claim sniffing for the grounding rule (references/url-to-source.md
  * §Claims ledger): a stat or superlative in the voiceover must be traceable to
@@ -603,7 +605,7 @@ function releaseGateCode(message) {
  * opts.diagnostics, every finding is appended as { severity, code, message }
  * with the same message text the human output prints. Human output is
  * unchanged; this is a parallel, opt-in channel. */
-function collectDiagnostics(opts, warnings, errors, release) {
+function collectDiagnostics(opts, warnings, errors, release, hardErrors = []) {
   if (!opts.diagnostics) return;
   for (const w of warnings) {
     const code = w.startsWith('clip truncation:') ? 'check.clip-truncation' : 'check.warning';
@@ -613,6 +615,9 @@ function collectDiagnostics(opts, warnings, errors, release) {
     opts.diagnostics.push(release
       ? { severity: 'error', code: assertRegistered(releaseGateCode(e)), message: e }
       : { severity: 'warning', code: assertRegistered('check.warning'), message: e });
+  }
+  for (const e of hardErrors) {
+    opts.diagnostics.push({ severity: 'error', code: assertRegistered('subject.non-pass'), message: e });
   }
 }
 
@@ -624,6 +629,7 @@ function collectDiagnostics(opts, warnings, errors, release) {
 function check(config, opts = {}) {
   const warnings = [];
   const errors = [];
+  const hardErrors = [];
   const release = !!opts.release;
   const strict = release || !!opts.strict;
   const bodyIds = new Set();
@@ -634,6 +640,14 @@ function check(config, opts = {}) {
     return release ? errors.push(full) : warnings.push(full);
   };
   const releaseIssue = (msg) => errors.push(msg);
+
+  // Compile the exact generated browser contexts without running author code.
+  // Syntax is a correctness boundary in every check mode, not a creative gate.
+  try {
+    preflightAuthorJavaScript(config);
+  } catch (error) {
+    hardErrors.push(error.message);
+  }
 
   for (const s of config.scenes) {
     const sceneIds = new Set();
@@ -973,11 +987,12 @@ function check(config, opts = {}) {
   }
 
   // Machine diagnostics (opt-in; no effect on human output below)
-  collectDiagnostics(opts, warnings, errors, release);
+  collectDiagnostics(opts, warnings, errors, release, hardErrors);
 
   // Print
   for (const w of warnings) console.log(`warn: ${w}`);
   for (const e of errors) console.log(`${release ? 'fail' : 'warn'}: ${e}`);
+  for (const e of hardErrors) console.log(`fail: ${e}`);
 
   if (release) {
     if (errors.length) {
@@ -1000,9 +1015,11 @@ function check(config, opts = {}) {
   const walkthroughCount = Object.keys(config.walkthroughs || {}).length;
   const walkthroughSummary = walkthroughCount ? `, ${walkthroughCount} walkthrough${walkthroughCount === 1 ? '' : 's'}` : '';
   const karaokeNote = config.narrationSource?.wordTimings ? `, ${config.narrationSource.wordTimings.length} karaoke cues` : '';
-  console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns${walkthroughSummary}${karaokeNote}, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
+  if (!hardErrors.length) {
+    console.log(`ok: "${config.title}" — ${config.scenes.length} scenes, ${turns} turns${walkthroughSummary}${karaokeNote}, ~${words} words, ≈${est} narration (est. at tempo ${tempo}) (${config.size.w}x${config.size.h}, ${backends})`);
+  }
 
-  return !(release && errors.length > 0);
+  return hardErrors.length === 0 && !(release && errors.length > 0);
 }
 
 /* ---- critique: opt-in creative craft assessment ------------------------------

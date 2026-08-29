@@ -60,6 +60,25 @@ try {
     throw new Error(`packed CLI scaffold did not check cleanly:\n${checked.stdout}`);
   }
 
+  // Simulate a compatible install where the PDF optional is unavailable. PDF
+  // intake must fail locally and explicitly, without runtime acquisition or
+  // partial evidence. (Some npm versions retain nested optionals even with
+  // --omit=optional, so make this disposable fixture state exact.)
+  fs.rmSync(path.join(
+    prefix, 'lib', 'node_modules', '@narova', 'narova', 'node_modules', 'pdfjs-dist',
+  ), { recursive: true, force: true });
+  const pdf = path.join(scratch, 'source.pdf');
+  fs.writeFileSync(pdf, '%PDF-1.7\n');
+  const unavailable = spawnSync(bin('narova'), [
+    'ingest', pdf, '--pages', '1', '--project', project,
+  ], { encoding: 'utf8', env: process.env });
+  if (unavailable.status !== 1 || !/PDF ingest renderer is unavailable/.test(unavailable.stderr)) {
+    throw new Error(`optional-free PDF ingest did not fail clearly:\n${unavailable.stdout}\n${unavailable.stderr}`);
+  }
+  if (fs.readdirSync(path.join(project, 'assets')).some(file => /\.(png|txt)$/.test(file))) {
+    throw new Error('optional-free PDF ingest published partial page evidence');
+  }
+
   process.stdout.write(
     `packed package smoke test ok: ${report.name}@${report.version}, ` +
     `${report.size} compressed bytes\n`,

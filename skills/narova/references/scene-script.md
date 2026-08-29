@@ -480,6 +480,13 @@ Use `tl` only for deliberately composition-global choreography, with `at()` or
 the `narova.at*()` helpers. Given the same project state + seed + assets,
 output reproduces exactly.
 
+The raw module is compiled without execution during `narova check` and again
+before browser composition. An uncaught synchronous initialization error is
+attributed to that scene and fails rendering; a module may still catch and
+handle its own expected errors normally. This is executable feedback only—raw
+Three.js remains an unrestricted escape hatch, with no added API, shader,
+complexity, or aesthetic gate.
+
 `scene.three` config (camera, toneMapping, fog, background, lights) is still
 honored as the shell when both are present, so you can mix declarative scene
 setup with raw code. `scene.threeModule` and `scene.threeFile` (a JSON
