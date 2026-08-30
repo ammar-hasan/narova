@@ -9,6 +9,7 @@
 
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { sh, probe, which, ensureDir } = require('./util');
 
 /* ---- preset catalog ------------------------------------------------------- */
@@ -222,117 +223,376 @@ function generateThumbnail(inputPath, preset, outDir) {
 
 /* ---- deliverable render --------------------------------------------------- */
 
-/* Render one deliverable: HyperFrames render → ffmpeg post-process → thumbnail.
- * Returns { mp4, seconds, thumbnail }. */
-function renderDeliverable(hfDir, outDir, preset, opts = {}) {
-  const log = opts.log || console.log;
-  const baseName = (opts.name || 'video').replace(/\.mp4$/i, '');
-  const presetId = opts.presetId || 'default';
-  const suffix = presetId === 'narova-standard' ? '' : `-${presetId}`;
-  const outName = `${baseName}${suffix}.mp4`;
+/* Stable identity serialization. Objects are sorted recursively so preset IDs
+ * and labels can remain publication metadata while every active execution
+ * field participates in equality (NAR-017-061). */
+function stableJson(value) {
+  if (Array.isArray(value)) return `[${value.map(stableJson).join(',')}]`;
+  if (value && typeof value === 'object') {
+    return `{${Object.keys(value).sort().map(k => `${JSON.stringify(k)}:${stableJson(value[k])}`).join(',')}}`;
+  }
+  return JSON.stringify(value);
+}
 
-  // Step 1: HyperFrames render (source-quality).
+function deliverySourceIdentity(preset, opts = {}) {
+  return stableJson({
+    version: 1,
+    renderer: opts.renderer || 'hyperframes',
+    compositionIdentity: opts.compositionIdentity || null,
+    fps: preset.fps || null,
+    hf: preset.hf || {},
+    videoFrameFormat: opts.videoFrameFormat || null,
+  });
+}
+
+function deliveryEncodeIdentity(preset, sourceIdentity, opts = {}) {
+  return stableJson({
+    version: 1,
+    sourceIdentity,
+    width: preset.width || null,
+    height: preset.height || null,
+    enc: preset.enc || {},
+    safeArea: opts.safeAreaGuides && preset.safeArea ? preset.safeArea : null,
+  });
+}
+
+function deliveryThumbnailIdentity(preset, encodeIdentity) {
+  if (!preset.thumbnail) return null;
+  return stableJson({ version: 1, encodeIdentity, thumbnail: preset.thumbnail });
+}
+
+function orderedPresets(config, opts = {}) {
+  const selected = Array.isArray(opts.presets)
+    ? opts.presets
+    : presetsFor(config, opts.deliverables === true ? null : opts.deliverables);
+  const standard = selected.find(p => p.id === 'narova-standard');
+  return standard
+    ? [standard, ...selected.filter(p => p.id !== 'narova-standard')]
+    : [...selected];
+}
+
+function memberPath(outDir, baseName, presetId) {
+  const suffix = presetId === 'narova-standard' ? '' : `-${presetId}`;
+  return path.join(outDir, `${baseName}${suffix}.mp4`);
+}
+
+/* Publish an independent named member without exposing a half-written copy. */
+function publishCopy(source, destination) {
+  if (path.resolve(source) === path.resolve(destination)) return destination;
+  const temporary = `${destination}.copy-${process.pid}`;
+  try {
+    fs.copyFileSync(source, temporary);
+    fs.renameSync(temporary, destination);
+  } finally {
+    try { fs.rmSync(temporary, { force: true }); } catch {}
+  }
+  return destination;
+}
+
+function fileDigest(file) {
+  return crypto.createHash('sha256').update(fs.readFileSync(file)).digest('hex');
+}
+
+function deliveryStatePath(outDir, baseName) {
+  return path.join(outDir, `.${baseName}-delivery-identities.json`);
+}
+
+function readDeliveryState(outDir, baseName) {
+  try {
+    const value = JSON.parse(fs.readFileSync(deliveryStatePath(outDir, baseName), 'utf8'));
+    return value && value.version === 1 && value.members ? value : null;
+  } catch {
+    return null;
+  }
+}
+
+function priorArtifactIsValid(file, record) {
+  if (!record || !fs.existsSync(file)) return false;
+  try {
+    const stat = fs.statSync(file);
+    if (!stat.isFile() || stat.size <= 0 || stat.size !== record.bytes) return false;
+    if (fileDigest(file) !== record.sha256) return false;
+    if (record.seconds != null) {
+      const seconds = probe(file);
+      if (!Number.isFinite(seconds) || Math.abs(seconds - record.seconds) > 0.08) return false;
+    }
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+function writeDeliveryState(outDir, baseName, members) {
+  const destination = deliveryStatePath(outDir, baseName);
+  const temporary = `${destination}.tmp-${process.pid}`;
+  try {
+    fs.writeFileSync(temporary, JSON.stringify({ version: 1, members }, null, 2));
+    fs.renameSync(temporary, destination);
+  } finally {
+    try { fs.rmSync(temporary, { force: true }); } catch {}
+  }
+}
+
+function processDeliverableMembers(presets, outDir, sourceFor, opts = {}) {
+  const log = opts.log || console.log;
+  const baseName = path.basename(opts.name || 'video.mp4', '.mp4');
+  const encoded = new Map();
+  const thumbnails = new Map();
+  const previous = readDeliveryState(outDir, baseName);
+  // Preserve unselected member identities as ordinary reusable history. Their
+  // files are revalidated before any future reuse, and a changed composition
+  // identity makes them immediate misses.
+  const nextMembers = previous ? { ...previous.members } : {};
+  const results = [];
+
+  for (const preset of presets) {
+    const source = sourceFor(preset);
+    const destination = memberPath(outDir, baseName, preset.id);
+    const encodeIdentity = deliveryEncodeIdentity(
+      preset, source.identity, { safeAreaGuides: opts.safeAreaGuides });
+    const priorEncode = encoded.get(encodeIdentity);
+    const priorMember = previous && previous.members[preset.id];
+    let seconds;
+    let encodeExecution;
+    let sourceExecution;
+
+    log(`  deliverable: ${preset.label} (${preset.width}x${preset.height}, ${preset.enc?.codec || 'copy'}, ${preset.enc?.videoBitrate || '-'})`);
+    // Prefer work already selected or performed in THIS attempt. A valid prior
+    // member may have been encoded in another process and need not be byte-
+    // identical to a freshly repaired equal member, even when both decode the
+    // same. Copying the first current-attempt identity keeps the published set
+    // byte-identical as NAR-017-061 requires.
+    if (priorEncode) {
+      publishCopy(priorEncode.mp4, destination);
+      seconds = priorEncode.seconds;
+      encodeExecution = { status: 'reused', from: priorEncode.id };
+      // Preserve the render origin independently of the encode donor. If the
+      // donor itself reused a scene-cache or previous-build source, that is the
+      // origin this member reused too; otherwise the donor performed it.
+      sourceExecution = priorEncode.sourceExecution?.status === 'reused'
+        ? { ...priorEncode.sourceExecution }
+        : { status: 'reused', from: priorEncode.id };
+      log(`    encode reused — same execution identity as ${priorEncode.id}`);
+    } else if (source.reusableAcrossBuilds !== false
+        && priorMember && priorMember.encodeIdentity === encodeIdentity
+        && priorArtifactIsValid(destination, priorMember.mp4)) {
+      seconds = priorMember.mp4.seconds;
+      encodeExecution = { status: 'reused', from: preset.id, attempt: 'previous-build' };
+      sourceExecution = { status: 'reused', from: preset.id, attempt: 'previous-build' };
+      encoded.set(encodeIdentity, {
+        id: preset.id, mp4: destination, seconds, sourceExecution,
+      });
+      log('    encode reused — validated previous build identity and digest');
+    } else {
+      const temporary = destination.replace(/\.mp4$/i, `.enc-${process.pid}.mp4`);
+      try {
+        const sourceMp4 = typeof source.getMp4 === 'function'
+          ? source.getMp4(preset.id)
+          : source.mp4;
+        postProcess(sourceMp4, temporary, preset, { safeAreaGuides: opts.safeAreaGuides });
+        fs.renameSync(temporary, destination);
+      } finally {
+        try { fs.rmSync(temporary, { force: true }); } catch {}
+      }
+      seconds = probe(destination);
+      encodeExecution = { status: 'performed', from: null };
+      sourceExecution = preset.id === source.performedBy
+        ? (source.execution || { status: 'performed', from: null })
+        : { status: 'reused', from: source.performedBy };
+      encoded.set(encodeIdentity, {
+        id: preset.id, mp4: destination, seconds, sourceExecution,
+      });
+    }
+
+    if (typeof opts.artifact === 'function') {
+      opts.artifact(destination, 'deliverable');
+      // Preserve the canonical-video role historically emitted by the
+      // browserless delivery path. HyperFrames gains only an additive role for
+      // the same committed Standard path, keeping machine consumers stable.
+      if (preset.id === 'narova-standard') opts.artifact(destination, 'video');
+    }
+
+    let thumbnail = null;
+    let thumbnailExecution = { status: 'not-applicable', from: null };
+    const thumbnailIdentity = deliveryThumbnailIdentity(preset, encodeIdentity);
+    if (thumbnailIdentity) {
+      const priorThumbnail = thumbnails.get(thumbnailIdentity);
+      const expectedThumbnail = destination.replace(/\.mp4$/i, '.jpg');
+      if (priorThumbnail) {
+        publishCopy(priorThumbnail.path, expectedThumbnail);
+        thumbnail = expectedThumbnail;
+        thumbnailExecution = { status: 'reused', from: priorThumbnail.id };
+        log(`    thumbnail reused — same execution identity as ${priorThumbnail.id}`);
+      } else if (source.reusableAcrossBuilds !== false
+          && priorMember && priorMember.thumbnailIdentity === thumbnailIdentity
+          && priorArtifactIsValid(expectedThumbnail, priorMember.thumbnail)) {
+        thumbnail = expectedThumbnail;
+        thumbnailExecution = { status: 'reused', from: preset.id, attempt: 'previous-build' };
+        thumbnails.set(thumbnailIdentity, { id: preset.id, path: thumbnail });
+        log('    thumbnail reused — validated previous build identity and digest');
+      } else {
+        thumbnail = generateThumbnail(destination, preset, outDir);
+        thumbnailExecution = { status: 'performed', from: null };
+        thumbnails.set(thumbnailIdentity, { id: preset.id, path: thumbnail });
+      }
+      if (thumbnail && typeof opts.artifact === 'function') opts.artifact(thumbnail, 'thumbnail');
+      if (thumbnail) log(`thumbnail -> ${thumbnail}`);
+    }
+
+    if (sourceExecution.status === 'reused') {
+      const origin = sourceExecution.attempt === 'previous-build'
+        ? `${sourceExecution.from} from previous build`
+        : sourceExecution.from;
+      log(`    source render reused — ${origin}`);
+    }
+    log(`deliverable -> ${destination}  (${seconds.toFixed(1)}s, ${preset.label})`);
+    results.push({
+      id: preset.id,
+      mp4: destination,
+      seconds,
+      thumbnail,
+      execution: {
+        source: sourceExecution,
+        encode: encodeExecution,
+        thumbnail: thumbnailExecution,
+      },
+    });
+    nextMembers[preset.id] = {
+      sourceIdentity: source.identity,
+      encodeIdentity,
+      mp4: {
+        bytes: fs.statSync(destination).size,
+        sha256: fileDigest(destination),
+        seconds,
+      },
+      thumbnailIdentity,
+      thumbnail: thumbnail ? {
+        bytes: fs.statSync(thumbnail).size,
+        sha256: fileDigest(thumbnail),
+        seconds: null,
+      } : null,
+    };
+  }
+  writeDeliveryState(outDir, baseName, nextMembers);
+  return results;
+}
+
+function renderDeliverySource(hfDir, outDir, preset, sourceIndex, opts = {}) {
+  const sourceMp4 = path.join(outDir, `.narova-delivery-source-${process.pid}-${sourceIndex}.mp4`);
   const hf = preset.hf || {};
-  const args = ['render', '--output', path.join('..', outName)];
+  const args = ['render', '--output', path.relative(hfDir, sourceMp4)];
   if (opts.videoFrameFormat) args.push('--video-frame-format', opts.videoFrameFormat);
   if (preset.fps) args.push('--fps', String(preset.fps));
   if (hf.quality) args.push('--quality', hf.quality);
   if (hf.format) args.push('--format', hf.format);
   if (hf.resolution) args.push('--resolution', hf.resolution);
-
   const { runHf } = require('./hf');
-  runHf(args, hfDir);
-
-  const sourceMp4 = path.join(outDir, outName);
-
-  // Step 2: ffmpeg post-process for delivery encode.
-  // Always post-process to a temp path (never in-place — ffmpeg can't
-  // read and write the same file).
-  const tempMp4 = path.join(outDir, `${baseName}${suffix}-enc.mp4`);
-
-  const hasEncode = preset.enc && preset.enc.codec === 'h264';
-  const hasLoudness = preset.enc && preset.enc.loudness;
-  const hasSafeArea = opts.safeAreaGuides && preset.safeArea;
-
-  if (hasEncode || hasLoudness || hasSafeArea) {
-    postProcess(sourceMp4, tempMp4, preset, { safeAreaGuides: opts.safeAreaGuides });
-    try { fs.unlinkSync(sourceMp4); } catch {}
-    try { fs.renameSync(tempMp4, sourceMp4); } catch {}
-  }
-
-  const mp4 = fs.existsSync(sourceMp4) ? sourceMp4 : (fs.existsSync(tempMp4) ? tempMp4 : null);
-  if (!mp4) throw new Error(`deliverable ${outName} not found after render`);
-  if (typeof opts.artifact === 'function') opts.artifact(mp4, 'deliverable');
-  const seconds = probe(mp4);
-
-  // Step 3: Thumbnail.
-  let thumbnail = null;
-  if (preset.thumbnail) {
-    thumbnail = generateThumbnail(mp4, preset, outDir);
-    if (thumbnail && typeof opts.artifact === 'function') opts.artifact(thumbnail, 'thumbnail');
-    if (thumbnail) log(`thumbnail -> ${thumbnail}`);
-  }
-
-  log(`deliverable -> ${mp4}  (${seconds.toFixed(1)}s, ${preset.label})`);
-  return { mp4, seconds, thumbnail };
-}
-
-/* Render all deliverable presets for a project. */
-function buildDeliverables(config, hfDir, outDir, opts = {}) {
-  const log = opts.log || console.log;
-  const explicitDeliverables = opts.deliverables === true ? null : opts.deliverables;
-  const presets = presetsFor(config, explicitDeliverables);
-  const results = [];
-
-  // Always do narova-standard first (it's the quickest baseline render).
-  const standard = presets.find(p => p.id === 'narova-standard');
-  const rest = presets.filter(p => p.id !== 'narova-standard');
-
-  const ordered = standard ? [standard, ...rest] : [...rest];
-
-  for (const p of ordered) {
-    log(`  deliverable: ${p.label} (${p.width}x${p.height}, ${p.enc?.codec || 'copy'}, ${p.enc?.videoBitrate || '-'})`);
-    const r = renderDeliverable(hfDir, outDir, p, { ...opts, presetId: p.id });
-    results.push({ id: p.id, ...r });
-  }
-
-  return results;
-}
-
-/* Post-process one already-rendered source for every requested delivery
- * profile. No-browser renders once at the project frame size; unlike HyperFrames,
- * it does not need a browser render per profile. */
-function buildDeliverablesFromSource(config, sourceMp4, outDir, opts = {}) {
-  const log = opts.log || console.log;
-  const explicit = opts.deliverables === true ? null : opts.deliverables;
-  const presets = presetsFor(config, explicit);
-  const standard = presets.find(p => p.id === 'narova-standard');
-  const ordered = standard ? [standard, ...presets.filter(p => p.id !== 'narova-standard')] : presets;
-  const baseName = path.basename(opts.name || sourceMp4, '.mp4');
-  const results = [];
-
-  for (const preset of ordered) {
-    const suffix = preset.id === 'narova-standard' ? '' : `-${preset.id}`;
-    const destination = path.join(outDir, `${baseName}${suffix}.mp4`);
-    const temporary = path.join(outDir, `${baseName}${suffix}-enc.mp4`);
-    log(`  deliverable: ${preset.label} (${preset.width}x${preset.height}, ${preset.enc?.codec || 'copy'}, ${preset.enc?.videoBitrate || '-'})`);
-    postProcess(sourceMp4, temporary, preset, { safeAreaGuides: opts.safeAreaGuides });
-    if (destination === sourceMp4) {
-      fs.unlinkSync(sourceMp4);
-      fs.renameSync(temporary, sourceMp4);
-    } else {
-      fs.renameSync(temporary, destination);
+  try {
+    runHf(args, hfDir);
+    if (!fs.existsSync(sourceMp4) || fs.statSync(sourceMp4).size === 0) {
+      throw new Error(`delivery source render missing for ${preset.id}`);
     }
-    const mp4 = destination === sourceMp4 ? sourceMp4 : destination;
-    if (typeof opts.artifact === 'function') opts.artifact(mp4, 'deliverable');
-    const seconds = probe(mp4);
-    const thumbnail = preset.thumbnail ? generateThumbnail(mp4, preset, outDir) : null;
-    if (thumbnail && typeof opts.artifact === 'function') opts.artifact(thumbnail, 'thumbnail');
-    if (thumbnail) log(`thumbnail -> ${thumbnail}`);
-    log(`deliverable -> ${mp4}  (${seconds.toFixed(1)}s, ${preset.label})`);
-    results.push({ id: preset.id, mp4, seconds, thumbnail });
+    return sourceMp4;
+  } catch (error) {
+    try { fs.rmSync(sourceMp4, { force: true }); } catch {}
+    throw error;
   }
-  return results;
+}
+
+/* Render one deliverable through the same identity-minimal path as a set. */
+function renderDeliverable(hfDir, outDir, preset, opts = {}) {
+  const presetId = opts.presetId || preset.id || 'default';
+  const [result] = buildDeliverables({}, hfDir, outDir, {
+    ...opts, presets: [{ id: presetId, ...preset }],
+  });
+  const { id, ...withoutId } = result;
+  return withoutId;
+}
+
+/* Render all HyperFrames deliverables. Equal source identities render once;
+ * equal post-process identities encode once and publish independent copies. */
+function buildDeliverables(config, hfDir, outDir, opts = {}) {
+  const presets = orderedPresets(config, opts);
+  const sources = new Map();
+  const sourceFiles = [];
+  try {
+    return processDeliverableMembers(presets, outDir, preset => {
+      const identity = deliverySourceIdentity(preset, {
+        renderer: 'hyperframes', videoFrameFormat: opts.videoFrameFormat,
+        compositionIdentity: opts.compositionIdentity,
+      });
+      // Pipeline callers may supply an already-rendered source for one exact
+      // identity while leaving all other identities on the ordinary lazy
+      // HyperFrames path. This keeps one ordered publication loop and its
+      // partial-failure boundary intact.
+      const supplied = typeof opts.sourceFor === 'function'
+        ? opts.sourceFor(preset, identity)
+        : null;
+      if (supplied) return supplied;
+      let source = sources.get(identity);
+      if (!source) {
+        const sourceIndex = sources.size;
+        source = {
+          identity,
+          reusableAcrossBuilds: opts.compositionIdentity != null,
+          mp4: null,
+          performedBy: null,
+          execution: null,
+          getMp4(requestedBy) {
+            if (!this.mp4) {
+              this.mp4 = renderDeliverySource(
+                hfDir, outDir, preset, sourceIndex, opts);
+              this.performedBy = requestedBy;
+              this.execution = { status: 'performed', from: null };
+              sourceFiles.push(this.mp4);
+            }
+            return this.mp4;
+          },
+        };
+        sources.set(identity, source);
+      }
+      return source;
+    }, opts);
+  } finally {
+    for (const file of sourceFiles) {
+      try { fs.rmSync(file, { force: true }); } catch {}
+    }
+  }
+}
+
+/* Post-process one immutable already-rendered source for requested profiles.
+ * If the source is also the Standard destination, stage it before publishing
+ * any member so later profiles never derive from Standard's padded output. */
+function buildDeliverablesFromSource(config, sourceMp4, outDir, opts = {}) {
+  const presets = orderedPresets(config, opts);
+  const baseName = path.basename(opts.name || sourceMp4, '.mp4');
+  const collides = presets.some(p => path.resolve(memberPath(outDir, baseName, p.id)) === path.resolve(sourceMp4));
+  let immutableSource = sourceMp4;
+  if (collides) {
+    immutableSource = path.join(outDir, `.${baseName}-delivery-source-${process.pid}.mp4`);
+    fs.copyFileSync(sourceMp4, immutableSource);
+  }
+  const identity = opts.sourceIdentity || stableJson({
+    version: 1,
+    renderer: opts.renderer || 'supplied-source',
+    source: {
+      path: path.resolve(sourceMp4),
+      bytes: fs.statSync(immutableSource).size,
+      sha256: fileDigest(immutableSource),
+    },
+  });
+  const performedBy = presets.length ? presets[0].id : null;
+  try {
+    return processDeliverableMembers(presets, outDir, () => ({
+      identity, mp4: immutableSource, performedBy,
+      reusableAcrossBuilds: true,
+      execution: opts.sourceExecution || { status: 'performed', from: null },
+    }), opts);
+  } finally {
+    if (collides) {
+      try { fs.rmSync(immutableSource, { force: true }); } catch {}
+    }
+  }
 }
 
 /* ---- Optional compressed companion (NAR-017-058..060) -----------------
@@ -454,6 +714,9 @@ module.exports = {
   PLATFORM_TO_PRESET,
   presetFor,
   presetsFor,
+  deliverySourceIdentity,
+  deliveryEncodeIdentity,
+  deliveryThumbnailIdentity,
   buildFfmpegArgs,
   postProcess,
   generateThumbnail,

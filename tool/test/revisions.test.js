@@ -38,6 +38,14 @@ test('revision manifest identity ignores additive toolchain-version evidence', (
   assert.notEqual(rev.manifestIdentity(base), rev.manifestIdentity(changedVersions));
 });
 
+test('post-synthesis manifest identity ignores the volatile synth timestamp', () => {
+  const base = { stages: { synth: '2026-08-30T10:00:00.000Z' }, scenes: [{ id: 's', duration: 1 }] };
+  const later = { stages: { synth: '2026-08-30T11:00:00.000Z' }, scenes: [{ id: 's', duration: 1 }] };
+  assert.equal(rev.manifestIdentity(base), rev.manifestIdentity(later));
+  later.scenes[0].duration = 1.1;
+  assert.notEqual(rev.manifestIdentity(base), rev.manifestIdentity(later));
+});
+
 const HAS_FFMPEG = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status === 0;
 let HAS_CANVAS = false;
 try { require.resolve('@napi-rs/canvas'); HAS_CANVAS = true; } catch {}
@@ -256,6 +264,29 @@ test('rebuilt-by-design artifacts are named, not counted as reuse or misses', ()
   assert.ok(names.includes('full.wav'));
   assert.ok(names.includes('mix.wav'));
   assert.ok(names.includes('2 delivery member'));
+});
+
+test('measured reuse records performed and reused delivery execution separately', () => {
+  const m = rev.measuredReuseRecord({
+    outDir: tmp(), manifest: { scenes: [] }, previous: null, renderReuse: null,
+    deliverableCount: 3,
+    deliveryExecution: [
+      { id: 'narova-standard', execution: {
+        source: { status: 'performed', from: null }, encode: { status: 'performed', from: null },
+      } },
+      { id: 'reels-1080p', execution: {
+        source: { status: 'reused', from: 'narova-standard' }, encode: { status: 'performed', from: null },
+      } },
+      { id: 'shorts-1080p', execution: {
+        source: { status: 'reused', from: 'narova-standard' }, encode: { status: 'reused', from: 'reels-1080p' },
+      } },
+    ],
+  });
+  assert.equal(m.delivery.sourceRendersPerformed, 1);
+  assert.equal(m.delivery.sourceRendersReused, 2);
+  assert.equal(m.delivery.encodesPerformed, 2);
+  assert.equal(m.delivery.encodesReused, 1);
+  assert.match(rev.formatMeasuredSummary(m), /delivery source renders 1 performed\/2 reused/);
 });
 
 test('record contents carry every NAR-009-025 field', () => {

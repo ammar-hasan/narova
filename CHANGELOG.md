@@ -6,6 +6,26 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.46.0] - 2026-08-30
+
+### Changed
+
+- **Trustworthy delivery execution reuse.** Multi-preset and repeated delivery
+  now performs each proven source render, encode, and thumbnail operation once,
+  then publishes every requested member under its existing deterministic name.
+  Reuse requires exact execution identity and validates prior regular files by
+  recorded size, SHA-256, and duration before trusting them; missing, changed,
+  or uncertain evidence rebuilds safely. Source, encode, and thumbnail reuse
+  are attributed separately, the supplied project-size source remains
+  immutable across members, and equivalent requested members remain
+  independent files with byte-identical content.
+- **Delivery uses the existing render cache.** The common HyperFrames delivery
+  source now follows Narova's dependency-aware scene or whole-video cache path.
+  Project-global choreography keeps its conservative whole-video treatment,
+  unusual authored work remains valid even when it rebuilds, and no creative
+  choice, style, provider, renderer capability, output contract, or authoring
+  restriction was added.
+
 ## [0.45.0] - 2026-08-30
 
 ### Added
@@ -2198,7 +2218,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.45.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.46.0...HEAD
+[0.46.0]: https://github.com/ammar-hasan/narova/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/ammar-hasan/narova/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/ammar-hasan/narova/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/ammar-hasan/narova/compare/v0.42.0...v0.43.0

@@ -16,6 +16,7 @@ const { threeSetupJs, threeSceneBody, threeModuleSetupJs, threeModuleSceneBody, 
 const { resolveElementsScene, validateElements, hasElements } = require('../src/compose/elements');
 const { composeDoc } = require('../src/compose/html');
 const { orbitCamera, panCamera } = require('../src/compose/camera-dsl');
+const hf = require('../src/hf');
 
 const VISUAL = {
   type: 'stack',
@@ -344,6 +345,97 @@ test('no-browser provider renders a real browserless MP4 with local audio', { ti
   assert.ok(fs.existsSync(path.join(proof.dir, 'contact-sheet.jpg')),
     'browserless proof review must include a discoverable contact sheet');
   assert.equal(fs.readdirSync(proof.dir).filter(file => file.endsWith('.png')).length, 2);
+});
+
+test('mixed HyperFrames delivery identities keep insertion order and use a composed project', { timeout: 60000 }, t => {
+  const ffmpeg = spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' });
+  if (ffmpeg.status !== 0) { t.skip('ffmpeg not installed'); return; }
+
+  const tempRoot = path.join(process.cwd(), 'out', 'test-tmp');
+  fs.mkdirSync(tempRoot, { recursive: true });
+  const project = fs.mkdtempSync(path.join(tempRoot, 'narova-hf-delivery-order-'));
+  const out = path.join(project, 'out');
+  const audio = path.join(project, 'narration.wav');
+  const spanFixture = path.join(project, 'span.mp4');
+  const sourceFixture = path.join(project, 'source.mp4');
+  const words = path.join(project, 'words.json');
+  fs.writeFileSync(words, JSON.stringify([{
+    start: 0.05, end: 1.0, text: 'Ordered delivery.',
+    words: [{ text: 'Ordered', start: 0.05, end: 0.25 },
+      { text: 'delivery.', start: 0.28, end: 1.0 }],
+  }]));
+  assert.equal(spawnSync('ffmpeg', [
+    '-y', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'sine=frequency=330:duration=1.2', '-ar', '48000', '-ac', '1', audio,
+  ]).status, 0);
+  assert.equal(spawnSync('ffmpeg', [
+    '-y', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=c=#123456:s=160x90:d=1.2:r=30',
+    '-an', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', spanFixture,
+  ]).status, 0);
+  assert.equal(spawnSync('ffmpeg', [
+    '-y', '-loglevel', 'error', '-f', 'lavfi',
+    '-i', 'color=c=#123456:s=160x90:d=1.2:r=30', '-i', audio,
+    '-shortest', '-c:v', 'libx264', '-pix_fmt', 'yuv420p', '-c:a', 'aac', sourceFixture,
+  ]).status, 0);
+
+  const renderer = getRenderer('hyperframes');
+  const originalRenderSpans = renderer.renderSpans;
+  const originalRunHf = hf.runHf;
+  const directCwds = [];
+  renderer.renderSpans = (config, renderOut, spans) => {
+    for (const span of spans) {
+      fs.mkdirSync(path.dirname(span.spanFile), { recursive: true });
+      fs.copyFileSync(spanFixture, span.spanFile);
+    }
+    return { dir: renderer.compose(config, renderOut).dir, spans };
+  };
+  hf.runHf = (args, cwd) => {
+    directCwds.push(cwd);
+    const output = args[args.indexOf('--output') + 1];
+    fs.copyFileSync(sourceFixture, path.resolve(cwd, output));
+  };
+
+  try {
+    const config = resolveConfig({
+      title: 'Mixed delivery order', renderer: 'hyperframes', size: { w: 160, h: 90 },
+      narration: { file: 'narration.wav', wordTimings: 'words.json' },
+      voices: { a: { speaker: 'custom-file', color: '#ffffff' } }, chrome: false,
+      scenes: [{ id: 'one', dur: 1.2,
+        vo: [{ who: 'a', text: 'Ordered delivery.' }],
+        body: '<main style="background:#123456;color:white">ORDERED</main>' }],
+    }, {}, project);
+    const logs = [];
+    const result = build(config, {
+      out, projectDir: project, deliverables: ['whatsapp-compressed', 'reels-1080p'],
+      log: line => logs.push(line),
+    });
+    assert.deepEqual(result.deliverables.map(item => item.id), [
+      'narova-standard', 'whatsapp-compressed', 'reels-1080p',
+    ]);
+    const publications = logs.filter(line => line.startsWith('deliverable ->'));
+    assert.match(publications[0], /video\.mp4/);
+    assert.match(publications[1], /whatsapp-compressed/);
+    assert.match(publications[2], /reels-1080p/);
+    assert.equal(directCwds.length, 1, 'only the distinct 24fps source renders directly');
+    assert.match(path.relative(out, directCwds[0]), /^hf-/,
+      'direct source render cwd must be the composed HyperFrames project');
+    assert.ok(fs.existsSync(path.join(directCwds[0], 'index.html')));
+
+    hf.runHf = () => { throw new Error('distinct source failed'); };
+    assert.throws(() => build(config, {
+      out, projectDir: project, name: 'partial.mp4',
+      deliverables: ['whatsapp-compressed', 'reels-1080p'], log: () => {},
+    }), /distinct source failed/);
+    assert.ok(fs.existsSync(path.join(out, 'partial.mp4')),
+      'Standard commits before the failing distinct member');
+    assert.equal(fs.existsSync(path.join(out, 'partial-reels-1080p.mp4')), false,
+      'a later common member must remain untouched after the earlier failure');
+  } finally {
+    renderer.renderSpans = originalRenderSpans;
+    hf.runHf = originalRunHf;
+    fs.rmSync(project, { recursive: true, force: true });
+  }
 });
 
 test('no-browser selective spans create clip extraction storage before ffmpeg writes', { timeout: 30000 }, t => {

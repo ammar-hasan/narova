@@ -23,7 +23,12 @@ const { narration } = require('./schema');
 const { writeCaptions } = require('./captions');
 const { getRenderer } = require('./renderers');
 const { compile, read, mergeTimings, hashFile } = require('./manifest');
-const { buildDeliverables } = require('./exports');
+const {
+  buildDeliverables,
+  buildDeliverablesFromSource,
+  deliverySourceIdentity,
+  presetsFor,
+} = require('./exports');
 const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
 const revisions = require('./revisions');
@@ -436,28 +441,98 @@ function build(config, opts = {}) {
     log(`  (${opts.deliverables === true ? 'all presets' : opts.deliverables})`);
     let results;
     let projectDir;
-    let renderReuse = null; // span reuse is not applicable on per-preset paths
+    let renderReuse = null;
+    const sourceExecutionFromReuse = reuse => {
+      const invocationCount = reuse && reuse.invocations
+        ? Number(reuse.invocations.spans || 0) + Number(reuse.invocations.full || 0)
+        : null;
+      return (reuse && (reuse.wholeVideoReused === true || invocationCount === 0))
+        ? { status: 'reused', from: 'scene-cache' }
+        : { status: 'performed', from: null };
+    };
     if (selectedRenderer.name === 'hyperframes') {
-      const composed = selectedRenderer.compose(cc, outDir);
-      projectDir = composed.dir;
-      artifact(projectDir, 'renderer-project');
-      results = buildDeliverables(cc, composed.dir, outDir, {
-        ...opts,
-        log,
-        safeAreaGuides: opts.safeAreaGuides,
-        videoFrameFormat: hasWalkthroughs ? 'png' : null,
-      });
+      const videoFrameFormat = hasWalkthroughs ? 'png' : null;
+      const compositionIdentity = revisions.manifestIdentity(manifest);
+      const selectedPresets = presetsFor(
+        cc, opts.deliverables === true ? null : opts.deliverables);
+
+      // Walkthrough frame extraction is an explicit source-render input that
+      // the current scene-span provider cannot yet reproduce selectively. Keep
+      // that path grouped by exact delivery identity but outside scene reuse.
+      if (hasWalkthroughs) {
+        const composed = selectedRenderer.compose(cc, outDir);
+        projectDir = composed.dir;
+        artifact(projectDir, 'renderer-project');
+        results = buildDeliverables(cc, composed.dir, outDir, {
+          ...opts, presets: selectedPresets, log, artifact,
+          safeAreaGuides: opts.safeAreaGuides, videoFrameFormat,
+          compositionIdentity,
+        });
+      } else {
+        const standard = selectedPresets.find(p => p.id === 'narova-standard');
+        const commonIdentity = deliverySourceIdentity(standard, {
+          renderer: 'hyperframes', videoFrameFormat, compositionIdentity,
+        });
+        const masterName = `.narova-delivery-master-${process.pid}.mp4`;
+        try {
+          const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, {
+            ...opts,
+            name: masterName,
+            fps: standard.fps,
+            quality: standard.hf && standard.hf.quality,
+            artifact: undefined,
+            log,
+          });
+          // The per-scene cache result names outDir because it assembles there;
+          // direct FPS/resolution identities still need the actual composed
+          // HyperFrames project. Compose is cheap and also refreshes preview.
+          projectDir = selectedRenderer.compose(cc, outDir).dir;
+          artifact(projectDir, 'renderer-project');
+          renderReuse = rendered.reuse || null;
+          const commonSource = {
+            identity: commonIdentity,
+            mp4: rendered.mp4,
+            performedBy: standard.id,
+            reusableAcrossBuilds: true,
+            execution: sourceExecutionFromReuse(renderReuse),
+          };
+          results = buildDeliverables(cc, projectDir, outDir, {
+            ...opts, presets: selectedPresets, log, artifact,
+            safeAreaGuides: opts.safeAreaGuides,
+            videoFrameFormat, compositionIdentity,
+            sourceFor: (_preset, identity) => identity === commonIdentity
+              ? commonSource
+              : null,
+          });
+        } finally {
+          try { fs.rmSync(path.join(outDir, masterName), { force: true }); } catch {}
+        }
+      }
     } else {
-      // The no-browser base render goes through the scene cache (per-scene
-      // reuse where possible); hyperframes deliverables render inside
-      // buildDeliverables above and are not cached at the base level.
-      const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, { ...opts, name, log });
-      projectDir = rendered.dir;
-      artifact(projectDir, 'renderer-project');
-      artifact(rendered.mp4, 'video');
-      renderReuse = rendered.reuse || null;
-      const { buildDeliverablesFromSource } = require('./exports');
-      results = buildDeliverablesFromSource(cc, rendered.mp4, outDir, { ...opts, log });
+      // Render to an internal immutable master so the previous named Standard
+      // member remains available for validated cross-build encode reuse.
+      const masterName = `.narova-delivery-master-${process.pid}.mp4`;
+      try {
+        const rendered = renderToMp4(selectedRenderer, cc, outDir, manifest, {
+          ...opts, name: masterName, artifact: undefined, log,
+        });
+        projectDir = rendered.dir;
+        artifact(projectDir, 'renderer-project');
+        renderReuse = rendered.reuse || null;
+        results = buildDeliverablesFromSource(cc, rendered.mp4, outDir, {
+          ...opts, log, artifact, renderer: selectedRenderer.name,
+          sourceIdentity: deliverySourceIdentity({
+            fps: opts.fps || (manifest.format && manifest.format.fps) || 30,
+            hf: { format: 'mp4', quality: opts.quality || 'standard' },
+          }, {
+            renderer: selectedRenderer.name,
+            compositionIdentity: revisions.manifestIdentity(manifest),
+          }),
+          sourceExecution: sourceExecutionFromReuse(renderReuse),
+        });
+      } finally {
+        try { fs.rmSync(path.join(outDir, masterName), { force: true }); } catch {}
+      }
     }
     const mp4 = path.join(outDir, name);
     const seconds = probe(mp4);
@@ -477,6 +552,7 @@ function build(config, opts = {}) {
     const revision = revisions.recordRevision({
       config, opts, outDir, manifest, renderReuse,
       deliverableCount: results.length, videoName: name,
+      deliveryExecution: results.map(r => ({ id: r.id, execution: r.execution })),
       stageDurations: stageDurations(), log,
     });
     const videoCiEvidence = writeVideoCiBinding(mp4, {

@@ -72,6 +72,10 @@ function stateIdentity(config, opts = {}) {
 function manifestIdentity(manifest) {
   const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(manifest), (k, v) =>
     ((k === 'created' || k === 'compiled')) ? undefined : v));
+  // mergeTimings records when synthesis completed. That observation is useful
+  // provenance, but it cannot be an audiovisual identity input: an unchanged
+  // --reuse build refreshes it even when every measured timing is identical.
+  if (stable.stages) delete stable.stages.synth;
   return sha256(JSON.stringify(stable));
 }
 
@@ -190,7 +194,10 @@ function round3(n) {
  * scene-cache reuse summary attached by renderToMp4 (or null when spans are
  * not applicable, e.g. per-preset deliverable renders). Every ratio states
  * its basis and unit; unevidenced quantities are null. */
-function measuredReuseRecord({ outDir, manifest, previous, renderReuse, deliverableCount = 0, videoName = null }) {
+function measuredReuseRecord({
+  outDir, manifest, previous, renderReuse, deliverableCount = 0,
+  deliveryExecution = null, videoName = null,
+}) {
   const scenes = (manifest && manifest.scenes) || [];
   const digests = sceneAudioDigests(outDir, scenes);
   const prevAudio = (previous && previous.sceneAudio) || null;
@@ -274,13 +281,26 @@ function measuredReuseRecord({ outDir, manifest, previous, renderReuse, delivera
   if (fs.existsSync(full)) rebuiltByDesign.push('full narration track (audio/full.wav)');
   const mix = path.join(outDir, 'audio', 'mix.wav');
   if (fs.existsSync(mix)) rebuiltByDesign.push('narration + bed/sfx mix (audio/mix.wav)');
-  if (deliverableCount > 0) rebuiltByDesign.push(`${deliverableCount} delivery member(s)`);
+  if (deliverableCount > 0) rebuiltByDesign.push(`${deliverableCount} delivery member(s) published`);
+
+  const delivery = Array.isArray(deliveryExecution)
+    ? {
+        basis: 'measured',
+        unit: 'delivery execution count',
+        members: deliveryExecution,
+        sourceRendersPerformed: deliveryExecution.filter(m => m.execution?.source?.status === 'performed').length,
+        sourceRendersReused: deliveryExecution.filter(m => m.execution?.source?.status === 'reused').length,
+        encodesPerformed: deliveryExecution.filter(m => m.execution?.encode?.status === 'performed').length,
+        encodesReused: deliveryExecution.filter(m => m.execution?.encode?.status === 'reused').length,
+      }
+    : null;
 
   return {
     basis: 'measured',
     audio,
     spans,
     sentences: sentenceCacheCounts(outDir),
+    delivery,
     rebuiltByDesign,
   };
 }
@@ -313,6 +333,11 @@ function formatMeasuredSummary(measured) {
   }
   const se = measured.sentences;
   if (se) parts.push(`sentences ${se.hits}/${se.total} served from cache (${se.unit})`);
+  const de = measured.delivery;
+  if (de) {
+    parts.push(`delivery source renders ${de.sourceRendersPerformed} performed/${de.sourceRendersReused} reused`);
+    parts.push(`delivery encodes ${de.encodesPerformed} performed/${de.encodesReused} reused`);
+  }
   return parts.join(', ');
 }
 
@@ -320,12 +345,16 @@ function formatMeasuredSummary(measured) {
  * effective resolved state differs from the latest recorded revision;
  * reports no-change otherwise. Advisory: any failure is reported and
  * swallowed — the completed build's success is never undone. */
-function recordRevision({ config, opts = {}, outDir, manifest, renderReuse, deliverableCount = 0, videoName = null, stageDurations = null, log = () => {} }) {
+function recordRevision({
+  config, opts = {}, outDir, manifest, renderReuse, deliverableCount = 0,
+  deliveryExecution = null, videoName = null, stageDurations = null, log = () => {},
+}) {
   try {
     const records = readLedger(outDir);
     const last = records.length ? records[records.length - 1] : null;
     const measured = measuredReuseRecord({
-      outDir, manifest, previous: last, renderReuse, deliverableCount, videoName,
+      outDir, manifest, previous: last, renderReuse, deliverableCount,
+      deliveryExecution, videoName,
     });
     const summary = formatMeasuredSummary(measured);
 
