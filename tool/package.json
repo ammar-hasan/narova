@@ -1,6 +1,6 @@
 {
   "name": "@narova/narova",
-  "version": "0.44.0",
+  "version": "0.45.0",
   "description": "Open video production system for humans and agents — local-first CLI for directable, reproducible video: scene scripts, deterministic rendering, local speech, word-synced captions, product walkthroughs, AI clips, revisions, and provenance.",
   "keywords": [
     "video",
