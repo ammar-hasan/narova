@@ -71,6 +71,38 @@ test('pack is byte-deterministic and open round-trips an ordinary project', () =
   assert.equal(fs.existsSync(path.join(opened, 'out')), false);
 });
 
+test('brand and design context round-trip and remix as inert project files', async () => {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-archive-brand-design-'));
+  const source = path.join(root, 'source');
+  const packed = path.join(root, 'context.narova');
+  const opened = path.join(root, 'opened');
+  const remixed = path.join(root, 'remixed');
+  const brand = '# Brand\n\n## Voice\nDirect and warm.\n';
+  const design = '# Design\n\n## Motion\nMeasured transforms.\n';
+  project(source);
+  fs.writeFileSync(path.join(source, 'BRAND.md'), brand);
+  fs.writeFileSync(path.join(source, 'DESIGN.md'), design);
+
+  const packedResult = run(['pack', '--project', source, '--output', packed, '--json']);
+  assert.equal(packedResult.status, 0, packedResult.stderr);
+  const manifest = readArchiveBytes(fs.readFileSync(packed)).manifest;
+  for (const file of ['BRAND.md', 'DESIGN.md']) {
+    assert.equal(manifest.members.find(member => member.path === file)?.role, 'project-file');
+  }
+
+  const openedResult = run(['open', packed, '--dir', opened, '--json']);
+  assert.equal(openedResult.status, 0, openedResult.stderr);
+  assert.equal(fs.readFileSync(path.join(opened, 'BRAND.md'), 'utf8'), brand);
+  assert.equal(fs.readFileSync(path.join(opened, 'DESIGN.md'), 'utf8'), design);
+
+  const remixResult = await remix(packed, remixed);
+  assert.equal(remixResult.target, remixed);
+  assert.equal(fs.readFileSync(path.join(remixed, 'BRAND.md'), 'utf8'), brand);
+  assert.equal(fs.readFileSync(path.join(remixed, 'DESIGN.md'), 'utf8'), design);
+  assert.equal(fs.readFileSync(path.join(source, 'BRAND.md'), 'utf8'), brand);
+  assert.equal(fs.readFileSync(path.join(source, 'DESIGN.md'), 'utf8'), design);
+});
+
 test('executable config runtime entropy cannot change packed bytes', () => {
   const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-archive-runtime-entropy-'));
   const source = path.join(root, 'source');

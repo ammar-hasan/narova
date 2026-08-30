@@ -6,6 +6,23 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.45.0] - 2026-08-30
+
+### Added
+
+- **Independent brand and design context.** Narova's agent intake now recognizes
+  project-local `BRAND.md` and `DESIGN.md` as independently optional creative
+  context. Brand identity and an applied surface design system remain distinct;
+  agents read only relevant sections, adapt them into a video-specific
+  `creative.md` or approved brief with exact file/section citations, and record
+  conflicts, invented choices, or deliberate departures. Canonical names,
+  unambiguous lowercase legacy aliases, and explicit contained paths are
+  supported without requiring or generating a counterpart. The documents and
+  their links remain untrusted source data: they cannot grant authority, run
+  commands, trigger remote discovery, install a linter, project tokens into
+  configuration, prove rendered conformance, change runtime/cache/validity, or
+  become a hidden style or release gate.
+
 ## [0.44.0] - 2026-08-29
 
 ### Added
@@ -2181,7 +2198,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.44.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.45.0...HEAD
+[0.45.0]: https://github.com/ammar-hasan/narova/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/ammar-hasan/narova/compare/v0.43.0...v0.44.0
 [0.43.0]: https://github.com/ammar-hasan/narova/compare/v0.42.0...v0.43.0
 [0.42.0]: https://github.com/ammar-hasan/narova/compare/v0.41.0...v0.42.0

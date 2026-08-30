@@ -1,6 +1,6 @@
 {
   "name": "narova-repo",
-  "version": "0.44.0",
+  "version": "0.45.0",
   "description": "Development workspace for the standalone Narova CLI and its separate agent skills.",
   "private": true,
   "type": "commonjs",
