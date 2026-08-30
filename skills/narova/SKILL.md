@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.46.0"
-checksum: 668354ba6533b68ab249a9ff1ff1b538aaac948392a979d10cdbd51f091c1d86
+  version: "0.47.0"
+checksum: 0396168d96fb9c32e0db168ffcef31f363fa9342766d499c033197f03109516b
 ---
 # narova — video from scene scripts
 
@@ -90,7 +90,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.46.0"
+narova_required="@narova/narova@0.47.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -338,6 +338,13 @@ reuse lines to know what rebuilt, what reused, and why (`guidance: visual
 content changed`), plus dirty-unit seconds and renderer invocation counts.
 Unproven reuse falls back conservatively with an attributed reason — never a
 stale frame.
+
+Keep authored JavaScript at its truthful scope: use a scene's
+`choreographyFile` when the behavior belongs to that scene, and reserve
+top-level `choreography` for deliberate cross-scene composition. The local form
+keeps sibling spans eligible for reuse; the global form remains unrestricted
+and an isolated browser renderer conservatively uses whole-video reuse. Narova
+does not infer or rewrite the choice. See `references/choreography.md`.
 
 ## Read it to…
 

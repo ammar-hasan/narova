@@ -15,7 +15,8 @@ need more control.
 1. **Semantic elements** (`scene.elements`) — fastest for common 3D work
 2. **Portable visual trees** (`scene.visual`) — when browserless portability matters
 3. **Arbitrary HTML, CSS, SVG, assets** (`scene.body` + `theme.css`) — for unique visual design
-4. **Project choreography** — for timing behavior beyond the built-in animators
+4. **Scene-local or project choreography** — attach one-scene behavior to its
+   owning scene; use the project form for deliberate cross-scene coordination
 5. **Explicit Three.js** (`scene.three`) — declarative Three.js scenes with
    primitives, models, lights, and timeline-driven animation. Bounded by the
    supported primitive types, lighting, and animation vocabulary.

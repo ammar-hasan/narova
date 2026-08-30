@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.47.0] - 2026-08-31
+
+### Changed
+
+- **Locality-first choreography guidance.** Narova now teaches
+  `scene.choreographyFile` first when authored JavaScript belongs to one scene,
+  keeping unchanged sibling scenes eligible for dependency-aware render reuse.
+  Top-level `choreography` remains the deliberate, unrestricted form for
+  cross-scene composition and retains conservative whole-video reuse. The
+  change adds no runtime, schema, analyzer, source rewrite, style rule, quality
+  gate, or creative restriction; the author or directing agent still chooses
+  the truthful scope.
+
 ## [0.46.0] - 2026-08-30
 
 ### Changed
@@ -2218,7 +2231,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.46.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.47.0...HEAD
+[0.47.0]: https://github.com/ammar-hasan/narova/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/ammar-hasan/narova/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/ammar-hasan/narova/compare/v0.44.0...v0.45.0
 [0.44.0]: https://github.com/ammar-hasan/narova/compare/v0.43.0...v0.44.0
