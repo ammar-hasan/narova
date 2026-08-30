@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.46.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.47.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -272,6 +272,13 @@ re-rendering. If safe reuse cannot be proven, Narova rebuilds conservatively and
 says why — it never serves a stale frame. The incremental result is
 audiovisually equivalent to a forced-clean build (decoded frames, frame
 counts/boundaries, audio/sync, captions, duration).
+
+Authored motion keeps that locality when it uses the scope it actually needs:
+attach one-scene JavaScript with `scene.choreographyFile`; reserve top-level
+`choreography` for behavior that intentionally coordinates the full
+composition. Global choreography remains unrestricted and valid, but an
+isolated browser renderer conservatively uses whole-video reuse because it
+cannot prove arbitrary project code is scene-local.
 
 Revisions are recorded as changes in effective authored state. `narova diff`
 reports the per-scene revision impact with predicted reuse and an honest render

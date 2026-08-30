@@ -1,36 +1,67 @@
-# Project choreography
+# Choreography: local by default, global when intentional
 
 The built-in animators (`reveal`/`cue`, `data-grow`, `data-draw`, `data-count`,
 `data-mark`, `data-drift`) all express one idea: elements appearing in sync with
-the voice. When a scene needs something to physically *happen* — a tile falling
-off a bar, a camera dip, a palette shift over time — declare a choreography
-file:
+the voice. When one scene needs something to physically *happen* — a tile
+falling off a bar, a camera dip, a palette shift over time — attach the file to
+that scene:
 
 ```js
 export default {
-  // ...
-  choreography: "choreo.js",   // optional, path relative to the config
+  scenes: [{
+    id: "overflow",
+    // body, vo, ...
+    choreographyFile: "overflow.choreo.js",
+  }],
 }
 ```
 
-The file is read at compose time and inlined into the composition document
-immediately after the built-in animators are registered. It is local and
-inlined, never fetched — the same trust model as `theme.css`.
+Scene-local choreography is rebased with its scene during isolated browser
+rendering and belongs to that scene's cache identity. A later change to this
+scene can therefore re-render its span while unchanged sibling scenes remain
+eligible for reuse.
+
+Locality is an authoring promise, not a sandbox. In a full composition a scene
+file can technically see every scene in `DATA`; keep its reads, selectors, and
+effects within the owning scene so the isolated render has the same meaning.
+
+Use top-level project choreography when the behavior genuinely reads,
+schedules, selects, or coordinates across scenes:
+
+```js
+export default {
+  choreography: "cross-scene.choreo.js",
+  scenes: [/* ... */],
+}
+```
+
+Project choreography can inspect the full composition `DATA` and address any
+scene. Because an isolated browser renderer cannot prove that arbitrary author
+JavaScript is local, this form conservatively uses whole-video reuse. That is a
+performance consequence, not a creative or validity judgement: the global
+escape hatch remains unrestricted. Do not misrepresent genuinely global work
+as local merely to gain speed, and do not move local work global without an
+intentional cross-scene reason.
+
+Both forms are read at compose time and inlined immediately after the built-in
+animators are registered. They are local files, never fetched — the same trust
+model as `theme.css`.
 
 `narova check`, compose, shots, and build compile the exact browser script
 shape without executing it. A syntax error stops before rendering and names
 the logical source plus its line and column when the parser provides them.
-Project choreography and JavaScript imports remain classic-script code;
-`scene.scriptFile` retains its existing function body. Narova does not rewrite,
-sandbox, size-gate, or judge selectors and programming style. This preflight is
-only the confidence boundary between executable and non-executable code.
+Project and scene choreography plus JavaScript imports remain classic-script
+code; `scene.scriptFile` retains its existing function body. Narova does not
+rewrite, sandbox, infer locality, size-gate, or judge selectors and programming
+style. This preflight is only the confidence boundary between executable and
+non-executable code.
 
 ## What is in scope
 
 | Name | What it is |
 |---|---|
 | `tl` | the paused GSAP timeline the renderer seeks |
-| `DATA` | `{ total, scenes: [{ id, start, dur, turns, sentences, transition }] }` |
+| `DATA` | `{ total, scenes: [{ id, start, dur, turns, sentences, transition }] }`; all scenes in a full composition, only the rebased owning scene during an isolated scene render |
 | `gsap` | the GSAP global |
 | `cueTime(sc, el, i)` | the same turn resolution the built-in animators use |
 | `sentenceCue(sc, sentenceIndex)` | a copied resolved sentence timing span |
@@ -131,11 +162,11 @@ a `tl.set()` before the tween:
 
 ## What `check` enforces
 
-- the `choreography` path must exist (`resolveConfig` throws if it does not)
+- every declared `choreography`/`choreographyFile` path must exist
 - every emitted choreography, JavaScript import, scene script, and raw Three.js
   module must compile in its actual browser context; syntax failures name the
   source and fail ordinary check as well as render paths
 - references to `Date`, `Math.random`, `requestAnimationFrame`, `setTimeout`,
   or `fetch` warn
-- a file over 32KB warns — choreography that large is usually logic that
-  belongs in the tool
+- a top-level `choreography` file over 32KB warns — choreography that large is
+  usually logic that belongs in the tool
