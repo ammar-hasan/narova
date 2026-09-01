@@ -6,6 +6,30 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.48.0] - 2026-09-01
+
+### Added
+
+- **Creator-owned generated-shot continuity.** Projects may keep a small
+  optional `continuity` block in `reel.config.*`, name open-kind characters,
+  objects, places, or other entities, and explicitly select one shot's ordered
+  keep/change intent with `narova generate --continuity <shot-id>`. A shot may
+  carry one contained image anchor when the selected provider declares
+  `referenceImages:true`; unsupported anchors fail before provider work rather
+  than being silently dropped. Recipe version 3 records the raw and effective
+  prompts, selected snapshot, and exact anchor bytes/hash; regeneration retains
+  that context unless explicitly replaced or dropped with `--no-continuity`.
+  Continuity remains generation input only: no inferred world, camera or style
+  policy, automatic judge/ranking/selection/retry, `sceneState` reuse, or claim
+  that a provider honored the reference in generated pixels.
+
+### Fixed
+
+- **Corrupt recipe continuity cannot disappear silently.** Regenerating a
+  hand-edited version-3 recipe that lacks its required continuity snapshot now
+  fails before generation and names `--no-continuity` as the explicit drop
+  path, instead of producing a continuity-free version-2 recipe.
+
 ## [0.47.0] - 2026-08-31
 
 ### Changed
@@ -2231,7 +2255,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.47.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.48.0...HEAD
+[0.48.0]: https://github.com/ammar-hasan/narova/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/ammar-hasan/narova/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/ammar-hasan/narova/compare/v0.45.0...v0.46.0
 [0.45.0]: https://github.com/ammar-hasan/narova/compare/v0.44.0...v0.45.0

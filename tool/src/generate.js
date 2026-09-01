@@ -333,10 +333,21 @@ async function generate(providerName, prompt, outputPath, _assetsDir, opts = {})
     throw new Error(`video provider ${JSON.stringify(providerName)} is not registered; install its companion and run \`narova providers add <manifest>\``);
   }
   if (typeof prompt !== 'string' || !prompt.trim()) throw new Error('generation prompt must be a non-empty string');
+  const continuity = opts.continuity || null;
+  if (continuity && (!continuity.snapshot || typeof continuity.text !== 'string')) {
+    throw new Error('generation continuity must be resolved before provider invocation');
+  }
+  if (continuity && continuity.reference && manifest.capabilities.referenceImages !== true) {
+    throw new Error(`video provider ${JSON.stringify(manifest.name)} does not support continuity image anchors (capabilities.referenceImages)`);
+  }
+  const effectivePrompt = continuity ? `${prompt.trim()}\n${continuity.text}` : prompt;
   const params = { ...(opts.params || {}) };
   const jsonError = jsonCompatibilityError(params, 'generation options');
   if (jsonError) throw new Error(jsonError);
-  if (containsRequiredEnvironmentValue({ prompt, options: params, artifact: path.basename(outputPath) }, manifest)) {
+  if (containsRequiredEnvironmentValue({
+    prompt, effectivePrompt, options: params, artifact: path.basename(outputPath),
+    continuity: continuity && continuity.snapshot,
+  }, manifest)) {
     throw new Error('generation intent contains a required environment secret');
   }
   const missing = missingEnvironment(manifest);
@@ -368,6 +379,9 @@ async function generate(providerName, prompt, outputPath, _assetsDir, opts = {})
 
   console.log(`Generating video with ${manifest.displayName}...`);
   console.log(`Prompt: "${prompt.slice(0, 120)}${prompt.length > 120 ? '…' : ''}"`);
+  if (continuity) {
+    console.log(`Continuity: ${continuity.snapshot.shot}${continuity.reference ? ` (anchor ${continuity.snapshot.anchor.file})` : ''}`);
+  }
 
   const destDir = path.dirname(outputPath);
   if (!fs.existsSync(destDir)) fs.mkdirSync(destDir, { recursive: true });
@@ -402,14 +416,39 @@ async function generate(providerName, prompt, outputPath, _assetsDir, opts = {})
     if (rollbackError && error) error.message += `; generated asset rollback failed: ${rollbackError.message}`;
   };
 
-  const request = {
-    id: 'generation-1',
-    operation: 'generate',
-    prompt,
-    output: path.resolve(stagedOutput),
-    options: params,
-  };
   try {
+    let stagedReference = null;
+    if (continuity && continuity.reference) {
+      const ext = path.extname(continuity.reference.path).toLowerCase();
+      const stagedAnchor = path.join(stagingDir, `continuity-anchor${ext}`);
+      fs.copyFileSync(continuity.reference.path, stagedAnchor, fs.constants.COPYFILE_EXCL);
+      fs.chmodSync(stagedAnchor, 0o400);
+      const stats = fs.statSync(stagedAnchor);
+      const digest = sha256File(stagedAnchor);
+      if (stats.size !== continuity.reference.bytes || digest !== continuity.reference.sha256) {
+        throw new Error(`continuity anchor changed while generation was being prepared: ${continuity.snapshot.anchor.file}`);
+      }
+      stagedReference = {
+        kind: 'image', path: stagedAnchor, bytes: stats.size, sha256: digest,
+      };
+    }
+    const request = {
+      id: 'generation-1',
+      operation: 'generate',
+      prompt: effectivePrompt,
+      output: path.resolve(stagedOutput),
+      options: params,
+      ...(continuity ? { continuity: {
+        shot: continuity.snapshot.shot,
+        entities: continuity.snapshot.entities,
+        keep: continuity.snapshot.keep,
+        change: continuity.snapshot.change,
+      } } : {}),
+      ...(stagedReference ? { reference: stagedReference } : {}),
+    };
+    if (containsRequiredEnvironmentValue(request, manifest)) {
+      throw new Error('generation request contains a required environment secret');
+    }
     const invoke = opts.invokeProvider || invokeGenerationProvider;
     const invoked = await invoke(manifest, request, { timeoutMs: opts.timeoutMs });
     const result = validateProviderResult(manifest, request, invoked.response || invoked, opts);
@@ -419,6 +458,7 @@ async function generate(providerName, prompt, outputPath, _assetsDir, opts = {})
     }
     const spec = buildSpec(manifest, runtimeVersion, prompt, result.metadata, stagedOutput, result.stats.size, {
       artifactName: path.basename(outputPath),
+      ...(continuity ? { effectivePrompt, continuity: continuity.snapshot } : {}),
     });
     if (containsRequiredEnvironmentValue(spec, manifest)) {
       throw new Error(`provider ${manifest.name} generation recipe contains a required environment secret`);
@@ -487,15 +527,17 @@ async function generate(providerName, prompt, outputPath, _assetsDir, opts = {})
 
 function buildSpec(manifest, providerVersion, prompt, metadata, outputPath, artifactBytes, opts = {}) {
   const sourceVideoUrl = metadata.sourceVideoUrl;
+  const continuity = opts.continuity || null;
   return {
     kind: 'narova-generate-spec',
-    version: 2,
+    version: continuity ? 3 : 2,
     provider: manifest.name,
     providerName: manifest.displayName,
     providerProtocol: VIDEO_PROVIDER_PROTOCOL,
     providerVersion,
     model: metadata.model,
     prompt,
+    ...(continuity ? { effectivePrompt: opts.effectivePrompt, continuity } : {}),
     params: metadata.params,
     ...(sourceVideoUrl ? {
       sourceVideoUrl: sanitizeUrl(sourceVideoUrl, { stripQuery: true }),

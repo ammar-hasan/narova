@@ -81,7 +81,8 @@ for the format, bounds, trust notice, and extraction rules.
 - Narrated dialogue with local TTS and word-synced captions
 - Silent and marker-driven motion pieces (narration is optional)
 - Deterministic 2D HTML/CSS/SVG and Three.js/WebGL scenes
-- AI clip generation through explicitly selected providers (Sora, Runway)
+- AI clip generation through explicitly selected providers (Sora, Runway),
+  with optional creator-owned character/object/place continuity
 - Real product walkthrough videos with timed browser actions
 - Local MP4, SRT, and VTT deliverables without a render service
 - Deterministic shareable project archives with safe inspection and remix lineage
@@ -96,6 +97,15 @@ service or fee.
 Agents can consume the versioned `narova.result/1` machine protocol (`--json`
 on every operation) with stable exit classes, diagnostics, and artifact
 records — no parsing of terminal prose.
+
+For generated shots, an optional `continuity` block in `reel.config.*` names
+entities and per-shot keep/change intent. Select it with `narova generate
+"<prompt>" --continuity <shot-id>`. A shot may include one local image anchor
+only when the selected provider declares reference-image support; otherwise the
+command fails before provider work. Recipe version 3 records the exact selected
+context and anchor identity for inspection and regeneration. Narova does not
+infer entities, choose style/camera, rank results, or certify provider pixel
+adherence.
 
 See the [project README](https://github.com/ammar-hasan/narova#readme) for the
 scene-script format, renderer choices, product walkthroughs, source grounding,

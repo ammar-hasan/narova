@@ -235,6 +235,43 @@ wider option space. Each unranked set includes keeping the render unchanged;
 Narova selects, branches, renders, and repairs nothing. The plan is evidence for
 the directing decision, not a direction.
 
+## Generated-shot continuity
+
+When separate generated clips must reuse a character, object, or place, add an
+optional `continuity` block to the existing project config. The entity `kind`
+is open vocabulary; Narova does not impose a world model.
+
+```js
+export default {
+  // voices, scenes, etc.
+  continuity: {
+    entities: {
+      amina: { kind: "character", description: "Amina wears a teal scarf." },
+      lantern: { kind: "object", description: "A small brass lantern with blue glass." },
+      courtyard: { kind: "place", description: "A white courtyard with three arches." },
+    },
+    shots: {
+      arrival: {
+        entities: ["amina", "lantern", "courtyard"],
+        keep: ["Keep the scarf, lantern, and three arches recognizable."],
+        change: ["Use a low angle as Amina lifts the lantern."],
+        anchor: "assets/arrival-anchor.png", // optional; one local image
+      },
+    },
+  },
+};
+```
+
+Generate explicitly with
+`narova generate "<shot prompt>" --continuity arrival --provider <name>`.
+Text context works with any conforming video provider. An authored image anchor
+requires the provider manifest to declare `capabilities.referenceImages:true`;
+Narova fails before provider work rather than silently ignoring it. Recipe v3
+records the selected context and exact anchor path, byte length, and SHA-256.
+The agent chooses every entity, keep/change note, and anchor. This feature does
+not judge outputs, select a best candidate, impose style or camera grammar, or
+guarantee that a generative model followed the request.
+
 ## 3D scenes and the element model
 
 narova renders 3D through HyperFrames' browser WebGL (Three.js). There are two

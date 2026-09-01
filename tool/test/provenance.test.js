@@ -16,6 +16,7 @@ const {
 } = require('../src/provenance');
 const { hashConfig, validate } = require('../src/manifest');
 const { writeStageInputs } = require('../src/pipeline');
+const { continuityText } = require('../src/continuity');
 
 const BIN = path.join(__dirname, '..', 'bin', 'narova.js');
 const run = (args, opts = {}) => spawnSync('node', [BIN, ...args], { encoding: 'utf8', ...opts });
@@ -640,6 +641,50 @@ test('provenance verifies current version-2 generation recipes', () => {
   }
 });
 
+test('provenance verifies recipe v3 continuity and detects changed anchor bytes', () => {
+  const dir = documentedProject();
+  try {
+    const anchorFile = path.join(dir, 'assets', 'anchor.png');
+    fs.writeFileSync(anchorFile, 'anchor-one');
+    const recipeFile = path.join(dir, 'assets', 'gen-clip.gen.json');
+    const recipe = JSON.parse(fs.readFileSync(recipeFile, 'utf8'));
+    const continuity = {
+      shot: 'next',
+      entities: [{ id: 'hero', kind: 'character', description: 'A copper robot.' }],
+      keep: ['Keep the same robot.'],
+      change: ['Raise one hand.'],
+      anchor: {
+        file: 'assets/anchor.png',
+        bytes: fs.statSync(anchorFile).size,
+        sha256: sha256File(anchorFile),
+      },
+    };
+    Object.assign(recipe, {
+      version: 3,
+      providerName: 'OpenAI Sora',
+      providerProtocol: 'narova-video-provider/v1',
+      providerVersion: '1.0.0',
+      params: { model: 'sora-2' },
+      effectivePrompt: `${recipe.prompt.trim()}\n${continuityText(continuity)}`,
+      continuity,
+    });
+    fs.writeFileSync(recipeFile, `${JSON.stringify(recipe)}\n`);
+    let report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
+    let generated = report.aiGeneration.generatedMedia[0];
+    assert.equal(generated.recipeGrade, 'verified');
+    assert.equal(generated.continuityShot, 'next');
+    assert.equal(generated.continuityAnchor, 'assets/anchor.png');
+
+    fs.writeFileSync(anchorFile, 'anchor-two-changed');
+    report = JSON.parse(run(['provenance', '--project', dir, '--json']).stdout).data;
+    generated = report.aiGeneration.generatedMedia[0];
+    assert.equal(generated.recipeGrade, 'unknown');
+    assert.match(generated.recipeIssue, /anchor identity does not match current bytes/);
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
 test('provenance marks structurally invalid generation recipes unknown and incomplete', () => {
   const dir = documentedProject();
   try {
@@ -648,7 +693,7 @@ test('provenance marks structurally invalid generation recipes unknown and incom
     const generated = report.aiGeneration.generatedMedia[0];
     assert.equal(generated.recipeGrade, 'unknown');
     assert.equal(generated.recipeStatus, 'unavailable');
-    assert.match(generated.recipeIssue, /not a supported narova-generate-spec version 1 or 2/);
+    assert.match(generated.recipeIssue, /not a supported narova-generate-spec version 1, 2, or 3/);
     assert.equal(report.aiGeneration.incomplete, true);
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });

@@ -11,6 +11,7 @@ const {
   validateProviderResult,
 } = require('../src/generate');
 const { readAssetLock, registerAsset } = require('../src/asset-registry');
+const { loadContinuityShot } = require('../src/continuity');
 
 const VIDEO_FIXTURE = path.join(__dirname, 'fixtures', 'fake-video-provider-worker.py');
 
@@ -112,6 +113,98 @@ test('registered video worker handshakes, generates once, and publishes recipe v
     assert.equal(spec.providerVersion, '1.2.3');
     assert.equal(spec.model, 'fake-video-1');
     assert.equal(readAssetLock(dir).assets[0].origin.provider, 'sora');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('text-only continuity reaches the worker and publishes an inspectable recipe v3', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-continuity-text-'));
+  const assets = path.join(dir, 'assets');
+  fs.mkdirSync(assets);
+  const artifact = path.join(assets, 'clip.mp4');
+  const raw = {
+    entities: {
+      hero: { kind: 'character', description: 'A copper robot with a teal scarf.' },
+      seed: { kind: 'object', description: 'A square red seed case.' },
+    },
+    shots: {
+      reveal: { entities: ['hero', 'seed'], keep: ['Keep both identities.'], change: ['Open the case.'] },
+    },
+  };
+  let sent;
+  try {
+    const continuity = loadContinuityShot(dir, raw, 'reveal');
+    await generate('fake-video', 'The robot enters the greenhouse.', artifact, assets, {
+      projectDir: dir,
+      providerManifest: manifest('fake-video'),
+      continuity,
+      invokeProvider: async (_manifest, request) => {
+        sent = request;
+        return successfulInvoke()(_manifest, request);
+      },
+      probeVideo: acceptFakeVideo,
+    });
+    assert.equal(sent.continuity.shot, 'reveal');
+    assert.equal(sent.reference, undefined);
+    assert.match(sent.prompt, /copper robot with a teal scarf/);
+    const spec = readSpec(artifact);
+    assert.equal(spec.version, 3);
+    assert.equal(spec.prompt, 'The robot enters the greenhouse.');
+    assert.equal(spec.effectivePrompt, sent.prompt);
+    assert.equal(spec.continuity.shot, 'reveal');
+  } finally {
+    fs.rmSync(dir, { recursive: true, force: true });
+  }
+});
+
+test('image continuity is capability-gated before worker work and binds the exact anchor', async () => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-gen-continuity-anchor-'));
+  const assets = path.join(dir, 'assets');
+  fs.mkdirSync(assets);
+  const artifact = path.join(assets, 'clip.mp4');
+  fs.writeFileSync(path.join(assets, 'anchor.png'), 'anchor-image');
+  const raw = {
+    entities: { hero: { kind: 'character', description: 'A copper robot.' } },
+    shots: { next: { entities: ['hero'], anchor: 'assets/anchor.png' } },
+  };
+  const continuity = loadContinuityShot(dir, raw, 'next');
+  let calls = 0;
+  try {
+    await assert.rejects(generate('fake-video', 'The next shot.', artifact, assets, {
+      projectDir: dir,
+      providerManifest: manifest('fake-video'),
+      continuity,
+      invokeProvider: async () => { calls++; },
+    }), /capabilities\.referenceImages/);
+    assert.equal(calls, 0);
+    assert.deepEqual(fs.readdirSync(assets).sort(), ['anchor.png']);
+
+    const capable = manifest('fake-video');
+    capable.capabilities.referenceImages = true;
+    let sent;
+    await generate('fake-video', 'The next shot.', artifact, assets, {
+      projectDir: dir,
+      providerManifest: capable,
+      continuity,
+      invokeProvider: async (_manifest, request) => {
+        calls++;
+        assert.notEqual(request.reference.path, path.join(assets, 'anchor.png'));
+        assert.equal(fs.statSync(request.reference.path).mode & 0o777, 0o400);
+        sent = { ...request, reference: { ...request.reference } };
+        return successfulInvoke()(_manifest, request);
+      },
+      probeVideo: acceptFakeVideo,
+    });
+    assert.equal(calls, 1);
+    assert.equal(fs.existsSync(sent.reference.path), false);
+    assert.equal(sent.reference.bytes, 12);
+    assert.match(sent.reference.sha256, /^[a-f0-9]{64}$/);
+    const spec = readSpec(artifact);
+    assert.equal(spec.version, 3);
+    assert.deepEqual(spec.continuity.anchor, {
+      file: 'assets/anchor.png', bytes: sent.reference.bytes, sha256: sent.reference.sha256,
+    });
   } finally {
     fs.rmSync(dir, { recursive: true, force: true });
   }

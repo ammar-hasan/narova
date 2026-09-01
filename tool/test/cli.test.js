@@ -446,6 +446,94 @@ test('ingest and generate validate the ancestor project asset lock before networ
   assert.doesNotMatch(acquired.stderr, /PEXELS_API_KEY/);
 });
 
+test('generate selects project-config continuity and publishes recipe v3', t => {
+  if (spawnSync('ffmpeg', ['-version'], { encoding: 'utf8' }).status !== 0
+      || spawnSync('ffprobe', ['-version'], { encoding: 'utf8' }).status !== 0) {
+    t.skip('ffmpeg/ffprobe unavailable');
+    return;
+  }
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-continuity-'));
+  const project = path.join(root, 'project');
+  const home = path.join(root, 'home');
+  const assets = path.join(project, 'assets');
+  const fixture = path.join(__dirname, 'fixtures', 'fake-video-provider-worker.py');
+  const env = { ...process.env, NAROVA_HOME: home };
+  fs.mkdirSync(assets, { recursive: true });
+  fs.writeFileSync(path.join(assets, 'anchor.png'), 'anchor-image');
+  fs.writeFileSync(path.join(project, 'reel.config.mjs'), `export default {
+  title: 'Continuity',
+  scenes: [{ id: 's1', dur: 1, body: '<p>one</p>', vo: [] }],
+  continuity: {
+    entities: {
+      amina: { kind: 'character', description: 'Amina wears a teal scarf.' },
+      lantern: { kind: 'object', description: 'A brass lantern with blue glass.' },
+    },
+    shots: {
+      arrival: {
+        entities: ['amina', 'lantern'],
+        keep: ['Keep both identities.'],
+        change: ['Lift the lantern.'],
+        anchor: 'assets/anchor.png',
+      },
+    },
+  },
+};
+`);
+  const manifestFile = path.join(root, 'provider.json');
+  fs.writeFileSync(manifestFile, JSON.stringify({
+    name: 'fake-video',
+    displayName: 'Fake Video',
+    protocol: 'narova-video-provider/v1',
+    command: [process.env.PYTHON || 'python3', fixture, 'real-video', 'fake-video'],
+    requiredEnvironment: [],
+    capabilities: { generation: true, referenceImages: true },
+  }));
+  try {
+    const added = run(['providers', 'add', manifestFile], { env });
+    assert.equal(added.status, 0, added.stderr);
+    const generated = run([
+      'generate', 'Amina enters.', '--provider', 'fake-video', '--continuity', 'arrival',
+      '--output', 'assets/arrival.mp4', '--project', project, '--json',
+    ], { env });
+    assert.equal(generated.status, 0, generated.stderr);
+    const generatedEnvelope = JSON.parse(generated.stdout);
+    assert.equal(generatedEnvelope.data.continuityShot, 'arrival');
+    const recipe = JSON.parse(fs.readFileSync(path.join(assets, 'arrival.gen.json'), 'utf8'));
+    assert.equal(recipe.version, 3);
+    assert.equal(recipe.continuity.shot, 'arrival');
+    assert.equal(recipe.continuity.anchor.file, 'assets/anchor.png');
+    assert.match(recipe.effectivePrompt, /Amina wears a teal scarf/);
+
+    const inherited = run([
+      'generate', '--regenerate', 'assets/arrival.mp4', '--project', project,
+    ], { env });
+    assert.equal(inherited.status, 0, inherited.stderr);
+    const inheritedRecipe = JSON.parse(fs.readFileSync(path.join(assets, 'arrival.gen.json'), 'utf8'));
+    assert.equal(inheritedRecipe.version, 3);
+    assert.equal(inheritedRecipe.continuity.shot, 'arrival');
+
+    const dropped = run([
+      'generate', '--regenerate', 'assets/arrival.mp4', '--no-continuity', '--project', project,
+    ], { env });
+    assert.equal(dropped.status, 0, dropped.stderr);
+    const droppedRecipe = JSON.parse(fs.readFileSync(path.join(assets, 'arrival.gen.json'), 'utf8'));
+    assert.equal(droppedRecipe.version, 2);
+    assert.equal(droppedRecipe.continuity, undefined);
+
+    fs.writeFileSync(path.join(assets, 'arrival.gen.json'), `${JSON.stringify({
+      ...droppedRecipe, version: 3,
+    })}\n`);
+    const malformedRetained = run([
+      'generate', '--regenerate', 'assets/arrival.mp4', '--project', project,
+    ], { env });
+    assert.equal(malformedRetained.status, 1);
+    assert.match(malformedRetained.stderr, /version 3 is missing continuity/);
+    assert.equal(JSON.parse(fs.readFileSync(path.join(assets, 'arrival.gen.json'), 'utf8')).version, 3);
+  } finally {
+    fs.rmSync(root, { recursive: true, force: true });
+  }
+});
+
 test('compose prints the scene start table for QA', () => {
   const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-cli-'));
   const proj = path.join(dir, 'p');

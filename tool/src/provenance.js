@@ -20,6 +20,7 @@ const {
   readAssetLock, resolveProjectFile, sha256File, inferKind, ASSET_LOCK_FILE,
 } = require('./asset-registry');
 const { hashConfig, validate: validateManifest } = require('./manifest');
+const { continuityFromRecipe } = require('./continuity');
 
 const GRADE_MARK = { verified: '✓', declared: '○', unknown: '?' };
 const REMIX_LINEAGE_FILE = '.narova-remix.json';
@@ -310,8 +311,8 @@ function recipeEvidence(projectDir, record) {
   try {
     const { absolute } = resolveProjectFile(projectDir, record.recipe);
     const parsed = JSON.parse(fs.readFileSync(absolute, 'utf8'));
-    const supportedVersion = parsed && (parsed.version === 1 || parsed.version === 2);
-    const currentIdentity = parsed && parsed.version === 2
+    const supportedVersion = parsed && [1, 2, 3].includes(parsed.version);
+    const currentIdentity = parsed && parsed.version >= 2
       && typeof parsed.providerName === 'string' && parsed.providerName.trim()
       && parsed.providerProtocol === 'narova-video-provider/v1'
       && typeof parsed.providerVersion === 'string' && parsed.providerVersion.trim()
@@ -320,8 +321,8 @@ function recipeEvidence(projectDir, record) {
         || parsed.kind !== 'narova-generate-spec' || !supportedVersion
         || typeof parsed.provider !== 'string' || !parsed.provider.trim()
         || typeof parsed.prompt !== 'string' || !parsed.prompt.trim()
-        || (parsed.version === 2 && !currentIdentity)) {
-      throw new Error('generation recipe is not a supported narova-generate-spec version 1 or 2 record with provider identity and prompt');
+        || (parsed.version >= 2 && !currentIdentity)) {
+      throw new Error('generation recipe is not a supported narova-generate-spec version 1, 2, or 3 record with provider identity and prompt');
     }
     const expectedArtifact = path.basename(record.file);
     if (parsed.artifact !== expectedArtifact
@@ -336,9 +337,32 @@ function recipeEvidence(projectDir, record) {
     if (origin.model && parsed.model !== origin.model) {
       throw new Error('generation recipe model does not match the tracked media record');
     }
-    return { path: record.recipe, grade: 'verified', status: 'available', issue: null };
+    let continuity = null;
+    if (parsed.version === 3) {
+      if (typeof parsed.effectivePrompt !== 'string' || !parsed.effectivePrompt.trim() || !parsed.continuity) {
+        throw new Error('generation recipe version 3 requires effectivePrompt and continuity');
+      }
+      const resolved = continuityFromRecipe(projectDir, parsed.continuity);
+      const expectedPrompt = `${parsed.prompt.trim()}\n${resolved.text}`;
+      if (parsed.effectivePrompt !== expectedPrompt) {
+        throw new Error('generation recipe effective prompt does not match its continuity context');
+      }
+      if (parsed.continuity.anchor) {
+        const current = resolved.snapshot.anchor;
+        if (!current || parsed.continuity.anchor.file !== current.file
+            || parsed.continuity.anchor.bytes !== current.bytes
+            || parsed.continuity.anchor.sha256 !== current.sha256) {
+          throw new Error('generation recipe continuity anchor identity does not match current bytes');
+        }
+      }
+      continuity = {
+        shot: resolved.snapshot.shot,
+        anchor: resolved.snapshot.anchor ? resolved.snapshot.anchor.file : null,
+      };
+    }
+    return { path: record.recipe, grade: 'verified', status: 'available', issue: null, continuity };
   } catch (error) {
-    return { path: record.recipe, grade: 'unknown', status: 'unavailable', issue: error.message };
+    return { path: record.recipe, grade: 'unknown', status: 'unavailable', issue: error.message, continuity: null };
   }
 }
 
@@ -449,6 +473,8 @@ function collectAiGeneration(config, registry, media, opts, manifest) {
         recipeGrade: recipe.grade,
         recipeStatus: recipe.status,
         recipeIssue: recipe.issue,
+        continuityShot: recipe.continuity ? recipe.continuity.shot : null,
+        continuityAnchor: recipe.continuity ? recipe.continuity.anchor : null,
         grade: 'verified',
         source: ASSET_LOCK_FILE,
       };
@@ -681,7 +707,10 @@ function formatAiGeneration(ai) {
         : item.recipe
           ? `; ${GRADE_MARK.unknown} recipe ${item.recipe} unavailable${item.recipeIssue ? ` (${item.recipeIssue})` : ''}`
           : `; ${GRADE_MARK.unknown} recipe not recorded`;
-      lines.push(`    ${GRADE_MARK[item.grade]} ${item.file} — ${detail} (${item.source})${recipe}`);
+      const continuity = item.continuityShot
+        ? `; continuity ${item.continuityShot}${item.continuityAnchor ? ` anchored by ${item.continuityAnchor}` : ''}`
+        : '';
+      lines.push(`    ${GRADE_MARK[item.grade]} ${item.file} — ${detail} (${item.source})${recipe}${continuity}`);
     }
     if (ai.incomplete) lines.push(`  note: ${ai.incompleteNote}.`);
   }

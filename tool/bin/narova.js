@@ -50,6 +50,7 @@ const { plan, loadCurrent, lastManifest, formatPlan } = require('../src/plan');
 const revisions = require('../src/revisions');
 const { save: saveRelease, list: listReleases, restore: restoreRelease, remove: removeRelease, saveBranch, readBranch, listBranches, setBranchStatus, setBranchRationale, releasePath, branchDir, resolveProjectDir, validBranchStatus, publishStagedBranch, branchRevision, projectIdentity, RELEASES_DIR, RESTORE_MARKER, RESTORE_OVERRIDES } = require('../src/releases');
 const { generate, readSpec } = require('../src/generate');
+const { continuityFromRecipe, loadContinuityShot } = require('../src/continuity');
 const {
   addProvider, getSpeechProvider, getVideoProvider, isProviderName, listProviders,
   removeProvider, doctorProvider, providersDir, providerKind, VIDEO_PROVIDER_PROTOCOL,
@@ -228,11 +229,14 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows']);
 
 function validateInvocationFlags(flags, cmd) {
+  if (flags.continuity != null && cmd !== 'generate') invocationError('--continuity is only valid with narova generate');
+  if (flags['no-continuity'] && cmd !== 'generate') invocationError('--no-continuity is only valid with narova generate');
+  if (flags.continuity != null && flags['no-continuity']) invocationError('--continuity and --no-continuity cannot be used together');
   if (flags.pages != null && cmd !== 'ingest') invocationError('--pages is only valid with narova ingest and a regular local PDF');
   if (flags.repair && cmd !== 'judge') invocationError('--repair is reserved for a future judge phase and is not available');
   if (flags['judge-assertion'] != null && cmd !== 'branch' && !(cmd === 'judge' && flags.repair)) {
@@ -646,6 +650,8 @@ Commands:
                               --model <id>              provider model
                               --size <WxH>              generation size/ratio
                               --duration <s>            provider-supported seconds
+                              --continuity <shot-id>     use that shot from project config continuity
+                              --no-continuity            drop inherited continuity during regeneration
                               --regenerate <mp4>        re-run a previous clip from its .gen.json spec
                                                         (keeps provider/model/prompt; override any of them)
                               A .gen.json spec sidecar is written next to every clip so the
@@ -2805,7 +2811,7 @@ async function main() {
         usageError(...lines);
       }
       try {
-        const { dir: projectDir } = await loadProjectConfig(flags.project || '.', flags.config);
+        const { dir: projectDir, raw: rawConfig } = await loadProjectConfig(flags.project || '.', flags.config);
         readAssetLock(projectDir);
         const assetsDir = path.join(projectDir, 'assets');
         if (!fs.existsSync(assetsDir)) fs.mkdirSync(assetsDir, { recursive: true });
@@ -2827,6 +2833,9 @@ async function main() {
             process.exit(1);
           }
           console.log(`regenerating from spec: ${path.basename(regenPath).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json`);
+        }
+        if (flags['no-continuity'] && !baseSpec) {
+          usageError('--no-continuity is only meaningful with --regenerate');
         }
 
         const provider = String(flags.provider || (baseSpec && baseSpec.provider) || 'sora');
@@ -2860,6 +2869,16 @@ async function main() {
           }
         }
 
+        let continuity = null;
+        if (flags.continuity) {
+          continuity = loadContinuityShot(projectDir, rawConfig && rawConfig.continuity, String(flags.continuity));
+        } else if (baseSpec && baseSpec.version === 3 && !flags['no-continuity']) {
+          if (!baseSpec.continuity) {
+            throw new Error('generation recipe version 3 is missing continuity; use --no-continuity to drop it explicitly');
+          }
+          continuity = continuityFromRecipe(projectDir, baseSpec.continuity);
+        }
+
         const slug = prompt.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-+|-+$/g, '').slice(0, 40);
         const output = flags.output
           ? path.resolve(projectDir, flags.output)
@@ -2867,7 +2886,9 @@ async function main() {
             ? path.resolve(path.dirname(flags.regenerate
                 ? path.resolve(projectDir, flags.regenerate) : projectDir), baseSpec.artifact)
             : path.join(assetsDir, `gen-${provider}-${slug}.mp4`));
-        await generate(provider, prompt, output, assetsDir, { params, projectDir, providerManifest: info });
+        await generate(provider, prompt, output, assetsDir, {
+          params, projectDir, providerManifest: info, continuity,
+        });
         console.log(`Add to reel.config.mjs:  clip: "assets/${path.basename(output)}"`);
         if (readSpec(output)) {
           console.log(`Generative spec:        assets/${path.basename(output).replace(/\.(mp4|webm|mov)$/i, '')}.gen.json (edit/regenerate from here)`);
@@ -2878,6 +2899,8 @@ async function main() {
           provider,
           providerProtocol: generatedSpec && generatedSpec.providerProtocol,
           providerVersion: generatedSpec && generatedSpec.providerVersion,
+          continuityShot: generatedSpec && generatedSpec.continuity
+            ? generatedSpec.continuity.shot : null,
           output,
           spec: fs.existsSync(specPath) ? specPath : null,
         });

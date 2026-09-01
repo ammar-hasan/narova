@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import json
 import os
+import subprocess
 import sys
 import time
 from pathlib import Path
@@ -51,9 +52,27 @@ for line in sys.stdin:
         time.sleep(60)
         continue
     output = Path(request["output"])
+    if MODE == "require-continuity":
+        continuity = request.get("continuity")
+        reference = request.get("reference")
+        if not isinstance(continuity, dict) or continuity.get("shot") != "arrival":
+            send({"id": request.get("id"), "ok": False, "error": {"message": "missing continuity"}})
+            continue
+        if not isinstance(reference, dict) or reference.get("kind") != "image" or not Path(reference.get("path", "")).is_file():
+            send({"id": request.get("id"), "ok": False, "error": {"message": "missing image reference"}})
+            continue
+    if MODE in {"require-continuity", "real-video"}:
+        made = subprocess.run([
+            "ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi",
+            "-i", "color=c=blue:s=16x16:d=0.2:r=5", "-an", "-c:v", "libx264",
+            "-pix_fmt", "yuv420p", str(output),
+        ], check=False)
+        if made.returncode != 0:
+            send({"id": request.get("id"), "ok": False, "error": {"message": "fixture ffmpeg failed"}})
+            continue
     if MODE == "empty":
         output.write_bytes(b"")
-    elif MODE != "missing":
+    elif MODE not in {"missing", "require-continuity", "real-video"}:
         output.write_bytes(b"fake-video-bytes")
     options = dict(request.get("options") or {})
     options.setdefault("model", "fake-video-1")
