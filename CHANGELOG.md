@@ -6,6 +6,13 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+
+- **Xiaomi companion name.** The separately installed Xiaomi speech companion
+  is now named `narova-xiaomi` instead of `narova-mimo`. Its registered
+  provider remains `mimo`, so existing project backend selections and provider
+  registrations do not change.
+
 ## [0.48.0] - 2026-09-01
 
 ### Added
