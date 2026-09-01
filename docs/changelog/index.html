@@ -67,7 +67,24 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.47.0</span>
+        <span class="rel-version" data-narova-version>0.48.0</span>
+        <span class="rel-date">2026-09-01</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Creator-owned generated-shot continuity.</strong> A small optional project-config block names characters, objects, places, or other entities and lets the creator or agent explicitly select one shot's keep/change intent. One contained image anchor can be supplied when the selected provider declares support; unsupported anchors fail before paid work. Recipe version 3 preserves exact context and anchor identity for inspection and regeneration. Narova does not infer the world, choose style or camera, rank candidates, retry generation, reuse <code>sceneState</code>, or claim that the provider honored the reference in its pixels.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><strong>Explicit continuity removal.</strong> A malformed version-3 recipe missing its continuity snapshot now fails before generation and points to <code>--no-continuity</code>, instead of silently becoming continuity-free.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.47.0</span>
         <span class="rel-date">2026-08-31</span>
       </div>
       <div class="rel-body">

@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.47.0"
-checksum: 0396168d96fb9c32e0db168ffcef31f363fa9342766d499c033197f03109516b
+  version: "0.48.0"
+checksum: 702371b28af8b7efbd8a5b805e4443acad567a286829ce6f5a57a954944b3adb
 ---
 # narova — video from scene scripts
 
@@ -90,7 +90,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.47.0"
+narova_required="@narova/narova@0.48.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -163,6 +163,15 @@ External speech and video providers are optional registered companion skills:
 Gemini speech and Veo video generation, and `narova-mimo` provides Xiaomi MiMo
 speech (preset voices, voice design, and voice cloning). See
 `references/cli.md` §providers.
+
+For AI-generated shots, the project may define a small optional `continuity`
+block with named characters, objects, places, or other creator-owned entities.
+Select one shot explicitly with `narova generate ... --continuity <shot-id>`;
+use at most one image anchor when the selected provider declares support.
+Narova records the exact context for inspection and regeneration but never
+infers the world, chooses style or camera, ranks candidates, or treats provider
+output as proof that the reference was followed. See
+`references/scene-script.md` §Generated-shot continuity.
 
 ## Untrusted source boundary
 

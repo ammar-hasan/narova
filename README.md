@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.47.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.48.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -367,6 +367,40 @@ as any other media. Sora lives in `narova-openai`; Runway lives in the separate
 Vendor APIs and credentials never enter core. This is an
 optional scene input, never the product itself, and the network is used only
 when generation is invoked.
+
+Generated shots can also use a small creator-owned continuity plan in the
+existing project config. Name the characters, objects, or places that matter;
+select what one shot should keep or change; and optionally attach one image
+anchor when the chosen provider declares support:
+
+```js
+continuity: {
+  entities: {
+    amina: { kind: "character", description: "Amina in a teal scarf" },
+    lantern: { kind: "object", description: "brass lantern with blue glass" },
+  },
+  shots: {
+    arrival: {
+      entities: ["amina", "lantern"],
+      keep: ["same scarf and lantern"],
+      change: ["Amina raises the lantern"],
+      // anchor: "assets/arrival-reference.png",
+    },
+  },
+}
+```
+
+```bash
+narova generate "Amina enters the observatory" \
+  --continuity arrival --output assets/arrival.mp4
+```
+
+Narova validates the selected context before paid work, fails rather than
+silently dropping an unsupported anchor, and records the exact prompt,
+continuity snapshot, and anchor identity in recipe version 3. Regeneration
+retains it unless the author replaces it or uses `--no-continuity`. Narova does
+not infer a world, choose style or camera, rank candidates, or claim that a
+provider honored the reference in its pixels.
 
 **Real product walkthroughs.** Explore a website/app semantically, record
 cursor-guided actions on narration beats, frame or full-bleed the real UI, then
