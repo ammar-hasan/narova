@@ -1,5 +1,5 @@
 ---
-name: narova-mimo
+name: narova-xiaomi
 description: >
   Use this optional Narova companion when the user explicitly requests Xiaomi
   MiMo speech generation, a MiMo preset voice, text-described voice design, or
@@ -11,7 +11,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "1.0.0"
-checksum: 99df6875d0dc807d99a49f6ad30f9e1bdfa4e64de6d7294e5a1ddd86fe4dc9ae
+checksum: ab56064d2d4a8595f0ed450b7de13f90e2f265e8cbe05093f5ffba262e1322d8
 ---
 
 # Narova + Xiaomi MiMo (V2.5-TTS)
@@ -27,14 +27,14 @@ access, a Xiaomi MiMo platform account with API access, and `MIMO_API_KEY`.
 ## Setup
 
 1. Install the standalone Narova CLI as described by the `narova` skill, then
-   install `narova` and `narova-mimo` as independently selected skills from
+   install `narova` and `narova-xiaomi` as independently selected skills from
    `ammar-hasan/narova`.
 2. Locate this installed skill from the directory containing this `SKILL.md`;
-   call it `<narova-mimo-skill-dir>`.
+   call it `<narova-xiaomi-skill-dir>`.
 3. Verify the worker:
 
    ```bash
-   bash <narova-mimo-skill-dir>/tool/setup.sh
+   bash <narova-xiaomi-skill-dir>/tool/setup.sh
    ```
 
 4. Set the key only in the environment that runs Narova:
@@ -47,7 +47,7 @@ access, a Xiaomi MiMo platform account with API access, and `MIMO_API_KEY`.
 
    ```bash
    narova providers add \
-     <narova-mimo-skill-dir>/tool/provider.json
+     <narova-xiaomi-skill-dir>/tool/provider.json
    narova providers doctor mimo
    ```
 

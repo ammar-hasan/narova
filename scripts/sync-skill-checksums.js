@@ -22,7 +22,7 @@ const crypto = require('crypto');
 const ROOT = path.resolve(__dirname, '..');
 const LICENSE = 'Apache-2.0';
 const SKILL_GLOBS = ['skills/narova/SKILL.md', 'skills/narova-3d-production/SKILL.md',
-  'skills/narova-elevenlabs/SKILL.md', 'skills/narova-google/SKILL.md', 'skills/narova-mimo/SKILL.md',
+  'skills/narova-elevenlabs/SKILL.md', 'skills/narova-google/SKILL.md', 'skills/narova-xiaomi/SKILL.md',
   'skills/narova-openai/SKILL.md', 'skills/narova-runway/SKILL.md', 'skills/narova-stock-extensions/SKILL.md'];
 
 /* Whole-line checksum/signature fields, removed for the canonical form. The
