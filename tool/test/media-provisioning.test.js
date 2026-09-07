@@ -185,8 +185,8 @@ test('recorded Linux pins carry complete retained release identities', () => {
 });
 
 test('probe reports a binDir for a satisfied provisioned install (warm-run F10)', () => {
-  const realPin = acquisition.mediaPinFor();
-  if (!realPin) return;
+  const hostPin = acquisition.mediaPinFor();
+  const realPin = hostPin || acquisition.mediaPinFor('linux', 'x64');
   const home = tmp();
   const saved = {};
   for (const k of ['NAROVA_FFMPEG', 'NAROVA_FFPROBE', 'NAROVA_HOME']) saved[k] = process.env[k];
@@ -198,6 +198,7 @@ test('probe reports a binDir for a satisfied provisioned install (warm-run F10)'
     fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
     fs.writeFileSync(path.join(root, 'bin', 'ffmpeg'), '#!/bin/sh\necho "ffmpeg version fixture"\n', { mode: 0o755 });
     fs.writeFileSync(path.join(root, 'bin', 'ffprobe'), '#!/bin/sh\necho "ffprobe version fixture"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(root, 'LICENSE'), 'fixture license\n');
     fs.writeFileSync(path.join(root, '.narova-pin.json'), JSON.stringify({
       schema: 2,
       id: realPin.id,
@@ -205,6 +206,7 @@ test('probe reports a binDir for a satisfied provisioned install (warm-run F10)'
     }));
     assert.ok(acquisition.mediaMarkerOk(root, realPin));
 
+    if (!hostPin) return; // readiness selects the host profile; Linux CI covers this projection
     const media = readiness.readinessMatrix().find((item) => item.id === 'media');
     assert.equal(media.status, 'satisfied');
     assert.equal(media.binDir, path.join(root, 'bin'));
