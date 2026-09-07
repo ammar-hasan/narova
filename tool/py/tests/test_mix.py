@@ -3,14 +3,26 @@
 Uses real ffmpeg/ffprobe with small synthetic wavs (anullsrc/sine) — no TTS
 models involved. Skips cleanly when ffmpeg is absent."""
 import shutil
+import json
 import tempfile
 import unittest
 import wave
 from pathlib import Path
 
-from narova_tts.pipeline import RATE, mix_audio, probe, sh
+from narova_tts.pipeline import RATE, mix_audio, probe, sh, scene_starts
 
 FFMPEG = shutil.which("ffmpeg") and shutil.which("ffprobe")
+
+
+class TestSharedAnchors(unittest.TestCase):
+    def test_shared_measured_and_external_anchor_contract(self):
+        fixtures = Path(__file__).resolve().parents[2] / "test" / "fixtures" / "audio-anchors.json"
+        for case in json.loads(fixtures.read_text()):
+            starts = scene_starts(case["scenes"], case["timings"])
+            self.assertEqual(starts, case["starts"])
+            for effect in case["effects"]:
+                at = starts[effect["scene"]] if "scene" in effect else 0
+                self.assertEqual(at + effect["at"], effect["expected"])
 
 
 def sine(path: Path, freq: int, dur: float) -> None:

@@ -67,7 +67,26 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.48.0</span>
+        <span class="rel-version" data-narova-version>0.49.0</span>
+        <span class="rel-date">2026-09-07</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><strong>Stable cold-demo media acquisition.</strong> Clean Linux activation now uses retained, digest-verified FFmpeg 6.1.1 release assets after the former rolling snapshot disappeared upstream.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Xiaomi companion name.</strong> The separately installed Xiaomi speech companion is now <code>narova-xiaomi</code>. Its provider remains <code>mimo</code>, so existing project selections and registrations continue to work.</li>
+          <li><strong>Shared timing facts.</strong> Narration timing and effect anchors now share one internal boundary while preserving external-caption compatibility, mix output profiles, scene placement, and render reuse.</li>
+          <li><strong>Faster guarded publication.</strong> Tagged releases execute tool and package checks once while retaining the same full verification and direct-publication protection.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.48.0</span>
         <span class="rel-date">2026-09-01</span>
       </div>
       <div class="rel-body">

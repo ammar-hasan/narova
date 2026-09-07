@@ -5,6 +5,7 @@
  * HyperFrames lints same-track overlap, and float noise would trip it. */
 
 const r3 = n => Math.round(n * 1000) / 1000;
+const { sceneAnchors } = require('../timing');
 
 /* Emphasis matching (config.captions.emphasis): strip surrounding punctuation
  * and symbols from BOTH the config words and the spoken tokens, then compare
@@ -28,17 +29,18 @@ function composeData(config, timings, captionsEnabled = true) {
   const maxWords = Number.isInteger(captions.maxWords) ? captions.maxWords : Infinity;
 
   const scenes = [];
-  let acc = 0;
-  for (const s of config.scenes) {
+  const { starts, total } = sceneAnchors(config.scenes, s => {
     const t = timings[s.id];
     if (!t) throw new Error(`timings.json: no entry for scene "${s.id}" — re-run narova synth`);
+    return t.dur;
+  }, { roundEach: true });
+  for (const s of config.scenes) {
+    const t = timings[s.id];
     scenes.push({
-      id: s.id, start: r3(acc), dur: t.dur, turns: t.turns || [],
+      id: s.id, start: starts.get(s.id), dur: t.dur, turns: t.turns || [],
       ...(s.transition ? { transition: s.transition } : {}),
     });
-    acc = r3(acc + t.dur);
   }
-  const total = acc;
 
   const groups = [];
   for (const sc of scenes) {

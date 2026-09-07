@@ -1,4 +1,5 @@
 'use strict';
+const { sceneAnchors, effectAnchor } = require('./timing');
 /* Review evidence surfaces (NAR-007-023 / NAR-007-024).
  *
  * Two families of ADVISORY output produced on request from existing build
@@ -789,16 +790,15 @@ async function audioMixMap(config, outDir, timings) {
     catch { mixDigest = null; }
   }
   const declarations = [];
-  const sceneStarts = new Map();
-  let total = 0;
   for (const scene of config.scenes || []) {
-    sceneStarts.set(scene.id, Math.round(total * 1000) / 1000);
     const duration = Number(timings?.[scene.id]?.dur);
     if (!Number.isFinite(duration) || duration <= 0) {
       return { reason: `timings unavailable for scene ${scene.id}`, mix: null, declarations: [], caveat: null };
     }
-    total = Math.round((total + duration) * 1000) / 1000;
   }
+  const { starts: sceneStarts, total } = sceneAnchors(
+    config.scenes || [], scene => Number(timings[scene.id].dur), { roundEach: true },
+  );
   if (config.bed) declarations.push({
     kind: 'bed', declarationIndex: 0, source: config.bed.file,
     gain: config.bed.volume, fadeIn: config.bed.fadeIn, fadeOut: config.bed.fadeOut,
@@ -806,8 +806,7 @@ async function audioMixMap(config, outDir, timings) {
   });
   for (let i = 0; i < (config.sfx || []).length; i++) {
     const effect = config.sfx[i];
-    const anchorStart = effect.scene == null ? 0 : sceneStarts.get(effect.scene);
-    const start = Number.isFinite(anchorStart) ? anchorStart + effect.at : null;
+    const { start: anchorStart, time: start } = effectAnchor(sceneStarts, effect.scene, effect.at);
     let duration = null;
     let sourceSelection = null;
     let sourceUnavailable = null;

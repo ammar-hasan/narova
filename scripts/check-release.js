@@ -89,6 +89,60 @@ function releaseVersionsFromMarkdown(source) {
     .filter(value => value !== 'Unreleased');
 }
 
+// Expand only the repository's deliberately simple &&-chained npm scripts.
+// Fail closed if release wiring grows a shell bypass rather than silently
+// declaring two different gates equivalent.
+function releaseChecks(rootPackage, toolPackage, command, scope = 'root', stack = []) {
+  return command.split(/\s*&&\s*/).flatMap(part => {
+    const run = part.match(/^npm (?:run (?:-s )?([^ ]+)|test)(?: --prefix tool)?$/);
+    if (run) {
+      const nextScope = part.endsWith(' --prefix tool') ? 'tool' : scope;
+      const name = run[1] || 'test';
+      const key = `${nextScope}:${name}`;
+      const source = (nextScope === 'root' ? rootPackage : toolPackage).scripts[name];
+      if (!source || stack.includes(key)) throw new Error(`invalid release script: ${key}`);
+      // Independent companion executors are leaf checks.
+      if (nextScope === 'root' && /^test:(3d|elevenlabs|openai|runway|google|mimo|integration)$/.test(name)) {
+        return [key];
+      }
+      return releaseChecks(rootPackage, toolPackage, source, nextScope, [...stack, key]);
+    }
+    const file = part.match(/^node (?:\.\.\/)?scripts\/(check-package|test-packed-package|check-release)\.js$/);
+    if (file) return [file[1]];
+    if (scope === 'tool' && (part === 'node --test test/*.test.js'
+      || part === 'PYTHONPATH=py python3 -m unittest discover -s py/tests')) return [part];
+    throw new Error(`unrecognized release check command: ${part}`);
+  });
+}
+
+function assertReleaseCheckOwnership(rootPackage, toolPackage, workflow) {
+  const commands = workflow.split(/\r?\n/)
+    .map(line => line.match(/^\s+(?:-\s+)?run:\s+(.+?)\s*$/)?.[1]).filter(Boolean);
+  const prepare = commands.indexOf('npm run release:prepublish');
+  const publish = commands.indexOf('npm publish --access public --provenance');
+  if (prepare < 0 || publish <= prepare || commands.includes('npm run release:check')
+    || commands.filter(c => c === commands[prepare]).length !== 1
+    || commands.filter(c => c === commands[publish]).length !== 1) {
+    throw new Error('publish workflow must run release:prepublish once before npm publish');
+  }
+  const expected = releaseChecks(rootPackage, toolPackage, 'npm run release:check').sort();
+  const actual = [
+    ...releaseChecks(rootPackage, toolPackage, 'npm run release:prepublish'),
+    ...releaseChecks(rootPackage, toolPackage, 'npm run prepublishOnly', 'tool'),
+  ].sort();
+  if (new Set(actual).size !== actual.length || JSON.stringify(actual) !== JSON.stringify(expected)) {
+    throw new Error('tagged publication must execute each full release check exactly once');
+  }
+  // Direct maintainer npm publish retains all its existing checks.
+  const direct = releaseChecks(rootPackage, toolPackage, 'npm run prepublishOnly', 'tool');
+  for (const check of [
+    ...releaseChecks(rootPackage, toolPackage, 'npm test', 'tool'),
+    'check-package', 'test-packed-package',
+  ]) {
+    if (!direct.includes(check)) throw new Error(`direct publication is missing ${check}`);
+  }
+}
+
 function releaseVersionsFromWebsite(source) {
   return [...source.matchAll(/class="rel-version"[^>]*>v?([^<]+)</g)]
     .map(match => match[1].trim());
@@ -182,6 +236,7 @@ if (!agentProtocol.includes('Machine schema: **`narova.result/1`**')) {
 
 const publishWorkflow = fs.readFileSync(path.join(root, '.github/workflows/publish.yml'), 'utf8');
 const ciWorkflow = fs.readFileSync(path.join(root, '.github/workflows/ci.yml'), 'utf8');
+assertReleaseCheckOwnership(repositoryPackage, toolPackage, publishWorkflow);
 for (const required of [
   'id-token: write',
   'fetch-depth: 0',
@@ -221,6 +276,8 @@ process.stdout.write(`release metadata ok: @narova/narova@${version}\n`);
 if (require.main === module) checkRelease();
 
 module.exports = {
+  assertReleaseCheckOwnership,
+  releaseChecks,
   assertReleaseChronology,
   checkRelease,
   hasCompleteTestDependencySetup,

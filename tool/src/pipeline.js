@@ -33,6 +33,7 @@ const { audioFingerprint, timingsFingerprint } = require('./audio-fingerprint');
 const { renderToMp4 } = require('./scene-cache');
 const revisions = require('./revisions');
 const machine = require('./machine');
+const { sceneAnchors, effectAnchor, externalTimings } = require('./timing');
 const { writeVideoCiBinding } = require('./video-ci-binding');
 const machineActive = machine.isActive;
 
@@ -352,32 +353,10 @@ function build(config, opts = {}) {
       mixExternalAudio(config, narrationPath, audioDir, log);
     }
 
-    // Generate timings from scene durations. When the custom narrator ships
-    // word timings, normalize them into the same scene-local contract as TTS
-    // so captions, manifests, HyperFrames, and no-browser all see identical data.
-    const sceneTimings = {};
-    let t = 0;
-    for (const s of config.scenes) {
-      const dur = s.dur || 0;
-      const sceneEnd = Math.round((t + dur) * 1e6) / 1e6;
-      const cues = (config.narrationSource.wordTimings || [])
-        .filter(cue => cue.start < sceneEnd - 1e-6 && cue.end > t + 1e-6);
-      const turns = (s.vo || []).map((turn, i) => {
-        const cue = cues[i];
-        return cue ? Math.max(0, cue.start - t) : (i * dur / Math.max(1, s.vo.length));
-      });
-      const words = cues.flatMap((cue, si) => (cue.words || []).map(word => ({
-        w: word.text || word.w || '',
-        t0: Math.max(0, word.start - t),
-        t1: Math.max(0, word.end - t),
-        who: cue.who || s.vo[si]?.who || s.vo[0]?.who || Object.keys(config.voices)[0] || 'a',
-        si,
-      })));
-      sceneTimings[s.id] = { dur, turns, words };
-      t = sceneEnd;
-    }
+    // Normalized scene-local evidence; browser-only legacy projection remains
+    // explicit in the shared timing boundary.
     fs.writeFileSync(path.join(outDir, 'timings.json'),
-      JSON.stringify({ total: Math.round(t * 1000) / 1000, ...sceneTimings }, null, 2));
+      JSON.stringify(externalTimings(config), null, 2));
     artifact(audioDir, 'audio');
     artifact(path.join(outDir, 'timings.json'), 'timings');
   } else {
@@ -629,13 +608,7 @@ function compileTimeline(config, opts = {}) {
  * Python pipeline would for TTS narration. */
 function mixExternalAudio(config, narrationPath, audioDir, log) {
   const { sh, probe } = require('./util');
-  const totalDur = config.scenes.reduce((n, s) => n + (s.dur || 0), 0);
-  const sceneStarts = new Map();
-  let sceneClock = 0;
-  for (const scene of config.scenes) {
-    sceneStarts.set(scene.id, Math.round(sceneClock * 1000) / 1000);
-    sceneClock += scene.dur || 0;
-  }
+  const { starts: sceneStarts, total: totalDur } = sceneAnchors(config.scenes, scene => scene.dur || 0);
   const process = config.narrationSource?.process;
 
   // Apply voice processing to the narration before mixing with bed/sfx.
@@ -694,11 +667,10 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
   for (const sfx of (config.sfx || [])) {
     inputs.push('-i', sfx.file);
     const vol = sfx.volume ?? 0.8;
-    const sceneStart = sfx.scene == null ? 0 : sceneStarts.get(sfx.scene);
+    const { start: sceneStart, time: delay } = effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0);
     if (!Number.isFinite(sceneStart)) {
       throw new Error(`config.sfx scene anchor is unavailable: ${sfx.scene}`);
     }
-    const delay = sceneStart + (sfx.at ?? 0);
     filters.push(`[${inputIdx}:a]adelay=${Math.round(delay * 1000)}|${Math.round(delay * 1000)},volume=${vol}[sfx${inputIdx}]`);
     inputIdx++;
   }

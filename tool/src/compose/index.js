@@ -13,6 +13,7 @@ const { composeDoc, composeSceneDoc } = require('./html');
 const { collectModelAssets, collectTextureAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
 const { preflightAuthorJavaScript } = require('../author-js');
+const { externalTimings } = require('../timing');
 
 const GSAP_VENDOR_DIR = path.join(__dirname, '..', '..', 'vendor', 'gsap');
 const GSAP_SRC = path.join(GSAP_VENDOR_DIR, 'gsap.min.js');
@@ -26,41 +27,9 @@ function copyThreeAssets(assetsDir) {
   if (!fs.existsSync(dest)) fs.copyFileSync(THREE_MODULE_SRC, dest);
 }
 
-/* External narration (a pre-recorded file + optional word timings) skips TTS
- * synth; scenes carry explicit `dur`. When word timings are present we
- * synthesize the same per-scene timing entries synth would have written, so
- * composeData can build caption groups. Shared by compose() (full project) and
- * composeSceneProject() (isolated span) — previously only compose() did this,
- * so per-scene rendering of external-narration projects always threw and fell
- * back to a full render. Returns null when the project is not external-narrated
- * or carries no word timings (callers fall back to timings.json). */
+// The same boundary supplies full and isolated legacy browser projections.
 function synthesizeExternalTimings(config) {
-  if (!(config.narrationSource && config.narrationSource.file && config.narrationSource.wordTimings)) {
-    return null;
-  }
-  const cues = config.narrationSource.wordTimings;
-  const timings = { total: config.scenes.reduce((n, s) => n + (s.dur || 0), 0) };
-  let cursor = 0;
-  for (const s of config.scenes) {
-    const sceneEnd = cursor + (s.dur || 0);
-    const sceneCues = cues.filter(c => c.start < sceneEnd && c.end > cursor);
-    const sceneVo = s.vo || [];
-    const cueWords = sceneCues.flatMap((cue, si) => (cue.words || []).map(word => ({
-      w: word.text || word.w || '',
-      t0: Math.max(0, word.start - cursor),
-      t1: Math.max(0, word.end - cursor),
-      who: cue.who || sceneVo[si]?.who || sceneVo[0]?.who || Object.keys(config.voices || {})[0] || 'a',
-      si,
-    })));
-    // Keep the pinned browser external-caption/turn projection intact: its
-    // raw authored word shape produced no composition turns and flowed to the
-    // legacy standard overlay unchanged. The indexed helper surface consumes
-    // a separate normalized view so adopting neither helper changes no pixels.
-    const words = sceneCues.flatMap(cue => cue.words);
-    timings[s.id] = { dur: s.dur || 0, words, cueWords };
-    cursor = sceneEnd;
-  }
-  return timings;
+  return externalTimings(config, { browser: true });
 }
 
 function compose(config, outDir) {
