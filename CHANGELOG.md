@@ -6,12 +6,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.49.0] - 2026-09-07
+
 ### Changed
 
 - **Xiaomi companion name.** The separately installed Xiaomi speech companion
   is now named `narova-xiaomi` instead of `narova-mimo`. Its registered
   provider remains `mimo`, so existing project backend selections and provider
   registrations do not change.
+- **Shared timing facts.** Narration timing and effect-anchor calculations now
+  share one internal boundary while preserving external-caption compatibility,
+  mix output profiles, exact scene placement, and render reuse.
+- **Faster guarded publication.** Tagged publishing partitions repository and
+  npm prepublish verification so tool tests and package checks execute once.
+  Direct maintainer publication retains its existing checks.
 
 ## [0.48.0] - 2026-09-01
 

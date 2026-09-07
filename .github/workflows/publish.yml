@@ -44,7 +44,10 @@ jobs:
       - run: npm ci --ignore-scripts --prefix skills/narova-3d-production
       - run: npm run version:sync
       - run: git diff --exit-code
-      - run: npm run release:check
+      # Repository-only checks run here. npm's prepublishOnly hook below owns
+      # tool tests, package audit and packed-install smoke, including failure.
+      # Together these execute the full release gate once before publication.
+      - run: npm run release:prepublish
       - name: Publish @narova/narova
         run: npm publish --access public --provenance
         working-directory: tool

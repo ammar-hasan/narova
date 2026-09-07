@@ -1,0 +1,14 @@
+[
+  {
+    "scenes": [{"id":"intro"},{"id":"bridge"},{"id":"main"}],
+    "timings": {"intro":{"dur":0.333},"bridge":{"dur":0.667},"main":{"dur":4}},
+    "starts": {"intro":0,"bridge":0.333,"main":1},
+    "effects": [{"scene":"main","at":2,"expected":3},{"at":0.25,"expected":0.25}]
+  },
+  {
+    "scenes": [{"id":"first"},{"id":"later"}],
+    "timings": {"first":{"dur":2.125},"later":{"dur":1.875}},
+    "starts": {"first":0,"later":2.125},
+    "effects": [{"scene":"later","at":0.125,"expected":2.25}]
+  }
+]

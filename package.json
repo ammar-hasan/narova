@@ -1,12 +1,13 @@
 {
   "name": "narova-repo",
-  "version": "0.48.0",
+  "version": "0.49.0",
   "description": "Development workspace for the standalone Narova CLI and its separate agent skills.",
   "private": true,
   "type": "commonjs",
   "scripts": {
     "narova": "node tool/bin/narova.js",
-    "test": "npm run -s test:tool && npm run -s test:integration && npm run -s test:3d && npm run -s test:elevenlabs && npm run -s test:openai && npm run -s test:runway && npm run -s test:google && npm run -s test:mimo",
+    "test": "npm run -s test:tool && npm run -s test:integration && npm run -s test:companions",
+    "test:companions": "npm run -s test:3d && npm run -s test:elevenlabs && npm run -s test:openai && npm run -s test:runway && npm run -s test:google && npm run -s test:mimo",
     "test:tool": "npm test --prefix tool",
     "test:js": "npm run test:js --prefix tool",
     "test:py": "npm run test:py --prefix tool",
@@ -25,6 +26,7 @@
     "gallery:build": "node scripts/build-gallery.js",
     "gallery:check": "node scripts/build-gallery.js --check",
     "release:check": "npm test && npm run -s test:package && npm run -s test:package-install && npm run -s test:release",
+    "release:prepublish": "npm run -s test:integration && npm run -s test:companions && npm run -s test:release",
     "eval:walkthrough": "node tool/evals/walkthrough-eval.js",
     "eval:no-browser": "node tool/evals/no-browser-complex-eval.js",
     "version:sync": "node scripts/sync-version.js",

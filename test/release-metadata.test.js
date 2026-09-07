@@ -7,6 +7,7 @@ const test = require('node:test');
 
 const {
   assertReleaseChronology,
+  assertReleaseCheckOwnership,
   hasCompleteTestDependencySetup,
   hasMainAncestryGuard,
   hasRequiredMediaToolSetup,
@@ -14,6 +15,26 @@ const {
 
 const workflowPath = path.join(__dirname, '..', '.github', 'workflows', 'publish.yml');
 const ciWorkflowPath = path.join(__dirname, '..', '.github', 'workflows', 'ci.yml');
+
+test('tagged publication partitions the full gate without duplicate checks', () => {
+  const root = require('../package.json');
+  const tool = require('../tool/package.json');
+  const workflow = fs.readFileSync(workflowPath, 'utf8');
+  assert.doesNotThrow(() => assertReleaseCheckOwnership(root, tool, workflow));
+  for (const changed of [
+    { ...root, scripts: { ...root.scripts, 'release:prepublish': root.scripts['release:check'] } },
+    { ...root, scripts: { ...root.scripts, 'release:prepublish': 'npm run -s test:integration' } },
+  ]) {
+    assert.throws(() => assertReleaseCheckOwnership(changed, tool, workflow), /exactly once/);
+  }
+  assert.throws(() => assertReleaseCheckOwnership(root,
+    { ...tool, scripts: { ...tool.scripts, prepublishOnly: 'node ../scripts/check-package.js' } }, workflow),
+  /exactly once|direct publication/);
+  assert.throws(() => assertReleaseCheckOwnership(root, tool,
+    workflow.replace('npm run release:prepublish', 'npm run release:check')), /once before/);
+  assert.throws(() => assertReleaseCheckOwnership(root, tool,
+    workflow.replace('npm publish --access public --provenance', 'npm publish --ignore-scripts')), /once before/);
+});
 
 test('publish workflow ancestry guard compares the tag commit to origin/main', () => {
   const workflow = fs.readFileSync(workflowPath, 'utf8');
