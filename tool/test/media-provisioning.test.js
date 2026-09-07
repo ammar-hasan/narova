@@ -1,9 +1,7 @@
 'use strict';
 /* NAR-SPEC-021 media-provisioning tests (NAR-021-002/003/007/008).
- * Archive items are exercised against a local HTTP server with a tar.gz
- * fixture (provisionMedia accepts .tar.gz and .tar.xz). The
- * satisfied-provisioned probe path and the real Linux pins are exercised
- * end-to-end by the clean-machine CI demo run. */
+ * Multi-asset pins are exercised against a local HTTP server. The real
+ * Linux assets are exercised end-to-end by the clean-machine CI demo run. */
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
 const fs = require('node:fs');
@@ -11,7 +9,7 @@ const os = require('node:os');
 const path = require('node:path');
 const http = require('node:http');
 const crypto = require('node:crypto');
-const { spawnSync } = require('node:child_process');
+const { gzipSync } = require('node:zlib');
 const { PassThrough } = require('node:stream');
 const readiness = require('../src/readiness');
 const acquisition = require('../src/acquisition');
@@ -31,62 +29,67 @@ class Sink extends PassThrough {
   text() { return this.chunks.join(''); }
 }
 
-/* Build a fixture archive shaped like the real pins: <topdir>/bin/{ffmpeg,ffprobe}. */
-function fixtureArchive(dir, topdir) {
-  const stage = path.join(dir, 'fixture-src');
-  fs.mkdirSync(path.join(stage, topdir, 'bin'), { recursive: true });
-  const body = (name) => `#!/bin/sh\necho "ffmpeg version fixture-${name}"\n`;
-  fs.writeFileSync(path.join(stage, topdir, 'bin', 'ffmpeg'), body('ffmpeg'));
-  fs.writeFileSync(path.join(stage, topdir, 'bin', 'ffprobe'), body('ffprobe'));
-  const archive = path.join(dir, `${topdir}.tar.gz`);
-  const r = spawnSync('tar', ['-czf', archive, '-C', stage, topdir]);
-  assert.equal(r.status, 0, 'fixture tar creation failed');
-  return {
-    archive, topdir,
-    sha256: crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
-    bytes: fs.statSync(archive).size,
+function fixtureAssets() {
+  const raw = {
+    ffmpeg: Buffer.from('#!/bin/sh\necho "ffmpeg version fixture"\n'),
+    ffprobe: Buffer.from('#!/bin/sh\necho "ffprobe version fixture"\n'),
+    LICENSE: Buffer.from('fixture license\n'),
   };
+  return Object.fromEntries(Object.entries(raw).map(([name, bytes]) => {
+    const compressed = gzipSync(bytes);
+    return [name, {
+      compressed,
+      sha256: crypto.createHash('sha256').update(compressed).digest('hex'),
+      bytes: compressed.length,
+    }];
+  }));
 }
 
-const pinFrom = (base, fx, overrides = {}) => ({
-  id: 'fixture-gpl-test', url: `${base}/media.tar.gz`,
-  sha256: fx.sha256, bytes: fx.bytes, topdir: fx.topdir, ...overrides,
-});
+function pinFrom(base, assets, overrides = {}) {
+  const files = Object.entries(assets).map(([name, asset]) => ({
+    name,
+    url: `${base}/${name}.gz`,
+    sha256: asset.sha256,
+    bytes: asset.bytes,
+  }));
+  return { id: 'ffmpeg-static-fixture', bytes: files.reduce((n, file) => n + file.bytes, 0), files, ...overrides };
+}
 
-const serveArchive = (fx) => async () => {
-  const { srv, base } = await server((req, res) => {
-    res.writeHead(200, { 'content-length': fs.statSync(fx.archive).size });
-    fs.createReadStream(fx.archive).pipe(res);
+async function serveAssets(assets) {
+  return server((req, res) => {
+    const name = decodeURIComponent(req.url.slice(1)).replace(/\.gz$/, '');
+    const asset = assets[name];
+    if (!asset) { res.writeHead(404); res.end(); return; }
+    res.writeHead(200, { 'content-length': asset.compressed.length });
+    res.end(asset.compressed);
   });
-  return { srv, base };
-};
+}
 
-test('provisionMedia extracts, marks, commits atomically, and is idempotent (NAR-021-003/007)', async () => {
+test('provisionMedia verifies members, validates binaries, commits atomically, and is idempotent (NAR-021-003/007)', async () => {
   const home = tmp();
-  const work = tmp();
-  const fx = fixtureArchive(work, 'ffmpeg-fixture-linux64-gpl');
-  const { srv, base } = await serveArchive(fx)();
+  const assets = fixtureAssets();
+  const { srv, base } = await serveAssets(assets);
   process.env.NAROVA_HOME = home;
   try {
     const view = new readiness.ProgressView(new Sink());
-    const pin = pinFrom(base, fx);
+    const pin = pinFrom(base, assets);
     const first = await acquisition.provisionMedia(view, pin);
     const root = acquisition.mediaInstallDir(pin);
     assert.equal(first.reused, false);
-    assert.ok(first.acquired > 0);
+    assert.equal(first.acquired, pin.bytes);
     assert.ok(fs.existsSync(path.join(root, 'bin', 'ffmpeg')));
     assert.ok(fs.existsSync(path.join(root, 'bin', 'ffprobe')));
+    assert.equal(fs.readFileSync(path.join(root, 'LICENSE'), 'utf8'), 'fixture license\n');
     assert.ok(acquisition.mediaMarkerOk(root, pin));
-    assert.ok(!fs.existsSync(`${root}.tar.gz`), 'archive removed after commit');
     assert.ok(!fs.existsSync(`${root}.staging-${process.pid}`), 'staging removed');
 
     const second = await acquisition.provisionMedia(view, pin);
     assert.equal(second.reused, true);
     assert.equal(second.acquired, 0);
 
-    // A stale marker (wrong digest) forces replacement, not silent reuse.
-    const marker = path.join(root, '.narova-pin.json');
-    fs.writeFileSync(marker, JSON.stringify({ sha256: '0'.repeat(64) }));
+    fs.writeFileSync(path.join(root, 'LICENSE'), '');
+    assert.equal(acquisition.mediaMarkerOk(root, pin), false, 'missing license bytes invalidate the install');
+    fs.writeFileSync(path.join(root, '.narova-pin.json'), JSON.stringify({ schema: 2, id: pin.id, files: [] }));
     const third = await acquisition.provisionMedia(view, pin);
     assert.equal(third.reused, false);
     assert.ok(acquisition.mediaMarkerOk(root, pin));
@@ -96,54 +99,59 @@ test('provisionMedia extracts, marks, commits atomically, and is idempotent (NAR
   }
 });
 
-test('provisionMedia digest failure leaves no install, archive, or staging (NAR-021-003)', async () => {
+test('digest failure leaves no new install or staging (NAR-021-003)', async () => {
   const home = tmp();
-  const work = tmp();
-  const fx = fixtureArchive(work, 'ffmpeg-fixture2-linux64-gpl');
-  const { srv, base } = await serveArchive(fx)();
+  const assets = fixtureAssets();
+  const { srv, base } = await serveAssets(assets);
   process.env.NAROVA_HOME = home;
   try {
-    const pin = pinFrom(base, fx, { sha256: '0'.repeat(64) });
+    const pin = pinFrom(base, assets);
+    pin.files[0].sha256 = '0'.repeat(64);
     await assert.rejects(
       () => acquisition.provisionMedia(new readiness.ProgressView(new Sink()), pin),
       /digest mismatch/,
     );
     const root = acquisition.mediaInstallDir(pin);
     assert.ok(!fs.existsSync(root), 'no install dir');
-    assert.ok(!fs.existsSync(`${root}.tar.gz`), 'no leftover archive');
-    const mediaRoot = path.join(home, 'tools', 'media');
-    if (fs.existsSync(mediaRoot)) {
-      assert.deepEqual(fs.readdirSync(mediaRoot), [], 'no partial install anywhere in user storage');
-    }
+    assert.ok(!fs.existsSync(`${root}.staging-${process.pid}`), 'no staging dir');
   } finally {
     srv.close();
     delete process.env.NAROVA_HOME;
   }
 });
 
-test('missing inner binary fails cleanly with no resolvable install', async () => {
+test('failed refresh preserves the prior verified install (NAR-021-003)', async () => {
   const home = tmp();
-  const work = tmp();
-  // Archive with the right topdir but no bin/ffprobe.
-  const stage = path.join(work, 'src');
-  fs.mkdirSync(path.join(stage, 'ffmpeg-hollow-linux64-gpl', 'bin'), { recursive: true });
-  fs.writeFileSync(path.join(stage, 'ffmpeg-hollow-linux64-gpl', 'bin', 'ffmpeg'), '#!/bin/sh\n');
-  const archive = path.join(work, 'hollow.tar.gz');
-  spawnSync('tar', ['-czf', archive, '-C', stage, 'ffmpeg-hollow-linux64-gpl']);
-  const { srv, base } = await server((req, res) => {
-    res.writeHead(200, { 'content-length': fs.statSync(archive).size });
-    fs.createReadStream(archive).pipe(res);
-  });
+  const assets = fixtureAssets();
+  const { srv, base } = await serveAssets(assets);
   process.env.NAROVA_HOME = home;
   try {
-    const pin = {
-      id: 'fixture-hollow', url: `${base}/hollow.tar.gz`,
-      sha256: crypto.createHash('sha256').update(fs.readFileSync(archive)).digest('hex'),
-      bytes: fs.statSync(archive).size, topdir: 'ffmpeg-hollow-linux64-gpl',
-    };
+    const good = pinFrom(base, assets);
+    await acquisition.provisionMedia(new readiness.ProgressView(new Sink()), good);
+    const broken = structuredClone(good);
+    broken.files[1].sha256 = '0'.repeat(64);
+    await assert.rejects(
+      () => acquisition.provisionMedia(new readiness.ProgressView(new Sink()), broken),
+      /digest mismatch/,
+    );
+    assert.ok(acquisition.mediaMarkerOk(acquisition.mediaInstallDir(good), good));
+  } finally {
+    srv.close();
+    delete process.env.NAROVA_HOME;
+  }
+});
+
+test('missing or invalid binary fails cleanly with no resolvable install', async () => {
+  const home = tmp();
+  const assets = fixtureAssets();
+  delete assets.ffprobe;
+  const { srv, base } = await serveAssets(assets);
+  process.env.NAROVA_HOME = home;
+  try {
+    const pin = pinFrom(base, assets);
     await assert.rejects(
       () => acquisition.provisionMedia(new readiness.ProgressView(new Sink()), pin),
-      /does not contain bin\/ffprobe/,
+      /must contain exactly ffmpeg, ffprobe, and LICENSE/,
     );
     assert.ok(!fs.existsSync(acquisition.mediaInstallDir(pin)));
   } finally {
@@ -153,8 +161,6 @@ test('missing inner binary fails cleanly with no resolvable install', async () =
 });
 
 test('unpinned platform fails closed with guidance, never downloads (NAR-021-002/003)', async () => {
-  // darwin-arm64 has no recorded pin (fail-closed posture), so the real
-  // platform lookup is the honest test on this host; assert generically too.
   assert.equal(acquisition.mediaPinFor('sunos', 'x64'), null);
   if (acquisition.mediaPinFor() === null) {
     await assert.rejects(
@@ -164,40 +170,44 @@ test('unpinned platform fails closed with guidance, never downloads (NAR-021-002
   }
 });
 
-test('recorded Linux pins carry complete verifiable identities', () => {
+test('recorded Linux pins carry complete retained release identities', () => {
   for (const [key, pin] of Object.entries(acquisition.MEDIA_PINS)) {
     assert.match(key, /^linux-(x64|arm64)$/);
-    assert.match(pin.url, /^https:\/\/github\.com\/BtbN\/FFmpeg-Builds\/releases\/download\/autobuild-\d{4}-\d{2}-\d{2}-\d{2}-\d{2}\//);
-    assert.match(pin.sha256, /^[0-9a-f]{64}$/);
-    assert.ok(pin.bytes > 50_000_000);
-    assert.match(pin.topdir, /^ffmpeg-N-\d+-g[0-9a-f]+-linux(64|arm64)-gpl$/);
+    assert.match(pin.id, /^ffmpeg-static-b6\.1\.1-linux-(x64|arm64)$/);
+    assert.deepEqual(pin.files.map((file) => file.name), ['ffmpeg', 'ffprobe', 'LICENSE']);
+    assert.equal(pin.bytes, pin.files.reduce((n, file) => n + file.bytes, 0));
+    for (const file of pin.files) {
+      assert.match(file.url, /^https:\/\/github\.com\/eugeneware\/ffmpeg-static\/releases\/download\/b6\.1\.1\//);
+      assert.match(file.sha256, /^[0-9a-f]{64}$/);
+      assert.ok(file.bytes > 10_000);
+    }
   }
 });
 
 test('probe reports a binDir for a satisfied provisioned install (warm-run F10)', () => {
   const realPin = acquisition.mediaPinFor();
-  if (!realPin) return; // unpinned host (e.g. darwin): CI on Linux covers this
+  if (!realPin) return;
   const home = tmp();
   const saved = {};
   for (const k of ['NAROVA_FFMPEG', 'NAROVA_FFPROBE', 'NAROVA_HOME']) saved[k] = process.env[k];
-  process.env.NAROVA_FFMPEG = 'narova-absent-ffmpeg';   // force off PATH-found tools
+  process.env.NAROVA_FFMPEG = 'narova-absent-ffmpeg';
   process.env.NAROVA_FFPROBE = 'narova-absent-ffprobe';
   process.env.NAROVA_HOME = home;
   try {
-    // Lay down exactly what a completed provisionMedia leaves behind, at the
-    // REAL pin's install root — the probe resolves that path, not a fixture id.
     const root = acquisition.mediaInstallDir(realPin);
     fs.mkdirSync(path.join(root, 'bin'), { recursive: true });
-    fs.writeFileSync(path.join(root, 'bin', 'ffmpeg'), '#!/bin/sh\n');
-    fs.writeFileSync(path.join(root, 'bin', 'ffprobe'), '#!/bin/sh\n');
+    fs.writeFileSync(path.join(root, 'bin', 'ffmpeg'), '#!/bin/sh\necho "ffmpeg version fixture"\n', { mode: 0o755 });
+    fs.writeFileSync(path.join(root, 'bin', 'ffprobe'), '#!/bin/sh\necho "ffprobe version fixture"\n', { mode: 0o755 });
     fs.writeFileSync(path.join(root, '.narova-pin.json'), JSON.stringify({
-      sha256: realPin.sha256, url: realPin.url, bytes: realPin.bytes,
+      schema: 2,
+      id: realPin.id,
+      files: realPin.files.map(({ name, url, sha256, bytes }) => ({ name, url, sha256, bytes })),
     }));
-    assert.ok(acquisition.mediaMarkerOk(root, realPin), 'fixture marker matches the real pin');
+    assert.ok(acquisition.mediaMarkerOk(root, realPin));
 
-    const media = require('../src/readiness').readinessMatrix().find((i) => i.id === 'media');
+    const media = readiness.readinessMatrix().find((item) => item.id === 'media');
     assert.equal(media.status, 'satisfied');
-    assert.equal(media.binDir, path.join(root, 'bin'), 'binDir exposed so warm runs can scope PATH');
+    assert.equal(media.binDir, path.join(root, 'bin'));
   } finally {
     for (const [k, v] of Object.entries(saved)) {
       if (v === undefined) delete process.env[k]; else process.env[k] = v;

@@ -14,28 +14,35 @@ const crypto = require('crypto');
 const os = require('os');
 const path = require('path');
 const { spawnSync } = require('child_process');
+const { createReadStream, createWriteStream } = require('fs');
+const { pipeline } = require('stream/promises');
+const { createGunzip } = require('zlib');
 const { acquireFile, DEMO_VOICE } = require('./readiness');
 
-/* Media-tool pins: static builds from the dated, immutable BtbN
- * FFmpeg-Builds autobuild snapshot `autobuild-2026-08-18-15-03` (GitHub
- * release artifacts; digests computed at pin time and cross-checked
- * against the listed asset sizes). macOS has no checksummed static
- * source, so it stays fail-closed to brew/ffmpeg.org guidance until one
- * is recorded. */
+const STATIC_RELEASE = 'https://github.com/eugeneware/ffmpeg-static/releases/download/b6.1.1';
+
+/* Media-tool pins: retained, tagged ffmpeg-static b6.1.1 release assets.
+ * GitHub's release API records each compressed asset's size and SHA-256.
+ * The corresponding license is installed beside the binaries. macOS and
+ * Windows stay fail-closed until equally verifiable sources are recorded. */
 const MEDIA_PINS = {
   'linux-x64': {
-    id: 'linux64-gpl-N-126207-g21bbd98e7b',
-    url: 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-18-15-03/ffmpeg-N-126207-g21bbd98e7b-linux64-gpl.tar.xz',
-    sha256: 'ae86e7d2924f46a4658c2a83a74096c8bf5dc7e78bd94e869ff35b45ddf762a0',
-    bytes: 127991188,
-    topdir: 'ffmpeg-N-126207-g21bbd98e7b-linux64-gpl',
+    id: 'ffmpeg-static-b6.1.1-linux-x64',
+    bytes: 58643973,
+    files: [
+      { name: 'ffmpeg', url: `${STATIC_RELEASE}/ffmpeg-linux-x64.gz`, sha256: 'bfe8a8fc511530457b528c48d77b5737527b504a3797a9bc4866aeca69c2dffa', bytes: 29354986 },
+      { name: 'ffprobe', url: `${STATIC_RELEASE}/ffprobe-linux-x64.gz`, sha256: '25d9b6ccb05e3d9de9e04e31e2506d8dd7f9f0418981965ac6df12e8d3afd067', bytes: 29276839 },
+      { name: 'LICENSE', url: `${STATIC_RELEASE}/linux-x64.LICENSE.gz`, sha256: 'e6f01cb10f21032b80e78a1b0bd13d6c387d6f18eed9a37f99ea35d7e3f7bb7a', bytes: 12148 },
+    ],
   },
   'linux-arm64': {
-    id: 'linuxarm64-gpl-N-126207-g21bbd98e7b',
-    url: 'https://github.com/BtbN/FFmpeg-Builds/releases/download/autobuild-2026-08-18-15-03/ffmpeg-N-126207-g21bbd98e7b-linuxarm64-gpl.tar.xz',
-    sha256: 'ac47b6cf125e1d85566aba95fb8d715692f9cb3f24bd694298b235f8f4252a8c',
-    bytes: 109609092,
-    topdir: 'ffmpeg-N-126207-g21bbd98e7b-linuxarm64-gpl',
+    id: 'ffmpeg-static-b6.1.1-linux-arm64',
+    bytes: 51074414,
+    files: [
+      { name: 'ffmpeg', url: `${STATIC_RELEASE}/ffmpeg-linux-arm64.gz`, sha256: '754a678672298bc68156adff58aa7385a592c2b30b1d0ae8750c45c915c4bac0', bytes: 25568691 },
+      { name: 'ffprobe', url: `${STATIC_RELEASE}/ffprobe-linux-arm64.gz`, sha256: '2ab6aba60ee84412dff9188720703376cb4e7aaf7e0b5e43aa8249f2acae5bf8', bytes: 25493573 },
+      { name: 'LICENSE', url: `${STATIC_RELEASE}/linux-arm64.LICENSE.gz`, sha256: '04dec67da0540177665f991e3f8f08ed1bc6b949c09ce644c37cd30082591b56', bytes: 12150 },
+    ],
   },
 };
 
@@ -54,18 +61,29 @@ function mediaInstallDir(pin = mediaPinFor()) {
 function mediaMarkerOk(root, pin) {
   try {
     const marker = JSON.parse(fs.readFileSync(path.join(root, '.narova-pin.json'), 'utf8'));
-    if (marker.sha256 !== pin.sha256) return false;
-    for (const bin of ['ffmpeg', 'ffprobe']) {
-      const p = path.join(root, 'bin', bin);
-      if (!fs.existsSync(p)) return false;
-    }
-    return true;
+    const identity = (files) => files.map(({ name, url, sha256, bytes }) => ({ name, url, sha256, bytes }));
+    if (marker.schema !== 2 || marker.id !== pin.id) return false;
+    if (JSON.stringify(marker.files) !== JSON.stringify(identity(pin.files))) return false;
+    return mediaBinariesOk(root);
   } catch { return false; }
 }
 
-/* Provision the pinned media tool: staged digest-verified download,
- * staged extraction, marker, atomic directory commit. Any failure removes
- * every staged path so no partial install is resolvable (NAR-021-003).
+function mediaBinariesOk(root) {
+  for (const relative of ['bin/ffmpeg', 'bin/ffprobe', 'LICENSE']) {
+    const stat = fs.lstatSync(path.join(root, relative), { throwIfNoEntry: false });
+    if (!stat || !stat.isFile() || stat.size === 0) return false;
+  }
+  for (const bin of ['ffmpeg', 'ffprobe']) {
+    const p = path.join(root, 'bin', bin);
+    const result = spawnSync(p, ['-version'], { encoding: 'utf8', timeout: 10000 });
+    if (result.status !== 0 || !result.stdout.toLowerCase().startsWith(`${bin} version`)) return false;
+  }
+  return true;
+}
+
+/* Provision the pinned media tool: staged digest-verified downloads,
+ * decompression, executable validation, marker, and atomic directory exchange.
+ * Any failure removes staged paths without replacing a prior install (NAR-021-003).
  * `pin` is injectable for fixture tests; production calls omit it. */
 async function provisionMedia(view, pin = mediaPinFor()) {
   if (!pin) {
@@ -73,46 +91,68 @@ async function provisionMedia(view, pin = mediaPinFor()) {
     err.code = 'NAROVA_MEDIA_UNPINNED';
     throw err;
   }
+  const names = Array.isArray(pin.files) ? pin.files.map((file) => file.name) : [];
+  if (JSON.stringify(names) !== JSON.stringify(['ffmpeg', 'ffprobe', 'LICENSE'])) {
+    throw new Error(`media pin ${pin.id} must contain exactly ffmpeg, ffprobe, and LICENSE`);
+  }
+  if (pin.bytes !== pin.files.reduce((sum, file) => sum + file.bytes, 0)) {
+    throw new Error(`media pin ${pin.id} has an inconsistent byte total`);
+  }
   const home = process.env.NAROVA_HOME || path.join(os.homedir(), '.narova');
   const root = mediaInstallDir(pin);
   if (mediaMarkerOk(root, pin)) return { dir: root, acquired: 0, reused: true };
 
-  // Archive extension follows the pinned artifact (GNU tar requires the
-  // matching decompression flag; bsdtar sniffs — do not rely on that).
-  const ext = pin.url.endsWith('.tar.gz') ? '.tar.gz' : '.tar.xz';
-  const xflag = ext === '.tar.gz' ? '-xzf' : '-xJf';
-  const archive = `${root}${ext}`;
   const staging = `${root}.staging-${process.pid}`;
-  const cleanup = () => { fs.rmSync(archive, { force: true }); fs.rmSync(staging, { recursive: true, force: true }); };
+  const backup = `${root}.backup-${process.pid}`;
+  let backedUp = false;
+  let committed = false;
   try {
-    fs.rmSync(root, { recursive: true, force: true }); // stale or corrupt prior install
-    const got = await acquireFile(pin.url, archive, { sha256: pin.sha256, bytes: pin.bytes, view });
-
-    // Staged extraction; system tar with the extension-matched flag.
-    fs.mkdirSync(staging, { recursive: true });
-    const extracted = spawnSync('tar', [xflag, archive, '-C', staging], { stdio: 'ignore' });
-    if (extracted.status !== 0) throw new Error(`extracting ${pin.url} failed (tar exited ${extracted.status})`);
-    const inner = path.join(staging, pin.topdir);
-    for (const bin of ['ffmpeg', 'ffprobe']) {
-      const p = path.join(inner, 'bin', bin);
-      if (!fs.existsSync(p)) throw new Error(`archive for ${pin.url} does not contain bin/${bin}`);
-      fs.chmodSync(p, 0o755);
+    fs.rmSync(staging, { recursive: true, force: true });
+    fs.rmSync(backup, { recursive: true, force: true });
+    fs.mkdirSync(path.join(staging, 'bin'), { recursive: true });
+    fs.mkdirSync(path.join(staging, '.downloads'), { recursive: true });
+    let acquired = 0;
+    for (const file of pin.files) {
+      if (!['ffmpeg', 'ffprobe', 'LICENSE'].includes(file.name)) {
+        throw new Error(`unsupported media pin member: ${file.name}`);
+      }
+      const download = path.join(staging, '.downloads', `${file.name}.gz`);
+      const got = await acquireFile(file.url, download, { sha256: file.sha256, bytes: file.bytes, view });
+      acquired += got.bytes;
+      const output = file.name === 'LICENSE'
+        ? path.join(staging, 'LICENSE')
+        : path.join(staging, 'bin', file.name);
+      await pipeline(createReadStream(download), createGunzip(), createWriteStream(output));
     }
-    fs.writeFileSync(path.join(inner, '.narova-pin.json'), JSON.stringify({
-      sha256: pin.sha256, url: pin.url, bytes: pin.bytes, acquiredAt: new Date().toISOString(),
+    fs.rmSync(path.join(staging, '.downloads'), { recursive: true, force: true });
+    for (const bin of ['ffmpeg', 'ffprobe']) fs.chmodSync(path.join(staging, 'bin', bin), 0o755);
+    if (!mediaBinariesOk(staging)) throw new Error(`media binaries for ${pin.id} failed version validation`);
+    fs.writeFileSync(path.join(staging, '.narova-pin.json'), JSON.stringify({
+      schema: 2,
+      id: pin.id,
+      files: pin.files.map(({ name, url, sha256, bytes }) => ({ name, url, sha256, bytes })),
+      acquiredAt: new Date().toISOString(),
     }, null, 2));
 
-    // Atomic commit: the install dir appears only when fully verified.
+    // Exchange only after every member is verified. A failed refresh keeps
+    // the prior installation resolvable (NAR-021-003).
     fs.mkdirSync(path.dirname(root), { recursive: true });
-    fs.renameSync(inner, root);
-    return { dir: root, acquired: got.bytes, reused: false };
+    if (fs.existsSync(root)) {
+      fs.renameSync(root, backup);
+      backedUp = true;
+    }
+    fs.renameSync(staging, root);
+    committed = true;
+    fs.rmSync(backup, { recursive: true, force: true });
+    return { dir: root, acquired, reused: false };
   } catch (err) {
-    cleanup();
-    fs.rmSync(root, { recursive: true, force: true }); // never leave a half install
+    if (backedUp && !committed && !fs.existsSync(root) && fs.existsSync(backup)) {
+      fs.renameSync(backup, root);
+    }
     throw err;
   } finally {
-    fs.rmSync(archive, { force: true }); // the archive is not an install artifact
     fs.rmSync(staging, { recursive: true, force: true });
+    if (committed) fs.rmSync(backup, { recursive: true, force: true });
   }
 }
 

@@ -8,6 +8,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [0.49.0] - 2026-09-07
 
+### Fixed
+
+- **Stable cold-demo media acquisition.** Clean Linux activation now uses
+  retained, digest-verified FFmpeg 6.1.1 release assets after the former
+  rolling snapshot disappeared upstream.
+
 ### Changed
 
 - **Xiaomi companion name.** The separately installed Xiaomi speech companion

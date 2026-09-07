@@ -28,10 +28,10 @@ jobs:
     steps:
       - uses: actions/checkout@d23441a48e516b6c34aea4fa41551a30e30af803 # v6
 
-      - name: Environment setup (interpreter + extractor only)
+      - name: Environment setup (interpreter only)
         run: |
           apt-get update
-          apt-get install -y --no-install-recommends python3-venv xz-utils ca-certificates
+          apt-get install -y --no-install-recommends python3-venv ca-certificates
           python3 --version
           ! command -v ffmpeg && echo 'clean: no ffmpeg on the machine (narova must provision it)'
 
@@ -48,7 +48,7 @@ jobs:
           test -s narova-demo/out/captions.vtt
           test -s narova-demo/reel.config.mjs
           echo '--- ffprobe on the provisioned toolchain ---'
-          "$HOME/.narova/tools/media"/linux64-gpl-*/bin/ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1 narova-demo/out/video.mp4
+          "$HOME/.narova/tools/media/ffmpeg-static-b6.1.1-linux-x64/bin/ffprobe" -v error -show_entries format=duration -of default=noprint_wrappers=1 narova-demo/out/video.mp4
 
       - name: Warm demo run — reuse, zero acquisition
         run: |
