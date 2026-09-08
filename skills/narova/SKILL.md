@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.49.0"
-checksum: 21e81d1cf5116457a9bfc7440409de111872b926f8b64aa8c22580c68651f46b
+checksum: b3beb232993054c82c991f93d483488e83a616cd7de8d4e1d5d043759f91a945
 ---
 # narova — video from scene scripts
 
@@ -292,10 +292,10 @@ consequential external mutation.
 - **No-browser never interprets HTML/CSS.** Give every no-browser scene a `visual`
   tree. Keep HyperFrames for unrestricted browser visuals; see
   `references/renderers.md` for the capability boundary and dual-authoring.
-- **Sourcing is checked; balance is not.** `check` gates claims against
-  `claims.md`, but a one-sided narrative built from sourced claims passes
-  clean. For contested topics, ledger the major perspectives and re-read the
-  script for framing — balance is the author's job.
+- **Claim checks are heuristic.** A passing check does not prove factual
+  completeness, truth, or balance. Ground factual claims in `claims.md`; for
+  contested topics, ledger the major perspectives and review the framing.
+  The check modes and their limits are described below.
 - **A provenance checkmark has a narrow meaning.** `provenance` distinguishes
   artifact-backed facts (verified), authored statements (declared), and absent
   evidence (unknown). Rights buckets are display groupings, not legal
@@ -313,28 +313,31 @@ consequential external mutation.
 
 Read `references/gotchas.md` for the full list.
 
-## Hard invariants
+## Authoring guarantees and check limits
 
-These are enforced by the tool. Do not circumvent them.
+Author scenes as functions of composition time and deterministic seeds. Built-in
+scene evaluation follows that model; raw scripts remain your responsibility.
+`check` warns about recognized hazards such as `Date` and `Math.random` but does
+not reject every violation or prove seek equivalence. Deterministic scene state
+does not guarantee byte-identical encoded files across machines or toolchains.
 
-| Rule | Enforcement |
-|------|-------------|
-| Deterministic rendering: same input + seed → identical output | Checker + deterministic pipeline |
-| Reproducible timing: `data-cue` resolves to measured turn starts | `cueTime()` uses `scenes[].turns[]` |
-| No remote runtime dependencies | vendored GSAP + vendored Three.js |
-| Source-grounded factual claims | `claims.md` validation on `check` |
-| Config and manifest consistency | `plan` compares hashes |
-| No silent feature degradation | unsupported semantic actions fail at validation |
-| Frame seeking must not affect output | `check` flags `Math.random`, `Date`, etc. in choreography |
-| GSAP loaded locally, not from CDN | vendored at `vendor/gsap/gsap.min.js` |
+| Concern | Observable behavior |
+|---------|---------------------|
+| Timing | `data-cue` uses resolved timing; synthesized turns follow measured audio, while word times are estimates unless alignment succeeds or cues are supplied. |
+| Local composition | Managed runtime dependencies are copied locally; release checks reject remote authored scene dependencies. Acquisition and selected hosted providers can use the network separately. |
+| Claims | Detection is heuristic. Normal check warns about a missing ledger; strict also warns about unmatched detected claims; release rejects missing or unmatched detected claims. None verifies source truth or narrative balance. |
+| Reuse | `plan` reports identity differences; actual builds decide reuse from their own identities and required artifacts. |
+| Unsupported semantics | Unsupported semantic actions fail validation with an attributed error. |
 
 ## Revisions
 
-A revision changes only what the user asked for — everything else stays
-byte-identical. Edit surgically. Visual-only edit → `build --reuse`.
-Spoken-text edit → plain `build` (sentence cache re-synthesizes only changed
-sentences; untouched scenes are byte-identical). See
-`references/prompt-to-video.md` §Iterating.
+Change only the requested authoring concern and verify what stayed unchanged.
+Visual-only edit → `build --reuse`. Spoken-text edit → plain `build`; matching
+sentence-cache entries can avoid repeating synthesis. Existing bytes are
+preserved only for artifacts whose reuse identity and required prior material
+remain valid. Changed timing, global dependencies, or missing reusable material
+can require other work to rebuild. Do not promise byte identity for every
+regenerated output. See `references/prompt-to-video.md` §Iterating.
 
 Rebuilds are incremental and dependency-aware: `narova build` re-renders only
 the scenes whose audiovisual work actually changed and reuses the rest. A scene

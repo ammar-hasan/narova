@@ -70,12 +70,12 @@ Read those notes before changing pipeline code; they are not product authority.
   command degrades to the right one. Voice/backend/tempo changes with
   unchanged text still replay the old audio by design — use a full `build`
   to re-voice.
-- **Spoken-text edits re-voice only the changed sentences.** synth caches
+- **Spoken-text edits can reuse matching sentence audio.** synth caches
   each processed sentence (backend + speaker + text + tempo) at
-  `~/.narova/cache/sentences/`. Untouched scenes are byte-identical across
-  runs — so never "improve" lines the user didn't ask you to change; that
-  re-voices them. Voice/tempo changes invalidate the cache: everything is
-  re-synthesized.
+  `~/.narova/cache/sentences/`. Matching entries can reuse sentence audio;
+  unchanged scene text alone does not guarantee identical regenerated outputs.
+  Keep lines the user did not ask to change. Voice/tempo changes invalidate the
+  relevant sentence identities and require synthesis.
 - **First runs download things.** The first `synth` creates the venv at
   `~/.narova/venv`. piper gets a voice per speaker. xtts gets ~1.9GB once.
   qwen gets ~1.2GB once. chatterbox gets ~1GB once (in its own venv). `npx
@@ -165,14 +165,18 @@ Read those notes before changing pipeline code; they are not product authority.
 - **Agent shells don't persist variables.** Use `narova` in every call, or
   `$HOME/.local/bin/narova` when that user-owned bin directory is not on
   `PATH`. A `NAROVA=...` assignment from an earlier call is gone (exit 127).
-- **Balance is on you, not the tool.** `check` gates claims against
-  `claims.md`, but a one-sided narrative built from sourced claims passes
-  clean. For contested topics, ledger the major perspectives and re-read the
-  script for framing before synth (`references/url-to-source.md` §3).
+- **Claim checks do not establish balance or truth.** Detection is heuristic.
+  Normal `check` warns about a missing ledger; strict also warns about unmatched
+  detected claims; release rejects missing or unmatched detected claims.
+  Ground factual claims in `claims.md`; for contested topics, ledger the major
+  perspectives and review framing (`references/url-to-source.md` §3).
 
 ## Revision guarantees
 
-Narova's contract: a revision changes only what the user asked for.
+Keep authoring edits within the requested scope. The table describes ordinary
+work with available reusable material; changed dependencies or missing cache
+artifacts can require rebuilding. Inspect reuse diagnostics before claiming
+that particular output bytes were preserved.
 
 | Edit type | What rebuilds | `--reuse` behavior |
 |---|---|---|

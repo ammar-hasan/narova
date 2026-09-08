@@ -38,20 +38,24 @@ many narrators, external narration, or silence according to the concept.
 Prefer HyperFrames when full browser creativity matters; prefer no-browser
 when browserlessness or portability is an actual requirement.
 
-## Hard invariants
+## Authoring guarantees and check limits
 
-These are enforced by the tool:
-
-- **Deterministic rendering**: same config + seed → identical output. No
-  `Math.random`, `Date`, wall-clock CSS in `theme.css`. Particles use
-  seeded randomness.
-- **Reproducible timing**: `data-cue="k"` resolves to the measured start of
-  turn `k`. GSAP is vendored and loaded locally.
-- **Source grounding**: every factual claim must trace to `claims.md`.
-- **Valid assets**: all referenced files must exist; URLs validated.
-- **No silent feature degradation**: unsupported semantic actions fail at
-  validation with clear errors. The currently supported actions are:
-  `appear`, `disappear`, `move`, `rotate`, `scale`, `orbit`, `revolve`.
+- **Deterministic evaluation:** author visible state from canonical time and
+  seeded randomness. `check` warns about recognized raw-script hazards such as
+  `Math.random` and `Date`; it does not reject every violation or prove seek
+  equivalence. Encoded bytes need not match across machines or toolchains.
+- **Resolved timing:** `data-cue="k"` uses the resolved start of turn `k`.
+  Synthesized turn timing follows measured audio; word times remain estimates
+  unless alignment succeeds or cues are supplied. GSAP is loaded locally.
+- **Source grounding:** ground factual claims in `claims.md`. Detection is
+  heuristic: normal checks warn about a missing ledger, strict checks also warn
+  about unmatched detected claims, and release checks fail missing or unmatched
+  detected claims. Passing does not prove completeness, truth, or balance.
+- **Valid assets:** provide existing local scene assets; release checks reject
+  remote authored scene dependencies. Acquisition happens separately.
+- **Unsupported semantics:** unsupported semantic actions fail validation with
+  clear errors. Supported actions are `appear`, `disappear`, `move`, `rotate`,
+  `scale`, `orbit`, and `revolve`.
 
 ```js
 export default {
@@ -511,12 +515,14 @@ camera.position.set(0, 0, 1);
 sceneTl.to(mat.uniforms.uTime, { value: duration, duration: duration, ease: "none" }, 0);
 ```
 
-Determinism contract (enforced by `check`, same as choreography): no `Date`,
-`Math.random`, `requestAnimationFrame`, `setTimeout`, or `fetch`. Use `seed`
-+ `narova.prng()` for any randomness and register scene motion on `sceneTl`.
-Use `tl` only for deliberately composition-global choreography, with `at()` or
-the `narova.at*()` helpers. Given the same project state + seed + assets,
-output reproduces exactly.
+Keep raw module state independent of `Date`, `Math.random`,
+`requestAnimationFrame`, `setTimeout`, and `fetch`. As with choreography,
+`check` warns about recognized references; authoring remains responsible for
+seek-equivalent behavior. Use `seed` + `narova.prng()` for randomness and
+register scene motion on `sceneTl`. Use `tl` only for deliberately
+composition-global choreography, with `at()` or the `narova.at*()` helpers.
+The same time, seed, and project inputs should produce the same visible state;
+this is not a cross-environment encoded-byte guarantee.
 
 The raw module is compiled without execution during `narova check` and again
 before browser composition. An uncaught synchronous initialization error is

@@ -351,9 +351,10 @@ male/female duet; choose voices on suitability, not on a default pairing.
 
 ## Iterating: no surprises
 
-The consistency contract: **a revision changes only what the user asked
-for.** Everything else — every other line, scene, voice, color, timing —
-stays identical, and narova's machinery backs you up:
+Keep authoring changes within the user's requested scope. Narova reuses
+artifacts when their identities and required prior material permit it; changed
+dependencies or unavailable reusable material can require conservative rebuilding.
+Verify which output bytes stayed unchanged before claiming preservation:
 
 - Keep the config stable: same scene `id`s, same voices, same `timing`,
   same theme. Edit surgically — the exact turn or body the user named,
@@ -363,10 +364,10 @@ stays identical, and narova's machinery backs you up:
   spoken text did change, it is ignored with a note and the changed
   sentences re-synthesize, so picking the wrong command cannot ship stale
   audio.
-- **Spoken-text edit**: plain `narova build`. The sentence cache
-  (`~/.narova/cache/sentences/`) re-synthesizes ONLY the changed sentences —
-  untouched scenes come out byte-identical. Never reword unchanged lines
-  "for flow"; that re-voices them.
+- **Spoken-text edit**: plain `narova build`. Matching entries in the sentence
+  cache (`~/.narova/cache/sentences/`) can reuse existing audio. Unchanged text
+  does not guarantee byte identity for every regenerated scene artifact. Keep
+  lines the user did not ask to change.
 - Before re-rendering, run `narova check` and sanity-check the new shape:
   scene count, word budget, cue targets.
 - Run HyperFrames `check` on the composed project and fix real layout and
