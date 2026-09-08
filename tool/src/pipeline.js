@@ -17,7 +17,7 @@
 
 const fs = require('fs');
 const path = require('path');
-const { spawnSync } = require('child_process');
+const { spawnSync, execFileSync } = require('child_process');
 const { ensureDir, probe } = require('./util');
 const { narration } = require('./schema');
 const { writeCaptions } = require('./captions');
@@ -348,10 +348,8 @@ function build(config, opts = {}) {
     const narrationPath = path.join(audioDir, 'full.wav');
     fs.copyFileSync(config.narrationSource.file, narrationPath);
 
-    // If a bed or SFX is configured, mix it with the external narration using ffmpeg.
-    if (config.bed || (config.sfx && config.sfx.length)) {
-      mixExternalAudio(config, narrationPath, audioDir, log);
-    }
+    // Rebuild current layers, or remove obsolete mixed audio on route changes.
+    mixExternalAudio(config, narrationPath, audioDir, log);
 
     // Normalized scene-local evidence; browser-only legacy projection remains
     // explicit in the shared timing boundary.
@@ -607,7 +605,20 @@ function compileTimeline(config, opts = {}) {
  * Produces a mix.wav from the narration + bed + sfx sources, same as the
  * Python pipeline would for TTS narration. */
 function mixExternalAudio(config, narrationPath, audioDir, log) {
-  const { sh, probe } = require('./util');
+  const { sh } = require('./util');
+  const mixPath = path.join(audioDir, 'mix.wav');
+  const pending = path.join(audioDir, 'mix.pending.wav');
+  fs.rmSync(mixPath, { force: true });
+  fs.rmSync(pending, { force: true });
+  if (!config.bed && !config.sfx?.length) return;
+  const stereoSource = file => {
+    const channels = execFileSync('ffprobe', [
+      '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=channels',
+      '-of', 'csv=p=0', file,
+    ], { encoding: 'utf8' }).trim();
+    return 'aresample=48000,' + (channels === '1'
+      ? 'pan=stereo|c0=c0|c1=c0' : 'aformat=channel_layouts=stereo');
+  };
   const { starts: sceneStarts, total: totalDur } = sceneAnchors(config.scenes, scene => scene.dur || 0);
   const process = config.narrationSource?.process;
 
@@ -638,50 +649,51 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
         log('  processed: voice cleanup applied');
       } catch (e) {
         log(`  note: voice processing failed (${e.message}) — using raw narration`);
+        return;
       }
     }
   }
 
-  // Build ffmpeg filter complex for mixing narration + bed + sfx.
-  const filters = [];
-  const inputs = ['-i', voicePath];
-  let inputIdx = 0;
-  inputIdx++; // narration is input 0
-
-  // Narration: ensure stereo, pad to total duration.
-  filters.push(`[${inputIdx - 1}:a]pan=stereo|c0=c0|c1=c0,apad=whole_dur=${totalDur}[voice]`);
-
-  if (config.bed && config.bed.file) {
-    inputs.push('-i', config.bed.file);
-    const vol = config.bed.volume ?? 0.14;
-    const fadeIn = config.bed.fadeIn ?? 0.5;
-    const fadeOut = config.bed.fadeOut ?? 1.5;
-    let bedFilter = `[${inputIdx}:a]atrim=start=0:end=${totalDur}`;
-    if (fadeIn > 0) bedFilter += `,afade=t=in:d=${fadeIn}`;
-    if (fadeOut > 0) bedFilter += `,afade=t=out:st=${totalDur - fadeOut}:d=${fadeOut}`;
-    bedFilter += `,volume=${vol}[bed]`;
-    filters.push(bedFilter);
-    inputIdx++;
-  }
-
-  for (const sfx of (config.sfx || [])) {
-    inputs.push('-i', sfx.file);
-    const vol = sfx.volume ?? 0.8;
-    const { start: sceneStart, time: delay } = effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0);
-    if (!Number.isFinite(sceneStart)) {
-      throw new Error(`config.sfx scene anchor is unavailable: ${sfx.scene}`);
-    }
-    filters.push(`[${inputIdx}:a]adelay=${Math.round(delay * 1000)}|${Math.round(delay * 1000)},volume=${vol}[sfx${inputIdx}]`);
-    inputIdx++;
-  }
-
-  // Amix all sources.
-  const mixInputs = ['[voice]'];
-  if (config.bed) mixInputs.push('[bed]');
-  for (let i = 0; i < (config.sfx || []).length; i++) mixInputs.push(`[sfx${i + (config.bed ? 2 : 1)}]`);
-  filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=longest:normalize=0,alimiter=limit=0.95[a]`);
-
   try {
+    // Build ffmpeg filter complex for mixing narration + bed + sfx.
+    const filters = [];
+    const inputs = ['-i', voicePath];
+    let inputIdx = 0;
+    inputIdx++; // narration is input 0
+
+    // Narration: ensure stereo, pad to total duration.
+    filters.push(`[${inputIdx - 1}:a]${stereoSource(voicePath)},apad=whole_dur=${totalDur}[voice]`);
+
+    if (config.bed && config.bed.file) {
+      inputs.push('-i', config.bed.file);
+      const vol = config.bed.volume ?? 0.14;
+      const fadeIn = config.bed.fadeIn ?? 0.5;
+      const fadeOut = config.bed.fadeOut ?? 1.5;
+      let bedFilter = `[${inputIdx}:a]${stereoSource(config.bed.file)},atrim=start=0:end=${totalDur}`;
+      if (fadeIn > 0) bedFilter += `,afade=t=in:d=${fadeIn}`;
+      if (fadeOut > 0) bedFilter += `,afade=t=out:st=${totalDur - fadeOut}:d=${fadeOut}`;
+      bedFilter += `,volume=${vol}[bed]`;
+      filters.push(bedFilter);
+      inputIdx++;
+    }
+
+    for (const sfx of (config.sfx || [])) {
+      inputs.push('-i', sfx.file);
+      const vol = sfx.volume ?? 0.8;
+      const { start: sceneStart, time: delay } = effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0);
+      if (!Number.isFinite(sceneStart)) {
+        throw new Error(`config.sfx scene anchor is unavailable: ${sfx.scene}`);
+      }
+      filters.push(`[${inputIdx}:a]${stereoSource(sfx.file)},adelay=${Math.round(delay * 1000)}:all=1,volume=${vol}[sfx${inputIdx}]`);
+      inputIdx++;
+    }
+
+    // Amix all sources.
+    const mixInputs = ['[voice]'];
+    if (config.bed) mixInputs.push('[bed]');
+    for (let i = 0; i < (config.sfx || []).length; i++) mixInputs.push(`[sfx${i + (config.bed ? 2 : 1)}]`);
+    filters.push(`${mixInputs.join('')}amix=inputs=${mixInputs.length}:duration=longest:normalize=0,alimiter=limit=0.95[a]`);
+
     sh('ffmpeg', [
       '-y', '-hide_banner', '-loglevel', 'error',
       ...inputs,
@@ -689,11 +701,14 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
       '-map', '[a]',
       '-ar', '48000', '-ac', '2',
       '-t', String(totalDur),
-      path.join(audioDir, 'mix.wav'),
+      '-c:a', 'pcm_s16le', pending,
     ]);
+    fs.renameSync(pending, mixPath);
     log('  mixed: narration + bed/sfx -> mix.wav');
   } catch (e) {
     log(`  note: audio mixing failed (${e.message}) — using raw narration (no bed/sfx in preview)`);
+  } finally {
+    fs.rmSync(pending, { force: true });
   }
 }
 

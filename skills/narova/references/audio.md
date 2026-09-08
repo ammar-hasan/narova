@@ -33,16 +33,22 @@ synth stage (`narova_tts`) does the work; compose picks up the result.
 
 ## How the mix behaves
 
-- Output is `out/audio/mix.wav` = narration + bed + sfx, one ffmpeg pass
+- Output is `out/audio/mix.wav`, 48 kHz stereo PCM = narration + bed + sfx, one ffmpeg pass
   (`adelay` + `amix normalize=0` + `alimiter`). Duration equals `full.wav`
   exactly (asserted within 50ms); a sfx tail past the end is cut.
 - loudnorm is NOT re-applied — the narration is already loudnorm'd and a
   second pass would shift its level. `normalize=0` keeps the voice at full
   level; the limiter catches bed+sfx clipping. If you hear pumping, lower
   `bed.volume`, don't reach for loudnorm.
-- Remove `bed`/`sfx` (or the legacy `music`) from the config and the next synth DELETES the stale
+- Mono inputs are centered at unity before the declared gains and limiter; stereo
+  inputs retain left/right separation. Canonical speech stays 22.05 kHz mono.
+  Existing projects adopt stereo on their next synth/build, including reuse.
+- Remove `bed`/`sfx` (or the legacy `music`) from the config and the next synth/build, including external audio, deletes the stale
   `mix.wav` — compose falls back to `full.wav` automatically. Compose always
   prefers `mix.wav` when it exists.
+- Old mixes become ineligible before replacement; only a completed mix is
+  published. External processing/mixing failures warn and use the current raw
+  source, so stale or partial audio cannot shadow it.
 - Mixing runs on `--reuse` too: you can audition beds without re-voicing.
 - A missing/unreadable `file` fails the synth naming the file. Fix the path;
   there is no silent skip.

@@ -23,6 +23,7 @@ from .align import align_scenes
 from .backends import BUILTIN_BACKENDS, build_backends, close_backends
 
 RATE = 22050          # output sample rate (Piper-native; XTTS is resampled to it)
+MIX_RATE = 48000      # production audio is independent of canonical speech
 FADE = 0.012          # ~12ms fade at each sentence edge, or you get clicks (LEARNINGS #4)
 
 # Sentence-level synthesis cache (iteration consistency): a processed sentence
@@ -115,6 +116,16 @@ def scene_starts(scenes, timings) -> dict[str, float]:
     return starts
 
 
+def stereo_source(path: Path) -> str:
+    """Center mono at unity; retain stereo channels before mixing."""
+    channels = subprocess.check_output([
+        "ffprobe", "-v", "error", "-select_streams", "a:0",
+        "-show_entries", "stream=channels", "-of", "csv=p=0", str(path),
+    ], text=True).strip()
+    mapping = "pan=stereo|c0=c0|c1=c0" if channels == "1" else "aformat=channel_layouts=stereo"
+    return f"aresample={MIX_RATE},{mapping}"
+
+
 def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
     """Overlay the background bed + spot sfx onto full.wav -> audio/mix.wav, in
     one ffmpeg filter_complex pass. The bed is looped/trimmed to the exact
@@ -126,10 +137,11 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
     compose never picks up an old one."""
     full = audio_dir / "full.wav"
     mix = audio_dir / "mix.wav"
+    # Old/partial audio must never be a fallback for the current request.
+    mix.unlink(missing_ok=True)
     bed = config.get("bed") or config.get("music")  # config.bed, fallback legacy config.music
     sfx = config.get("sfx") or []
     if not bed and not sfx:
-        mix.unlink(missing_ok=True)
         return
 
     total = probe(full)
@@ -140,7 +152,7 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
             raise ValueError(f"{what}: file not found or unreadable: {p}")
 
     inputs: list[list[str]] = []        # ffmpeg argv fragments per -i
-    chains: list[str] = []              # per-source filter chains
+    chains: list[str] = [f"[0:a]{stereo_source(full)}[voice]"]
     labels: list[str] = []              # amix input labels, after [0:a]
 
     if bed:
@@ -149,7 +161,7 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
         inputs.append(["-stream_loop", "-1", "-i", str(bed["file"])])  # loop to length
         fin = bed.get("fadeIn", 0.5)
         fout = bed.get("fadeOut", 1.5)
-        chain = (f"[{idx}:a]aresample={RATE},aformat=channel_layouts=mono,"
+        chain = (f"[{idx}:a]{stereo_source(Path(bed['file']))},"
                  f"atrim=0:{total:.3f},asetpts=PTS-STARTPTS,volume={bed.get('volume', 0.14)}")
         if fin > 0:
             chain += f",afade=t=in:st=0:d={fin}"
@@ -168,23 +180,29 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
             if sc not in starts:
                 raise ValueError(f"config.sfx[{i}].scene: {sc!r} is not a scene id")
             at = starts[sc] + at
-        chains.append(f"[{idx}:a]aresample={RATE},aformat=channel_layouts=mono,"
-                      f"volume={e.get('volume', 0.8)},adelay={round(at * 1000)}[fx{i}]")
+        chains.append(f"[{idx}:a]{stereo_source(Path(e['file']))},"
+                      f"volume={e.get('volume', 0.8)},adelay={round(at * 1000)}:all=1[fx{i}]")
         labels.append(f"fx{i}")
 
     n = 1 + len(labels)
     fc = ";".join(chains + [
-        f"[0:a]{''.join(f'[{l}]' for l in labels)}"
+        f"[voice]{''.join(f'[{l}]' for l in labels)}"
         f"amix=inputs={n}:duration=first:normalize=0:dropout_transition=0,"
-        f"aresample={RATE},aformat=channel_layouts=mono,alimiter=limit=0.891[mix]"
+        f"alimiter=limit=0.891[mix]"
     ])
     args = ["ffmpeg", "-y", "-loglevel", "error", "-i", str(full)]
     for frag in inputs:
         args += frag
-    sh(*args, "-filter_complex", fc, "-map", "[mix]",
-       "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(mix))
-    drift = abs(probe(mix) - total)
-    assert drift < 0.05, f"mix duration {probe(mix):.3f}s drifts {drift*1000:.0f}ms from narration {total:.3f}s"
+    pending = audio_dir / "mix.pending.wav"
+    try:
+        sh(*args, "-filter_complex", fc, "-map", "[mix]",
+           "-ar", str(MIX_RATE), "-ac", "2", "-c:a", "pcm_s16le", str(pending))
+        achieved = probe(pending)
+        drift = abs(achieved - total)
+        assert drift < 0.05, f"mix duration {achieved:.3f}s drifts {drift*1000:.0f}ms from narration {total:.3f}s"
+        pending.replace(mix)
+    finally:
+        pending.unlink(missing_ok=True)
     what = ([f"bed={Path(bed['file']).name}@{bed.get('volume', 0.14)}"] if bed else []) \
         + ([f"sfx={len(sfx)}"] if sfx else [])
     print(f"mix   {total:5.1f}s  {' '.join(what)} -> audio/mix.wav", flush=True)
