@@ -126,3 +126,67 @@ class TestAlignScenes(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class TestProjectAlignmentOptions(unittest.TestCase):
+    def test_hyphen_components_keep_one_authored_word(self):
+        expected = words("a", "one-to-one", "connection")
+        measured = [{"w": tok, "t0": i * .2, "t1": (i+1) * .2} for i, tok in enumerate(["a", "one", "to", "one", "connection"])]
+        self.assertIsNone(apply_alignment(measured, expected, partial=False))
+        self.assertEqual(len(expected), 3)
+        self.assertEqual(expected[1]["w"], "one-to-one")
+        self.assertEqual((expected[1]["t0"], expected[1]["t1"]), (.2, .8))
+        mismatch = words("one", "two")
+        self.assertIn("word", apply_alignment([{"w": "onetwo", "t0": 0, "t1": 1}], mismatch, partial=False))
+
+    def test_explicit_partial_overrides_environment_in_both_directions(self):
+        measured = [{"w": "1", "t0": .1, "t1": .3}, {"w": "world", "t0": .4, "t1": .8}]
+        with mock.patch.dict("os.environ", {"NAROVA_ALIGN_PARTIAL": "1"}):
+            strict = words("One", "world")
+            self.assertIn("differs", apply_alignment(measured, strict, partial=False))
+            self.assertEqual(strict[1]["t0"], 0)
+        with mock.patch.dict("os.environ", {"NAROVA_ALIGN_PARTIAL": "0"}):
+            partial = words("One", "world")
+            self.assertTrue(apply_alignment(measured, partial, partial=True).startswith("partial "))
+            self.assertEqual(partial[1]["t0"], .4)
+
+    def test_project_model_overrides_env_without_mutating_it(self):
+        import sys, types, os
+        calls = []
+        class Model:
+            def __init__(self, name, **kwargs): calls.append(name)
+            def transcribe(self, *args, **kwargs): return [], None
+        with mock.patch.dict(sys.modules, {"faster_whisper": types.SimpleNamespace(WhisperModel=Model)}), mock.patch.dict(os.environ, {"NAROVA_WHISPER_MODEL": "tiny.en"}), mock.patch.object(align, "_FW_MODEL", None):
+            align._faster_whisper_words(Path("fake.wav"), "base.en")
+            align._faster_whisper_words(Path("fake.wav"))
+            self.assertEqual(calls, ["base.en", "tiny.en"])
+            self.assertEqual(os.environ["NAROVA_WHISPER_MODEL"], "tiny.en")
+
+    def test_alignment_cache_separates_models_and_reuses_raw_words(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.object(align, "CACHE_DIR", Path(d)/"cache"):
+            wav = Path(d)/"scene.wav"; wav.write_bytes(b"same audio")
+            calls = []
+            def fn(wav):
+                calls.append(wav)
+                return [{"w": "one", "t0": .1, "t1": .4}]
+            align._cached_words(wav, "faster-whisper", fn, "tiny.en")
+            align._cached_words(wav, "faster-whisper", fn, "base.en")
+            align._cached_words(wav, "faster-whisper", fn, "base.en")
+            self.assertEqual(len(calls), 2)
+
+
+class TestLocalAlignmentModelIdentity(unittest.TestCase):
+    def test_changed_model_bytes_in_store_invalidate_raw_words(self):
+        with tempfile.TemporaryDirectory() as d, mock.patch.dict("os.environ", {"NAROVA_HOME": d}), mock.patch.object(align, "CACHE_DIR", Path(d)/"cache"):
+            wav = Path(d)/"scene.wav"; wav.write_bytes(b"same audio")
+            model = Path(d)/"models"/"local.bin"; model.parent.mkdir(); model.write_bytes(b"model v1")
+            calls = []
+            def fn(wav):
+                calls.append(wav)
+                return [{"w": "one", "t0": .1, "t1": .4}]
+            align._cached_words(wav, "whisper-cpp", fn, "local.bin")
+            align._cached_words(wav, "whisper-cpp", fn, "local.bin")
+            self.assertEqual(len(calls), 1)
+            model.write_bytes(b"model v2")
+            align._cached_words(wav, "whisper-cpp", fn, "local.bin")
+            self.assertEqual(len(calls), 2)

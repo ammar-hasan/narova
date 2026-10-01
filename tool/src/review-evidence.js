@@ -806,10 +806,13 @@ async function audioMixMap(config, outDir, timings) {
   });
   for (let i = 0; i < (config.sfx || []).length; i++) {
     const effect = config.sfx[i];
-    const { start: anchorStart, time: start } = effectAnchor(sceneStarts, effect.scene, effect.at);
+    let anchorStart = effect.scene == null ? 0 : sceneStarts.get(effect.scene), start = null;
+    let anchorUnavailable = null;
+    try { ({ start: anchorStart, time: start } = effectAnchor(sceneStarts, effect.scene, effect.at, timings)); }
+    catch (error) { anchorUnavailable = error.message; }
     let duration = null;
     let sourceSelection = null;
-    let sourceUnavailable = null;
+    let sourceUnavailable = anchorUnavailable;
     if (fs.existsSync(effect.file)) {
       const sourceProbe = probeAudio(effect.file);
       if (sourceProbe.reason) sourceUnavailable = sourceProbe.reason;
@@ -818,17 +821,21 @@ async function audioMixMap(config, outDir, timings) {
         if (sourceSelection.reason) sourceUnavailable = `source ${sourceSelection.reason}`;
         else {
           const measuredDuration = sourceSelection.member.duration ?? sourceProbe.duration;
-          if (Number.isFinite(measuredDuration) && measuredDuration > 0) duration = measuredDuration;
+          if (Number.isFinite(measuredDuration) && measuredDuration > 0) {
+            duration = Math.min(effect.duration ?? Infinity, measuredDuration - (effect.start ?? 0));
+            if (duration <= 0) { duration = null; sourceUnavailable = 'source start is at or beyond source end'; }
+          }
           else sourceUnavailable = 'source audio duration is unavailable';
         }
       }
     }
     declarations.push({
       kind: 'sfx', declarationIndex: i, source: effect.file, gain: effect.volume,
-      fadeIn: null, fadeOut: null,
+      fadeIn: effect.fadeIn ?? null, fadeOut: effect.fadeOut ?? null,
+      ...(effect.start != null || effect.duration != null ? { sourceTrim: { start: effect.start ?? 0, duration: effect.duration ?? null } } : {}),
       anchor: effect.scene == null
         ? { basis: 'global timeline', scene: null, at: effect.at }
-        : { basis: 'scene start plus offset', scene: effect.scene, sceneStart: anchorStart ?? null, at: effect.at },
+        : { basis: typeof effect.at === 'object' ? 'scene indexed cue plus offset' : 'scene start plus offset', scene: effect.scene, sceneStart: anchorStart ?? null, at: effect.at },
       window: start == null || duration == null ? null : { start, end: Math.min(total, start + duration) },
       sourceSelection,
       sourceUnavailable,
@@ -895,7 +902,7 @@ function formatAudioMixMap(report) {
     lines.push(`    source digest: ${row.sourceIdentity?.digest || 'unavailable'}`);
     if (row.sourceIdentity?.member) lines.push(`    source member: stream ${row.sourceIdentity.member.index}; ${row.sourceIdentity.selectionBasis}`);
     lines.push(`    declared gain: ${row.gain}; fades: in=${row.fadeIn ?? 'not declared'} out=${row.fadeOut ?? 'not declared'}`);
-    lines.push(`    anchor: ${row.anchor.basis}${row.anchor.scene ? ` scene=${row.anchor.scene}` : ''} at=${row.anchor.at}s`);
+    lines.push(`    anchor: ${row.anchor.basis}${row.anchor.scene ? ` scene=${row.anchor.scene}` : ''} at=${typeof row.anchor.at === 'object' ? JSON.stringify(row.anchor.at) : row.anchor.at + 's'}`);
     lines.push(`    global window: ${row.window ? `${row.window.start.toFixed(2)}s–${row.window.end.toFixed(2)}s` : 'unavailable'}`);
     if (row.achieved) lines.push(`    total mix: true peak ${fmtFact(row.achieved.facts.truePeak)} ${row.achieved.basis.peakUnit}; sample peak ${fmtFact(row.achieved.facts.samplePeak)} ${row.achieved.basis.samplePeakUnit}; integrated ${fmtFact(row.achieved.facts.integratedLoudness)} ${row.achieved.basis.loudnessUnit}; range ${fmtFact(row.achieved.facts.loudnessRange)} ${row.achieved.basis.rangeUnit}; clipped samples ${row.achieved.facts.clippingSamples}; digest ${row.achieved.digest}`);
     if (row.unavailable) lines.push(`    unavailable: ${row.unavailable}`);

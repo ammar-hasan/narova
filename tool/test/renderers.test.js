@@ -1147,3 +1147,11 @@ test('hasThreeModules and hasThreeScenes recognize escape-hatch and declarative 
   assert.equal(hasThreeModules(moduleCfg), true);
   assert.equal(hasThreeModules(declarative), false);
 });
+
+
+test('no-browser skips hidden caption groups before drawing', () => {
+  const { drawCaptions } = getRenderer('no-browser')._internals;
+  drawCaptions(new Proxy({}, { get() { throw new Error('hidden captions attempted to draw'); } }), {
+    captionsEnabled: true, timeline: { preset: 'subtitle', groups: [{ start: 0, end: 1, hidden: true, words: [{ w: 'Hidden' }] }] },
+  }, 0.5, {});
+});

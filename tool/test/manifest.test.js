@@ -1033,3 +1033,21 @@ test('revision: visual-only edit (add scene with same vo text) SHOULD change fin
   assert.notEqual(audioFingerprint(a), audioFingerprint(b),
     'adding a scene with the same text still changes fingerprint — additional turn to synthesize');
 });
+
+
+test('series controls survive manifest restoration and separate speech from scene identity', t => {
+  const { configFromManifest, audioFingerprint } = require('../src/pipeline');
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-series-manifest-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'hit.wav'), 'fixture');
+  const raw = makeRaw({ align: { model: 'base.en', partial: false }, sfx: [{ file: 'hit.wav', scene: 'body', at: { sentence: 0, word: 1 }, start: 1, duration: 2, fadeIn: 0.2, fadeOut: 0.3 }] });
+  const before = resolveConfig(raw, {}, dir), m1 = compile(before);
+  raw.scenes[1].captions = false;
+  const after = resolveConfig(raw, {}, dir), m2 = compile(after), restored = configFromManifest(m2);
+  assert.deepEqual(restored.sfx[0], m2.audio.sfx[0]);
+  assert.deepEqual(restored.align, after.align);
+  assert.equal(restored.scenes[1].captions, false);
+  assert.equal(audioFingerprint(before), audioFingerprint(after));
+  assert.equal(m1.scenes[0].hash, m2.scenes[0].hash);
+  assert.notEqual(m1.scenes[1].hash, m2.scenes[1].hash);
+});

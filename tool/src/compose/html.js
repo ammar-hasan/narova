@@ -112,7 +112,7 @@ function composeDoc(config, size, data, css) {
       words: (g.words || []).map(w => ({ ...w, t0: w.t0 - start, t1: w.t1 - start })),
     }));
     const sceneData = { ...measured, markers: data.markers || {}, groups: cueGroups };
-    const overlay = karaoke.overlayForScene ? karaoke.overlayForScene(start, dur) : '';
+    const overlay = s.captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(start, dur) : '';
     let body = String(s.body || '');
     if (s._threeModuleContents) {
       body = threeModuleSceneBody(s, sceneData, size.w, size.h) + (body || '');
@@ -278,7 +278,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   // are rebased to scene-local by passing offset=globalStart (this project's
   // timeline starts at 0).
   const karaoke = buildKaraokeOverlays(config);
-  const karaokeOverlay = karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur, globalStart) : '';
+  const karaokeOverlay = config.scenes[sceneIdx].captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur, globalStart) : '';
   const karaokeCss = karaoke.css || '';
 
   // Captions: filter groups within this scene's time window, rebase to t=0.
@@ -286,6 +286,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
     return g.start < globalStart + sceneDur && g.end > globalStart;
   }).map(g => ({
     who: g.who, label: g.label,
+    ...(g.hidden ? { hidden: true } : {}),
     start: Math.max(0, r3(g.start - globalStart)),
     end: Math.min(sceneDur, r3(g.end - globalStart)),
     words: g.words.filter(w => {

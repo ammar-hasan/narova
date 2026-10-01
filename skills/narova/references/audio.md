@@ -29,7 +29,24 @@ synth stage (`narova_tts`) does the work; compose picks up the result.
   re-voicing that changes earlier scenes' lengths.
 - Without `scene` (`"scene": null` or omitted): `at` is a global timeline
   time in seconds. Brittle across re-voicing; use for one-off fixes.
-- `at` defaults to 0, `volume` to 0.8.
+- `at` defaults to 0, `volume` to 0.8. To follow speech inside a scene,
+  use `at: { sentence: 0, word: 2, offset: -0.05 }`. Indices match
+  `wordCue(scene, sentence, word)`; omit `word` to use the sentence's first
+  word. `offset` is signed seconds, and the resolved global time must stay
+  non-negative. Missing timing or indices fail with attribution. External
+  narration needs supplied word timings for these anchors.
+- `start` selects a source offset in seconds; `duration` optionally limits the
+  selected audio. `fadeIn` and `fadeOut` apply to that selected interval before
+  placing it on the timeline. Start/fades default to zero; duration defaults
+  to all remaining source audio. Fades are bounded by the selected length;
+  a start at/beyond source end is an error. These work on both audio routes.
+
+```js
+sfx: [{ file: "assets/riser.wav", scene: "hook",
+  at: { sentence: 0, word: 2, offset: -0.05 },
+  start: 1.5, duration: 0.8, fadeIn: 0.05, fadeOut: 0.2, volume: 0.6 }]
+```
+
 
 ## How the mix behaves
 
@@ -188,9 +205,13 @@ good enough for karaoke. `align` replaces them with measured ones:
 
 ```json
 "align": true                                // engine: auto
-"align": { "engine": "faster-whisper" }      // or "whisper-cpp"
+"align": { "engine": "faster-whisper", "model": "base.en", "partial": true }
 ```
 
+- Project `model` and `partial` override environment defaults, including
+  `partial: false`. Omit them to retain `NAROVA_WHISPER_MODEL` and
+  `NAROVA_ALIGN_PARTIAL` compatibility. Keeping them in the config makes
+  the project's chosen alignment settings travel with it.
 - **faster-whisper**: `pip install faster-whisper` into the narova venv
   (`~/.narova/venv`). Not in requirements.txt — it's a heavy optional dep.
   Model `tiny.en` by default; `$NAROVA_WHISPER_MODEL=base.en` for a bit more
@@ -200,17 +221,24 @@ good enough for karaoke. `align` replaces them with measured ones:
 - **whisper.cpp**: install it so `whisper-cli` is on PATH
   (`brew install whisper-cpp`, or build ggerganov/whisper.cpp). The
   `ggml-tiny.en.bin` model auto-downloads once to `~/.narova/models/`.
+  Its optional `model` selects an existing local model file: use a
+  project-relative path or a filename already in the Narova model store.
 - **auto**: faster-whisper if importable, else whisper.cpp. `narova doctor`
   reports which engines it can see.
 - Alignment runs AFTER the loudnorm rescale, on the final scene wav, and only
   rewrites word `t0`/`t1` — scene `dur` and `turns` are untouched, so the
   caption-sync guarantee still holds. Works on `--reuse`.
-- Results are cached by scene-wav sha1 at `~/.narova/cache/align/` — re-runs
-  are free until the audio changes.
+- Raw measured results are cached by scene audio, engine and effective model
+  identity at `~/.narova/cache/align/`. Changing partial mode reapplies mapping
+  to those raw words; changing model selects a different cache entry.
 - **Failure is soft.** Engine missing/crashed, or aligned words don't match
   the script token-for-token (punctuation-stripped, case-insensitive): that
   scene keeps its estimates with a warning. Alignment never breaks a build.
-- **Partial alignment** (`NAROVA_ALIGN_PARTIAL=1`): for mixed-language
+- Hyphenated authored words such as `one-to-one` also match the consecutive
+  measured words `one`, `to`, `one` while retaining one clean caption token.
+  Other strict mismatches keep estimates; partial mode can retain exact
+  anchors around a misheard word such as `One` transcribed as `1`.
+- **Partial alignment** (`align: { partial: true }`, or `NAROVA_ALIGN_PARTIAL=1`): for mixed-language
   scenes (e.g. English narration + Arabic quotations), Whisper transcribes
   only the English words. Partial mode finds exact English anchors and
   interpolates timings for unrecognized spans instead of rejecting the
@@ -233,3 +261,13 @@ good enough for karaoke. `align` replaces them with measured ones:
   PerTh neural watermark by default — inaudible, survives mp3 compression
   (that's why `resemble-perth` is a hard dep and setuptools is pinned <81).
   Good for EU AI Act provenance; do not try to strip it.
+
+## Unit tempo and scene captions
+
+At `timing.tempo: 1`, synthesis bypasses time stretching and still applies gain,
+fades and canonical conversion. Use exactly one for unchanged pacing.
+
+Set `captions: false` on an individual scene to hide its visual caption overlay
+in either renderer, including the dedicated external-word overlay. SRT/VTT and
+indexed choreography cues retain that scene's words. Omit the field or use true
+to inherit the root standard-caption setting.

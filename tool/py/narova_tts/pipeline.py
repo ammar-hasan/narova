@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import math
 import os
 import re
 import shutil
@@ -176,12 +177,30 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
         inputs.append(["-i", str(e["file"])])
         at = e.get("at", 0)
         sc = e.get("scene")
+        if isinstance(at, dict):
+            words = [w for w in timings.get(sc, {}).get("words", []) if w.get("si") == at["sentence"]]
+            wi = at.get("word", 0)
+            if wi >= len(words):
+                raise ValueError(f"config.sfx[{i}] cue unavailable: scene {sc!r}, sentence {at['sentence']}, word {wi}")
+            at = words[wi]["t0"] + at.get("offset", 0)
         if sc is not None:
             if sc not in starts:
                 raise ValueError(f"config.sfx[{i}].scene: {sc!r} is not a scene id")
             at = starts[sc] + at
-        chains.append(f"[{idx}:a]{stereo_source(Path(e['file']))},"
-                      f"volume={e.get('volume', 0.8)},adelay={round(at * 1000)}:all=1[fx{i}]")
+        if not math.isfinite(at) or at < 0:
+            raise ValueError(f"config.sfx[{i}] anchor must resolve to non-negative finite seconds")
+        source_start = e.get("start", 0)
+        duration = min(e.get("duration", float("inf")), probe(Path(e["file"])) - source_start)
+        if duration <= 0:
+            raise ValueError(f"config.sfx[{i}].start: at or beyond source end")
+        chain = (f"[{idx}:a]{stereo_source(Path(e['file']))},"
+                 f"atrim=start={source_start}:duration={duration},asetpts=PTS-STARTPTS,volume={e.get('volume', 0.8)}")
+        fin, fout = min(e.get("fadeIn", 0), duration), min(e.get("fadeOut", 0), duration)
+        if fin > 0:
+            chain += f",afade=t=in:st=0:d={fin}"
+        if fout > 0:
+            chain += f",afade=t=out:st={max(0.0, duration-fout)}:d={fout}"
+        chains.append(chain + f",adelay={round(at * 1000)}:all=1[fx{i}]")
         labels.append(f"fx{i}")
 
     n = 1 + len(labels)
@@ -241,7 +260,7 @@ def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float,
     of the same sentence is a different cache entry AND a different derived
     seed — a reproducible alternative take, not a random re-roll."""
     h = hashlib.sha1()
-    parts = f"v1|{kind}|{speaker}|{tempo}|{RATE}|{FADE}|{text}"
+    parts = f"{'v2-unit-tempo' if tempo == 1.0 else 'v1'}|{kind}|{speaker}|{tempo}|{RATE}|{FADE}|{text}"
     if lang:
         parts += f"|lang={lang}"
     if nonce is not None:
@@ -327,9 +346,10 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
     backend.synthesize(who, text, raw, lang=lang, seed=seed)
     d = probe(raw) / tempo                 # duration on the post-tempo timeline
     fo = max(0.0, d - FADE)
-    gain = f",volume={gain_db}dB" if gain_db != 0.0 else ""
+    gain = f"volume={gain_db}dB," if gain_db != 0.0 else ""
+    stretch = f"atempo={tempo}," if tempo != 1.0 else ""
     sh("ffmpeg", "-y", "-loglevel", "error", "-i", str(raw),
-       "-af", f"atempo={tempo}{gain},"
+       "-af", f"{stretch}{gain}"
               f"afade=t=in:st=0:d={FADE},afade=t=out:st={fo}:d={FADE}",
        "-ar", str(RATE), "-ac", "1", "-c:a", "pcm_s16le", str(out))
     dur = probe(out)
@@ -376,7 +396,8 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
                      if (s.get("clipAudio") or {}).get("authority") != "native"]
         if alignable:
             align_scenes(alignable, timings, audio_dir,
-                         config["align"].get("engine", "auto"))
+                         config["align"].get("engine", "auto"),
+                         model=config["align"].get("model"), partial=config["align"].get("partial"))
 
     timings_path.write_text(json.dumps(timings))
 

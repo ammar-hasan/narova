@@ -251,7 +251,7 @@ function compile(config, opts = {}) {
     },
     audio: {
       bed: bed ? { file: path.relative(projectDir, bed.file) || bed.file, volume: bed.volume, fadeIn: bed.fadeIn, fadeOut: bed.fadeOut } : null,
-      sfx: (sfx || []).map(s => ({ file: path.relative(projectDir, s.file) || s.file, scene: s.scene || null, at: s.at, volume: s.volume })),
+      sfx: (sfx || []).map(s => ({ file: path.relative(projectDir, s.file) || s.file, scene: s.scene || null, at: s.at, volume: s.volume, ...Object.fromEntries(['start', 'duration', 'fadeIn', 'fadeOut'].filter(k => s[k] != null).map(k => [k, s[k]])) })),
     },
     captions: {
       // `enabled` distinguishes `captions:false` (band off) from the default
@@ -409,6 +409,7 @@ function compileScenes(scenes, projectDir, assetsDir) {
     const assetRefs = sceneAssetRefs(s, projectDir, assetsDir);
     return {
     id:         s.id,
+    ...(s.captions != null ? { captions: s.captions } : {}),
     index:      i,
     start:      0,          // filled after synth
     duration:   0,          // filled after synth
@@ -597,6 +598,7 @@ function sceneHash(s) {
     id: s.id,
     vo: s.vo, body: s.body, visual: s.visual, three: s.three,
     clip: s.clip, walkthrough: s.walkthrough, transition: s.transition,
+    ...(s.captions != null ? { captions: s.captions } : {}),
     dur: s.dur, minDur: s.minDur, clipAudio: s.clipAudio,
     choreographyFile: s._choreographyFileContents || null,
     scriptFile: s._scriptFileContents || null,

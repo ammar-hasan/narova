@@ -24,6 +24,8 @@ free until the audio changes.
 from __future__ import annotations
 
 import hashlib
+import copy
+import math
 import importlib.util
 import json
 import os
@@ -61,11 +63,11 @@ def _norm(tok: str) -> str:
 _FW_MODEL: tuple[str, Any] | None = None  # (name, model) — loaded once per process
 
 
-def _faster_whisper_words(wav: Path) -> list[dict]:
+def _faster_whisper_words(wav: Path, model: str | None = None) -> list[dict]:
     global _FW_MODEL
     from faster_whisper import WhisperModel  # optional dep — see module docstring
 
-    name = os.environ.get("NAROVA_WHISPER_MODEL", "tiny.en")
+    name = model if model is not None else os.environ.get("NAROVA_WHISPER_MODEL", "tiny.en")
     if _FW_MODEL is None or _FW_MODEL[0] != name:
         print(f"[align] loading faster-whisper {name} …", flush=True)
         _FW_MODEL = (name, WhisperModel(name, device="cpu", compute_type="int8"))
@@ -88,7 +90,15 @@ def _whisper_cpp_bin() -> str | None:
     return None
 
 
-def _whisper_cpp_model() -> Path:
+def _whisper_cpp_model(selected: str | None = None) -> Path:
+    if selected is not None:
+        candidate = Path(selected)
+        if candidate.is_file():
+            return candidate
+        candidate = Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova")) / "models" / selected
+        if candidate.is_file():
+            return candidate
+        raise RuntimeError(f"whisper-cpp model file not found: {selected}")
     model = Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova")) / "models" / WHISPER_CPP_MODEL
     if not model.exists():
         model.parent.mkdir(parents=True, exist_ok=True)
@@ -97,11 +107,11 @@ def _whisper_cpp_model() -> Path:
     return model
 
 
-def _whisper_cpp_words(wav: Path) -> list[dict]:
+def _whisper_cpp_words(wav: Path, model: str | None = None) -> list[dict]:
     bin = _whisper_cpp_bin()
     if not bin:
         raise RuntimeError("no whisper.cpp binary on PATH (want whisper-cli)")
-    model = _whisper_cpp_model()
+    model = _whisper_cpp_model(model)
     # -ojf = --output-json-full; -ml 1 = one token per segment -> word-level
     # offsets. whisper.cpp writes <out>.json next to the -of path.
     out_base = wav.parent / f"_{wav.stem}_align"
@@ -128,22 +138,27 @@ def _whisper_cpp_words(wav: Path) -> list[dict]:
     return words
 
 
-def _candidates(engine: str) -> list[tuple[str, Callable[[Path], list[dict]]]]:
+def _candidates(engine: str, model: str | None = None) -> list[tuple[str, Callable[[Path], list[dict]]]]:
     """Engines to try, in order, limited to what's actually installed."""
     cands = []
     if engine in ("auto", "faster-whisper") and importlib.util.find_spec("faster_whisper"):
-        cands.append(("faster-whisper", _faster_whisper_words))
+        cands.append(("faster-whisper", lambda wav: _faster_whisper_words(wav, model)))
     if engine in ("auto", "whisper-cpp") and _whisper_cpp_bin():
-        cands.append(("whisper-cpp", _whisper_cpp_words))
+        cands.append(("whisper-cpp", lambda wav: _whisper_cpp_words(wav, model)))
     return cands
 
 
 # ---- cache ----------------------------------------------------------------------
 
-def _cached_words(wav: Path, engine: str, fn: Callable[[Path], list[dict]]) -> list[dict]:
+def _cached_words(wav: Path, engine: str, fn: Callable[[Path], list[dict]], model: str | None = None) -> list[dict]:
     """Alignment keyed by the wav's contents: identical audio re-aligns free."""
     h = hashlib.sha1()
-    h.update(f"v1|{engine}|{os.environ.get('NAROVA_WHISPER_MODEL', 'tiny.en')}".encode())
+    effective_model = model if model is not None else (os.environ.get('NAROVA_WHISPER_MODEL', 'tiny.en') if engine == 'faster-whisper' else WHISPER_CPP_MODEL)
+    model_file = Path(effective_model)
+    if engine == 'whisper-cpp' and not model_file.is_file():
+        model_file = Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova")) / "models" / effective_model
+    model_identity = hashlib.sha256(model_file.read_bytes()).hexdigest() if model_file.is_file() else effective_model
+    h.update(f"v2|{engine}|{model_identity}".encode())
     with wav.open("rb") as f:
         for chunk in iter(lambda: f.read(1024 * 1024), b""):
             h.update(chunk)
@@ -160,7 +175,7 @@ def _cached_words(wav: Path, engine: str, fn: Callable[[Path], list[dict]]) -> l
 
 # ---- mapping aligned words onto the expected token sequence ----------------------
 
-def apply_alignment(measured: list[dict], words: list[dict]) -> str | None:
+def apply_alignment(measured: list[dict], words: list[dict], partial: bool | None = None) -> str | None:
     """Overwrite word t0/t1 from measured words. Returns None on full success,
     a 'partial N/M exact anchors' string on partial success, or a failure
     description. On full failure nothing is touched (estimates stay).
@@ -169,6 +184,23 @@ def apply_alignment(measured: list[dict], words: list[dict]) -> str | None:
     find exact word anchors between expected and measured tokens, then
     interpolates timings for unrecognized spans. Essential for mixed
     Arabic/English scenes where Whisper transcribes English but not Arabic."""
+    # Match only explicitly hyphenated authored tokens against their split components.
+    grouped, cursor = [], 0
+    for expected in words:
+        if cursor >= len(measured):
+            break
+        token = measured[cursor]
+        components = re.split(r"[-‐‑–]", expected["w"])
+        if len(components) > 1 and all(_norm(part) for part in components) and _norm(token["w"]) != _norm(expected["w"]):
+            chunk = measured[cursor:cursor + len(components)]
+            if len(chunk) == len(components) and all(_norm(m["w"]) == _norm(part) for m, part in zip(chunk, components)):
+                token = {"w": expected["w"], "t0": chunk[0]["t0"], "t1": chunk[-1]["t1"]}
+                cursor += len(chunk)
+                grouped.append(token)
+                continue
+        grouped.append(token)
+        cursor += 1
+    measured = grouped + measured[cursor:]
     # 1 — try exact match
     if len(measured) == len(words) and all(
         _norm(m["w"]) == _norm(e["w"]) for m, e in zip(measured, words)
@@ -180,7 +212,7 @@ def apply_alignment(measured: list[dict], words: list[dict]) -> str | None:
         return None
 
     # 2 — partial alignment (opt-in via NAROVA_ALIGN_PARTIAL=1)
-    if os.environ.get("NAROVA_ALIGN_PARTIAL") != "1":
+    if not (partial if partial is not None else os.environ.get("NAROVA_ALIGN_PARTIAL") == "1"):
         if len(measured) != len(words):
             return f"word count differs: aligned {len(measured)} vs expected {len(words)}"
         for i, (m, e) in enumerate(zip(measured, words)):
@@ -236,10 +268,10 @@ def apply_alignment(measured: list[dict], words: list[dict]) -> str | None:
 # ---- entry point -------------------------------------------------------------------
 
 def align_scenes(scenes: list[dict], timings: dict[str, Any],
-                 audio_dir: Path, engine: str = "auto") -> None:
+                 audio_dir: Path, engine: str = "auto", *, model: str | None = None, partial: bool | None = None) -> None:
     """Align every scene's final (post-loudnorm, post-rescale) wav in place.
     Never raises: a scene that can't be aligned keeps its estimated timings."""
-    cands = _candidates(engine)
+    cands = _candidates(engine, model)
     if not cands:
         print(f"align: no engine available for {engine!r} — keeping estimated word timings\n"
               "  install one of: `pip install faster-whisper` (narova venv), or\n"
@@ -254,11 +286,16 @@ def align_scenes(scenes: list[dict], timings: dict[str, Any],
             continue
         for name, fn in cands:
             try:
-                measured = _cached_words(wav, name, fn)
+                measured = _cached_words(wav, name, fn, model)
+                if any(not math.isfinite(float(w[key])) for w in measured for key in ('t0', 't1')):
+                    raise ValueError('non-finite aligned word timing')
+                replacement = copy.deepcopy(words)
+                why = apply_alignment(measured, replacement, partial)
             except Exception as e:  # engine failure: try the next engine
                 print(f"align: scene {nn} [{s['id']}] {name} failed: {e}", flush=True)
                 continue
-            why = apply_alignment(measured, words)
+            if why is None or why.startswith("partial "):
+                words[:] = replacement
             if why is None:
                 print(f"align {nn} [{s['id']:>9}] {len(words)} words measured ({name})",
                       flush=True)

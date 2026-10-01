@@ -97,8 +97,8 @@ var stage = document.getElementById('cap-stage');
     return { scene: foundScene, sentence: sentence };
   }
   function span(scene, sentenceIndex, wordIndex, start, end, extra) {
-    if (!Number.isFinite(start) || !Number.isFinite(end) || end <= start) {
-      throw cueError(scene, sentenceIndex, wordIndex, 'resolved timing must have a finite end after its start');
+    if (!Number.isFinite(start) || !Number.isFinite(end) || end < start) {
+      throw cueError(scene, sentenceIndex, wordIndex, 'resolved timing must have a finite end at or after its start');
     }
     var result = {
       scene: scene.id,
@@ -141,6 +141,7 @@ var PRESET = DATA.preset || '';
 // When PRESET is falsy, captions are disabled — skip building the DOM.
 if (PRESET && stage && DATA.groups.length) {
 DATA.groups.forEach(function (g, gi) {
+  if (g.hidden) return;
   var el = document.createElement('div');
   el.className = 'cap-group';
   el.id = 'capg-' + gi;

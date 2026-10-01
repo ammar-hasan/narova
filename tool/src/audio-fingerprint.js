@@ -76,7 +76,7 @@ function audioFingerprint(config) {
     lead: timing.lead != null ? timing.lead : 0.16,
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
-    pipeline: 3,
+    pipeline: 4,
   }));
 }
 
@@ -116,7 +116,7 @@ function narrationContextDigest(config) {
     lead: timing.lead != null ? timing.lead : 0.16,
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
-    pipeline: 3,
+    pipeline: 4,
   }));
 }
 

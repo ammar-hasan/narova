@@ -681,3 +681,30 @@ class TestDeterministicTakes(unittest.TestCase):
         self.assertFalse(hit)
         self.assertEqual(FakeBackend.calls["seed"], 4242)
         self.assertEqual(dur, 1.0)
+
+
+class TestUnitTempoProcessing(unittest.TestCase):
+    def test_short_raw_clip_bypasses_stretch_but_keeps_processing(self):
+        import subprocess, wave
+        from narova_tts import pipeline
+        class Backend:
+            def synthesize(self, who, text, out, **kwargs):
+                subprocess.run(["ffmpeg", "-y", "-loglevel", "error", "-f", "lavfi", "-i", "sine=frequency=440:duration=1.44:sample_rate=44100", "-ac", "1", str(out)], check=True)
+        with tempfile.TemporaryDirectory() as d:
+            tmp = Path(d); out = tmp/"processed.wav"
+            original = pipeline.sh
+            chains = []
+            def capture(*args):
+                if "-af" in args: chains.append(args[args.index("-af")+1])
+                return original(*args)
+            with mock.patch.object(pipeline, "sh", side_effect=capture):
+                dur, hit = pipeline.synth_sentence(Backend(), "a", "Hello.", tmp, out, 1.0, gain_db=-3)
+            self.assertFalse(hit)
+            self.assertNotIn("atempo", chains[0])
+            self.assertIn("volume=-3dB", chains[0]); self.assertIn("afade", chains[0])
+            self.assertAlmostEqual(dur, 1.44, places=2)
+            with wave.open(str(out)) as wav:
+                self.assertEqual((wav.getframerate(), wav.getnchannels(), wav.getsampwidth()), (22050, 1, 2))
+            with mock.patch.object(pipeline, "sh", side_effect=capture):
+                fast, _ = pipeline.synth_sentence(Backend(), "a", "Hello.", tmp, out, 1.25)
+            self.assertIn("atempo=1.25", chains[-1]); self.assertLess(fast, dur)

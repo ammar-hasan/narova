@@ -629,7 +629,7 @@ function transitionState(scene, localTime, index) {
 function drawCaptions(ctx, project, time, env) {
   if (project.captionsEnabled === false || project.timeline.preset === false) return;
   const group = project.timeline.groups.find(g => time >= g.start && time < g.end);
-  if (!group || !group.words.length) return;
+  if (!group || group.hidden || !group.words.length) return;
   const width = project.size.w, height = project.size.h;
   const presentation = project.timeline.captionPresentation || {};
   const fontSize = presentation.size != null
