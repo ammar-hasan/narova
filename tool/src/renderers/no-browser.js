@@ -87,21 +87,13 @@ function timingsFor(config, outDir) {
   }
   const timings = JSON.parse(fs.readFileSync(timingsPath, 'utf8'));
   if (config.narrationSource && Array.isArray(config.narrationSource.wordTimings)) {
-    const cues = config.narrationSource.wordTimings;
-    let cursor = 0;
+    const projected = require('../timing').externalTimings({
+      ...config, scenes: config.scenes.map(scene => ({ ...scene, dur: timings[scene.id]?.dur ?? scene.dur })),
+    });
     for (const scene of config.scenes) {
-      const entry = timings[scene.id] || (timings[scene.id] = { dur: scene.dur || 0 });
-      const end = Math.round((cursor + entry.dur) * 1e6) / 1e6;
+      const entry = timings[scene.id] || (timings[scene.id] = { dur: projected[scene.id].dur });
       entry.turns = entry.turns || [];
-      entry.words = cues.filter(cue => cue.start < end - 1e-6 && cue.end > cursor + 1e-6)
-        .flatMap((cue, si) => (cue.words || []).map(word => ({
-          w: word.text || word.w || '',
-          t0: Math.max(0, word.start - cursor),
-          t1: Math.max(0, word.end - cursor),
-          who: cue.who || scene.vo[0]?.who || Object.keys(config.voices)[0] || 'a',
-          si,
-        })));
-      cursor = end;
+      entry.words = projected[scene.id].words;
     }
   }
   for (const scene of config.scenes) {
@@ -666,7 +658,7 @@ function drawCaptions(ctx, project, time, env) {
   const x = (width - boxWidth) / 2, y = height - boxHeight - Math.max(22, height * 0.055);
   if (presentation.plate === true) {
     roundRect(ctx, x, y, boxWidth, boxHeight, fontSize * 0.42);
-    ctx.fillStyle = 'rgba(3,7,14,0.86)'; ctx.fill();
+    ctx.fillStyle = presentation.plateColor || 'rgba(3,7,14,0.86)'; ctx.fill();
   }
   ctx.textBaseline = 'middle';
   const canvasRtl = rtl && !font;
@@ -683,7 +675,7 @@ function drawCaptions(ctx, project, time, env) {
       const voice = project.voices[group.who] || {};
       const preset = project.timeline.preset || 'subtitle';
       const look = captionWordStyle(preset, active, past, voice.color || project.theme.accent || '#2ee6d6');
-      ctx.fillStyle = look.color;
+      ctx.fillStyle = (active ? presentation.activeColor : (past ? presentation.pastColor : null)) || presentation.color || look.color;
       ctx.globalAlpha = look.alpha;
       if (font) {
         cursor -= wordWidths[i];

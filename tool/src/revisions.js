@@ -90,6 +90,7 @@ function narrationDigest(scene) {
     ...(turn.lang ? { lang: turn.lang } : {}),
     ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
     ...(turn.take != null ? { take: turn.take } : {}),
+    ...(turn.pauseAfter ? { pauseAfter: turn.pauseAfter } : {}),
   }));
   return sha256(JSON.stringify({
     turns,

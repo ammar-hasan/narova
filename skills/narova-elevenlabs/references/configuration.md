@@ -52,7 +52,7 @@ Supported `providerOptions`:
 
 - `model` or `modelId`
 - `outputFormat` (default `mp3_44100_128`; converted to mono PCM WAV)
-- `stability`, `similarityBoost`, `style`, `useSpeakerBoost`, `speed`
+- `stability`, `similarityBoost`, `style`, `useSpeakerBoost`, `speed` (model-dependent; v4/v4 turbo accept only the first two)
 - `voiceSettings` using the API's snake_case voice-setting keys
 - `applyTextNormalization`, `applyLanguageTextNormalization`, `seed`
 - `requestTimeoutSeconds` from 1 to 300
@@ -63,6 +63,12 @@ passwords, or other secrets in this object; Narova rejects secret-like keys.
 
 The optional per-voice `lang`, or a turn's `lang`, is sent as the API
 `language_code`. Model support determines whether it has an effect.
+
+Read [current offerings](current-offerings.md) for v4 models, context negotiation,
+raw PCM decoding and optional hosted MCP. Re-register the updated worker to
+refresh its version and surrounding-text capability before using it. For an
+existing registration, remove it first (`narova providers remove elevenlabs`)
+then add the updated manifest; add rejects duplicate registrations.
 
 ## Voice listing and synthesis
 

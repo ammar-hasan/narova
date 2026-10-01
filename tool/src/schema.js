@@ -42,6 +42,12 @@ const ASSERTION_OPERATORS = new Set(['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'betw
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
   const errs = [];
+  function validateTurnPresentation(turn, at, suppliedPerformance = false) {
+    if (!turn || typeof turn !== 'object') return;
+    if (turn.pauseAfter != null && (typeof turn.pauseAfter !== 'number' || !Number.isFinite(turn.pauseAfter) || turn.pauseAfter < 0)) errs.push(`${at}.pauseAfter: expected non-negative finite seconds`);
+    if (turn.captions != null && typeof turn.captions !== 'boolean') errs.push(`${at}.captions: expected a boolean`);
+    if (turn.pauseAfter > 0 && suppliedPerformance) errs.push(`${at}.pauseAfter: requires synthesized narration`);
+  }
 
   const title = raw.title || 'narova';
   // Platform preset (--platform / config.platform): picks the frame size when
@@ -278,6 +284,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         // version changes without importing provider code.
         v.providerProtocol = provider.protocol;
         v.providerVersion = provider.providerVersion || '';
+        v.providerCapabilities = provider.capabilities || {};
         if (v.providerOptions == null) v.providerOptions = {};
       }
     }
@@ -454,6 +461,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (turn.take != null && (typeof turn.take !== 'number' || !Number.isInteger(turn.take) || turn.take < 1)) {
         errs.push(`${at}.vo[${j}].take: must be a positive integer (explicit take nonce)`);
       }
+      validateTurnPresentation(turn, `${at}.vo[${j}]`, raw.narration || s.clipAudio?.authority === 'native');
       // Per-turn language override for multilingual TTS (chatterbox/qwen/xtts).
       // Accepted but not validated against a list — the backend decides.
       if (turn.lang != null && typeof turn.lang !== 'string') {
@@ -980,7 +988,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (e.at != null && typeof e.at === 'object' && !Array.isArray(e.at)) {
         if (!e.scene) errs.push(`${at}.at: an indexed anchor requires scene`);
         if (!Number.isInteger(e.at.sentence) || e.at.sentence < 0) errs.push(`${at}.at.sentence: expected a non-negative integer`);
-        if (e.at.word != null && (!Number.isInteger(e.at.word) || e.at.word < 0)) errs.push(`${at}.at.word: expected a non-negative integer`);
+        if (e.at.word != null && !(Number.isInteger(e.at.word) && e.at.word >= 0) && !(typeof e.at.word === 'object' && !Array.isArray(e.at.word) && typeof e.at.word.text === 'string' && e.at.word.text.trim() && (e.at.word.occurrence == null || (Number.isInteger(e.at.word.occurrence) && e.at.word.occurrence >= 0)))) errs.push(`${at}.at.word: expected a non-negative integer or { text, occurrence? }`);
         if (e.at.offset != null && (typeof e.at.offset !== 'number' || !Number.isFinite(e.at.offset))) errs.push(`${at}.at.offset: expected finite seconds`);
       } else if (e.at != null && (typeof e.at !== 'number' || !Number.isFinite(e.at) || e.at < 0)) {
         errs.push(`${at}.at: must be a non-negative number of seconds`);
@@ -999,6 +1007,22 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         ...Object.fromEntries(['start', 'duration', 'fadeIn', 'fadeOut'].filter(k => e[k] != null).map(k => [k, e[k]])),
       });
     });
+  }
+
+  let mix = null;
+  if (raw.mix != null) {
+    if (typeof raw.mix !== 'object' || Array.isArray(raw.mix)) errs.push('config.mix: expected an object');
+    else if (raw.mix.loudness != null) {
+      const l = raw.mix.loudness;
+      if (typeof l !== 'object' || Array.isArray(l)) errs.push('config.mix.loudness: expected { target, peak?, lra? }');
+      else {
+        const values = { target: l.target, peak: l.peak ?? -1.5, lra: l.lra ?? 11 };
+        for (const [k, low, high] of [['target', -70, -5], ['peak', -9, 0], ['lra', 1, 50]]) {
+          if (typeof values[k] !== 'number' || !Number.isFinite(values[k]) || values[k] < low || values[k] > high) errs.push(`config.mix.loudness.${k}: expected ${low}..${high}`);
+        }
+        mix = { loudness: values };
+      }
+    }
   }
 
   // Captions: a karaoke style preset plus words to auto-emphasize (matched
@@ -1033,6 +1057,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (typeof c.plate !== 'boolean') {
           errs.push('config.captions.plate: expected a boolean');
         } else captions.plate = c.plate;
+      }
+      for (const key of ['color', 'activeColor', 'pastColor', 'plateColor']) {
+        if (c[key] != null) {
+          if (typeof c[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(c[key])) errs.push(`config.captions.${key}: expected a six-digit hexadecimal RGB color`);
+          else captions[key] = c[key];
+        }
       }
       if (c.size != null) {
         if (!Number.isInteger(c.size) || c.size < 10 || c.size > 120) {
@@ -1109,6 +1139,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         if (!Array.isArray(sc.vo) || sc.vo.length === 0) { errs.push(`${at}.scene.vo: non-empty turn list required`); return; }
         let ok = true;
         sc.vo.forEach((turn, j) => {
+          validateTurnPresentation(turn, `${at}.scene.vo[${j}]`, raw.narration || scenes[0]?.clipAudio?.authority === 'native');
           if (!turn || !turn.who || !voices[turn.who]) { errs.push(`${at}.scene.vo[${j}].who: ${turn && turn.who ? `"${turn.who}" not in config.voices` : 'required'}`); ok = false; }
           if (!turn || typeof turn.text !== 'string' || !turn.text.trim()) { errs.push(`${at}.scene.vo[${j}].text: required`); ok = false; }
           if (turn && turn.synthesisText != null && (typeof turn.synthesisText !== 'string' || !turn.synthesisText.trim())) {
@@ -1136,6 +1167,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
           }
           if (so.vo != null) {
             if (!Array.isArray(so.vo)) { errs.push(`${at}.sceneOverrides.${sid}.vo: expected a turn array`); continue; }
+            so.vo.forEach((turn, j) => validateTurnPresentation(turn, `${at}.sceneOverrides.${sid}.vo[${j}]`, raw.narration || scenes.find(s => s.id === sid)?.clipAudio?.authority === 'native'));
             entry.vo = so.vo;
           }
           if (so.three != null) {
@@ -1173,6 +1205,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
           errs.push(`${at}.captions: expected an object like { preset, emphasis }`);
         } else {
           captionsOverride = {};
+          for (const key of ['color', 'activeColor', 'pastColor', 'plateColor']) {
+            if (v.captions[key] != null) {
+              if (typeof v.captions[key] !== 'string' || !/^#[0-9a-f]{6}$/i.test(v.captions[key])) errs.push(`${at}.captions.${key}: expected a six-digit hexadecimal RGB color`);
+              else captionsOverride[key] = v.captions[key];
+            }
+          }
           if (v.captions.preset != null) {
             if (!CAPTION_PRESETS.has(v.captions.preset)) {
               errs.push(`${at}.captions.preset: unknown preset "${v.captions.preset}"`);
@@ -1305,6 +1343,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       }
       // Merge captions overrides
       if (v.captions) {
+        for (const key of ['color', 'activeColor', 'pastColor', 'plateColor']) if (v.captions[key] != null) captions[key] = v.captions[key];
         if (v.captions.preset != null) captions.preset = v.captions.preset;
         if (v.captions.emphasis != null) captions.emphasis = v.captions.emphasis;
       }
@@ -1402,7 +1441,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, mix, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

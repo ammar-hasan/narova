@@ -271,3 +271,97 @@ Set `captions: false` on an individual scene to hide its visual caption overlay
 in either renderer, including the dedicated external-word overlay. SRT/VTT and
 indexed choreography cues retain that scene's words. Omit the field or use true
 to inherit the root standard-caption setting.
+
+## Turn pauses and caption visibility
+
+```js
+vo: [
+  { who: 'a', text: 'Let that sink in.', pauseAfter: 1.2 },
+  { who: 'a', text: 'A spoken aside.', captions: false },
+]
+```
+
+`pauseAfter` adds non-negative seconds of silence after a synthesized turn,
+including the last turn. The usual turn gap and scene tail still apply. It
+changes measured timing, while the synthesized sentence clips remain reusable.
+External and native performances reject non-zero pauses; author those pauses
+in the source performance instead. `minDur` continues to pad only scene end.
+
+A turn's `captions: false` hides its visual words in both renderers and the
+external-word overlay. Its words stay in SRT/VTT and choreography cues. True
+inherits the scene/root setting; it cannot re-enable a disabled overlay.
+
+For supported caption styling, use the root configuration rather than reserved
+internal classes:
+
+```js
+captions: { preset: 'karaoke', size: 28, plate: true, maxWords: 8,
+            emphasis: ['remember'], color: '#ffffff', activeColor: '#ffd56a',
+            pastColor: '#cccccc', plateColor: '#101820' }
+```
+
+Presets are `subtitle`, `karaoke`, `slam`, `pop`, and `rise`; size is 10–120
+composition pixels, maxWords is 1–30, plate is boolean, and emphasis matches
+clean words ignoring case and surrounding punctuation. These controls have
+matching browser and browserless behavior and participate in render identity.
+Optional color, activeColor, pastColor and plateColor use six-digit RGB hex;
+color supplies unspecified word states and plateColor applies only to an enabled
+plate. Omit them to retain each preset’s defaults.
+
+## Portable synthesized sentences
+
+The normal sentence cache already survives deleting `out/`: it lives under
+`$NAROVA_CACHE` or `$NAROVA_HOME/cache/sentences`. To carry the exact current
+sentence takes to another machine:
+
+```bash
+narova synth --out out
+narova voice-cache export --out out --dir speech-cache
+# Copy the project and speech-cache to the receiving machine.
+narova voice-cache import --dir speech-cache
+narova build --out out
+```
+
+Export creates a new directory with `manifest.json` and keyed canonical WAVs.
+The bundle carries byte hashes, format and duration facts, without credentials
+or worker configuration. Import validates the whole bundle before publication;
+corrupt, escaping, duplicate or symlink entries fail. Different existing cache
+bytes require `--overwrite`; identical entries are kept. Failed publication
+restores prior entries. Limits are 10,000 entries, 64 MiB per WAV and 512 MiB total.
+If your project ignores WAVs, explicitly add this selected durable bundle or
+store it beside the project in an artifact store.
+
+The receiving machine still needs the same explicitly registered provider
+identity and project inputs. Matching imported clips do not start a worker or
+require its key. A text, voice, model, language, direction, context or take
+change can require synthesis again. Export takes made with the current CLI;
+older `takes.json` files lack cache keys. A bundle verifies byte integrity, not
+whether the spoken performance matches your creative intent.
+
+## Optional final mix loudness
+
+```js
+mix: { loudness: { target: -16, peak: -1.5, lra: 11 } }
+```
+
+This explicitly selected two-pass normalization runs after voice processing,
+background beds and SFX, including a soundtrack with no layers. It writes a
+48 kHz stereo `audio/mix.wav`, preserving channel separation, narration source,
+measured duration and word timing. Changing it reuses speech. Without the option,
+the existing mix policy applies. Target is -70..-5 LUFS, peak is -9..0 dBTP,
+and lra is 1..50 LU; peak/lra default to the values above. Silent input remains
+silent; arbitrary content and peak constraints can limit the achieved target.
+A processing failure fails the operation and removes the incomplete mix.
+Measure the encoded delivery with `narova review --audio-levels --delivered`
+when checking the final result; a WAV target is not proof of encoded loudness.
+
+Literal SFX word selectors also work:
+
+```js
+sfx: [{ file: 'assets/hit.wav', scene: 'hook',
+        at: { sentence: 0, word: { text: 'remember', occurrence: 1 }, offset: 0.05 } }]
+```
+
+Occurrence is zero-based within the named sentence. Omit it only for a unique
+match. Matching ignores case and surrounding Unicode punctuation; missing or
+ambiguous tokens fail rather than guess. Numeric word indices remain supported.

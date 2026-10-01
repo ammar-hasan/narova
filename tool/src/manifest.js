@@ -250,6 +250,7 @@ function compile(config, opts = {}) {
       tempo:       timing.tempo != null ? timing.tempo : null,
     },
     audio: {
+      mix: config.mix || null,
       bed: bed ? { file: path.relative(projectDir, bed.file) || bed.file, volume: bed.volume, fadeIn: bed.fadeIn, fadeOut: bed.fadeOut } : null,
       sfx: (sfx || []).map(s => ({ file: path.relative(projectDir, s.file) || s.file, scene: s.scene || null, at: s.at, volume: s.volume, ...Object.fromEntries(['start', 'duration', 'fadeIn', 'fadeOut'].filter(k => s[k] != null).map(k => [k, s[k]])) })),
     },
@@ -265,6 +266,7 @@ function compile(config, opts = {}) {
       maxWords: (captions && captions.maxWords) || null,
       plate:    captions && captions.plate === true,
       size:     captions && captions.size != null ? captions.size : null,
+      ...Object.fromEntries(['color', 'activeColor', 'pastColor', 'plateColor'].filter(k => captions && captions[k] != null).map(k => [k, captions[k]])),
     },
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
@@ -399,6 +401,7 @@ function compileVoices(voices) {
       ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
       ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
+      ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     };
   }
   return out;
@@ -420,6 +423,8 @@ function compileScenes(scenes, projectDir, assetsDir) {
       ...(turn.lang ? { lang: turn.lang } : {}),
       ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
       ...(turn.take != null ? { take: turn.take } : {}),
+      ...(turn.pauseAfter != null ? { pauseAfter: turn.pauseAfter } : {}),
+      ...(turn.captions != null ? { captions: turn.captions } : {}),
       start: 0,            // filled after synth
       words: [],           // filled after synth
     })),

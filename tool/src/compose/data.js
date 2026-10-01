@@ -46,22 +46,29 @@ function composeData(config, timings, captionsEnabled = true) {
   const groups = [];
   for (const sc of scenes) {
     const t = timings[sc.id];
-    const groupWords = words => {
+    const sourceScene = config.scenes.find(s => s.id === sc.id);
+    const groupWords = (words, splitTurns = false) => {
       const grouped = new Map();
       for (const w of words) {
-        if (!grouped.has(w.si)) grouped.set(w.si, []);
-        grouped.get(w.si).push(w);
+        const key = splitTurns ? `${w.si}:${w.turnScene || sc.id}:${w.ti}` : w.si;
+        if (!grouped.has(key)) grouped.set(key, []);
+        grouped.get(key).push(w);
       }
       return grouped;
     };
-    const by = groupWords(t.words || []);
+    // Preserve legacy raw external caption projection; add grouping metadata
+    // only when turn visibility requires it. Normalized cue evidence stays intact.
+    const captionWords = t.cueWords && config.scenes.some(scene => scene.vo?.some(turn => turn.captions === false))
+      ? (t.words || []).map((word, i) => ({ ...word, ti: t.cueWords[i]?.ti, si: t.cueWords[i]?.si, turnScene: t.cueWords[i]?.turnScene }))
+      : (t.words || []);
+    const by = groupWords(captionWords, config.scenes.some(s => s.vo?.some(turn => turn.captions === false)));
     // A compatibility-only external browser projection may retain raw caption
     // words while cueWords carries their normalized timing view. Ordinary
     // synthesized timing uses the same collection for both consumers.
     if (t.cueWords != null && !Array.isArray(t.cueWords)) {
       throw new Error(`timings.json: cueWords for scene "${sc.id}" must be an array`);
     }
-    const cueBy = t.cueWords ? groupWords(t.cueWords) : by;
+    const cueBy = groupWords(t.cueWords || t.words || []);
     // Cue evidence is independent of caption visibility and maxWords chunking.
     // Keep sentence identity and word order exactly as timings.json provides
     // them; lookup validation in runtime reports absent or unusable evidence.
@@ -74,6 +81,11 @@ function composeData(config, timings, captionsEnabled = true) {
         end: r3(sc.start + w.t1),
       })),
     }));
+    const legacyTurnBySentence = [];
+    for (const [ti, turn] of (sourceScene.vo || []).entries()) {
+      const count = (turn.text || '').trim().split(/(?<=[.!?۔؟])\s+/).filter(Boolean).length;
+      for (let k = 0; k < count; k++) legacyTurnBySentence.push(ti);
+    }
     for (const [si, ws] of by.entries()) {
       const who = ws[0].who;
       const label = (config.voices[who] && config.voices[who].label) || who;
@@ -81,8 +93,8 @@ function composeData(config, timings, captionsEnabled = true) {
       for (let offset = 0; offset < ws.length; offset += maxWords) {
         const chunk = ws.slice(offset, offset + maxWords);
         groups.push({
-          who, si,
-          ...(sc.captions === false ? { hidden: true } : {}),
+          who, si: ws[0].si ?? si,
+          ...(sc.captions === false || (config.scenes.find(s => s.id === (ws[0].turnScene || sc.id)) || sourceScene).vo?.[ws[0].ti ?? legacyTurnBySentence[si]]?.captions === false ? { hidden: true } : {}),
           label,
           start: r3(sc.start + chunk[0].t0),
           sceneEnd: r3(sc.start + sc.dur),
@@ -108,6 +120,7 @@ function composeData(config, timings, captionsEnabled = true) {
     total, scenes, groups,
     preset: captionsEnabled ? (captions.preset || 'subtitle') : false,
     captionPresentation: {
+      ...Object.fromEntries(['color', 'activeColor', 'pastColor', 'plateColor'].filter(k => captions[k] != null).map(k => [k, captions[k]])),
       plate: captions.plate === true,
       size: captions.size != null ? captions.size : Math.min(30, Math.max(17, (config.size?.w || 1280) * 0.027)),
     },

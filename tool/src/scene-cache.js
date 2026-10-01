@@ -200,7 +200,7 @@ function wholeVideoKey(manifest, contextHash) {
   const audioEntries = Object.entries(m.hashes || {})
     .filter(([k]) => k.startsWith('bed:') || k.startsWith('sfx:'))
     .sort((a, b) => (a[0] < b[0] ? -1 : a[0] > b[0] ? 1 : 0));
-  const audioIdentity = sha256(JSON.stringify(audioEntries));
+  const audioIdentity = sha256(JSON.stringify({ entries: audioEntries, mix: m.audio?.mix || null }));
   const sceneKeys = (m.scenes || [])
     .map((s, i) => (s.hash || '') + '\n' + sceneAssetIdentity(m, i) + '\n' + sceneTimingsFingerprint(s))
     .join('\n');

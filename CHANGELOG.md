@@ -6,6 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Portable sentence audio bundles through `voice-cache export/import`, with full
+  integrity validation, explicit conflict replacement and rollback.
+- Synthesized turn `pauseAfter`, per-turn visual caption hiding with retained
+  sidecars, optional final `mix.loudness`, and literal word/occurrence selectors
+  for choreography and SFX.
+- Negotiated surrounding-text speech context, included in sentence identities.
+
+### Changed
+- ElevenLabs companion 1.2.0 documents v4/v4 turbo, validates their voice controls,
+  maps phrasing context and decodes raw PCM/companded output. Hosted MCP stays
+  optional for authoring; current dialogue, music and effects routes use local assets.
+- Added explicit caption base/active/past/plate colors in both bundled renderers;
+  clarified shared scene-local script files.
+
 ## [0.50.0] - 2026-10-02
 
 ### Fixed

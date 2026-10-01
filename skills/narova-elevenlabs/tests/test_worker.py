@@ -35,7 +35,8 @@ class TestProtocol(unittest.TestCase):
                 "ok": True,
                 "protocol": "narova-tts-provider/v1",
                 "provider": "elevenlabs",
-                "providerVersion": "1.0.0",
+                "providerVersion": "1.1.0",
+                "capabilities": {"surroundingText": True},
             })
 
     def test_wrong_protocol_is_structured(self):
@@ -169,3 +170,29 @@ class TestVoiceListing(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+class TestCurrentModels(unittest.TestCase):
+    def test_v4_models_and_context_map_without_account_calls(self):
+        for model in ('eleven_v4', 'eleven_v4_turbo'):
+            _, payload, _ = worker.build_request({'speaker': 'voice', 'text': 'Now.', 'options': {'model': model, 'stability': 0.4, 'similarityBoost': 0.7}, 'context': {'previousText': 'Before.', 'nextText': 'After.'}})
+            self.assertEqual(payload['model_id'], model)
+            self.assertEqual(payload['previous_text'], 'Before.')
+            self.assertEqual(payload['next_text'], 'After.')
+            for option in ({'speed': 1.1}, {'style': 0.5}, {'useSpeakerBoost': True}, {'voiceSettings': {'speed': 1.1}}):
+                with self.assertRaises(worker.ProviderError):
+                    worker.build_request({'speaker': 'voice', 'text': 'Now.', 'options': {'model': model, **option}})
+
+    def test_raw_pcm_decoding(self):
+        with tempfile.TemporaryDirectory() as directory:
+            source, output = Path(directory) / 'raw.pcm', Path(directory) / 'out.wav'
+            source.write_bytes(b'\x00\x01' * 24000)
+            worker.convert_to_wav(source, output, output_format='pcm_24000')
+            with wave.open(str(output), 'rb') as audio:
+                self.assertEqual(audio.getframerate(), 24000)
+                self.assertEqual(audio.getnframes(), 24000)
+                self.assertEqual(audio.getnchannels(), 1)
+
+    def test_invalid_context_and_raw_format_fail_before_submission(self):
+        for extra in ({'context': {'previousText': 7, 'nextText': ''}}, {'options': {'outputFormat': 'pcm_oops'}}):
+            with self.assertRaises(worker.ProviderError):
+                worker.build_request({'speaker': 'voice', 'text': 'Now.', **extra})

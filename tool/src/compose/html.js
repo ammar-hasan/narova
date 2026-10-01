@@ -21,7 +21,19 @@ function escapeHtml(s) {
  * is set. Each cue gets a backdrop pill, a baseline text layer, and per-word
  * active layers that show one word in gold (hot) with the rest transparent (ghost). */
 function buildKaraokeOverlays(config) {
-  const cues = config.narrationSource?.wordTimings;
+  const sourceCues = config.narrationSource?.wordTimings;
+  const owners = require('../external-word-turns').externalWordTurns(config);
+  const hidden = word => { const owner = owners.get(word); return owner && config.scenes.find(s => s.id === owner.scene)?.vo?.[owner.ti]?.captions === false; };
+  const cues = sourceCues?.flatMap(cue => {
+    if (!cue.words.some(hidden)) return [cue];
+    const runs = []; let run = [];
+    for (const word of cue.words) {
+      if (hidden(word)) { if (run.length) runs.push(run); run = []; }
+      else run.push(word);
+    }
+    if (run.length) runs.push(run);
+    return runs.map(words => ({ ...cue, words, start: words[0].start, end: words.at(-1).end }));
+  });
   if (!cues || !cues.length) return { css: '', overlays: null };
 
   const css = `
@@ -36,7 +48,7 @@ function buildKaraokeOverlays(config) {
   // render passes offset=0 (its timeline is already global); the per-scene
   // render passes offset=globalStart. Durations are differences, so they are
   // unaffected by the offset.
-  function overlayForScene(sceneStart, sceneDur, offset = 0) {
+  function overlayForScene(sceneStart, sceneDur, offset = 0, turns = []) {
     const sceneEnd = sceneStart + sceneDur;
     return cues.filter(c => c.start < sceneEnd && c.end > sceneStart).map((cue, ci) => {
       const start = Math.max(cue.start, sceneStart);
@@ -112,7 +124,7 @@ function composeDoc(config, size, data, css) {
       words: (g.words || []).map(w => ({ ...w, t0: w.t0 - start, t1: w.t1 - start })),
     }));
     const sceneData = { ...measured, markers: data.markers || {}, groups: cueGroups };
-    const overlay = s.captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(start, dur) : '';
+    const overlay = s.captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(start, dur, 0, s.vo) : '';
     let body = String(s.body || '');
     if (s._threeModuleContents) {
       body = threeModuleSceneBody(s, sceneData, size.w, size.h) + (body || '');
@@ -278,7 +290,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   // are rebased to scene-local by passing offset=globalStart (this project's
   // timeline starts at 0).
   const karaoke = buildKaraokeOverlays(config);
-  const karaokeOverlay = config.scenes[sceneIdx].captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur, globalStart) : '';
+  const karaokeOverlay = config.scenes[sceneIdx].captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(globalStart, sceneDur, globalStart, config.scenes[sceneIdx].vo) : '';
   const karaokeCss = karaoke.css || '';
 
   // Captions: filter groups within this scene's time window, rebase to t=0.

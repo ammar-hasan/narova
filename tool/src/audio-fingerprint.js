@@ -37,6 +37,7 @@ function audioFingerprint(config) {
     fp.providerProtocol = v.providerProtocol || '';
     fp.providerVersion = v.providerVersion || '';
     fp.providerOptions = v.providerOptions || {};
+    fp.surroundingText = v.providerCapabilities?.surroundingText === true;
     entries.push(fp);
   }
 
@@ -48,6 +49,7 @@ function audioFingerprint(config) {
         text: turn.text,
         ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
         lang: turn.lang || '',
+        pauseAfter: turn.pauseAfter || 0,
       });
     }
   }
@@ -76,7 +78,7 @@ function audioFingerprint(config) {
     lead: timing.lead != null ? timing.lead : 0.16,
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
-    pipeline: 4,
+    pipeline: 5,
   }));
 }
 
@@ -106,6 +108,7 @@ function narrationContextDigest(config) {
     fp.providerProtocol = v.providerProtocol || '';
     fp.providerVersion = v.providerVersion || '';
     fp.providerOptions = v.providerOptions || {};
+    fp.surroundingText = v.providerCapabilities?.surroundingText === true;
     entries.push(fp);
   }
   return sha256(stableStringify({
@@ -116,7 +119,7 @@ function narrationContextDigest(config) {
     lead: timing.lead != null ? timing.lead : 0.16,
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
-    pipeline: 4,
+    pipeline: 5,
   }));
 }
 

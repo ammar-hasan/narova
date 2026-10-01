@@ -160,6 +160,7 @@ class _ProviderWorker:
             raise RuntimeError(
                 f"provider {self.manifest['name']!r} handshake omitted providerVersion")
         self.provider_version = version
+        self.capabilities = response.get("capabilities") or {}
 
     def exchange(self, request: dict, timeout: float | None = None,
                  operation: str = "request") -> dict:
@@ -265,6 +266,7 @@ class ExternalProviderBackend:
             raise ValueError(
                 f"provider {self.manifest.get('name')!r}: unsupported protocol "
                 f"{self.manifest.get('protocol')!r}")
+        self.context_capable = (self.manifest.get("capabilities") or {}).get("surroundingText") is True
         self._speakers = dict(speakers)
         self._options = {
             who: json.loads(json.dumps(options or {}))
@@ -311,7 +313,8 @@ class ExternalProviderBackend:
                 f"provider output is not a valid WAV file: {path}") from exc
 
     def synthesize(self, who: str, text: str, out_path: Path,
-                   lang: str | None = None, seed: int | None = None) -> Path:
+                   lang: str | None = None, seed: int | None = None,
+                   context: dict | None = None) -> Path:
         output = self._validate_output(Path(out_path))
         worker = self._ensure_worker()
         self._request_number += 1
@@ -330,6 +333,10 @@ class ExternalProviderBackend:
             "output": str(output),
             "options": options,
         }
+        if context is not None:
+            if not self.context_capable or worker.capabilities.get("surroundingText") is not True:
+                raise RuntimeError(f"provider {self.manifest['name']!r}: surroundingText capability differs from registration; re-register the current worker")
+            request["context"] = context
         response = worker.exchange(request, operation=f"synthesis {request_id}")
         if response.get("id") != request_id:
             raise RuntimeError(
