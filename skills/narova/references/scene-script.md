@@ -879,3 +879,13 @@ Omitting `chrome` keeps all three. `narova check` validates the keys.
   reacts while the point is spoken.
 - Fewer words on screen than words spoken — the captions already show the
   transcript word by word.
+
+## Per-scene caption visibility
+
+A scene may set `captions: false` when its authored visuals already show the
+spoken words. This hides that scene's visual captions in both renderers,
+including external-word overlays, while keeping SRT/VTT and `wordCue`/
+`sentenceCue` timing available. Omit it or set true to inherit root settings.
+
+See [audio.md](audio.md) for indexed SFX anchors, source trimming/fades and
+project-owned alignment model/partial settings.

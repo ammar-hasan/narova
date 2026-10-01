@@ -286,3 +286,29 @@ test('generated HTML contains no remote script dependencies', () => {
       'script src must be local, not remote: ' + src);
   }
 });
+
+
+test('hidden scene captions preserve sidecars and isolated visibility', () => {
+  const { buildSrt } = require('../src/captions');
+  const hidden = { ...config, scenes: config.scenes.map((s, i) => ({ ...s, ...(i === 1 ? { captions: false } : {}) })) };
+  const data = composeData(hidden, timings);
+  assert.ok(data.groups.some(g => g.hidden));
+  assert.equal(buildSrt(data), buildSrt(composeData(config, timings)));
+  const isolated = inlinedData(composeSceneDoc(hidden, 1, size, data, ''));
+  assert.ok(isolated.groups.every(g => g.hidden));
+  assert.ok(isolated.scenes[0].sentences.length);
+});
+
+
+test('scene visibility suppresses external karaoke overlays in full and isolated documents', () => {
+  const source = { wordTimings: [{ start: 5.1, end: 5.7, words: [{ text: 'External', start: 5.1, end: 5.7 }] }] };
+  const shown = { ...config, narrationSource: source };
+  const hidden = { ...shown, scenes: shown.scenes.map((s, i) => ({ ...s, ...(i === 1 ? { captions: false } : {}) })) };
+  const shownData = composeData(shown, timings), hiddenData = composeData(hidden, timings);
+  const fullShown = composeDoc(shown, size, shownData, ''), fullHidden = composeDoc(hidden, size, hiddenData, '');
+  const isolatedShown = composeSceneDoc(shown, 1, size, shownData, ''), isolatedHidden = composeSceneDoc(hidden, 1, size, hiddenData, '');
+  assert.match(fullShown, /<div class="narration-karaoke-pill"/);
+  assert.match(isolatedShown, /<div class="narration-karaoke-pill"/);
+  assert.doesNotMatch(fullHidden, /<div class="narration-karaoke-pill"/);
+  assert.doesNotMatch(isolatedHidden, /<div class="narration-karaoke-pill"/);
+});

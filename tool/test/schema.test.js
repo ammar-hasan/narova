@@ -908,3 +908,24 @@ test('caption plate and composition-pixel size validate and resolve defaults', (
     assert.throws(() => resolveConfig({ ...validRaw(), captions }, {}, '.'), /config\.captions\.(?:plate|size)/);
   }
 });
+
+
+test('series audio controls validate and retain project-owned values', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-series-schema-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.writeFileSync(path.join(dir, 'hit.wav'), 'fixture');
+  const effect = { file: 'hit.wav', scene: 's2', at: { sentence: 0, word: 1, offset: -0.1 }, start: 2, duration: 0.4, fadeIn: 0.1, fadeOut: 0.2 };
+  const raw = { ...validRaw(), sfx: [effect], align: { engine: 'faster-whisper', model: 'base.en', partial: false } };
+  raw.scenes[0].captions = false;
+  const c = resolveConfig(raw, {}, dir);
+  assert.deepEqual(c.align, raw.align);
+  assert.deepEqual(c.sfx[0].at, effect.at);
+  for (const key of ['start', 'duration', 'fadeIn', 'fadeOut']) assert.equal(c.sfx[0][key], effect[key]);
+  assert.equal(c.scenes[0].captions, false);
+  for (const patch of [{ at: { sentence: -1 } }, { at: { sentence: 0, word: 0.5 } }, { scene: null }, { duration: 0 }, { start: -1 }, { fadeIn: Infinity }, { fadeOut: '1' }]) {
+    assert.throws(() => resolveConfig({ ...raw, sfx: [{ ...effect, ...patch }] }, {}, dir), /config.sfx/);
+  }
+  for (const align of [{ model: '' }, { partial: 1 }]) assert.throws(() => resolveConfig({ ...validRaw(), align }, {}, dir), /config.align/);
+  raw.scenes[0].captions = {};
+  assert.throws(() => resolveConfig(raw, {}, dir), /scenes.*captions/);
+});

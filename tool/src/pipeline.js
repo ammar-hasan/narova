@@ -680,11 +680,19 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
     for (const sfx of (config.sfx || [])) {
       inputs.push('-i', sfx.file);
       const vol = sfx.volume ?? 0.8;
-      const { start: sceneStart, time: delay } = effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0);
+      const { start: sceneStart, time: delay } = effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0, externalTimings(config));
       if (!Number.isFinite(sceneStart)) {
         throw new Error(`config.sfx scene anchor is unavailable: ${sfx.scene}`);
       }
-      filters.push(`[${inputIdx}:a]${stereoSource(sfx.file)},adelay=${Math.round(delay * 1000)}:all=1,volume=${vol}[sfx${inputIdx}]`);
+      const sourceDur = Number(execFileSync('ffprobe', ['-v', 'error', '-show_entries', 'format=duration', '-of', 'csv=p=0', sfx.file], { encoding: 'utf8' }).trim());
+      const sourceStart = sfx.start ?? 0;
+      const duration = Math.min(sfx.duration ?? Infinity, sourceDur - sourceStart);
+      if (!Number.isFinite(duration) || duration <= 0) throw new Error(`config.sfx source start is at or beyond source end: ${sfx.file}`);
+      let chain = `[${inputIdx}:a]${stereoSource(sfx.file)},atrim=start=${sourceStart}:duration=${duration},asetpts=PTS-STARTPTS,volume=${vol}`;
+      const fadeIn = Math.min(sfx.fadeIn ?? 0, duration), fadeOut = Math.min(sfx.fadeOut ?? 0, duration);
+      if (fadeIn > 0) chain += `,afade=t=in:st=0:d=${fadeIn}`;
+      if (fadeOut > 0) chain += `,afade=t=out:st=${Math.max(0, duration - fadeOut)}:d=${fadeOut}`;
+      filters.push(chain + `,adelay=${Math.round(delay * 1000)}:all=1[sfx${inputIdx}]`);
       inputIdx++;
     }
 
@@ -764,6 +772,7 @@ function configFromManifest(manifest, resolvedConfig) {
       ...((original.scenes || [])[i] || {}),
       id: s.id, body: s.body || '', visual: s.visual || null, clip: s.clip || null, dur: s.dur || null,
       minDur: s.minDur != null ? s.minDur : null,
+      ...(s.captions != null ? { captions: s.captions } : {}),
       clipAudio: s.clipAudio || ((original.scenes || [])[i]?.clipAudio) || null,
       walkthrough: s.walkthrough || null, three: s.three || null,
       transition: s.transition || 'fade',
@@ -783,7 +792,7 @@ function configFromManifest(manifest, resolvedConfig) {
     imports: resolvedConfig ? (resolvedConfig.imports || {}) : (m.importSources || {}),
     align: m.align || false,
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
-    sfx: (m.audio?.sfx || []).map(s => ({ file: s.file, scene: s.scene, at: s.at, volume: s.volume })),
+    sfx: (m.audio?.sfx || []).map(s => ({ ...s })),
     variants: (m.variants || []).map(v => ({
       id: v.id, kind: v.kind || 'hook',
       scene: v.scene ? { body: v.scene.body, visual: v.scene.visual || null, three: v.scene.three || null, vo: v.scene.vo } : null,

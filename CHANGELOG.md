@@ -6,6 +6,22 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Fixed
+
+- Zero-length aligned words and sentences resolve as instant choreography cues.
+- Unit speech tempo bypasses time stretching while preserving gain, fades and
+  canonical conversion, avoiding short-clip failures from a no-op filter.
+
+### Added
+
+- Scene SFX can follow indexed sentence/word cues and select source offsets,
+  duration and fades in synthesized and external narration projects.
+- Alignment model and partial mode can be recorded in the project; explicit
+  project settings override environment defaults. Strict mapping accepts split
+  components of hyphenated authored words.
+- Per-scene `captions: false` hides visual captions in either renderer while
+  preserving caption sidecars and choreography timing.
+
 ## [0.49.0] - 2026-09-07
 
 ### Fixed

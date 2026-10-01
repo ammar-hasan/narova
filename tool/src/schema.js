@@ -345,6 +345,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   for (let i = 0; i < scenes.length; i++) {
     const s = scenes[i];
     const sat = `config.scenes[${i}]`;
+    if (s.captions != null && typeof s.captions !== 'boolean') errs.push(`${sat}.captions: expected a boolean`);
 
     if (s.bodyFile != null) {
       if (typeof s.bodyFile !== 'string') {
@@ -976,13 +977,27 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       if (e.scene != null && !seen.has(e.scene)) {
         errs.push(`${at}.scene: "${e.scene}" is not a scene id — sfx anchors to a scene or, without one, to the global timeline`);
       }
-      if (e.at != null && (typeof e.at !== 'number' || !Number.isFinite(e.at) || e.at < 0)) {
+      if (e.at != null && typeof e.at === 'object' && !Array.isArray(e.at)) {
+        if (!e.scene) errs.push(`${at}.at: an indexed anchor requires scene`);
+        if (!Number.isInteger(e.at.sentence) || e.at.sentence < 0) errs.push(`${at}.at.sentence: expected a non-negative integer`);
+        if (e.at.word != null && (!Number.isInteger(e.at.word) || e.at.word < 0)) errs.push(`${at}.at.word: expected a non-negative integer`);
+        if (e.at.offset != null && (typeof e.at.offset !== 'number' || !Number.isFinite(e.at.offset))) errs.push(`${at}.at.offset: expected finite seconds`);
+      } else if (e.at != null && (typeof e.at !== 'number' || !Number.isFinite(e.at) || e.at < 0)) {
         errs.push(`${at}.at: must be a non-negative number of seconds`);
+      }
+      for (const key of ['start', 'fadeIn', 'fadeOut', 'duration']) {
+        if (e[key] != null && (typeof e[key] !== 'number' || !Number.isFinite(e[key]) || (key === 'duration' ? e[key] <= 0 : e[key] < 0))) {
+          errs.push(`${at}.${key}: expected ${key === 'duration' ? 'positive' : 'non-negative'} seconds`);
+        }
       }
       if (e.volume != null && (typeof e.volume !== 'number' || !Number.isFinite(e.volume) || e.volume < 0)) {
         errs.push(`${at}.volume: must be a non-negative number`);
       }
-      sfx.push({ file: p, scene: e.scene ?? null, at: e.at ?? 0, volume: e.volume ?? 0.8 });
+      sfx.push({ file: p, scene: e.scene ?? null,
+        at: e.at && typeof e.at === 'object' ? { sentence: e.at.sentence, ...(e.at.word != null ? { word: e.at.word } : {}), offset: e.at.offset ?? 0 } : (e.at ?? 0),
+        volume: e.volume ?? 0.8,
+        ...Object.fromEntries(['start', 'duration', 'fadeIn', 'fadeOut'].filter(k => e[k] != null).map(k => [k, e[k]])),
+      });
     });
   }
 
@@ -1036,7 +1051,18 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       const engine = raw.align.engine ?? 'auto';
       if (!ALIGN_ENGINES.has(engine)) {
         errs.push(`config.align.engine: unknown engine ${JSON.stringify(engine)} (${[...ALIGN_ENGINES].join('|')})`);
-      } else align = { engine };
+      } else {
+        align = { engine };
+        if (raw.align.model != null) {
+          if (typeof raw.align.model !== 'string' || !raw.align.model.trim()) errs.push('config.align.model: expected a non-empty model identifier or local model path');
+          else align.model = raw.align.model.trim();
+        }
+        if (raw.align.partial != null) {
+          if (typeof raw.align.partial !== 'boolean') errs.push('config.align.partial: expected a boolean');
+          else align.partial = raw.align.partial;
+        }
+        if (engine === 'whisper-cpp' && align.model && (align.model.includes('/') || align.model.includes('\\'))) align.model = path.resolve(baseDir, align.model);
+      }
     } else errs.push('config.align: expected true/false or { engine }');
   }
 

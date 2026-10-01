@@ -193,9 +193,9 @@ test('cue lookups throw attributed index and timing errors instead of guessing',
   assert.throws(() => window.wordCue('s1', 0, 'there.'), /word "there\.".*non-negative integer/,
     'text lookup is intentionally unsupported even when the token exists');
   const invalid = JSON.parse(JSON.stringify(DATA));
-  invalid.scenes[0].sentences[0].words[0].end = invalid.scenes[0].sentences[0].words[0].start;
+  invalid.scenes[0].sentences[0].words[0].end = invalid.scenes[0].sentences[0].words[0].start - 0.1;
   assert.throws(() => runScript({ data: invalid }).window.wordCue('s1', 0, 0),
-    /finite end after its start/);
+    /finite end at or after its start/);
 });
 
 test('honestly untimed narration reports unavailable cue evidence', () => {
@@ -649,4 +649,24 @@ test('data-mark on an SVG transform carrier moves to the wrapper', () => {
   const wrap = svg.children[0];
   assert.equal(wrap.getAttribute('data-mark'), 'circle');
   assert.ok(!marker.hasAttribute('data-mark'), 'carrier keeps only its transform');
+});
+
+
+test('zero-length aligned words and sentences remain usable instant cues', () => {
+  const data = JSON.parse(JSON.stringify(DATA));
+  const words = data.scenes[0].sentences[0].words;
+  for (const word of words) word.start = word.end = 0.321;
+  const { window } = runScript({ data });
+  const word = window.wordCue('s1', 0, 0), sentence = window.sentenceCue('s1', 0);
+  assert.equal(word.start, 0.321); assert.equal(word.end, 0.321); assert.equal(word.duration, 0);
+  assert.equal(sentence.start, 0.321); assert.equal(sentence.duration, 0);
+  assert.equal(data.scenes[0].sentences[0].words[0].end, 0.321);
+});
+
+test('hidden scene captions skip DOM creation while preserving word cues', () => {
+  const data = JSON.parse(JSON.stringify(DATA));
+  data.groups.forEach(g => { g.hidden = true; });
+  const { window, capStage } = runScript({ data });
+  assert.equal(window.wordCue('s1', 0, 0).token, DATA.scenes[0].sentences[0].words[0].token);
+  assert.equal(capStage.children.length, 0);
 });

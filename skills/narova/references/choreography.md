@@ -98,6 +98,10 @@ and `sentenceIndex`; a word result also contains `wordIndex`, `token`, and
 `speaker`. Full renders use global composition seconds. An isolated scene uses
 the equivalent scene-local seconds, so the same choreography retains its
 internal timing. These lookups remain available when visible captions are off.
+An aligned word with equal start and end resolves to that instant with
+`duration: 0`; an entirely zero-length sentence does the same. Reversed or
+non-finite spans still fail. Use its `start` to schedule an event; choose an
+explicit animation duration when the event needs visible motion.
 
 Indices are deliberate: Narova does not search or normalize text, decide which
 word matters, infer a semantic beat, bind an element, or choose an animation.

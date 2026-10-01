@@ -38,6 +38,7 @@ function composeData(config, timings, captionsEnabled = true) {
     const t = timings[s.id];
     scenes.push({
       id: s.id, start: starts.get(s.id), dur: t.dur, turns: t.turns || [],
+      ...(s.captions === false ? { captions: false } : {}),
       ...(s.transition ? { transition: s.transition } : {}),
     });
   }
@@ -81,6 +82,7 @@ function composeData(config, timings, captionsEnabled = true) {
         const chunk = ws.slice(offset, offset + maxWords);
         groups.push({
           who, si,
+          ...(sc.captions === false ? { hidden: true } : {}),
           label,
           start: r3(sc.start + chunk[0].t0),
           sceneEnd: r3(sc.start + sc.dur),

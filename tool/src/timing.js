@@ -16,9 +16,17 @@ function sceneAnchors(scenes, duration, { roundEach = false } = {}) {
   return { starts, total };
 }
 
-function effectAnchor(starts, scene, offset) {
+function effectAnchor(starts, scene, offset, timings = null) {
   const start = scene == null ? 0 : starts.get(scene);
-  return { start, time: Number.isFinite(start) ? start + offset : null };
+  if (offset && typeof offset === 'object') {
+    const words = (timings?.[scene]?.words || []).filter(word => word.si === offset.sentence);
+    const word = words[offset.word ?? 0];
+    if (!word || !Number.isFinite(word.t0)) throw new Error(`config.sfx cue unavailable: scene "${scene}", sentence ${offset.sentence}, word ${offset.word ?? 0}`);
+    offset = word.t0 + (offset.offset ?? 0);
+  }
+  const time = Number.isFinite(start) ? start + offset : null;
+  if (time != null && (!Number.isFinite(time) || time < 0)) throw new Error(`config.sfx anchor must resolve to non-negative finite seconds: scene "${scene}"`);
+  return { start, time };
 }
 
 function externalTimings(config, { browser = false } = {}) {
