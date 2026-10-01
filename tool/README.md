@@ -89,6 +89,11 @@ for the format, bounds, trust notice, and extraction rules.
 - Read-only evidence-graded provenance reports and text, YouTube, web, or JSON
   credit output
 
+Narrated-series projects can anchor SFX to sentence or word cues, trim and fade
+effects, keep alignment model/partial settings in the config, and hide visual
+captions per scene while retaining SRT/VTT exports. Production mixes preserve
+stereo. See the [audio controls](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/audio.md).
+
 Two local renderers ship with the package. HyperFrames is the full browser
 canvas (HTML/CSS, WebGL, Studio); No-Browser draws a portable scene tree with
 Skia when a machine cannot launch a browser. Both run locally with no render

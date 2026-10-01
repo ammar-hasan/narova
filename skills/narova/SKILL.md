@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.49.0"
-checksum: b3beb232993054c82c991f93d483488e83a616cd7de8d4e1d5d043759f91a945
+  version: "0.50.0"
+checksum: 59fa371f0146f64e2def4e44204e29f6646a8a1b086890b8dcd67b5a3cd73202
 ---
 # narova — video from scene scripts
 
@@ -71,6 +71,11 @@ first-class and use the same scene/timeline model.
 
 Or bring your own recording with `narration.file` and `narration.wordTimings`.
 
+For narrated series, keep optional alignment model/partial settings in `align`,
+anchor SFX with sentence/word indices, and trim/fade each effect. Scene-level
+`captions: false` hides visual captions while preserving sidecars and cue timing.
+See [audio controls](references/audio.md) for settings and engine prerequisites.
+
 ## Install the CLI
 
 Requires Node.js 18+ (Python 3.10+ and FFmpeg are found on the machine or,
@@ -90,7 +95,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.49.0"
+narova_required="@narova/narova@0.50.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 

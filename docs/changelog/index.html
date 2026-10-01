@@ -67,7 +67,33 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.49.0</span>
+        <span class="rel-version" data-narova-version>0.50.0</span>
+        <span class="rel-date">2026-10-02</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Speech-anchored SFX.</strong> Place effects at indexed sentence or word cues, with source offsets, duration and fades, for synthesized or external narration.</li>
+          <li><strong>Project-owned alignment.</strong> Record the alignment model and partial mode in the project. Explicit settings override environment defaults; strict mapping accepts split components of hyphenated words.</li>
+          <li><strong>Caption visibility per scene.</strong> Set <code>captions: false</code> on a scene in either renderer while keeping SRT/VTT sidecars and choreography timing.</li>
+        </ul>
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><strong>Instant timing cues.</strong> Zero-length aligned words and sentences resolve as instant choreography cues.</li>
+          <li><strong>Unchanged speech tempo.</strong> Tempo 1 bypasses time stretching while retaining gain, fades and canonical conversion, avoiding no-op filter failures on short clips.</li>
+          <li><strong>Stereo production mixes.</strong> Bed and SFX mixes retain stereo; audio route changes clear obsolete mixed audio before rebuilding.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>Precise production guarantees.</strong> Guidance distinguishes timeline determinism from provider output, explains claim-check modes, and scopes revision reuse to verified artifacts.</li>
+          <li><strong>Discoverable narration controls.</strong> README, npm overview and website now describe the narrated-series audio controls.</li>
+        </ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.49.0</span>
         <span class="rel-date">2026-09-07</span>
       </div>
       <div class="rel-body">
