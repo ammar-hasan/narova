@@ -5,7 +5,7 @@ const fs = require('node:fs');
 const os = require('node:os');
 const path = require('node:path');
 const { execFileSync, spawnSync } = require('node:child_process');
-const { exportCache, importCache } = require('../src/voice-cache');
+const { exportCache, importCache, wavFacts } = require('../src/voice-cache');
 const { resolveConfig } = require('../src/schema');
 const { compile } = require('../src/manifest');
 const { configFromManifest, mixExternalAudio } = require('../src/pipeline');
@@ -56,6 +56,9 @@ test('hidden turns retain caption boundaries, sidecars, normalized cues and dedi
   const data = composeData(config, timings);
   assert.equal(data.groups[0].end, 2); assert.equal(data.groups[1].hidden, true);
   assert.match(buildSrt(data), /Hidden/); assert.equal(data.scenes[0].sentences.length, 2);
+  const legacy = structuredClone(timings);
+  legacy.one.words.forEach(word => { delete word.ti; });
+  assert.equal(composeData(config, legacy).groups[1].hidden, true, 'old synthesized timing without turn metadata still hides the authored turn');
   config.narrationSource = { file: 'external.wav', wordTimings: [{ start: 0, end: 1, words: [{ text: 'Hello.', start: 0, end: 1 }] }, { start: 2, end: 3, words: [{ text: 'Hidden.', start: 2, end: 3 }] }] };
   const html = composeDoc(config, { w: 640, h: 360 }, data, '');
   assert.match(html, /<span>Hello\.<\/span>/);
@@ -322,5 +325,39 @@ test('external builds fail missing or ambiguous literal anchors before optional 
     assert.notEqual(result.status, 0); assert.match(result.stdout + result.stderr, /matches|occurrence/);
     assert.equal(fs.existsSync(path.join(dir, 'out/audio/mix.wav')), false);
     assert.equal(fs.existsSync(path.join(dir, 'out/video.mp4')), false);
+  }
+});
+
+test('overlapping external cues invalidate neighboring visibility dependencies without invalidating unrelated spans', t => {
+  const dir = temp(t), cache = require('../src/scene-cache');
+  const project = raw(); project.scenes = ['one', 'two', 'three'].map((id, i) => ({ id, dur: 1, body: '', vo: [{ who: 'a', text: ['First.', 'Second.', 'Third.'][i] }] }));
+  const config = resolveConfig(project, {}, dir);
+  config.narrationSource = { file: path.join(dir, 'external.wav'), wordTimings: [
+    { text: 'First. Second.', start: 0, end: 2, words: [{ text: 'First.', start: 0, end: 1.2 }, { text: 'Second.', start: 1.2, end: 2 }] },
+    { text: 'Third.', start: 2, end: 3, words: [{ text: 'Third.', start: 2, end: 3 }] },
+  ] };
+  const snapshot = () => {
+    const timings = require('../src/timing').externalTimings(config);
+    const file = path.join(dir, 'timings.json'); fs.writeFileSync(file, JSON.stringify(timings));
+    const manifest = require('../src/manifest').mergeTimings(compile(config, { projectDir: dir }), file);
+    const context = cache.renderContextHash(manifest, { fps: 30 });
+    return { context, keys: manifest.scenes.map((scene, i) => cache.sceneCacheKey(scene, context, cache.sceneAssetIdentity(manifest, i))), data: composeData(config, timings) };
+  };
+  const before = snapshot(); config.scenes[0].vo[0].captions = false; const after = snapshot();
+  assert.equal(before.context, after.context);
+  assert.notEqual(before.keys[0], after.keys[0]); assert.notEqual(before.keys[1], after.keys[1]);
+  assert.equal(before.keys[2], after.keys[2]);
+  assert.equal(after.data.groups.filter(g => g.words.some(w => w.w === 'First.')).every(g => g.hidden), true);
+  assert.equal(after.data.groups.every(group => group.end >= group.start), true, 'cross-scene evidence must not produce negative sidecar durations');
+});
+
+
+test('canonical WAV validation compares exact header and chunk identifiers', t => {
+  const dir = temp(t), file = path.join(dir, 'speech.wav');
+  execFileSync('ffmpeg', ['-y', '-loglevel', 'error', '-f', 'lavfi', '-i', 'sine=frequency=440:duration=0.2', '-ar', '22050', '-ac', '1', '-c:a', 'pcm_s16le', file]);
+  const bytes = fs.readFileSync(file); assert.equal(wavFacts(bytes).sampleRate, 22050);
+  for (const offset of [0, 8, bytes.indexOf(Buffer.from('fmt ')), bytes.indexOf(Buffer.from('data'))]) {
+    assert.ok(offset >= 0); const bad = Buffer.from(bytes); bad[offset] |= 0x80;
+    assert.throws(() => wavFacts(bad), /WAV/);
   }
 });

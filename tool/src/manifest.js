@@ -850,6 +850,13 @@ function mergeTimings(tl, timingsPath) {
     if (!ts) { s.start = globalStart; s.duration = s.dur || 0; globalStart += s.duration; continue; }
     s.start    = globalStart;
     s.duration = ts.dur || 0;
+    // External cues can overlap scenes. Their caption owner may be another
+    // scene, so preserve that visibility dependency in this span's identity.
+    const captionDependencies = (ts.words || []).filter(word => word.turnScene && word.turnScene !== s.id)
+      .map(word => [word.turnScene, word.ti, updated.scenes.find(owner => owner.id === word.turnScene)?.vo?.[word.ti]?.captions === false]);
+    if (captionDependencies.length) s.captionDependencies = captionDependencies;
+    else delete s.captionDependencies;
+
 
     if (ts.words && Array.isArray(ts.words) && s.vo.length > 0) {
       if (ts.words.length > 0 && ts.words.every(word => Number.isInteger(word.ti))) {

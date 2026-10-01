@@ -172,6 +172,7 @@ function sceneTimingsFingerprint(scene) {
   const payload = {
     id: scene.id,
     duration: scene.duration,
+    ...(scene.captionDependencies ? { captionDependencies: scene.captionDependencies } : {}),
     vo: (scene.vo || []).map(t => ({
       start: (t.start == null || !(t.words && t.words.length))
         ? 0

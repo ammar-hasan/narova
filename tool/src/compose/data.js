@@ -92,9 +92,13 @@ function composeData(config, timings, captionsEnabled = true) {
       // Chunk long sentences into maxWords-sized caption lines (bilingual content).
       for (let offset = 0; offset < ws.length; offset += maxWords) {
         const chunk = ws.slice(offset, offset + maxWords);
+        // The legacy external projection retains whole overlapping cues for
+        // indexed evidence; caption groups wholly beyond this scene cannot
+        // form a visible or valid sidecar interval here.
+        if (Number.isFinite(chunk[0].t0) && chunk[0].t0 > sc.dur) continue;
         groups.push({
           who, si: ws[0].si ?? si,
-          ...(sc.captions === false || (config.scenes.find(s => s.id === (ws[0].turnScene || sc.id)) || sourceScene).vo?.[ws[0].ti ?? legacyTurnBySentence[si]]?.captions === false ? { hidden: true } : {}),
+          ...(sc.captions === false || (config.scenes.find(s => s.id === (ws[0].turnScene || sc.id)) || sourceScene).vo?.[ws[0].ti ?? legacyTurnBySentence[ws[0].si ?? si]]?.captions === false ? { hidden: true } : {}),
           label,
           start: r3(sc.start + chunk[0].t0),
           sceneEnd: r3(sc.start + sc.dur),
@@ -112,7 +116,7 @@ function composeData(config, timings, captionsEnabled = true) {
   // This prevents captions from bleeding into a silent end card.
   groups.forEach((g, i) => {
     const next = groups[i + 1];
-    g.end = next ? Math.min(next.start, g.sceneEnd) : g.sceneEnd;
+    g.end = Math.max(g.start, next ? Math.min(next.start, g.sceneEnd) : g.sceneEnd);
     delete g.sceneEnd;
   });
 

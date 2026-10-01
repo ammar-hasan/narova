@@ -13,11 +13,11 @@ function regular(file, limit = MAX_BYTES) {
   return fs.readFileSync(file);
 }
 function wavFacts(bytes) {
-  if (bytes.length < 44 || bytes.toString('ascii', 0, 4) !== 'RIFF' || bytes.toString('ascii', 8, 12) !== 'WAVE' || bytes.readUInt32LE(4) !== bytes.length - 8) throw new Error('voice cache: invalid WAV envelope');
+  if (bytes.length < 44 || bytes.toString('latin1', 0, 4) !== 'RIFF' || bytes.toString('latin1', 8, 12) !== 'WAVE' || bytes.readUInt32LE(4) !== bytes.length - 8) throw new Error('voice cache: invalid WAV envelope');
   let fmt = false, frames = null;
   for (let offset = 12; offset < bytes.length;) {
     if (offset + 8 > bytes.length) throw new Error('voice cache: truncated WAV chunk');
-    const type = bytes.toString('ascii', offset, offset + 4), length = bytes.readUInt32LE(offset + 4), start = offset + 8;
+    const type = bytes.toString('latin1', offset, offset + 4), length = bytes.readUInt32LE(offset + 4), start = offset + 8;
     if (start + length > bytes.length) throw new Error('voice cache: truncated WAV payload');
     if (type === 'fmt ') {
       if (fmt || length < 16 || bytes.readUInt16LE(start) !== 1 || bytes.readUInt16LE(start + 2) !== 1 || bytes.readUInt32LE(start + 4) !== 22050 || bytes.readUInt32LE(start + 8) !== 44100 || bytes.readUInt16LE(start + 12) !== 2 || bytes.readUInt16LE(start + 14) !== 16) throw new Error('voice cache: sentence must be mono 22050 Hz signed-16-bit PCM');
