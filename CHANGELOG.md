@@ -6,11 +6,15 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.50.0] - 2026-10-02
+
 ### Fixed
 
 - Zero-length aligned words and sentences resolve as instant choreography cues.
 - Unit speech tempo bypasses time stretching while preserving gain, fades and
   canonical conversion, avoiding short-clip failures from a no-op filter.
+- Production bed and SFX mixes preserve stereo, and changing audio routes
+  clears obsolete mixed audio before rebuilding.
 
 ### Added
 
@@ -21,6 +25,12 @@ versions follow [Semantic Versioning](https://semver.org/).
   components of hyphenated authored words.
 - Per-scene `captions: false` hides visual captions in either renderer while
   preserving caption sidecars and choreography timing.
+
+### Changed
+
+- Documentation distinguishes timeline determinism from provider output,
+  explains claim-check modes, and scopes revision reuse to verified artifacts.
+- README, npm overview and website expose the narrated-series audio controls.
 
 ## [0.49.0] - 2026-09-07
 

@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.49.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.50.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -623,6 +623,32 @@ The rules:
 artifact. Free-form expectations remain creator-owned prose; only explicit
 `observe` probes are mechanically compared. Assertions do not change rendering,
 cache identity, proof validity, or release eligibility.
+
+### Narrated-series controls
+
+Keep optional alignment settings in the project with
+`align: { engine: "faster-whisper", model: "base.en", partial: true }`.
+Explicit settings override environment defaults; alignment requires the chosen
+optional engine. Hyphenated authored words can match split measured words.
+
+Scene effects can follow speech rather than copied timestamps:
+
+```js
+sfx: [{ scene: "title", file: "assets/chime.wav",
+  at: { sentence: 0, word: 2, offset: 0.05 },
+  start: 1.5, duration: 0.8, fadeIn: 0.05, fadeOut: 0.2, volume: 0.6 }],
+```
+
+Sentence and word indices start at zero within the selected scene. `start`
+selects the source offset; `duration` and fades shape that selected interval.
+These controls work with synthesized and external narration. For a scene with
+custom typography, set `captions: false` on that scene: visual captions disappear,
+while SRT/VTT exports and cue timing remain available. Zero-length word and
+sentence cues are valid instants. Speech at tempo 1 retains its original speed,
+and production bed/SFX mixes preserve stereo.
+
+See the [audio reference](skills/narova/references/audio.md) and
+[choreography reference](skills/narova/references/choreography.md) for details.
 
 ### Product walkthroughs
 
