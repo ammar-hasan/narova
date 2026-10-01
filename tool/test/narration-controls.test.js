@@ -111,6 +111,11 @@ for line in sys.stdin:
   assert.equal(fs.readFileSync(calls, 'utf8').trim().split('\n').length, 3);
   assert.deepEqual(fs.readFileSync(path.join(dir, 'out1/audio/full.wav')), fs.readFileSync(path.join(dir, 'out2/audio/full.wav')));
   assert.ok(fs.statSync(path.join(dir, 'out2/video.mp4')).size > 0);
+  const relativeCache = { ...keyless, NAROVA_CACHE: path.relative(path.resolve(__dirname, '..'), path.join(dir, 'relative-cache')) };
+  run(['voice-cache', 'import', '--dir', 'sentences'], dir, relativeCache);
+  run(['build', '--out', 'out-relative'], dir, relativeCache);
+  assert.equal(fs.readFileSync(calls, 'utf8').trim().split('\n').length, 3, 'relative cache import and Python synthesis resolve the same directory');
+  assert.deepEqual(fs.readFileSync(path.join(dir, 'out1/audio/full.wav')), fs.readFileSync(path.join(dir, 'out-relative/audio/full.wav')));
   assert.match(fs.readFileSync(path.join(dir, 'out2/captions.srt'), 'utf8'), /Last/);
   const oldTakes = fs.readFileSync(path.join(dir, 'out1/audio/takes.json'));
   const projectFile = path.join(dir, 'reel.config.mjs');
@@ -360,4 +365,23 @@ test('canonical WAV validation compares exact header and chunk identifiers', t =
     assert.ok(offset >= 0); const bad = Buffer.from(bytes); bad[offset] |= 0x80;
     assert.throws(() => wavFacts(bad), /WAV/);
   }
+});
+
+
+test('hiding an unrelated scene does not split an unchanged visible mixed-turn cue', t => {
+  const config = raw(); config.scenes = [
+    { id: 'one', dur: 2, vo: [{ who: 'a', text: 'First.' }, { who: 'a', text: 'Second.' }] },
+    { id: 'two', dur: 1, vo: [{ who: 'a', text: 'Third.' }] },
+  ];
+  config.narrationSource = { wordTimings: [
+    { text: 'First. Second.', start: 0, end: 2, words: [{ text: 'First.', start: 0, end: 1 }, { text: 'Second.', start: 1, end: 2 }] },
+    { text: 'Third.', start: 2, end: 3, words: [{ text: 'Third.', start: 2, end: 3 }] },
+  ] };
+  const snapshot = browser => composeData(config, require('../src/timing').externalTimings(config, { browser })).groups.filter(group => group.start < 2);
+  const before = snapshot(false);
+  config.scenes[1].vo[0].captions = false;
+  assert.deepEqual(snapshot(false), before);
+  config.narrationSource.file = 'external.wav';
+  config.scenes[1].vo[0].captions = true; const browserBefore = snapshot(true);
+  config.scenes[1].vo[0].captions = false; assert.deepEqual(snapshot(true), browserBefore);
 });

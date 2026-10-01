@@ -6,7 +6,7 @@ const crypto = require('crypto');
 const SCHEMA = 'narova.voice-cache/1';
 const MAX_BYTES = 64 * 1024 * 1024, MAX_ENTRIES = 10000;
 const hash = bytes => crypto.createHash('sha256').update(bytes).digest('hex');
-const cacheDir = () => path.resolve(process.env.NAROVA_CACHE || path.join(process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'), 'cache', 'sentences'));
+const cacheDir = () => path.resolve(__dirname, '..', process.env.NAROVA_CACHE || path.join(process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'), 'cache', 'sentences'));
 function regular(file, limit = MAX_BYTES) {
   const stat = fs.lstatSync(file);
   if (!stat.isFile() || stat.isSymbolicLink() || stat.size > limit || stat.size === 0) throw new Error(`voice cache: expected a bounded regular file: ${file}`);

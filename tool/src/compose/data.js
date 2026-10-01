@@ -47,6 +47,11 @@ function composeData(config, timings, captionsEnabled = true) {
   for (const sc of scenes) {
     const t = timings[sc.id];
     const sourceScene = config.scenes.find(s => s.id === sc.id);
+    // Splitting only depends on visibility used in this scene. A hidden turn
+    // elsewhere cannot change an unrelated mixed-cue caption line.
+    const splitTurns = sourceScene.vo?.some(turn => turn.captions === false)
+      || (t.cueWords || t.words || []).some(word => (config.scenes.find(scene => scene.id === (word.turnScene || sc.id)) || sourceScene).vo?.[word.ti]?.captions === false);
+
     const groupWords = (words, splitTurns = false) => {
       const grouped = new Map();
       for (const w of words) {
@@ -58,10 +63,10 @@ function composeData(config, timings, captionsEnabled = true) {
     };
     // Preserve legacy raw external caption projection; add grouping metadata
     // only when turn visibility requires it. Normalized cue evidence stays intact.
-    const captionWords = t.cueWords && config.scenes.some(scene => scene.vo?.some(turn => turn.captions === false))
+    const captionWords = t.cueWords && splitTurns
       ? (t.words || []).map((word, i) => ({ ...word, ti: t.cueWords[i]?.ti, si: t.cueWords[i]?.si, turnScene: t.cueWords[i]?.turnScene }))
       : (t.words || []);
-    const by = groupWords(captionWords, config.scenes.some(s => s.vo?.some(turn => turn.captions === false)));
+    const by = groupWords(captionWords, splitTurns);
     // A compatibility-only external browser projection may retain raw caption
     // words while cueWords carries their normalized timing view. Ordinary
     // synthesized timing uses the same collection for both consumers.
