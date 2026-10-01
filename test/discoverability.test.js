@@ -13,7 +13,7 @@ const changelogUrl = `${homeUrl}changelog/`;
 const exploreUrl = `${homeUrl}explore/`;
 const npmUrl = 'https://www.npmjs.com/package/@narova/narova';
 const skillUrl = 'https://skills.sh/ammar-hasan/narova';
-const releaseDate = '2026-08-12';
+const siteModifiedDate = '2026-10-02';
 const expectedKeywords = [
   'video',
   'video-production',
@@ -195,8 +195,8 @@ test('sitemap lists canonical pages without ignored ranking hints', () => {
   assert.deepEqual(
     entries.map(match => ({ location: match[1], lastmod: match[2] })),
     [
-      { location: homeUrl, lastmod: releaseDate },
-      { location: changelogUrl, lastmod: releaseDate },
+      { location: homeUrl, lastmod: siteModifiedDate },
+      { location: changelogUrl, lastmod: siteModifiedDate },
       { location: exploreUrl, lastmod: '2026-08-20' },
     ],
   );
