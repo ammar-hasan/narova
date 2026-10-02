@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.51.0] - 2026-10-02
+
 ### Added
 - Portable sentence audio bundles through `voice-cache export/import`, with full
   integrity validation, explicit conflict replacement and rollback.
