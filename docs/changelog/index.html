@@ -65,19 +65,29 @@
 
   <section class="cl-list">
 
-    <article class="release sr-title" id="unreleased" data-hover>
-      <div class="rel-rail"><span class="rel-version unreleased">Unreleased</span></div>
-      <div class="rel-body"><h3>Authored narration controls and portable takes</h3>
-        <p>Portable sentence audio for keyless rebuilds, turn pauses and caption visibility,
-        explicit caption colors, final mix loudness targets, and literal word anchors.
-        ElevenLabs v4/v4 turbo and surrounding-text context stay in the optional companion;
-        hosted MCP is an explicit authoring route.</p>
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version" data-narova-version>0.51.0</span>
+        <span class="rel-date">2026-10-02</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag added">Added</span></h4>
+        <ul>
+          <li><strong>Portable speech takes.</strong> Export/import validated sentence audio for matching keyless rebuilds, with explicit conflict replacement and rollback.</li>
+          <li><strong>Authored narration controls.</strong> Turn pauses, per-turn caption hiding with retained sidecars and cues, supported caption colors, optional final mix loudness and literal word/occurrence anchors.</li>
+          <li><strong>Surrounding-text context.</strong> Negotiated same-turn phrasing context participates in sentence identity while utterances remain sentence-scoped.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul>
+          <li><strong>ElevenLabs companion 1.2.0.</strong> Explicit v4/v4 turbo selection, validated voice controls and raw PCM/companded decoding. Hosted MCP and current media offerings remain optional authoring routes using durable local assets.</li>
+          <li>Shared scene-local script files are documented and tested. Final mix changes invalidate finished-video audio while retaining speech and eligible scene pixels; caption visibility follows referenced turns across overlapping scene cues.</li>
+        </ul>
       </div>
     </article>
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.50.0</span>
+        <span class="rel-version">0.50.0</span>
         <span class="rel-date">2026-10-02</span>
       </div>
       <div class="rel-body">
