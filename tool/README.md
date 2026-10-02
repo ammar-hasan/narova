@@ -57,6 +57,8 @@ backend uses an optional isolated Python 3.12 CPU runtime installed with
 `narova voices list --backend pockettts`, inspect models with `narova pockettts catalog`,
 check explicit model readiness with `narova pockettts doctor`, and save a voice
 with `narova pockettts export-voice --speaker alba --output alba.safetensors`.
+Model helpers print progress and default to a 120-second deadline (override
+`NAROVA_POCKETTTS_TIMEOUT`); failed exports preserve the previous state file.
 Pocket and external `providerFiles` bind local inputs to current byte hashes
 before reuse; the current Pocket runtime profile also participates in identity.
 See the [Pocket guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/pockettts.md).

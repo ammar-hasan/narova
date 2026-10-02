@@ -17,6 +17,13 @@ versions follow [Semantic Versioning](https://semver.org/).
   cache reuse, preserved in manifests, checked by the worker and included in
   whole-build/shared/sentence identities. Archives reject out-of-project inputs.
 
+### Fixed
+- Pocket local files require core-owned `providerFiles` bindings before reuse;
+  setup verifies the effective isolated environment before installing packages.
+- Pocket `maxTokens` is accepted as a validated numeric control, catalog models
+  identify previews, and model doctor/export have configurable deadlines and
+  progress. Failed or timed-out exports preserve existing state files.
+
 ## [0.51.0] - 2026-10-02
 
 ### Added

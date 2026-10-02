@@ -2583,21 +2583,16 @@ async function main() {
         return;
       }
       if (sub === 'export-voice' && !flags.output) usageError('Pocket export-voice requires --output <file>');
-      const profile = pocket.pocketRuntime();
-      if (!profile.ok) throw new Error(profile.detail);
-      const args = [pocket.worker, sub];
-      for (const name of ['speaker', 'model', 'reference', 'output']) {
-        if (flags[name] != null) args.push(`--${name}`, ['reference', 'output'].includes(name) ? path.resolve(String(flags[name])) : String(flags[name]));
+      if (!fs.existsSync(pocket.pocketPython())) throw new Error('Pocket runtime not installed — run narova-setup --pockettts (Python 3.12)');
+      const args = [];
+      for (const name of ['speaker', 'model', 'reference']) {
+        if (flags[name] != null) args.push(`--${name}`, name === 'reference' ? path.resolve(String(flags[name])) : String(flags[name]));
       }
       for (const name of ['quantize', 'voice-cloning', 'truncate-reference']) if (flags[name]) args.push(`--${name}`);
-      const r = spawnSync(pocket.pocketPython(), args, {
-        encoding: 'utf8', maxBuffer: 1024 * 1024,
-        env: { ...process.env, ...(process.env.NAROVA_POCKETTTS_OFFLINE === '1' ? { HF_HUB_OFFLINE: '1' } : {}) },
-        stdio: ['ignore', 'pipe', machine.isActive() ? 'pipe' : 'inherit'],
-      });
-      if (machine.isActive() && r.stderr) process.stderr.write(machine.redact(r.stderr));
-      if (r.error || r.status !== 0) throw new Error(`Pocket ${sub} failed${r.error ? ': ' + r.error.message : '; see diagnostics above'}`);
-      const result = JSON.parse(r.stdout);
+      const helperOptions = { diagnostic: text => process.stderr.write(machine.isActive() ? machine.redact(text) : text) };
+      const result = sub === 'export-voice'
+        ? await pocket.exportPocketVoice(String(flags.output), args, helperOptions)
+        : await pocket.runPocketHelper(sub, args, helperOptions);
       console.log(JSON.stringify(result, null, 2));
       mSetData(result);
       if (sub === 'export-voice') mArtifact(path.resolve(String(flags.output)), 'pockettts-voice-state');

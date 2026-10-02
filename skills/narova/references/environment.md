@@ -56,6 +56,10 @@ access and uses the existing FFmpeg requirement.
   using Python 3.12; no core dependency change (unreleased).
 - `$NAROVA_POCKETTTS_OFFLINE=1` — require already acquired Pocket resources.
   Ordinary doctor probes packages only; `narova pockettts doctor` loads models.
+- `$NAROVA_POCKETTTS_TIMEOUT` — model doctor/export deadline in positive finite
+  seconds up to 86400 (default 120; falls back to `$NAROVA_PROVIDER_TIMEOUT`).
+  Helpers print elapsed progress every five seconds; failed exports preserve
+  existing output.
 
 ## First-run downloads (network, one time each)
 

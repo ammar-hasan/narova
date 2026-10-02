@@ -267,4 +267,7 @@ package readiness; model/cloning readiness remains untested there.
 loads the selected model/conditioning. `narova pockettts export-voice
 --output <file>` saves a compatible state. Both accept `--reference <audio>`,
 `--quantize`, `--voice-cloning`, and `--truncate-reference`; these explicit
-operations may acquire model resources. See [Pocket controls](pockettts.md).
+operations may acquire model resources. They emit progress every five seconds
+and default to a 120-second deadline (`NAROVA_POCKETTTS_TIMEOUT`, falling back
+to `NAROVA_PROVIDER_TIMEOUT`); failed exports preserve existing output.
+See [Pocket controls](pockettts.md).

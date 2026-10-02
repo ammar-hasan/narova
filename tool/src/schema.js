@@ -278,11 +278,21 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     if (v.vary != null && typeof v.vary !== 'boolean') {
       errs.push(`${at}.vary: must be a boolean`);
     }
+    let jsonOptions = v.providerOptions;
+    if (v.backend === 'pockettts' && jsonOptions && typeof jsonOptions === 'object'
+        && !Array.isArray(jsonOptions) && [Object.prototype, null].includes(Object.getPrototypeOf(jsonOptions))
+        && Object.prototype.hasOwnProperty.call(jsonOptions, 'maxTokens')) {
+      // This numeric generation bound is not a credential. Keep the generic
+      // secret filter intact for every other key and for external providers.
+      const { maxTokens, ...otherOptions } = jsonOptions;
+      if (!Number.isInteger(maxTokens) || maxTokens < 16 || maxTokens > 256) errs.push(`${at}.providerOptions.maxTokens: expected an integer from 16 to 256`);
+      jsonOptions = otherOptions;
+    }
     const optionsError = v.providerOptions == null
       ? null
       : (typeof v.providerOptions !== 'object' || Array.isArray(v.providerOptions)
         ? `${at}.providerOptions: expected a JSON-compatible object`
-        : jsonCompatibilityError(v.providerOptions, `${at}.providerOptions`));
+        : jsonCompatibilityError(jsonOptions, `${at}.providerOptions`));
     if (optionsError) errs.push(optionsError);
 
     if (v.backend === 'pockettts') {
@@ -291,6 +301,9 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       delete v.providerCapabilities;
       if (v.providerOptions == null) v.providerOptions = {};
       if (Object.prototype.hasOwnProperty.call(v.providerOptions, 'seed')) errs.push(`${at}.providerOptions.seed: seed is core-owned; use speech.deterministicTakes and vary`);
+      for (const name of require('./pockettts').FILE_OPTIONS) {
+        if (Object.prototype.hasOwnProperty.call(v.providerOptions, name)) errs.push(`${at}.providerOptions.${name}: local resources must use providerFiles.${name}; file bindings are core-owned`);
+      }
     }
     if (!isBuiltinBackend(v.backend)) {
       let provider = null;

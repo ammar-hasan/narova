@@ -6,7 +6,9 @@ Chatterbox. Install only its optional isolated runtime with
 is required. A former Pocket companion registration is ignored by built-in
 routing and may be removed explicitly with `narova providers remove pockettts`;
 normal project commands leave that registry file untouched. Setup leaves other backend environments intact and downloads no
-models. Select `backend: 'pockettts'` per voice or `--backend pockettts`.
+models. Pocket setup ignores inherited pip options and configuration to prevent
+package installation from being redirected into another environment.
+Select `backend: 'pockettts'` per voice or `--backend pockettts`.
 
 `narova voices list --backend pockettts` and `narova pockettts catalog` work
 without the Pocket runtime or model downloads. Ordinary `narova doctor` checks
@@ -16,12 +18,23 @@ explicitly checks the selected model and state and may download them.
 `NAROVA_POCKETTTS_OFFLINE=1` uses already acquired resources without network.
 Models are cached by the upstream runtime; `HF_HOME` can locate that cache.
 
+Explicit model doctor and voice export announce their work and print elapsed
+progress every five seconds, including in automation. Their default deadline
+is 120 seconds. Set `NAROVA_POCKETTTS_TIMEOUT` to positive finite seconds up to
+86400 for a cold download or slower machine; when unset,
+`NAROVA_PROVIDER_TIMEOUT` supplies the deadline. Timeout stops the helper and
+cleans its private export stage, preserving an existing destination. Diagnostics
+go to stderr in `--json` mode. Successful exports verify the staged byte digest
+before replacing the destination.
+
 ## Engine and resources
 
 The released engine profile is Pocket TTS 3.3.0 on CPU, with dated model
 configurations and immutable model/tokenizer/embedding revisions. Run
 `narova pockettts catalog` for all 27 preset IDs and 18
 released model configurations; this command needs no speech dependencies.
+Catalog model records label 24-layer configurations with `preview: true` and
+include the seven language routes.
 See [upstream presets and their sources](https://huggingface.co/kyutai/tts-voices),
 [released package](https://pypi.org/project/pocket-tts/3.3.0/) and
 [release source](https://github.com/kyutai-labs/pocket-tts/tree/v3.3.0).
@@ -92,6 +105,9 @@ from a clone, set `voiceCloning: true`; for a quantized export, set
 `quantize: true`. Arbitrary upstream states lack this provenance and are rejected.
 Files are verified before reading; exports replace the destination only after
 successful serialization. Keep the state inside the project for portable packs.
+Declare all local references, saved states and model resources through
+`providerFiles`; authored `{path, sha256}` records in `providerOptions` are
+rejected so stale metadata cannot bypass cache or archive dependency checks.
 
 ## Generation controls
 

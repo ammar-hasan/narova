@@ -75,13 +75,28 @@ for other in (core, chatterbox):
   if [ ! -x "$POCKET_VENV/bin/python" ]; then
     "$POCKET_PYTHON" -m venv "$POCKET_VENV"
   fi
-  "$POCKET_VENV/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12), "Existing Pocket venv must use Python 3.12"'
+  "$POCKET_VENV/bin/python" -c '
+from pathlib import Path
+import sys
+if sys.version_info[:2] != (3, 12):
+    sys.exit("Existing Pocket venv must use Python 3.12; re-run narova-setup --pockettts with a separate Python 3.12 environment")
+selected = Path(sys.argv[1]).expanduser().resolve()
+prefix, base = Path(sys.prefix).resolve(), Path(sys.base_prefix).resolve()
+if prefix == base or prefix != selected:
+    sys.exit("Pocket executable must belong to the selected isolated virtual environment; set NAROVA_POCKETTTS_VENV to a valid separate environment and re-run narova-setup --pockettts")
+' "$POCKET_VENV"
+  # Neither inherited pip environment options nor global/user/site config may
+  # redirect Pocket packages into another installation. Scope this policy to
+  # Pocket so explicitly requested existing backend setup keeps its behavior.
+  pocket_pip() {
+    PIP_CONFIG_FILE=/dev/null "$POCKET_VENV/bin/python" -m pip --isolated "$@"
+  }
   # Linux uses CPU wheels rather than pulling the CUDA runtime.
   if [ "$(uname -s)" = Linux ]; then
-    "$POCKET_VENV/bin/python" -m pip install 'torch==2.10.0' --index-url https://download.pytorch.org/whl/cpu
+    pocket_pip install 'torch==2.10.0' --index-url https://download.pytorch.org/whl/cpu
   fi
-  "$POCKET_VENV/bin/python" -m pip install -r "$TOOL/py/requirements-pockettts.txt"
-  "$POCKET_VENV/bin/python" -m pip check
+  pocket_pip install -r "$TOOL/py/requirements-pockettts.txt"
+  pocket_pip check
   "$POCKET_VENV/bin/python" -c 'import torch; assert not torch.cuda.is_available(), "Pocket supports CPU execution"'
   echo 'Pocket runtime ready. Models are acquired on first doctor/synthesis use, not by setup.'
   echo 'Next: narova voices list --backend pockettts; narova pockettts doctor --speaker alba'

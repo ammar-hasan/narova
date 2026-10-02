@@ -850,6 +850,9 @@ Full-model access is required for cloning; it never silently switches to presets
 Pocket runtime or downloads. `narova pockettts doctor` explicitly checks the
 selected model; `narova pockettts export-voice --speaker alba --output alba.safetensors`
 saves a compatible state. Narova retains timing, captions, processing and rendering.
+Model helpers show progress and default to a 120-second deadline; set
+`NAROVA_POCKETTTS_TIMEOUT` for slower acquisition. Failed exports preserve the
+existing state file, and catalog metadata identifies preview models.
 
 Pocket and external voices can declare
 `providerFiles: { voiceState: 'assets/voice.safetensors' }`. Core resolves and
