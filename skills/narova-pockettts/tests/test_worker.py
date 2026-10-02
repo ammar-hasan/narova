@@ -84,6 +84,10 @@ class BoundaryTests(unittest.TestCase):
         runtime=types.SimpleNamespace(version='test')
         hello=w.handle({'operation':'hello','protocol':w.PROTOCOL},runtime)
         self.assertEqual(hello['provider'],'pockettts')
+        declared=json.loads((TOOL/'provider.json').read_text())['deliveryCapabilities']
+        self.assertEqual(declared['seed-stabilization'],'honored')
+        for family in ['delivery-instruct','pronunciation-markup','pause-markup','emphasis-markup','non-latin-script']:
+            self.assertEqual(declared[family],'ignored')
         self.assertFalse(hello['capabilities']['wordTimings'])
         self.assertFalse(hello['capabilities']['surroundingText'])
         self.assertEqual(len(w.handle({'operation':'listVoices'},runtime)['voices']),27)

@@ -17,7 +17,9 @@
   "deliveryCapabilities": {
     "seed-stabilization": "honored",
     "delivery-instruct": "ignored",
-    "tts-markup": "ignored",
-    "nonlatin-sanitization": "ignored"
+    "pronunciation-markup": "ignored",
+    "pause-markup": "ignored",
+    "emphasis-markup": "ignored",
+    "non-latin-script": "ignored"
   }
 }
