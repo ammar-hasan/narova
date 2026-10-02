@@ -174,3 +174,42 @@ a `tl.set()` before the tween:
   or `fetch` warn
 - a top-level `choreography` file over 32KB warns — choreography that large is
   usually logic that belongs in the tool
+
+## Literal word anchors and shared scene files
+
+```js
+var remembered = wordCue(sc, 0, { text: 'remember', occurrence: 1 });
+tl.set('#scene-' + sc.id + ' .detail', { opacity: 1 }, remembered.start);
+```
+
+The selector addresses the second matching clean word in sentence 0.
+Occurrence is zero-based; omit it only when exactly one token matches. Matching
+ignores case and surrounding Unicode punctuation and symbols. Missing,
+ambiguous or invalid selectors throw attributed cue errors. Results retain the
+resolved numeric `wordIndex` and the same timing basis as indexed lookups.
+
+A shared source file can already be attached to several scenes locally:
+
+```js
+scenes: [
+  { id: 'intro', scriptFile: 'shared-motion.js', /* vo, body… */ },
+  { id: 'detail', scriptFile: 'shared-motion.js', /* vo, body… */ },
+]
+```
+
+`scriptFile` runs each attachment in a function with `_scStart` and `_scDur`
+for its owning scene. In that shared file, identify the owning timeline record
+and schedule only that scene's elements:
+
+```js
+var sc = DATA.scenes.find(function(s) { return s.start === _scStart; });
+tl.set('#scene-' + sc.id + ' .detail', { opacity: 1 }, sc.start + 0.2);
+```
+
+The isolated composition rebases its scene start to zero. Function scope keeps
+repeated declarations independent. `choreographyFile` keeps the existing classic
+shared script scope; it does not provide an automatic `scene` variable. Avoid
+sibling reads or global state when claiming local reuse. Editing the shared source invalidates every scene that attaches it;
+a visual edit to one scene leaves compatible sibling spans reusable. A root
+`choreography` file retains project-wide scope and conservative whole-video
+reuse. A filename or comment cannot turn global dependencies into local ones.

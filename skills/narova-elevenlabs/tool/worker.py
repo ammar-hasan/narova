@@ -22,7 +22,7 @@ from typing import Any
 
 PROTOCOL = "narova-tts-provider/v1"
 PROVIDER = "elevenlabs"
-PROVIDER_VERSION = "1.0.0"
+PROVIDER_VERSION = "1.1.0"
 API_BASE = "https://api.elevenlabs.io"
 DEFAULT_MODEL = "eleven_multilingual_v2"
 DEFAULT_OUTPUT_FORMAT = "mp3_44100_128"
@@ -203,8 +203,18 @@ def build_request(request: dict) -> tuple[str, dict, float]:
         raise ProviderError("invalid_request", "synthesis text must be a non-empty string")
     if not isinstance(payload["model_id"], str) or not payload["model_id"]:
         raise ProviderError("invalid_options", "model must be a non-empty string")
+    if payload["model_id"] in {"eleven_v4", "eleven_v4_turbo"}:
+        unsupported = set(voice_settings) - {"stability", "similarity_boost"}
+        if unsupported:
+            raise ProviderError("invalid_options", "v4 supports only stability and similarityBoost voice settings")
     if voice_settings:
         payload["voice_settings"] = voice_settings
+    context = request.get("context")
+    if context is not None:
+        if not isinstance(context, dict) or any(not isinstance(context.get(k), str) for k in ("previousText", "nextText")):
+            raise ProviderError("invalid_request", "context requires previousText and nextText strings")
+        payload["previous_text"] = context["previousText"]
+        payload["next_text"] = context["nextText"]
     language = request.get("language")
     if language is not None:
         if not isinstance(language, str) or not language.strip():
@@ -220,6 +230,9 @@ def build_request(request: dict) -> tuple[str, dict, float]:
     output_format = options.get("outputFormat", DEFAULT_OUTPUT_FORMAT)
     if not isinstance(output_format, str) or not output_format:
         raise ProviderError("invalid_options", "outputFormat must be a non-empty string")
+    codec, _, rate = output_format.partition("_")
+    if codec in {"pcm", "ulaw", "alaw"} and (not rate.isdigit() or int(rate) not in {8000, 16000, 22050, 24000, 32000, 44100, 48000}):
+        raise ProviderError("invalid_options", "raw audio outputFormat requires a supported sample rate")
     timeout = options.get("requestTimeoutSeconds", DEFAULT_TIMEOUT)
     timeout = _number(timeout, "requestTimeoutSeconds", 1.0, 300.0)
     speaker = request.get("speaker")
@@ -230,12 +243,18 @@ def build_request(request: dict) -> tuple[str, dict, float]:
     return f"/v1/text-to-speech/{voice_id}?{query}", payload, timeout
 
 
-def convert_to_wav(source: Path, output: Path, timeout: float = 60.0) -> None:
+def convert_to_wav(source: Path, output: Path, timeout: float = 60.0, output_format: str = DEFAULT_OUTPUT_FORMAT) -> None:
     temporary = output.with_name(f".{output.name}.{os.getpid()}.tmp.wav")
+    input_args = []
+    codec, _, rate = output_format.partition("_")
+    if codec in {"pcm", "ulaw", "alaw"}:
+        if not rate.isdigit() or int(rate) not in {8000, 16000, 22050, 24000, 32000, 44100, 48000}:
+            raise ProviderError("invalid_options", "raw audio outputFormat requires a supported sample rate")
+        input_args = ["-f", {"pcm": "s16le", "ulaw": "mulaw", "alaw": "alaw"}[codec], "-ar", rate, "-ac", "1"]
     try:
         result = subprocess.run(
             [
-                "ffmpeg", "-y", "-loglevel", "error", "-i", str(source),
+                "ffmpeg", "-y", "-loglevel", "error", *input_args, "-i", str(source),
                 "-ac", "1", "-c:a", "pcm_s16le", str(temporary),
             ],
             stdout=subprocess.DEVNULL,
@@ -291,7 +310,11 @@ def synthesize(request: dict) -> dict:
                 delete=False) as source:
             source.write(audio)
             source_path = Path(source.name)
-        convert_to_wav(source_path, output)
+        output_format = (request.get("options") or {}).get("outputFormat", DEFAULT_OUTPUT_FORMAT)
+        if output_format == DEFAULT_OUTPUT_FORMAT:
+            convert_to_wav(source_path, output)
+        else:
+            convert_to_wav(source_path, output, output_format=output_format)
     finally:
         if source_path is not None:
             source_path.unlink(missing_ok=True)
@@ -344,6 +367,7 @@ def handle(request: dict) -> dict:
             "protocol": PROTOCOL,
             "provider": PROVIDER,
             "providerVersion": PROVIDER_VERSION,
+            "capabilities": {"surroundingText": True},
         }
     if operation == "synthesize":
         return synthesize(request)

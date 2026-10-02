@@ -13,7 +13,8 @@
     "synthesis": true,
     "voiceListing": true,
     "languages": true,
-    "wordTimings": false
+    "wordTimings": false,
+    "surroundingText": true
   },
   "deliveryCapabilities": {
     "delivery-instruct": "unknown",

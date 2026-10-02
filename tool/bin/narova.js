@@ -183,6 +183,7 @@ function operationName(cmd, positionals, flags = {}) {
     branch: ['save', 'compare', 'list', 'set', 'show'],
     history: ['list', 'annotate', 'compare'],
     providers: ['add', 'list', 'remove', 'doctor'],
+    'voice-cache': ['export', 'import'],
     renderers: ['list', 'doctor'],
     voices: ['list', 'get'],
     karaoke: ['generate'],
@@ -206,7 +207,7 @@ const PUBLIC_COMMANDS = new Set([
   'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
   'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
   'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
-  'generate',
+  'generate', 'voice-cache',
 ]);
 
 function preDispatchOperation(argv) {
@@ -606,6 +607,8 @@ Commands:
                            read-only; no score, ranking, recommendation, or selection
   branch set <name>    approve/reject/archive a proof branch with --status
   branch list|show     inspect saved proof directions and their rationale
+  voice-cache export --out <build-dir> --dir <new-bundle-dir>  save portable sentence WAVs
+  voice-cache import --dir <bundle-dir> [--overwrite]         validate and restore sentences
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> selected renderer project + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
@@ -2040,6 +2043,17 @@ async function main() {
       mDiag('error', 'usage.invalid', 'narova render was removed in 0.3.0');
       process.exit(machine.EXIT.usage);
       break;
+
+    case 'voice-cache': {
+      const sub = positionals[1];
+      if (!['export', 'import'].includes(sub) || !flags.dir || (sub === 'export' && !flags.out)) usageError('usage: narova voice-cache export --out <build-dir> --dir <new-bundle-dir> | import --dir <bundle-dir> [--overwrite]');
+      const cache = require('../src/voice-cache');
+      const result = sub === 'export' ? cache.exportCache(flags.out, flags.dir) : cache.importCache(flags.dir, { overwrite: flags.overwrite === true });
+      console.log(`voice-cache ${sub}: ${result.entries} sentence(s) -> ${result.dir}`);
+      mSetData(result);
+      if (sub === 'export') mArtifact(path.join(result.dir, 'manifest.json'), 'voice-cache');
+      return;
+    }
 
     case 'synth': {
       const { config, projectDir } = await loadResolved(flags);

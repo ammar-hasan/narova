@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.50.0"
-checksum: 59fa371f0146f64e2def4e44204e29f6646a8a1b086890b8dcd67b5a3cd73202
+checksum: 59b8bcf6dc46df1cf5050db20ce2e73e67a49e5377ac21726076b1a71c45a426
 ---
 # narova — video from scene scripts
 
@@ -74,7 +74,12 @@ Or bring your own recording with `narration.file` and `narration.wordTimings`.
 For narrated series, keep optional alignment model/partial settings in `align`,
 anchor SFX with sentence/word indices, and trim/fade each effect. Scene-level
 `captions: false` hides visual captions while preserving sidecars and cue timing.
-See [audio controls](references/audio.md) for settings and engine prerequisites.
+Turn `pauseAfter` adds authored silence to synthesized speech. Turn
+`captions: false` hides visual words while preserving sidecars. Use caption
+color settings for explicit styling and `mix.loudness` for optional final mix
+normalization. `voice-cache export/import` carries selected completed sentence
+clips to a matching keyless build. Literal word/occurrence selectors complement
+indexed cues. See [audio controls](references/audio.md) for settings and engine prerequisites.
 
 ## Install the CLI
 

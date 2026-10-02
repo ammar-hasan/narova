@@ -303,6 +303,8 @@ function synth(outDir, opts = {}) {
   if (r.status !== 0) throw new Error(`synth (narova_tts) exited ${r.status}`);
   const timings = path.join(outDir, 'timings.json');
   if (!fs.existsSync(timings)) throw new Error(`synth produced no timings.json in ${outDir}`);
+  const finalConfig = opts.config || JSON.parse(fs.readFileSync(path.join(outDir, 'config.resolved.json'), 'utf8'));
+  require('./final-loudness').applyFinalLoudness(finalConfig, path.join(outDir, 'audio'), opts.log);
   // Commit the audio fingerprint only after synthesis succeeds.
   if (opts.config) commitFingerprint(opts.config, outDir);
   return { timings };
@@ -350,6 +352,7 @@ function build(config, opts = {}) {
 
     // Rebuild current layers, or remove obsolete mixed audio on route changes.
     mixExternalAudio(config, narrationPath, audioDir, log);
+    require('./final-loudness').applyFinalLoudness(config, audioDir, log);
 
     // Normalized scene-local evidence; browser-only legacy projection remains
     // explicit in the shared timing boundary.
@@ -610,7 +613,7 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
   const pending = path.join(audioDir, 'mix.pending.wav');
   fs.rmSync(mixPath, { force: true });
   fs.rmSync(pending, { force: true });
-  if (!config.bed && !config.sfx?.length) return;
+  if (!config.bed && !config.sfx?.length && !config.mix?.loudness) return;
   const stereoSource = file => {
     const channels = execFileSync('ffprobe', [
       '-v', 'error', '-select_streams', 'a:0', '-show_entries', 'stream=channels',
@@ -621,6 +624,15 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
   };
   const { starts: sceneStarts, total: totalDur } = sceneAnchors(config.scenes, scene => scene.dur || 0);
   const process = config.narrationSource?.process;
+  // Authored literal selectors are required timing evidence, not an optional
+  // mixing failure. Resolve them before the legacy media fallback catches.
+  const literalAnchors = new Map();
+  for (const sfx of config.sfx || []) {
+    if (sfx.at && typeof sfx.at.word === 'object') {
+      literalAnchors.set(sfx, effectAnchor(sceneStarts, sfx.scene, sfx.at, externalTimings(config)));
+    }
+  }
+
 
   // Apply voice processing to the narration before mixing with bed/sfx.
   let voicePath = narrationPath;
@@ -680,7 +692,7 @@ function mixExternalAudio(config, narrationPath, audioDir, log) {
     for (const sfx of (config.sfx || [])) {
       inputs.push('-i', sfx.file);
       const vol = sfx.volume ?? 0.8;
-      const { start: sceneStart, time: delay } = effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0, externalTimings(config));
+      const { start: sceneStart, time: delay } = literalAnchors.get(sfx) || effectAnchor(sceneStarts, sfx.scene, sfx.at ?? 0, externalTimings(config));
       if (!Number.isFinite(sceneStart)) {
         throw new Error(`config.sfx scene anchor is unavailable: ${sfx.scene}`);
       }
@@ -761,6 +773,7 @@ function configFromManifest(manifest, resolvedConfig) {
       ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
       ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
+      ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     }])),
     theme: { ...(m.theme || {}), accent: m.theme?.accent, bg: m.theme?.bg },
     mode: m.theme?.mode || 'dark',
@@ -776,7 +789,7 @@ function configFromManifest(manifest, resolvedConfig) {
       clipAudio: s.clipAudio || ((original.scenes || [])[i]?.clipAudio) || null,
       walkthrough: s.walkthrough || null, three: s.three || null,
       transition: s.transition || 'fade',
-      vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}), ...(t.take != null ? { take: t.take } : {}) })),
+      vo: (s.vo || []).map(t => ({ who: t.who, text: t.text, ...(t.lang ? { lang: t.lang } : {}), ...(t.synthesisText ? { synthesisText: t.synthesisText } : {}), ...(t.take != null ? { take: t.take } : {}), ...(t.pauseAfter != null ? { pauseAfter: t.pauseAfter } : {}), ...(t.captions != null ? { captions: t.captions } : {}) })),
       _choreographyFileContents: s._choreographyFileContents || ((original.scenes || [])[i]?._choreographyFileContents) || '',
       _scriptFileContents: s._scriptFileContents || ((original.scenes || [])[i]?._scriptFileContents) || '',
       _threeModuleContents: s._threeModuleContents || ((original.scenes || [])[i]?._threeModuleContents) || '',
@@ -793,6 +806,7 @@ function configFromManifest(manifest, resolvedConfig) {
     align: m.align || false,
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
     sfx: (m.audio?.sfx || []).map(s => ({ ...s })),
+    mix: m.audio?.mix || null,
     variants: (m.variants || []).map(v => ({
       id: v.id, kind: v.kind || 'hook',
       scene: v.scene ? { body: v.scene.body, visual: v.scene.visual || null, three: v.scene.three || null, vo: v.scene.vo } : null,

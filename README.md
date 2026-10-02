@@ -822,3 +822,13 @@ Apache-2.0 — see [LICENSE](./LICENSE). Changes are tracked in
 First-party Explore projects and demo media are published separately under
 [CC0 1.0](https://github.com/ammar-hasan/narova-assets) for unrestricted reuse;
 no attribution or proof of use is required.
+
+### Narration controls and portable speech
+
+Use turn `pauseAfter` for authored silence, turn `captions: false` to hide visual
+words while retaining subtitles, and root `mix.loudness` for optional final mix
+normalization. Literal word selectors can anchor effects and choreography by
+text plus occurrence. `narova voice-cache export/import` carries selected sentence
+WAVs for matching keyless builds. See the [audio guide](skills/narova/references/audio.md).
+The [ElevenLabs companion guide](skills/narova-elevenlabs/references/current-offerings.md)
+covers v4/v4 turbo, phrasing context and optional hosted MCP authoring.

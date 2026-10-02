@@ -147,3 +147,13 @@ Releases from `0.31.1` onward use npm Trusted Publishing and include provenance
 linking the package to its public GitHub source and publishing workflow. The
 manually bootstrapped `0.31.0` release has no provenance attestation. Narova is
 available under the Apache-2.0 license.
+
+## Portable speech and narration controls
+
+`narova voice-cache export --out out --dir speech-cache` saves selected completed
+sentence audio; `narova voice-cache import --dir speech-cache` validates and
+restores it for matching keyless builds. Authored turns support `pauseAfter` and
+`captions: false`. Root caption colors and `mix.loudness` provide explicit visual
+and final mix choices. Literal word/occurrence selectors work in choreography
+and SFX. See the [audio guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/audio.md)
+for validation, reuse and measured-delivery limits.

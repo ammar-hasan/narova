@@ -78,6 +78,8 @@ operation may add fields in a later schema-1 release.
 | `plan` | the stage plan object | none |
 | `provenance` | the provenance report object | none |
 | `diff` | the revision-impact report, plus its named baseline when applicable | none |
+| `voice-cache export` | `{ dir, entries, bytes }` | `voice-cache` manifest |
+| `voice-cache import` | `{ dir, entries, imported, reused }` | none |
 | `synth` | `{ out, reused }` | `audio`, `timings`, `manifest` |
 | `compose` | `{ scenes, total, renderer, cues }` | `renderer-project`, `captions` or `caption-omission`, `manifest` |
 | `captions` | `{ cues }` | `captions` or `caption-omission` |

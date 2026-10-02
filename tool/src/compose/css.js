@@ -294,6 +294,10 @@ function captionPresentationCss(captions = {}) {
     // is appended after this block and can still replace the local token.
     rules.push('.caption2{--ink:#f4f7fb;background:rgba(3,7,14,.86);border-radius:.42em;padding:.42em .75em}');
   }
+  if (captions.color) rules.push(`#cap-stage .cap-w{color:${captions.color}}`);
+  if (captions.activeColor || captions.color) rules.push(`#cap-stage .cap-w.active{color:${captions.activeColor || captions.color}}`);
+  if (captions.pastColor || captions.color) rules.push(`#cap-stage .cap-w.past{color:${captions.pastColor || captions.color}}`);
+  if (captions.plate === true && captions.plateColor) rules.push(`.caption2{background:${captions.plateColor}}`);
   return rules.join('\n');
 }
 

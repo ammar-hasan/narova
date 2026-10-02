@@ -121,10 +121,18 @@ var stage = document.getElementById('cap-stage');
       words[0].start, words[words.length - 1].end);
   };
   window.wordCue = function(scene, sentenceIndex, wordIndex) {
-    if (!Number.isInteger(wordIndex) || wordIndex < 0) {
-      throw cueError(scene, sentenceIndex, wordIndex, 'word index must be a non-negative integer');
-    }
+    if (!(wordIndex && typeof wordIndex === 'object') && (!Number.isInteger(wordIndex) || wordIndex < 0)) throw cueError(scene, sentenceIndex, wordIndex, 'word index must be a non-negative integer');
     var resolved = resolvedSentence(scene, sentenceIndex, wordIndex);
+    if (wordIndex && typeof wordIndex === 'object') {
+      var selector = wordIndex;
+      var norm = function(s) { return String(s).trim().toLowerCase().replace(/^[\\p{P}\\p{S}]+/u, '').replace(/[\\p{P}\\p{S}]+$/u, ''); };
+      if (Array.isArray(selector) || typeof selector.text !== 'string' || !norm(selector.text) || (selector.occurrence != null && (!Number.isInteger(selector.occurrence) || selector.occurrence < 0))) throw cueError(scene, sentenceIndex, undefined, 'invalid word selector');
+      var matches = [];
+      resolved.sentence.words.forEach(function(w, i) { if (norm(w.token) === norm(selector.text)) matches.push(i); });
+      if (selector.occurrence == null && matches.length !== 1) throw cueError(scene, sentenceIndex, undefined, 'literal word is missing or ambiguous; provide occurrence for repeated words');
+      wordIndex = matches[selector.occurrence == null ? 0 : selector.occurrence];
+    }
+    if (!Number.isInteger(wordIndex) || wordIndex < 0) throw cueError(scene, sentenceIndex, wordIndex, 'word index or occurrence is unavailable');
     var word = resolved.sentence.words[wordIndex];
     if (!word) throw cueError(resolved.scene, sentenceIndex, wordIndex, 'resolved word timing is unavailable');
     return span(resolved.scene, sentenceIndex, wordIndex, word.start, word.end, word);

@@ -179,7 +179,7 @@ function plan(fromManifestPath, toConfig, opts = {}) {
       walkthroughExecutionProjection(walkthroughConfigDiff.to),
     ),
   );
-  const hasBedSfxChange = configDiffs.some(d => d.key === 'bed' || d.key === 'sfx');
+  const hasBedSfxChange = configDiffs.some(d => d.key === 'bed' || d.key === 'sfx' || d.key === 'mix');
   const hasAssetBedSfxChange = assetDiffs.some(d => d.file && (
     d.file.endsWith('.mp3') || d.file.endsWith('.wav') || d.file.endsWith('.ogg')
     || d.file.endsWith('.flac') || d.file.endsWith('.m4a') || d.file.endsWith('.aac')
@@ -278,8 +278,8 @@ function diffScenes(fromScenes, toScenes) {
       toIndex: t.index,
     };
     if (f.id !== t.id) entry.idChanged = true;
-    const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
-    const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText })));
+    const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText, pauseAfter: v.pauseAfter || 0 })));
+    const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText, pauseAfter: v.pauseAfter || 0 })));
     if (fvo !== tvo) entry.voChanged = true;
     if (f.body !== t.body) entry.bodyChanged = true;
     if (JSON.stringify(f.visual) !== JSON.stringify(t.visual)) entry.visualChanged = true;
@@ -309,6 +309,7 @@ function diffConfigTopLevel(from, to, fromHash, toHash, hasAssetChange) {
     { key: 'platform', from: from.project?.platform, to: to.project?.platform },
     { key: 'bed',      from: from.audio?.bed,       to: to.audio?.bed },
     { key: 'sfx',      from: from.audio?.sfx,       to: to.audio?.sfx },
+    { key: 'mix',      from: from.audio?.mix || null, to: to.audio?.mix || null },
     { key: 'captions', from: from.captions,          to: to.captions },
     { key: 'align',    from: from.align,             to: to.align },
     { key: 'series',   from: from.series,            to: to.series },

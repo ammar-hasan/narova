@@ -670,3 +670,15 @@ test('hidden scene captions skip DOM creation while preserving word cues', () =>
   assert.equal(window.wordCue('s1', 0, 0).token, DATA.scenes[0].sentences[0].words[0].token);
   assert.equal(capStage.children.length, 0);
 });
+
+test('literal word cues match normalized tokens, retain indices and reject ambiguity', () => {
+  const data = structuredClone(DATA);
+  data.scenes[0].sentences[0].words.push({ token: 'THERE!', speaker: 'a', start: 1.2, end: 1.3 });
+  const { window } = runScript({ data });
+  assert.equal(window.wordCue('s1', 0, { text: 'hi' }).wordIndex, 0);
+  assert.equal(window.wordCue('s1', 0, { text: 'there', occurrence: 1 }).start, 1.2);
+  assert.throws(() => window.wordCue('s1', 0, { text: 'there' }), /ambiguous/);
+  assert.throws(() => window.wordCue('s1', 0, { text: 'missing' }), /missing/);
+  assert.throws(() => window.wordCue('s1', 0, { text: 'there', occurrence: -1 }), /invalid/);
+  assert.throws(() => window.wordCue('s1', 0, { text: 'there', occurrence: 5 }), /unavailable/);
+});

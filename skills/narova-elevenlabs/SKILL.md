@@ -13,8 +13,8 @@ compatibility: >
   ElevenLabs account, and ELEVENLABS_API_KEY.
 metadata:
   author: ammar-hasan
-  version: "1.1.0"
-checksum: 7589cbb434b90dddfe3900dce0deb37c9c532a9958581131d3c56d6ee81a0542
+  version: "1.2.0"
+checksum: b03824f0fb66bfa70614ca3b0726e1d2b95cac5463f13d165398f323b98e8dd9
 ---
 
 # Narova + ElevenLabs
@@ -67,6 +67,10 @@ When a brief needs a voice that does not exist yet, use
 `tool/design.py` to design previews from a description, audition them,
 and create the permanent voice — the resulting voice ID slots into the
 normal voice block.
+
+Read [current offerings](references/current-offerings.md) for explicit v4/v4 turbo
+selection, surrounding-text phrasing, portable takes, optional hosted MCP and
+local routes for dialogue, music, effects and other selected provider media.
 
 ## Operating rules
 

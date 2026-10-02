@@ -179,7 +179,8 @@ def mix_audio(scenes, timings, config, audio_dir: Path) -> None:
         sc = e.get("scene")
         if isinstance(at, dict):
             words = [w for w in timings.get(sc, {}).get("words", []) if w.get("si") == at["sentence"]]
-            wi = at.get("word", 0)
+            from .word_selector import select_word_index
+            wi = select_word_index([w.get("w", "") for w in words], at.get("word", 0), f"config.sfx[{i}]")
             if wi >= len(words):
                 raise ValueError(f"config.sfx[{i}] cue unavailable: scene {sc!r}, sentence {at['sentence']}, word {wi}")
             at = words[wi]["t0"] + at.get("offset", 0)
@@ -253,7 +254,7 @@ def rescale_timings(t: dict[str, Any], actual: float) -> dict[str, Any]:
 # ---- sentence synthesis (raw voice -> tempo + fades + resample) --------------
 
 def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float,
-                       lang: str | None = None, nonce: int | None = None) -> str:
+                       lang: str | None = None, nonce: int | None = None, context: dict | None = None) -> str:
     """Stable identity of one synthesized sentence. Bump v1 when the processing
     chain (rate/fades/atempo) changes so old entries are naturally abandoned.
     An explicit take nonce (NAR-018-071) participates in identity, so take 2
@@ -265,6 +266,8 @@ def sentence_cache_key(kind: str, speaker: str, text: str, tempo: float,
         parts += f"|lang={lang}"
     if nonce is not None:
         parts += f"|take={nonce}"
+    if context is not None:
+        parts += "|context=" + json.dumps(context, sort_keys=True, ensure_ascii=False)
     h.update(parts.encode("utf-8"))
     return h.hexdigest()
 
@@ -332,7 +335,7 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
 
 def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: float,
                    cache_key: str | None = None, lang: str | None = None,
-                   gain_db: float = 0.0, seed: int | None = None) -> tuple[float, bool]:
+                   gain_db: float = 0.0, seed: int | None = None, context: dict | None = None) -> tuple[float, bool]:
     """Synthesize one sentence, speed via atempo (pitch-preserving; NEVER the XTTS
     speed param, LEARNINGS #9), then fade the edges. Returns the MEASURED duration
     of the processed clip and whether a cache hit served it — word timing is
@@ -343,7 +346,8 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
         shutil.copyfile(cached, out)
         return probe(out), True
     raw = tmp / "_raw.wav"
-    backend.synthesize(who, text, raw, lang=lang, seed=seed)
+    extra = {"context": context} if context is not None else {}
+    backend.synthesize(who, text, raw, lang=lang, seed=seed, **extra)
     d = probe(raw) / tempo                 # duration on the post-tempo timeline
     fo = max(0.0, d - FADE)
     gain = f"volume={gain_db}dB," if gain_db != 0.0 else ""
@@ -442,6 +446,8 @@ def _synthesize_with_router(
     deterministic_takes = bool(
         (config.get("speech") or {}).get("deterministicTakes", True))
     # Take-identity records (NAR-018-070) + durable per-sentence takes.
+    # A failed generation must not expose old keys alongside replaced clips.
+    (audio_dir / "takes.json").unlink(missing_ok=True)
     take_records: list[dict[str, Any]] = []
     sentences_dir = audio_dir / "sentences"
 
@@ -539,6 +545,11 @@ def _synthesize_with_router(
                 w = tmp / f"{nn}_{si:03d}.wav"
                 turn_lang = turn.get("lang") or voice_lang.get(who)
                 nonce = turn.get("take")
+                backend = router[who]
+                context = None
+                if getattr(backend, "context_capable", False):
+                    context = {"previousText": " ".join(p[0] for p in sent_pairs[:k]),
+                               "nextText": " ".join(p[0] for p in sent_pairs[k + 1:])}
                 key = sentence_cache_key(
                     voice_kind.get(who, default_backend),
                     voice_speaker.get(who, who),
@@ -546,6 +557,7 @@ def _synthesize_with_router(
                     tempo,
                     lang=turn_lang,
                     nonce=nonce if isinstance(nonce, int) and nonce > 0 else None,
+                    context=context,
                 )
                 backend = router[who]
                 seed_capable = bool(getattr(backend, "seed_capable", False))
@@ -557,7 +569,7 @@ def _synthesize_with_router(
                     backend, who, synth_sent, tmp, w, tempo,
                     cache_key=key, lang=turn_lang,
                     gain_db=voice_gain_db.get(who, 0.0),
-                    seed=seed,
+                    seed=seed, context=context,
                 )
                 # Durable per-sentence take (advisory evidence; NAR-007-026
                 # surfaces this as the take index).
@@ -574,7 +586,8 @@ def _synthesize_with_router(
                     "mode": mode,
                     **({"seed": seed} if seed is not None else {}),
                     **({"take": nonce} if isinstance(nonce, int) and nonce > 0 else {}),
-                    "cacheHit": cache_hit,
+                    "cacheHit": cache_hit, "cacheKey": key,
+                    "sha256": hashlib.sha256(w.read_bytes()).hexdigest(),
                     "file": f"audio/sentences/{sentence_file}",
                     "text": synth_sent,
                 })
@@ -587,10 +600,16 @@ def _synthesize_with_router(
                 for tok, wg in zip(toks, wts):
                     wd = d * (wg / tot)
                     words.append({"w": tok, "t0": round(wt, 3), "t1": round(wt + wd, 3),
-                                  "who": who, "si": si})
+                                  "who": who, "si": si, "ti": ti})
                     wt += wd
                 clock += d
                 si += 1
+            pause = float(turn.get("pauseAfter") or 0)
+            if pause > 0:
+                silence = tmp / f"pause_{nn}_{ti}.wav"
+                make_silence(pause, silence)
+                pieces.append(silence)
+                clock += pause
         pieces.append(sil["tail"])
         clock += tail
 

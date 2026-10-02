@@ -20,7 +20,8 @@ function effectAnchor(starts, scene, offset, timings = null) {
   const start = scene == null ? 0 : starts.get(scene);
   if (offset && typeof offset === 'object') {
     const words = (timings?.[scene]?.words || []).filter(word => word.si === offset.sentence);
-    const word = words[offset.word ?? 0];
+    const { selectWordIndex } = require('./word-selector');
+    const word = words[selectWordIndex(words.map(w => w.w), offset.word ?? 0, `config.sfx scene ${scene}, sentence ${offset.sentence}`)];
     if (!word || !Number.isFinite(word.t0)) throw new Error(`config.sfx cue unavailable: scene "${scene}", sentence ${offset.sentence}, word ${offset.word ?? 0}`);
     offset = word.t0 + (offset.offset ?? 0);
   }
@@ -32,6 +33,7 @@ function effectAnchor(starts, scene, offset, timings = null) {
 function externalTimings(config, { browser = false } = {}) {
   const source = config.narrationSource;
   if (browser && !(source && source.file && source.wordTimings)) return null;
+  const owners = require('./external-word-turns').externalWordTurns(config);
   const entries = {};
   let cursor = 0;
   for (const scene of config.scenes) {
@@ -45,8 +47,9 @@ function externalTimings(config, { browser = false } = {}) {
       w: word.text || word.w || '',
       t0: Math.max(0, word.start - cursor),
       t1: Math.max(0, word.end - cursor),
-      who: cue.who || turns[si]?.who || turns[0]?.who || Object.keys(config.voices || {})[0] || 'a',
-      si,
+      who: cue.who || owners.get(word)?.who || turns[si]?.who || turns[0]?.who || Object.keys(config.voices || {})[0] || 'a',
+      si, ...(owners.has(word) ? { ti: owners.get(word).ti } : {}),
+      ...(owners.get(word) && owners.get(word).scene !== scene.id ? { turnScene: owners.get(word).scene } : {}),
     })));
     entries[scene.id] = browser
       ? { dur, words: cues.flatMap(cue => cue.words), cueWords: words }
