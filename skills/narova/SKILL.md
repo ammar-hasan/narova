@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.51.0"
-checksum: 65a9fa234e7d325c9bf13009bfafdbe4aebba8c678035d815cabaff50a56085d
+checksum: 7cf0774b6331471a46126c205f5087aef5fc95f48be0673b37d23def01c232c7
 ---
 # narova — video from scene scripts
 
@@ -171,7 +171,9 @@ External speech and video providers are optional registered companion skills:
 `narova-elevenlabs` provides speech, `narova-openai` provides speech and Sora,
 `narova-runway` provides Runway video generation, `narova-google` provides
 Gemini speech and Veo video generation, and `narova-xiaomi` provides Xiaomi MiMo
-speech (preset voices, voice design, and voice cloning). See
+speech (preset voices, voice design, and voice cloning). `narova-pockettts`
+provides isolated local CPU speech, multilingual presets, reference cloning
+and saved states; it is currently unreleased. See
 `references/cli.md` §providers.
 
 For AI-generated shots, the project may define a small optional `continuity`

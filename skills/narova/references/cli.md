@@ -90,6 +90,7 @@ Walkthrough config, auth, semantic locator, security, timing, and layout details
 [`product-walkthroughs.md`](product-walkthroughs.md).
 
 Optional cloud companions are installed and registered separately. Use
+`narova-pockettts` for isolated local CPU speech (unreleased),
 `narova-elevenlabs` for ElevenLabs speech, `narova-openai` for OpenAI speech
 and Sora, `narova-runway` for Runway video generation, `narova-google` for
 Google Gemini speech and Veo video generation, or `narova-xiaomi` for Xiaomi

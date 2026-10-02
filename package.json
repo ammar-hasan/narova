@@ -7,7 +7,7 @@
   "scripts": {
     "narova": "node tool/bin/narova.js",
     "test": "npm run -s test:tool && npm run -s test:integration && npm run -s test:companions",
-    "test:companions": "npm run -s test:3d && npm run -s test:elevenlabs && npm run -s test:openai && npm run -s test:runway && npm run -s test:google && npm run -s test:mimo",
+    "test:companions": "npm run -s test:3d && npm run -s test:elevenlabs && npm run -s test:openai && npm run -s test:runway && npm run -s test:google && npm run -s test:mimo && npm run -s test:pockettts",
     "test:tool": "npm test --prefix tool",
     "test:js": "npm run test:js --prefix tool",
     "test:py": "npm run test:py --prefix tool",
@@ -30,6 +30,7 @@
     "eval:walkthrough": "node tool/evals/walkthrough-eval.js",
     "eval:no-browser": "node tool/evals/no-browser-complex-eval.js",
     "version:sync": "node scripts/sync-version.js",
-    "version": "node scripts/sync-version.js"
+    "version": "node scripts/sync-version.js",
+    "test:pockettts": "PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s skills/narova-pockettts/tests"
   }
 }

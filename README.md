@@ -832,3 +832,19 @@ text plus occurrence. `narova voice-cache export/import` carries selected senten
 WAVs for matching keyless builds. See the [audio guide](skills/narova/references/audio.md).
 The [ElevenLabs companion guide](skills/narova-elevenlabs/references/current-offerings.md)
 covers v4/v4 turbo, phrasing context and optional hosted MCP authoring.
+
+
+### Pocket TTS (unreleased)
+
+The optional [Pocket TTS companion](skills/narova-pockettts/SKILL.md) adds local
+CPU narration with 27 presets, seven languages, reference cloning and saved
+voice states. Narova retains timing, captions, processing and rendering.
+Install it separately with `npx skills add ammar-hasan/narova --skill narova-pockettts -g`,
+then run its setup and explicitly register `pockettts`. Use the matching source
+checkout until a CLI release includes this feature. Model access is required
+for cloning; it never silently switches to preset-only weights.
+
+External voices can declare `providerFiles: { voiceState: 'assets/voice.safetensors' }`.
+Core resolves and hashes these files before reuse, includes their identities in
+manifests and caches, and delivers bound `{ path, sha256 }` values to the worker.
+See the [Pocket configuration guide](skills/narova-pockettts/references/configuration.md).

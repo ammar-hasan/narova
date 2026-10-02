@@ -2,6 +2,7 @@
 /* Resolve + validate a project config into the shape the renderer/synth expect. */
 const fs = require('fs');
 const path = require('path');
+const crypto = require('crypto');
 const { resolveSize, PLATFORMS, resolveVoiceSample } = require('./util');
 const { isBuiltinBackend, backendHint } = require('./tts-backends');
 const {
@@ -39,6 +40,18 @@ const ASSERTION_OPERATORS = new Set(['eq', 'ne', 'lt', 'lte', 'gt', 'gte', 'betw
  * choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir, platform,
  * bed, sfx, captions, align, variants, variant, provenance } and throws on anything the
  * pipeline can't render. */
+// Model weights can be large; bound-file hashing must not load them into memory.
+function hashProviderFile(file) {
+  const hash = crypto.createHash('sha256');
+  const fd = fs.openSync(file, 'r');
+  try {
+    const buffer = Buffer.alloc(1024 * 1024);
+    let count;
+    while ((count = fs.readSync(fd, buffer, 0, buffer.length, null)) > 0) hash.update(buffer.subarray(0, count));
+    return hash.digest('hex');
+  } finally { fs.closeSync(fd); }
+}
+
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
   const errs = [];
@@ -252,6 +265,8 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   voiceIds.forEach(id => {
     const v = voices[id];
     const at = `config.voices.${id}`;
+    // Resolved metadata is evidence, never an authored source of identity.
+    delete v.providerFileInputs;
     // Per-voice gain trim in dB — works for all backends.
     if (v.gainDb != null && (typeof v.gainDb !== 'number' || !Number.isFinite(v.gainDb)
         || v.gainDb < -24 || v.gainDb > 24)) {
@@ -286,6 +301,31 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         v.providerVersion = provider.providerVersion || '';
         v.providerCapabilities = provider.capabilities || {};
         if (v.providerOptions == null) v.providerOptions = {};
+      }
+    }
+    if (Object.prototype.hasOwnProperty.call(v, 'providerFiles')) {
+      const files = v.providerFiles;
+      if (isBuiltinBackend(v.backend)) errs.push(`${at}.providerFiles: requires an external speech provider`);
+      if (!files || typeof files !== 'object' || Array.isArray(files)
+          || ![Object.prototype, null].includes(Object.getPrototypeOf(files))) {
+        errs.push(`${at}.providerFiles: expected an object of option names to local file paths`);
+      } else {
+        v.providerFileInputs = {};
+        for (const [name, source] of Object.entries(files)) {
+          const field = `${at}.providerFiles.${name}`;
+          if (!/^[A-Za-z][A-Za-z0-9_]*$/.test(name) || ['seed', '__proto__', 'prototype', 'constructor'].includes(name)
+              || Object.prototype.hasOwnProperty.call(v.providerOptions || {}, name)) {
+            errs.push(`${field}: unsafe or conflicting provider option name`); continue;
+          }
+          if (typeof source !== 'string' || !source.trim() || /^[a-z][a-z0-9+.-]*:\/\//i.test(source)) {
+            errs.push(`${field}: expected a nonempty local file path`); continue;
+          }
+          const file = path.resolve(baseDir, source);
+          try {
+            if (!fs.statSync(file).isFile()) throw new Error('not a regular file');
+            v.providerFileInputs[name] = { path: file, sha256: hashProviderFile(file) };
+          } catch (error) { errs.push(`${field}: cannot read local file ${file}: ${error.message}`); }
+        }
       }
     }
     if (v.backend !== 'chatterbox') return;

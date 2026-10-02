@@ -102,7 +102,7 @@ function releaseChecks(rootPackage, toolPackage, command, scope = 'root', stack 
       const source = (nextScope === 'root' ? rootPackage : toolPackage).scripts[name];
       if (!source || stack.includes(key)) throw new Error(`invalid release script: ${key}`);
       // Independent companion executors are leaf checks.
-      if (nextScope === 'root' && /^test:(3d|elevenlabs|openai|runway|google|mimo|integration)$/.test(name)) {
+      if (nextScope === 'root' && /^test:(3d|elevenlabs|openai|runway|google|mimo|pockettts|integration)$/.test(name)) {
         return [key];
       }
       return releaseChecks(rootPackage, toolPackage, source, nextScope, [...stack, key]);

@@ -365,3 +365,22 @@ sfx: [{ file: 'assets/hit.wav', scene: 'hook',
 Occurrence is zero-based within the named sentence. Omit it only for a unique
 match. Matching ignores case and surrounding Unicode punctuation; missing or
 ambiguous tokens fail rather than guess. Numeric word indices remain supported.
+
+
+## Optional Pocket TTS and provider files (unreleased)
+
+`narova-pockettts` registers local CPU speech independently from core. It exposes
+released multilingual presets, reference cloning, saved states and generation
+controls; see its [configuration guide](../../narova-pockettts/references/configuration.md).
+Pocket supplies raw audio. Narova retains segmentation, resampling, processing,
+alignment, captions, mixing and reuse. No native word timings are advertised.
+
+Declare local provider dependencies under `voices.<id>.providerFiles`, for example
+`{ referenceAudio: 'assets/authorized.wav' }`. Keep non-file controls under
+`providerOptions`. Files must be readable local regular files; names must be
+safe option identifiers and cannot overlap options or reserved `seed`.
+Resolved `providerFileInputs` evidence is recomputed from current bytes before
+reuse, preserved in manifests, and passed as `{ path, sha256 }` option values.
+Workers verify it before use. Project archives reject dependencies outside the
+project and retain existing archive size limits. The current released CLI 0.51.0
+predates these bindings; use the matching source checkout until release.

@@ -51,7 +51,11 @@ Optional `--xtts`, `--qwen`, and `--chatterbox` flags install larger local
 voice backends into Narova-owned virtual environments. Optional hosted speech
 (ElevenLabs, OpenAI) and video generation (Sora through OpenAI, Runway) are
 separate companion skills registered explicitly; the core package stays
-local-first and contains no vendor API adapter.
+local-first and contains no vendor API adapter. The unreleased `narova-pockettts`
+companion adds isolated CPU Pocket speech; its setup and models are separate
+from core. External `providerFiles` bind local references/states/model resources
+to current byte hashes before reuse. See the
+[Pocket guide](../skills/narova-pockettts/references/configuration.md).
 
 ## Quick start
 

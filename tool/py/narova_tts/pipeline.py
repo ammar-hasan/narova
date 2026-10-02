@@ -328,6 +328,9 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
         parts.append("providerOptions=" + json.dumps(
             v.get("providerOptions", {}), sort_keys=True,
             separators=(",", ":"), ensure_ascii=False))
+        if v.get("providerFileInputs"):
+            parts.append("providerFileInputs=" + json.dumps(
+                v["providerFileInputs"], sort_keys=True, separators=(",", ":")))
     if v.get("gainDb") is not None:
         parts.append(f"gainDb={v['gainDb']}")
     return "|".join(parts)

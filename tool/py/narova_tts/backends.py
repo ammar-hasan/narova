@@ -856,7 +856,8 @@ def build_backends(
                 voices[who].setdefault(
                     "providerVersion", manifest.get("providerVersion", ""))
             options = {
-                who: voices[who].get("providerOptions", {})
+                who: {**voices[who].get("providerOptions", {}),
+                      **voices[who].get("providerFileInputs", {})}
                 for who in speakers
             }
             instances[kind] = ExternalProviderBackend(manifest, speakers, options)

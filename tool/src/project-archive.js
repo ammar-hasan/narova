@@ -527,6 +527,7 @@ function rawProjectReferences(raw) {
     add(character && character.src, `config.characters.${id}.src`);
   }
   for (const [id, voice] of Object.entries((raw && raw.voices) || {})) {
+    for (const [name, ref] of Object.entries(voice?.providerFiles || {})) add(ref, `config.voices.${id}.providerFiles.${name}`);
     if (voice && voice.backend === 'chatterbox' && path.isAbsolute(String(voice.speaker || ''))) add(voice.speaker, `config.voices.${id}.speaker`);
   }
   for (const [name, ref] of Object.entries((raw && raw.imports) || {})) add(ref, `config.imports.${name}`);
