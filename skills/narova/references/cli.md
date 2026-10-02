@@ -90,7 +90,6 @@ Walkthrough config, auth, semantic locator, security, timing, and layout details
 [`product-walkthroughs.md`](product-walkthroughs.md).
 
 Optional cloud companions are installed and registered separately. Use
-`narova-pockettts` for isolated local CPU speech (unreleased),
 `narova-elevenlabs` for ElevenLabs speech, `narova-openai` for OpenAI speech
 and Sora, `narova-runway` for Runway video generation, `narova-google` for
 Google Gemini speech and Veo video generation, or `narova-xiaomi` for Xiaomi
@@ -103,7 +102,7 @@ Renderer providers are different: both are bundled, local, and free. See
 ## Flags
 
 - `--backend <name>` — TTS backend for all voices: a built-in
-  (`piper|xtts|qwen|chatterbox`) or an explicitly registered external
+  (`piper|xtts|qwen|chatterbox|pockettts`) or an explicitly registered external
   provider. Default piper. `chatterbox` clones a voice: set each voice's `speaker` to an ABSOLUTE
   path to a clean 10–20s recording (install once: `narova-setup --chatterbox`).
 - `--renderer hyperframes|no-browser` — renderer provider. HyperFrames is the
@@ -256,3 +255,16 @@ times for you.
   equivalent: `narova preview --detach`.
 - Verify the result: mp4 length ≈ `out/audio/full.wav` length (±0.15s):
   `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <file>`
+
+## pockettts (built-in, unreleased)
+
+`narova-setup --pockettts` installs an isolated Python 3.12 CPU runtime without
+changing existing backend environments or registering a provider.
+`narova voices list --backend pockettts` and `narova pockettts catalog` list
+presets/configurations without model loading. `narova doctor` reports optional
+package readiness; model/cloning readiness remains untested there.
+`narova pockettts doctor [--speaker alba] [--model english_2026-09]` explicitly
+loads the selected model/conditioning. `narova pockettts export-voice
+--output <file>` saves a compatible state. Both accept `--reference <audio>`,
+`--quantize`, `--voice-cloning`, and `--truncate-reference`; these explicit
+operations may acquire model resources. See [Pocket controls](pockettts.md).

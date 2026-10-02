@@ -4,6 +4,7 @@
 #   narova-setup              # piper backend (default, fast, zero-config)
 #   narova-setup --xtts       # also install the xtts backend (~1.9GB model on first synth)
 #   narova-setup --qwen       # also install the Qwen3-TTS backend (~1.2GB model on first synth)
+#   narova-setup --pockettts  # isolated local CPU Pocket TTS runtime
 #   narova-setup --chatterbox # also install the chatterbox backend (voice cloning; SEPARATE venv)
 #
 # Venv location: $NAROVA_VENV, else ~/.narova/venv (outside the tool package,
@@ -24,13 +25,15 @@ set -euo pipefail
 WITH_XTTS=0
 WITH_QWEN=0
 WITH_CHATTERBOX=0
+WITH_POCKETTTS=0
 for arg in "$@"; do
   case "$arg" in
     --xtts) WITH_XTTS=1 ;;
     --qwen) WITH_QWEN=1 ;;
     --chatterbox) WITH_CHATTERBOX=1 ;;
+    --pockettts) WITH_POCKETTTS=1 ;;
     -h|--help)
-      echo "usage: narova-setup [--xtts] [--qwen] [--chatterbox]"; exit 0 ;;
+      echo "usage: narova-setup [--xtts] [--qwen] [--chatterbox] [--pockettts]"; exit 0 ;;
     *) echo "unknown option: $arg (see --help)"; exit 1 ;;
   esac
 done
@@ -47,6 +50,44 @@ while [ -h "$SETUP_SOURCE" ]; do
   esac
 done
 TOOL="$(cd -P "$(dirname "$SETUP_SOURCE")" && pwd)"
+# Pocket-only setup preserves the main environment. Combined flags continue
+# through the existing setup for the other explicitly requested backends.
+if [ "$WITH_POCKETTTS" = "1" ]; then
+  POCKET_HOME="${NAROVA_HOME:-$HOME/.narova}"
+  POCKET_VENV="${NAROVA_POCKETTTS_VENV:-$POCKET_HOME/venv-pockettts}"
+  POCKET_PYTHON="${NAROVA_SETUP_PYTHON:-python3.12}"
+  if ! command -v "$POCKET_PYTHON" >/dev/null 2>&1; then
+    echo 'Pocket setup requires Python 3.12; install it and set NAROVA_SETUP_PYTHON, then re-run narova-setup --pockettts.' >&2
+    exit 1
+  fi
+  "$POCKET_PYTHON" -c 'import sys; assert sys.version_info[:2] == (3, 12), "Pocket profile requires Python 3.12; set NAROVA_SETUP_PYTHON"'
+  # Environment overrides must not redirect Pocket installation into another
+  # backend. Resolve aliases before any environment creation or package mutation.
+  "$POCKET_PYTHON" -c '
+from pathlib import Path
+import sys
+pocket, core, chatterbox = map(lambda value: Path(value).expanduser().resolve(), sys.argv[1:])
+for other in (core, chatterbox):
+    if pocket == other or pocket in other.parents or other in pocket.parents:
+        sys.exit("Pocket runtime must be separate from existing backend environments; set NAROVA_POCKETTTS_VENV to a separate directory and re-run narova-setup --pockettts")
+' "$POCKET_VENV" "${NAROVA_VENV:-$POCKET_HOME/venv}" "${NAROVA_CHATTERBOX_VENV:-$POCKET_HOME/venv-chatterbox}"
+
+  if [ ! -x "$POCKET_VENV/bin/python" ]; then
+    "$POCKET_PYTHON" -m venv "$POCKET_VENV"
+  fi
+  "$POCKET_VENV/bin/python" -c 'import sys; assert sys.version_info[:2] == (3, 12), "Existing Pocket venv must use Python 3.12"'
+  # Linux uses CPU wheels rather than pulling the CUDA runtime.
+  if [ "$(uname -s)" = Linux ]; then
+    "$POCKET_VENV/bin/python" -m pip install 'torch==2.10.0' --index-url https://download.pytorch.org/whl/cpu
+  fi
+  "$POCKET_VENV/bin/python" -m pip install -r "$TOOL/py/requirements-pockettts.txt"
+  "$POCKET_VENV/bin/python" -m pip check
+  "$POCKET_VENV/bin/python" -c 'import torch; assert not torch.cuda.is_available(), "Pocket supports CPU execution"'
+  echo 'Pocket runtime ready. Models are acquired on first doctor/synthesis use, not by setup.'
+  echo 'Next: narova voices list --backend pockettts; narova pockettts doctor --speaker alba'
+  if [ "$WITH_XTTS" = "0" ] && [ "$WITH_QWEN" = "0" ] && [ "$WITH_CHATTERBOX" = "0" ]; then exit 0; fi
+fi
+
 VENV="${NAROVA_VENV:-${NAROVA_HOME:-$HOME/.narova}/venv}"
 REQ="$TOOL/py/requirements.txt"
 REQ_XTTS="$TOOL/py/requirements-xtts.txt"

@@ -53,7 +53,7 @@ test('invalid file inputs fail before reuse with precise field errors', () => fi
     assert.throws(() => resolveConfig(raw, {}, dir), expected);
   }
   raw.voices.a.backend = 'piper'; raw.voices.a.providerFiles = { state: 'state.safetensors' };
-  assert.throws(() => resolveConfig(raw, {}, dir), /requires an external/);
+  assert.throws(() => resolveConfig(raw, {}, dir), /requires Pocket TTS or an external/);
 }));
 test('portable archives reject provider dependencies outside the project', () => fixture((dir, raw) => {
   const project = path.join(dir, 'project'); fs.mkdirSync(project);

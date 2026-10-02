@@ -801,7 +801,43 @@ class ChatterboxBackend:
         self.close()
 
 
+class PocketTtsBackend(ExternalProviderBackend):
+    """Built-in optional CPU adapter using the shared raw-utterance channel."""
+
+    def __init__(self, speakers, options=None, versions=None):
+        home = Path(os.environ.get("NAROVA_HOME", Path.home() / ".narova"))
+        py = Path(os.environ.get("NAROVA_POCKETTTS_VENV", home / "venv-pockettts")) / "bin" / "python"
+        if not py.is_file():
+            raise RuntimeError("Pocket runtime missing — run narova-setup --pockettts (Python 3.12)")
+        manifest = {
+            "name": "pockettts", "protocol": PROVIDER_PROTOCOL,
+            "command": [str(py), str(Path(__file__).with_name("pockettts_run.py"))],
+            "requiredEnvironment": [], "capabilities": {"synthesis": True},
+            "deliveryCapabilities": {"seed-stabilization": "honored"},
+        }
+        super().__init__(manifest, speakers, options)
+        self._versions = set((versions or {}).values())
+
+    def _ensure_worker(self):
+        worker = super()._ensure_worker()
+        if self._versions and self._versions != {worker.provider_version}:
+            self.close()
+            raise RuntimeError("Pocket runtime changed after resolution; resolve the project again")
+        return worker
+
+    @staticmethod
+    def _validate_output(path):
+        # The bundled worker stages its own complete output atomically. Keep the
+        # previous raw WAV until it has generated and verified the replacement.
+        if not path.is_absolute() or not path.parent.is_dir():
+            raise ValueError("Pocket output must be absolute with an existing parent")
+        if path.is_symlink() or (path.exists() and not path.is_file()):
+            raise ValueError("Pocket output must be a regular file, not a symlink")
+        return path
+
+
 BUILTIN_BACKENDS = {
+    "pockettts": PocketTtsBackend,
     "piper": PiperBackend,
     "xtts": XttsBackend,
     "qwen": QwenBackend,
@@ -831,7 +867,12 @@ def build_backends(
 
     instances: dict[str, Backend] = {}
     for kind, speakers in by_type.items():
-        if kind == "qwen":
+        if kind == "pockettts":
+            options = {who: {**voices[who].get("providerOptions", {}),
+                             **voices[who].get("providerFileInputs", {})} for who in speakers}
+            versions = {who: voices[who]["providerVersion"] for who in speakers if voices[who].get("providerVersion")}
+            instances[kind] = PocketTtsBackend(speakers, options, versions)
+        elif kind == "qwen":
             langs = {who: voices[who]["lang"] for who in speakers if voices[who].get("lang")}
             instructs = {who: voices[who]["instruct"] for who in speakers if voices[who].get("instruct")}
             instances[kind] = QwenBackend(speakers, langs, instructs)

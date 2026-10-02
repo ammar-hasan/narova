@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.51.0"
-checksum: 7cf0774b6331471a46126c205f5087aef5fc95f48be0673b37d23def01c232c7
+checksum: aebcd3944be95fa00a8a11e179827518ebf75c5636586a23db4f0bf9fc0244f7
 ---
 # narova — video from scene scripts
 
@@ -171,10 +171,15 @@ External speech and video providers are optional registered companion skills:
 `narova-elevenlabs` provides speech, `narova-openai` provides speech and Sora,
 `narova-runway` provides Runway video generation, `narova-google` provides
 Gemini speech and Veo video generation, and `narova-xiaomi` provides Xiaomi MiMo
-speech (preset voices, voice design, and voice cloning). `narova-pockettts`
-provides isolated local CPU speech, multilingual presets, reference cloning
-and saved states; it is currently unreleased. See
+speech (preset voices, voice design, and voice cloning). See
 `references/cli.md` §providers.
+
+Pocket TTS is a built-in optional local backend (unreleased), alongside Qwen,
+XTTS and Chatterbox. Install its isolated runtime with `narova-setup --pockettts`
+(Python 3.12), then select `backend: 'pockettts'`; no companion registration.
+`narova voices list --backend pockettts` lists presets without downloads;
+`narova pockettts catalog|doctor|export-voice` supports model discovery, explicit
+readiness and saved conditioning. See `references/pockettts.md`.
 
 For AI-generated shots, the project may define a small optional `continuity`
 block with named characters, objects, places, or other creator-owned entities.
@@ -380,6 +385,7 @@ does not infer or rewrite the choice. See `references/choreography.md`.
 | `references/product-walkthroughs.md` | explore, capture, compose, and QA product demos         |
 | `references/choreography.md`   | make something *happen* in a scene beyond the built-in cues   |
 | `references/stock-assets.md`  | route essential, extension, and browser-sourced creative assets |
+| `references/pockettts.md`     | optional built-in Pocket TTS setup, presets, language/model controls, saved voices |
 | `references/audio.md`          | background beds, spot SFX, forced word alignment             |
 | `references/cli.md`            | every command, flag, `out/` file, and rough cost              |
 | `references/gotchas.md`        | avoid the traps (tempo, reuse, sync, models, lint)          |

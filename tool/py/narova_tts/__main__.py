@@ -44,6 +44,7 @@ KNOWN_VOICES = {
              "Dylan", "Uncle_Fu", "Ono_Anna", "Sohee"],
     # chatterbox has no preset voices — it clones from a recording.
     "chatterbox": [],
+    "pockettts": json.loads(Path(__file__).with_name("pockettts_catalog.json").read_text())["voices"],
 }
 
 
@@ -63,6 +64,8 @@ def _voices(argv: list[str]) -> int:
                 print("… + 58 studio speakers built into the cached XTTS-v2 model", file=sys.stderr)
             elif args.backend == "qwen":
                 print("… all 9 CustomVoice presets; voice cloning/design not wired into narova yet", file=sys.stderr)
+            elif args.backend == "pockettts":
+                print("27 released presets; narova pockettts catalog for models/languages. Install runtime: narova-setup --pockettts", file=sys.stderr)
             elif args.backend == "chatterbox":
                 print("chatterbox has no preset voices — clone your own: set a voice's "
                       "`speaker` to an ABSOLUTE path to a clean 10–20s recording.", file=sys.stderr)

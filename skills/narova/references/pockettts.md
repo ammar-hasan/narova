@@ -1,8 +1,26 @@
-# Pocket TTS configuration
+# Built-in Pocket TTS (unreleased)
+
+Pocket TTS ships within the Narova tool alongside Piper, XTTS, Qwen and
+Chatterbox. Install only its optional isolated runtime with
+`narova-setup --pockettts` (Python 3.12). No separate skill or provider registration
+is required. A former Pocket companion registration is ignored by built-in
+routing and may be removed explicitly with `narova providers remove pockettts`;
+normal project commands leave that registry file untouched. Setup leaves other backend environments intact and downloads no
+models. Select `backend: 'pockettts'` per voice or `--backend pockettts`.
+
+`narova voices list --backend pockettts` and `narova pockettts catalog` work
+without the Pocket runtime or model downloads. Ordinary `narova doctor` checks
+optional package readiness only; `narova pockettts doctor --speaker alba`
+explicitly checks the selected model and state and may download them.
+`NAROVA_POCKETTTS_VENV` selects the isolated environment;
+`NAROVA_POCKETTTS_OFFLINE=1` uses already acquired resources without network.
+Models are cached by the upstream runtime; `HF_HOME` can locate that cache.
+
+## Engine and resources
 
 The released engine profile is Pocket TTS 3.3.0 on CPU, with dated model
 configurations and immutable model/tokenizer/embedding revisions. Run
-`python3 <pocket-skill-dir>/tool/run.py catalog` for all 27 preset IDs and 18
+`narova pockettts catalog` for all 27 preset IDs and 18
 released model configurations; this command needs no speech dependencies.
 See [upstream presets and their sources](https://huggingface.co/kyutai/tts-voices),
 [released package](https://pypi.org/project/pocket-tts/3.3.0/) and
@@ -53,7 +71,7 @@ reads at most the explicitly selected first 30 seconds, before encoding. Speaker
 ## Export and reuse a voice state
 
 ```bash
-python3 <pocket-skill-dir>/tool/run.py export-voice \
+narova pockettts export-voice \
   --speaker alba --model english_2026-09 --output /absolute/path/alba.safetensors
 # For a clone, add --reference /absolute/path/authorized.wav.
 ```
@@ -68,7 +86,7 @@ voices: {
 }
 ```
 
-Export embeds companion provenance in the state itself. Import requires the
+Export embeds Narova provenance in the state itself. Import requires the
 same model/runtime/quantization/full-or-preset profile. For a state exported
 from a clone, set `voiceCloning: true`; for a quantized export, set
 `quantize: true`. Arbitrary upstream states lack this provenance and are rejected.

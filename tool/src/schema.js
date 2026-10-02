@@ -262,6 +262,8 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (overrides.voiceA && voiceIds[0]) voices[voiceIds[0]].speaker = overrides.voiceA;
   if (overrides.voiceB && voiceIds[1]) voices[voiceIds[1]].speaker = overrides.voiceB;
   if (overrides.backend) voiceIds.forEach(id => { voices[id].backend = overrides.backend; });
+  const pocketProfile = voiceIds.some(id => voices[id].backend === 'pockettts')
+    ? require('./pockettts').pocketRuntime() : null;
   voiceIds.forEach(id => {
     const v = voices[id];
     const at = `config.voices.${id}`;
@@ -283,6 +285,13 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
         : jsonCompatibilityError(v.providerOptions, `${at}.providerOptions`));
     if (optionsError) errs.push(optionsError);
 
+    if (v.backend === 'pockettts') {
+      v.providerVersion = pocketProfile.providerVersion;
+      delete v.providerProtocol;
+      delete v.providerCapabilities;
+      if (v.providerOptions == null) v.providerOptions = {};
+      if (Object.prototype.hasOwnProperty.call(v.providerOptions, 'seed')) errs.push(`${at}.providerOptions.seed: seed is core-owned; use speech.deterministicTakes and vary`);
+    }
     if (!isBuiltinBackend(v.backend)) {
       let provider = null;
       try { provider = getSpeechProvider(v.backend); }
@@ -305,7 +314,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
     if (Object.prototype.hasOwnProperty.call(v, 'providerFiles')) {
       const files = v.providerFiles;
-      if (isBuiltinBackend(v.backend)) errs.push(`${at}.providerFiles: requires an external speech provider`);
+      if (isBuiltinBackend(v.backend) && v.backend !== 'pockettts') errs.push(`${at}.providerFiles: requires Pocket TTS or an external speech provider`);
       if (!files || typeof files !== 'object' || Array.isArray(files)
           || ![Object.prototype, null].includes(Object.getPrototypeOf(files))) {
         errs.push(`${at}.providerFiles: expected an object of option names to local file paths`);

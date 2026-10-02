@@ -23,7 +23,7 @@ for (const failure of ['', 'integration', 'tool-js', 'package-install']) {
       "fs.appendFileSync(process.env.CHECK_LOG, name + '\\n');",
       "if (name === process.env.FAIL_CHECK) process.exit(23);",
     ].join('\n'));
-    for (const name of ['integration', '3d', 'elevenlabs', 'openai', 'runway', 'google', 'mimo', 'pockettts']) {
+    for (const name of ['integration', '3d', 'elevenlabs', 'openai', 'runway', 'google', 'mimo']) {
       repository.scripts['test:' + name] = `node probe.cjs ${name}`;
     }
     for (const [file, label] of [
@@ -48,7 +48,7 @@ for (const failure of ['', 'integration', 'tool-js', 'package-install']) {
       npm_config_ignore_scripts: 'false',
     } });
     const observed = fs.readFileSync(log, 'utf8').trim().split('\n');
-    const expected = ['integration', '3d', 'elevenlabs', 'openai', 'runway', 'google', 'mimo', 'pockettts',
+    const expected = ['integration', '3d', 'elevenlabs', 'openai', 'runway', 'google', 'mimo',
       'metadata', 'tool-js', 'tool-py', 'package', 'package-install'];
     assert.deepEqual(observed, failure ? expected.slice(0, expected.indexOf(failure) + 1) : expected);
     if (failure) assert.notEqual(result.status, 0);

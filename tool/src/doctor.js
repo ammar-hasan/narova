@@ -117,6 +117,9 @@ function doctor(projectDir, opts = {}) {
         : 'not found — optional; install whisper.cpp so `whisper-cli` is on PATH', true);
   }
 
+  const pocket = require('./pockettts').pocketRuntime();
+  add('pockettts runtime', pocket.ok, pocket.detail, true);
+
   // Optional: chatterbox backend venv (voice cloning / multilingual v3).
   const cbPy = chatterboxPython();
   if (fs.existsSync(cbPy)) {

@@ -369,9 +369,10 @@ ambiguous tokens fail rather than guess. Numeric word indices remain supported.
 
 ## Optional Pocket TTS and provider files (unreleased)
 
-`narova-pockettts` registers local CPU speech independently from core. It exposes
+The built-in `pockettts` backend uses an optional isolated CPU runtime. Run
+`narova-setup --pockettts`; no separate skill or registration is needed. It exposes
 released multilingual presets, reference cloning, saved states and generation
-controls; see its [configuration guide](../../narova-pockettts/references/configuration.md).
+controls; see the [configuration guide](pockettts.md).
 Pocket supplies raw audio. Narova retains segmentation, resampling, processing,
 alignment, captions, mixing and reuse. No native word timings are advertised.
 

@@ -7,6 +7,7 @@ const BUILTIN_BACKENDS = Object.freeze({
   piper: Object.freeze({ displayName: 'Piper', voiceMode: 'downloadable' }),
   xtts: Object.freeze({ displayName: 'XTTS-v2', voiceMode: 'bundled' }),
   qwen: Object.freeze({ displayName: 'Qwen3-TTS', voiceMode: 'bundled' }),
+  pockettts: Object.freeze({ displayName: 'Pocket TTS', voiceMode: 'bundled' }),
   chatterbox: Object.freeze({ displayName: 'Chatterbox', voiceMode: 'clone' }),
 });
 
@@ -26,6 +27,11 @@ const BUILTIN_BACKENDS = Object.freeze({
  *   seed-stabilization    deterministic takes from an identity-derived seed
  *                         (NAR-018-071). */
 const DELIVERY_CAPABILITIES = Object.freeze({
+  pockettts: Object.freeze({
+    'pronunciation-markup': 'ignored', 'delivery-instruct': 'ignored',
+    'pause-markup': 'ignored', 'emphasis-markup': 'ignored',
+    'non-latin-script': 'ignored', 'seed-stabilization': 'honored',
+  }),
   piper: Object.freeze({
     'pronunciation-markup': 'ignored',
     'delivery-instruct': 'ignored',

@@ -20,7 +20,7 @@ import wave
 PROTOCOL = 'narova-tts-provider/v1'
 PROVIDER = 'pockettts'
 VERSION = '1.0.0'
-CATALOG = json.loads(Path(__file__).with_name('catalog.json').read_text())
+CATALOG = json.loads(Path(__file__).with_name('pockettts_catalog.json').read_text())
 LANGUAGES = {'en': 'english_2026-09', 'fr': 'french', 'de': 'german',
              'es': 'spanish', 'it': 'italian', 'pt': 'portuguese', 'nl': 'dutch'}
 FILES = {'referenceAudio', 'voiceState', 'config', 'weights', 'tokenizer',
@@ -146,9 +146,9 @@ def runtime_version():
     for name in ['pocket-tts', 'torch', 'numpy', 'soundfile', 'tokenizers',
                  'sentencepiece', 'scipy', 'safetensors', 'einops']:
         try: versions[name] = metadata.version(name)
-        except metadata.PackageNotFoundError: fail(f'{name} is missing; run this companion tool/setup.sh', 'missing_dependency')
+        except metadata.PackageNotFoundError: fail(f'{name} is missing; run narova-setup --pockettts', 'missing_dependency')
     if versions['pocket-tts'] != CATALOG['pocketVersion']:
-        fail('Pocket TTS package differs from supported 3.3.0; re-run setup.sh', 'incompatible_runtime')
+        fail('Pocket TTS package differs from supported 3.3.0; re-run narova-setup --pockettts', 'incompatible_runtime')
     try: versions['torchao'] = metadata.version('torchao')
     except metadata.PackageNotFoundError: versions['torchao'] = None
     return VERSION+'+profile.'+stable_hash(versions)[:16], versions
@@ -254,7 +254,7 @@ class Runtime:
                 record = json.loads(meta)
                 if not isinstance(record, dict) or record.get('schema') != 'narova.pockettts-state/1' or record.get('profile') != profile:
                     fail('voiceState: incompatible model/runtime provenance; export it for the selected profile')
-            except (ValueError, TypeError) as exc: fail('voiceState: missing/invalid companion provenance')
+            except (ValueError, TypeError) as exc: fail('voiceState: missing/invalid Narova provenance')
             key = 'state:'+o['voiceState']['sha256']
         elif 'referenceAudio' in o:
             source = binding(o['referenceAudio'], 'referenceAudio')
@@ -375,7 +375,7 @@ def handle(request, runtime):
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('action', choices=['worker', 'catalog', 'doctor', 'export-voice'], nargs='?', default='worker')
+    parser.add_argument('action', choices=['worker', 'catalog', 'version', 'doctor', 'export-voice'], nargs='?', default='worker')
     parser.add_argument('--speaker', default='alba')
     parser.add_argument('--model')
     parser.add_argument('--reference')
@@ -385,6 +385,9 @@ def main():
     parser.add_argument('--truncate-reference', action='store_true')
     args = parser.parse_args()
     if args.action == 'catalog': print(json.dumps(catalog(), indent=2)); return
+    if args.action == 'version':
+        version, versions = runtime_version()
+        print(json.dumps({'providerVersion': version, 'runtime': versions})); return
     # Pocket/HF diagnostics must never occupy the JSONL stdout channel.
     with contextlib.redirect_stdout(sys.stderr): runtime = Runtime()
     if args.action != 'worker':

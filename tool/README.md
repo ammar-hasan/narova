@@ -47,15 +47,19 @@ or explicitly with:
 narova-setup
 ```
 
-Optional `--xtts`, `--qwen`, and `--chatterbox` flags install larger local
+Optional `--xtts`, `--qwen`, `--chatterbox`, and `--pockettts` flags install larger local
 voice backends into Narova-owned virtual environments. Optional hosted speech
 (ElevenLabs, OpenAI) and video generation (Sora through OpenAI, Runway) are
 separate companion skills registered explicitly; the core package stays
-local-first and contains no vendor API adapter. The unreleased `narova-pockettts`
-companion adds isolated CPU Pocket speech; its setup and models are separate
-from core. External `providerFiles` bind local references/states/model resources
-to current byte hashes before reuse. See the
-[Pocket guide](../skills/narova-pockettts/references/configuration.md).
+local-first and contains no vendor API adapter. The unreleased built-in `pockettts`
+backend uses an optional isolated Python 3.12 CPU runtime installed with
+`narova-setup --pockettts`; no provider registration is needed. List presets with
+`narova voices list --backend pockettts`, inspect models with `narova pockettts catalog`,
+check explicit model readiness with `narova pockettts doctor`, and save a voice
+with `narova pockettts export-voice --speaker alba --output alba.safetensors`.
+Pocket and external `providerFiles` bind local inputs to current byte hashes
+before reuse; the current Pocket runtime profile also participates in identity.
+See the [Pocket guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/pockettts.md).
 
 ## Quick start
 

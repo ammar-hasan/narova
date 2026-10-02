@@ -345,13 +345,6 @@
         <div class="provider-options" role="group" aria-label="Optional media companions">
           <div class="provider-option">
             <div class="provider-option-copy">
-              <div class="provider-option-heading"><h3>Pocket TTS</h3><span>local CPU · unreleased</span></div>
-              <p>27 presets, seven languages, reference cloning and saved voice states. Separate setup and model access.</p>
-              <a href="https://github.com/ammar-hasan/narova/tree/main/skills/narova-pockettts" data-hover>Development guide</a>
-            </div>
-          </div>
-          <div class="provider-option">
-            <div class="provider-option-copy">
               <div class="provider-option-heading"><h3>ElevenLabs</h3><span>voice library</span></div>
               <p>Account voices, explicit v4/v4 turbo models, phrasing context, and optional hosted MCP for authoring.</p>
             </div>
@@ -399,11 +392,17 @@
       </div>
     </div>
 
+    <p>Pocket TTS is a built-in optional local CPU backend (unreleased):
+      <code>narova-setup --pockettts</code>, then <code>backend: 'pockettts'</code>.
+      No provider registration. 27 presets, seven languages, compatible saved
+      states and reference cloning with full-model access.
+      <a href="https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/pockettts.md" data-hover>Pocket guide</a></p>
     <div class="backend-row" role="group" aria-label="Supported local speech and optional cloud media providers">
       <span><b>Piper</b> default</span>
       <span><b>XTTS</b> studio voices</span>
       <span><b>Qwen</b> instruct control</span>
       <span><b>Chatterbox</b> voice cloning</span>
+      <span><b>Pocket TTS</b> local CPU · unreleased</span>
       <span class="external"><b>ElevenLabs</b> optional companion</span>
       <span class="external"><b>OpenAI</b> optional companion</span>
       <span class="external"><b>Runway</b> optional companion</span>
