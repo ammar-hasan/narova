@@ -256,7 +256,7 @@ times for you.
 - Verify the result: mp4 length ≈ `out/audio/full.wav` length (±0.15s):
   `ffprobe -v error -show_entries format=duration -of default=noprint_wrappers=1:nokey=1 <file>`
 
-## pockettts (built-in, unreleased)
+## pockettts (built-in)
 
 `narova-setup --pockettts` installs an isolated Python 3.12 CPU runtime without
 changing existing backend environments or registering a provider.

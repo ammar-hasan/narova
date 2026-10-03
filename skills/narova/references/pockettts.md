@@ -1,4 +1,4 @@
-# Built-in Pocket TTS (unreleased)
+# Built-in Pocket TTS
 
 Pocket TTS ships within the Narova tool alongside Piper, XTTS, Qwen and
 Chatterbox. Install only its optional isolated runtime with

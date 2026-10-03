@@ -19,7 +19,7 @@ calling the CLI directly can use the versioned
 [`--json` protocol](AGENT_PROTOCOL.md) without parsing terminal prose.
 
 [![License: Apache-2.0](https://img.shields.io/badge/license-Apache%202.0-blue.svg)](./LICENSE)
-[![Version](https://img.shields.io/badge/version-0.51.0-4fd9e8.svg)](./package.json)
+[![Version](https://img.shields.io/badge/version-0.52.0-4fd9e8.svg)](./package.json)
 [![npm](https://img.shields.io/npm/v/@narova/narova?color=f2418a&label=npm)](https://www.npmjs.com/package/@narova/narova)
 [![Site](https://img.shields.io/badge/site-ammar--hasan.github.io%2Fnarova-f2418a.svg)](https://ammar-hasan.github.io/narova/)
 
@@ -453,7 +453,7 @@ the config.
 | `xtts`  | higher | slow | `narova-setup --xtts` | ~1.9GB model, 58 speakers |
 | `qwen`  | high | slow | `narova-setup --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
 | `chatterbox` | voice cloning | slowest | `narova-setup --chatterbox` | `speaker` = absolute path to a 10–20s recording; own venv, ~1GB model |
-| `pockettts` (unreleased) | listening unverified | model/machine dependent | `narova-setup --pockettts` | local CPU, own Python 3.12 runtime, 27 presets, seven languages; cloning needs full-model access |
+| `pockettts` | listening unverified | model/machine dependent | `narova-setup --pockettts` | local CPU, own Python 3.12 runtime, 27 presets, seven languages; cloning needs full-model access |
 
 ```bash
 narova providers add <provider-manifest.json>
@@ -835,7 +835,7 @@ The [ElevenLabs companion guide](skills/narova-elevenlabs/references/current-off
 covers v4/v4 turbo, phrasing context and optional hosted MCP authoring.
 
 
-### Pocket TTS (unreleased)
+### Pocket TTS
 
 [Pocket TTS](skills/narova/references/pockettts.md) is a built-in optional local
 CPU backend alongside Piper, XTTS, Qwen and Chatterbox. It offers 27 presets,
@@ -843,7 +843,7 @@ seven languages, reference cloning and saved voice states. Run
 `narova-setup --pockettts`, then select `backend: 'pockettts'` per voice or
 `--backend pockettts`. No separate skill or provider registration is required.
 Setup uses an isolated Python 3.12 environment and leaves other backends intact.
-Use the matching source checkout until a CLI release includes this feature.
+Pocket TTS is included in Narova 0.52.0 and later.
 Full-model access is required for cloning; it never silently switches to presets.
 
 `narova voices list --backend pockettts` and `narova pockettts catalog` need no

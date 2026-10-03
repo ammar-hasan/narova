@@ -51,7 +51,7 @@ Optional `--xtts`, `--qwen`, `--chatterbox`, and `--pockettts` flags install lar
 voice backends into Narova-owned virtual environments. Optional hosted speech
 (ElevenLabs, OpenAI) and video generation (Sora through OpenAI, Runway) are
 separate companion skills registered explicitly; the core package stays
-local-first and contains no vendor API adapter. The unreleased built-in `pockettts`
+local-first and contains no vendor API adapter. The built-in `pockettts`
 backend uses an optional isolated Python 3.12 CPU runtime installed with
 `narova-setup --pockettts`; no provider registration is needed. List presets with
 `narova voices list --backend pockettts`, inspect models with `narova pockettts catalog`,
