@@ -231,7 +231,7 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'speech', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows', 'speaker', 'reference']);
 
@@ -250,6 +250,7 @@ function validateInvocationFlags(flags, cmd) {
   if (flags.video != null && cmd !== 'judge' && !(cmd === 'branch' && flags['judge-assertion'])) {
     invocationError('--video is only valid with narova judge or focused narova branch save');
   }
+  if (flags.speech != null && cmd !== 'review') invocationError('--speech is only valid with narova review');
   if (flags['audio-levels'] != null && cmd !== 'review') {
     invocationError('--audio-levels is only valid with narova review');
   }
@@ -622,6 +623,7 @@ Commands:
   review --excerpt <terms>  one short audio clip per term from synthesized audio
   review --silences [s]  advisory silence-gap report (threshold seconds, default 1.0)
   review --takes        advisory narration take index (timing, sentence file, take identity)
+  review --speech       advisory per-turn transcript differences (optional local ASR)
   review --audio-levels [--audio <file>] [--interval start,end]
                           advisory loudness/peak/clipping facts from existing audio
                           --windows '<JSON array>' joins ordered labeled intervals
@@ -2116,12 +2118,20 @@ async function main() {
     }
 
     case 'review': {
-      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt, flags.silences, flags.takes, flags['audio-levels']].filter(Boolean).length;
+      const modes = [flags.coverage, flags['contact-sheet'], flags.excerpt, flags.silences, flags.takes, flags.speech, flags['audio-levels']].filter(Boolean).length;
       if (modes === 0) {
-        usageError('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes | --audio-levels');
+        usageError('review needs one of --coverage | --contact-sheet | --excerpt <terms> | --silences [s] | --takes | --speech | --audio-levels');
       }
       if (modes > 1) {
         usageError('review modes are mutually exclusive');
+      }
+      if (flags.speech) {
+        const { config, projectDir } = await loadResolved(flags, { readOnly: true });
+        const report = require('../src/speech-check').reviewSpeech(config, outDirOf(flags, projectDir));
+        for (const row of report.turns) console.log(require('../src/speech-check').formatTurn(row));
+        console.log(report.uncertainty);
+        mSetData({ mode: 'speech', ...report });
+        return;
       }
       if (flags['audio-levels']) {
         const specialized = [flags.windows != null, Boolean(flags['mix-map']), flags.delivered != null].filter(Boolean).length;

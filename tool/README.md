@@ -158,6 +158,19 @@ linking the package to its public GitHub source and publishing workflow. The
 manually bootstrapped `0.31.0` release has no provenance attestation. Narova is
 available under the Apache-2.0 license.
 
+## Script-to-speech checks
+
+`narova review --speech` reports per-turn transcripts and dropped, added or
+replaced words from existing synthesized takes. Optional root
+`speech: { check: 'warn', retakes: 1 }` checks builds and re-synthesizes only
+mismatched turns with the next take nonce. Use `check: 'fail'` to stop before
+rendering when speech differs or recognition is unavailable. Warn retains the
+latest completed candidate when recognition becomes unavailable. Explicit checks
+require current take records; replacing selected local model bytes with a positive
+retake budget starts fresh selection while reusing eligible sentence audio. Review remains
+advisory and read-only; optional local ASR tools are required. Transcripts can
+mishear, so audition flagged turns. See the [speech check guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/audio.md#check-synthesized-speech-against-the-script).
+
 ## Portable speech and narration controls
 
 `narova voice-cache export --out out --dir speech-cache` saves selected completed

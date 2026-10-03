@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `narova review --speech`: advisory per-turn transcript comparison with dropped,
+  added and replaced words; spacing, punctuation and English cardinal normalization.
+- Optional authored `speech.check` warn/fail gates and bounded `speech.retakes`:
+  only mismatched turns advance their take nonce, with selection history, current
+  audio verification on reuse and preservation of prior video on failure.
+  Optional local recognition stays separate from synthesis and alignment.
+  Local model byte replacement invalidates positive-budget selection reuse;
+  unavailable recognition keeps the latest complete warn candidate. Compound
+  hundred forms normalize while lexical conjunctions remain differences. Machine
+  failure diagnostics identify affected turns and retain earlier completed
+  delivery-member video receipts.
+
 ## [0.52.0] - 2026-10-03
 
 ### Added
@@ -2339,7 +2352,7 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.48.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.52.0...HEAD
 [0.48.0]: https://github.com/ammar-hasan/narova/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/ammar-hasan/narova/compare/v0.46.0...v0.47.0
 [0.46.0]: https://github.com/ammar-hasan/narova/compare/v0.45.0...v0.46.0

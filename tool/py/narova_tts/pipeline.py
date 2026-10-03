@@ -17,6 +17,7 @@ import os
 import re
 import shutil
 import subprocess
+import tempfile
 from pathlib import Path
 from typing import Any
 
@@ -386,6 +387,13 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
     if reuse and timings_path.exists():
         # Skip synth, but STILL rescale each scene to its existing (post-loudnorm) wav.
         print("reuse — skipping synth, rescaling timings to existing audio", flush=True)
+        # Binding failures become unavailable speech evidence before a missing
+        # or corrupt scene can fail the ordinary timing probe.
+        if (config.get('speech') or {}).get('check'):
+            from .speech_check import review, write_report, enforce
+            checked = review(scenes, config, out_dir)
+            write_report(out_dir, checked['turns'], complete=True)
+            enforce(checked['turns'], config)
         timings = json.loads(timings_path.read_text())
         for s in scenes:
             wav = audio_dir / f"{s['n']:02d}.wav"
@@ -425,6 +433,47 @@ def _synthesize(scenes, config, timing, audio_dir, tmp, default_backend) -> dict
         close_backends(router)
 
 
+def effective_take(value):
+    """Mirror the existing cache nonce boundary; never label an ignored value."""
+    return value if isinstance(value, int) and value > 0 else None
+
+
+def _turn_candidate(sent_pairs, turn, who, backend, backend_kind, speaker_identity,
+                    voice_lang, gain_db, tempo, nonce, deterministic_takes, stage):
+    result = []
+    for k, (synth_sent, clean_sent) in enumerate(sent_pairs):
+        w = stage/f'sentence_{k}.wav'
+        turn_lang = turn.get("lang") or voice_lang
+        context = None
+        if getattr(backend, "context_capable", False):
+            context = {"previousText": " ".join(p[0] for p in sent_pairs[:k]),
+                       "nextText": " ".join(p[0] for p in sent_pairs[k + 1:])}
+        key = sentence_cache_key(
+            backend_kind,
+            speaker_identity,
+            synth_sent,
+            tempo,
+            lang=turn_lang,
+            nonce=effective_take(nonce),
+            context=context,
+        )
+        seed_capable = bool(getattr(backend, "seed_capable", False))
+        pin = deterministic_takes and seed_capable
+        seed = derived_seed(key) if pin else None
+        mode = ("pinned" if not isinstance(nonce, int)
+                else "pinned+nonce") if pin else "provider-default"
+        d, cache_hit = synth_sentence(
+            backend, who, synth_sent, stage, w, tempo,
+            cache_key=key, lang=turn_lang,
+            gain_db=gain_db,
+            seed=seed, context=context,
+        )
+        result.append({'audio': w, 'duration': d, 'clean': clean_sent, 'text': synth_sent,
+                       'lang': turn_lang, 'nonce': effective_take(nonce), 'seed': seed, 'mode': mode,
+                       'cacheHit': cache_hit, 'cacheKey': key, 'context': context})
+    return result
+
+
 def _synthesize_with_router(
         scenes, config, timing, audio_dir, tmp, default_backend, voices, router
 ) -> dict[str, Any]:
@@ -452,6 +501,7 @@ def _synthesize_with_router(
     # A failed generation must not expose old keys alongside replaced clips.
     (audio_dir / "takes.json").unlink(missing_ok=True)
     take_records: list[dict[str, Any]] = []
+    speech_rows = []
     sentences_dir = audio_dir / "sentences"
 
     sil = {}
@@ -464,6 +514,10 @@ def _synthesize_with_router(
         nn = f"{s['n']:02d}"
         clip_audio = s.get("clipAudio") or {}
         if clip_audio.get("authority") == "native":
+            if (config.get('speech') or {}).get('check'):
+                from .speech_check import write_report, enforce
+                unavailable = [{'scene':s['n'], 'sceneId':s['id'], 'turn':ti, 'who':t['who'], 'expectedText':t['text'], 'status':'unavailable', 'transcript':None, 'differences':[], 'reason':'speech check requires synthesized sentence takes; native audio is not retaken'} for ti,t in enumerate(s['segments'])]
+                speech_rows.extend(unavailable); write_report(audio_dir.parent, speech_rows); enforce(unavailable, config)
             dur = float(s["dur"])
             wav = audio_dir / f"{nn}.wav"
             source = clip_audio.get("file")
@@ -541,72 +595,64 @@ def _synthesize_with_router(
                 clean_sents = sentences(turn["text"])
                 sent_pairs = [(s, s) for s in clean_sents]
 
-            for k, (synth_sent, clean_sent) in enumerate(sent_pairs):
-                if k > 0:
-                    pieces.append(sil["s"])
-                    clock += gap_sentence
-                w = tmp / f"{nn}_{si:03d}.wav"
-                turn_lang = turn.get("lang") or voice_lang.get(who)
-                nonce = turn.get("take")
-                backend = router[who]
-                context = None
-                if getattr(backend, "context_capable", False):
-                    context = {"previousText": " ".join(p[0] for p in sent_pairs[:k]),
-                               "nextText": " ".join(p[0] for p in sent_pairs[k + 1:])}
-                key = sentence_cache_key(
-                    voice_kind.get(who, default_backend),
-                    voice_speaker.get(who, who),
-                    synth_sent,
-                    tempo,
-                    lang=turn_lang,
-                    nonce=nonce if isinstance(nonce, int) and nonce > 0 else None,
-                    context=context,
-                )
-                backend = router[who]
-                seed_capable = bool(getattr(backend, "seed_capable", False))
-                pin = deterministic_takes and seed_capable
-                seed = derived_seed(key) if pin else None
-                mode = ("pinned" if not isinstance(nonce, int)
-                        else "pinned+nonce") if pin else "provider-default"
-                d, cache_hit = synth_sentence(
-                    backend, who, synth_sent, tmp, w, tempo,
-                    cache_key=key, lang=turn_lang,
-                    gain_db=voice_gain_db.get(who, 0.0),
-                    seed=seed, context=context,
-                )
-                # Durable per-sentence take (advisory evidence; NAR-007-026
-                # surfaces this as the take index).
-                sentences_dir.mkdir(parents=True, exist_ok=True)
-                sentence_file = f"{nn}_{si:03d}.wav"
-                shutil.copyfile(w, sentences_dir / sentence_file)
-                vcfg = voices.get(who, {})
-                take_records.append({
-                    "scene": s["n"], "sceneId": s["id"], "si": si, "who": who,
-                    "backend": voice_kind.get(who, default_backend),
-                    "speaker": vcfg.get("speaker", who),
-                    "model": (vcfg.get("providerOptions") or {}).get("model"),
-                    "lang": turn_lang,
-                    "mode": mode,
-                    **({"seed": seed} if seed is not None else {}),
-                    **({"take": nonce} if isinstance(nonce, int) and nonce > 0 else {}),
-                    "cacheHit": cache_hit, "cacheKey": key,
-                    "sha256": hashlib.sha256(w.read_bytes()).hexdigest(),
-                    "file": f"audio/sentences/{sentence_file}",
-                    "text": synth_sent,
-                })
-                pieces.append(w)
-                # Distribute clean text words across the sentence's real duration
-                toks = clean_sent.split()
-                wts = [len(tok) + 1 for tok in toks]
-                tot = sum(wts)
-                wt = clock
-                for tok, wg in zip(toks, wts):
-                    wd = d * (wg / tot)
-                    words.append({"w": tok, "t0": round(wt, 3), "t1": round(wt + wd, 3),
-                                  "who": who, "si": si, "ti": ti})
-                    wt += wd
-                clock += d
-                si += 1
+            with tempfile.TemporaryDirectory(prefix='speech-turn-', dir=tmp) as work:
+                stage = Path(work)
+                policy = (config.get('speech') or {}).get('check')
+                budget = (config.get('speech') or {}).get('retakes', 0) if policy else 0
+                base_nonce = turn.get('take')
+                if budget and base_nonce is not None and (type(base_nonce) is not int or base_nonce <= 0 or base_nonce > 9007199254740991-budget): raise ValueError('speech retakes require a safely incrementable authored integer nonce')
+                attempts = []
+                for attempt in range(budget + 1):
+                    nonce = base_nonce if attempt == 0 else (base_nonce or 0) + attempt
+                    candidate = _turn_candidate(sent_pairs, turn, who, router[who], backend_kind,
+                                                voice_speaker.get(who, who), voice_lang.get(who),
+                                                voice_gain_db.get(who, 0.0), tempo, nonce,
+                                                deterministic_takes, stage)
+                    if not policy: break
+                    checked_pieces = []
+                    for item in candidate:
+                        if checked_pieces: checked_pieces.append(sil['s'])
+                        checked_pieces.append(item['audio'])
+                    turn_audio = stage/'turn.wav'; concat(checked_pieces, turn_audio, stage)
+                    from . import speech_check
+                    row = speech_check.assess(turn_audio, turn['text'], config, candidate[0]['lang'])
+                    row.update(scene=s['n'], sceneId=s['id'], turn=ti, who=who, selectedTake=candidate[0]['nonce'] or 0)
+                    attempts.append({'take': row['selectedTake'], **row})
+                    speech_check.write_report(audio_dir.parent, speech_rows + [{**row, 'attempts': list(attempts)}])
+                    print(speech_check.summary(row), flush=True)
+                    if row['status'] != 'mismatch': break
+                    if attempt < budget: print(f"speech: retake scene {s['id']} turn {ti}, nonce {(base_nonce or 0)+attempt+1}", flush=True)
+                if policy:
+                    row['attempts'] = attempts
+                    speech_rows.append(row)
+                    speech_check.write_report(audio_dir.parent, speech_rows)
+                    speech_check.enforce([row], config)
+                for k, item in enumerate(candidate):
+                    if k > 0:
+                        pieces.append(sil['s']); clock += gap_sentence
+                    w = tmp/f'{nn}_{si:03d}.wav'; shutil.copyfile(item['audio'], w)
+                    d, clean_sent, nonce = item['duration'], item['clean'], item['nonce']
+                    sentences_dir.mkdir(parents=True, exist_ok=True)
+                    sentence_file = f'{nn}_{si:03d}.wav'; shutil.copyfile(w, sentences_dir/sentence_file)
+                    vcfg = voices.get(who, {})
+                    take_records.append({
+                        'scene': s['n'], 'sceneId': s['id'], 'si': si, 'ti': ti, 'who': who,
+                        'backend': backend_kind, 'speaker': vcfg.get('speaker', who),
+                        'model': (vcfg.get('providerOptions') or {}).get('model'), 'lang': item['lang'],
+                        'mode': item['mode'], **({'seed': item['seed']} if item['seed'] is not None else {}),
+                        **({'take': nonce} if isinstance(nonce, int) and nonce > 0 else {}),
+                        'cacheHit': item['cacheHit'], 'cacheKey': item['cacheKey'],
+                        'context': item['context'],
+                        **({'speechAttempts': attempts} if policy else {}),
+                        'sha256': hashlib.sha256(w.read_bytes()).hexdigest(),
+                        'file': f'audio/sentences/{sentence_file}', 'text': item['text'],
+                    })
+                    pieces.append(w)
+                    toks = clean_sent.split(); weights = [len(tok)+1 for tok in toks]; total = sum(weights); wt = clock
+                    for tok, weight in zip(toks, weights):
+                        wd = d*(weight/total)
+                        words.append({'w': tok, 't0': round(wt,3), 't1': round(wt+wd,3), 'who':who, 'si':si, 'ti':ti});wt += wd
+                    clock += d; si += 1
             pause = float(turn.get("pauseAfter") or 0)
             if pause > 0:
                 silence = tmp / f"pause_{nn}_{ti}.wav"
@@ -634,12 +680,22 @@ def _synthesize_with_router(
         # The final media measurement is canonical. Do not rescale word/turn
         # coordinates across the appended silence.
         timings[s["id"]]["dur"] = round(final_duration, 3)
+        scene_digest = hashlib.sha256(wav.read_bytes()).hexdigest()
+        for record in take_records:
+            if record['sceneId'] == s['id']: record['sceneAudioSha256'] = scene_digest
+        for row in speech_rows:
+            if row['sceneId'] == s['id']:
+                row['sceneAudioSha256'] = scene_digest
+                row['sources'] = [{k:r[k] for k in ('file','sha256','cacheKey')} for r in take_records if r['sceneId']==s['id'] and r['ti']==row['turn']]
         print(f"scene {nn} [{s['id']:>9}] {timings[s['id']]['dur']:5.1f}s  "
               f"turns={''.join(t['who'] for t in s['segments'])}", flush=True)
-    # NAR-018-070: advisory take-identity evidence. Never required by any
-    # gate; regenerable by re-synthesis.
+    # NAR-018-070: ordinary take evidence is advisory and regenerable.
+    # Explicit speech checks require current records to bind selected audio.
     (audio_dir / "takes.json").write_text(
         json.dumps(take_records, ensure_ascii=False, indent=1) + "\n")
+    if (config.get('speech') or {}).get('check'):
+        from .speech_check import write_report
+        write_report(audio_dir.parent, speech_rows, complete=True)
     return timings
 
 

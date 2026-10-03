@@ -268,6 +268,7 @@ function compile(config, opts = {}) {
       size:     captions && captions.size != null ? captions.size : null,
       ...Object.fromEntries(['color', 'activeColor', 'pastColor', 'plateColor'].filter(k => captions && captions[k] != null).map(k => [k, captions[k]])),
     },
+    speech: { ...(config.speech || {}) },
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
     walkthroughs: compileWalkthroughs(walkthroughs, projectDir),

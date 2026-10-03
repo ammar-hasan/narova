@@ -54,6 +54,7 @@ absent optional keys are reported as skips.
 | `narova compose` | config + timings + audio → the selected renderer project (`out/hf-*` or `out/no-browser-*`) + SRT/VTT, then prints the scene table. HyperFrames also consumes fresh walkthrough captures and restarts a live detached Studio. | usually under 1s |
 | `narova captions` | (re)write `out/captions.srt` + `out/captions.vtt` from the existing `out/timings.json` — one cue per sentence, global time. No recompose. | instant |
 | `narova shots` | snapshot one QA frame per scene (mid-scene) with the selected renderer. `--at t1,t2,…` picks explicit times. No-browser needs no browser. | seconds |
+| `narova review --speech` | advisory per-turn transcript differences from existing bound synthesized takes; optional local ASR, no synthesis or project writes. Reports match/mismatch/unavailable; configured fail/retakes do not apply to review. | bounded local recognition per turn |
 | `narova review --audio-levels [--audio <file>] [--interval start,end]` | report advisory integrated loudness, loudness range, true peak, decoded-sample peak, and threshold-crossing sample count from existing audio. The report names the complete artifact digest and measurement basis; it supplies no target, verdict, mutation, or gate. Relative `--audio` paths resolve from the selected output directory. | bounded local decode |
 | `narova review --audio-levels --windows '<JSON>' [--audio <file>]` | measure an ordered non-empty JSON array of `{ "label", "start", "end" }` windows over one exact artifact. Labels remain caller identifiers; short/gated-out windows retain available peak/sample facts and mark gated facts unavailable. Duplicate labels and malformed intervals fail plainly. | bounded local decode per window |
 | `narova review --audio-levels --mix-map` | join project-order bed/SFX declarations, source digests, authored gains/fades/anchors, resolved global windows, and achieved facts over the corresponding interval of `out/audio/mix.wav`. Every achieved row describes the total overlapping mix, never an isolated source or a claim about audibility, clarity, masking, or balance. | bounded local decode per declaration |
@@ -137,6 +138,7 @@ Renderer providers are different: both are bundled, local, and free. See
 - `--beats` — `shots`: arrival/resolved state of every narration sentence,
   both sides of named markers, and scene coverage for silent work. Mutually
   exclusive with `--at` and `--motion`.
+- `--speech` — `review`: compare existing synthesized turns with the script; mutually exclusive with other review modes.
 - `--audio-levels` — `review`: measure existing audio without changing it.
   `--audio <file>` selects an artifact (relative paths start at `out/`), and
   `--interval start,end` scopes the facts to non-negative seconds with end

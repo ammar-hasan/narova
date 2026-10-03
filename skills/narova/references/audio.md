@@ -244,6 +244,73 @@ good enough for karaoke. `align` replaces them with measured ones:
   interpolates timings for unrecognized spans instead of rejecting the
   whole scene. Essential for multilingual projects.
 
+## Check synthesized speech against the script
+
+```bash
+narova review --speech                 # inspect existing synthesized takes
+narova review --speech --json          # advisory machine report, exit 0
+```
+
+The report lists each scene and zero-based turn, the independent transcript,
+source audio hashes and dropped, added or replaced words. Case, punctuation,
+spacing and hyphens compare equally; English cardinal words such as `twenty`
+match `20`. Numeric list separators retain item boundaries (`twenty, one`
+matches `20, 1`, not `21`). This does not change clean narration or captions. ASR can mishear:
+audition flagged turns before deciding that the generated voice is wrong.
+
+To check during synthesis/build, add this optional root configuration:
+
+```js
+speech: {
+  check: 'warn',           // or 'fail': stop before composition/render
+  retakes: 1,             // 0..10 additional candidates per mismatched turn
+  engine: 'faster-whisper',
+  model: 'base.en',        // use a multilingual model for other languages
+},
+```
+
+Omitting `check` keeps ordinary build behavior. Retakes default to zero; a
+positive budget requires `check` and synthesized narration. Only mismatched
+turns get new takes, using the next `take` nonce for every sentence in that turn.
+The first matching candidate is selected. Unavailable recognition and provider
+errors do not trigger further retakes. If recognition becomes unavailable,
+`warn` retains the latest complete synthesized candidate and its nonce/history;
+`fail` stops before publishing that candidate. Exhaustion selects the last
+candidate in
+`warn` mode; `fail` stops with the previous finished video preserved. Explicit
+retakes can invoke any selected speech provider, including a hosted provider.
+Narova records the selected nonce, candidate history and hashes in
+`out/speech-check.json` and sentence-take evidence; it leaves authored `take`
+values unchanged. `--reuse` checks current selected audio again under the current
+policy without starting another candidate search when whole-build audio is reused.
+Run fresh synthesis to apply the authored candidate budget again.
+
+Recognition uses optional existing local faster-whisper or whisper.cpp tooling;
+review does not install dependencies, synthesize or modify project artifacts.
+`speech.engine` and `speech.model` override alignment settings and then compatible
+environment defaults. Faster-whisper may acquire its explicitly selected model
+into its model cache. Whisper.cpp requires an already acquired local model; a bare filename can
+select a model in the Narova model store. Relative local model paths resolve from the project. Missing/stale take evidence,
+unsupported models, timeouts and recognizer errors report `unavailable`, never a
+match. Recognition has a 120-second deadline and bounded output. Comparisons
+above 512 lexical tokens per turn report unavailable with split guidance.
+`fail` rejects both mismatch and unavailable evidence. Historical builds
+without bound sentence/scene evidence need a fresh synthesis before review.
+External narration and native clip audio have unavailable synthesized-turn
+evidence; nonzero retakes are rejected for those sources. Speech review itself
+remains advisory even when `check: 'fail'` is configured.
+
+An explicit check requires current sentence-take records to bind recognition to
+the audio. Missing or stale records are unavailable and cannot pass `fail`.
+With a positive retake budget, replacing a selected local model's bytes at the
+same path (including the local snapshot behind a cached model name) invalidates
+whole-build selection reuse so the authored search can run
+again. Unaffected sentence cache entries remain reusable. Comparison recognizes
+compound hundred forms (for example, twelve hundred equals 1200) while retaining
+lexical conjunctions such as “a hundred and a few more.” Meaningful Unicode
+vowels and tones remain lexical differences. Broken optional tokenizer links
+still retain readable model hashes and bind any tokenizer fallback.
+
 ## Chatterbox Multilingual v3
 
 - narova pins chatterbox to git master in `requirements-chatterbox.txt`:

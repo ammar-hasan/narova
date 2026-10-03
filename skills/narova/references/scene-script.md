@@ -892,3 +892,12 @@ including external-word overlays, while keeping SRT/VTT and `wordCue`/
 
 See [audio.md](audio.md) for indexed SFX anchors, source trimming/fades and
 project-owned alignment model/partial settings.
+
+## Optional speech verification
+
+Root `speech` retains `deterministicTakes` and optionally accepts `check`
+(`warn` or `fail`), `retakes` (integer 0..10, default 0), `engine` (`auto`,
+`faster-whisper` or `whisper-cpp`) and nonempty `model`. A positive retake budget
+requires `check` and synthesized turns. The manifest preserves these settings.
+See [speech checks](audio.md#check-synthesized-speech-against-the-script) for
+selection, reuse and unavailable-evidence behavior.
