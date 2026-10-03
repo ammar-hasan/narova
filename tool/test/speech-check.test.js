@@ -185,3 +185,41 @@ test('advisory recognition resolves relative environment model paths from the sy
  assert.equal(report.modelResolved,path.resolve(__dirname,'../models/relative.bin'));
  assert.notEqual(report.modelResolved,path.join(dir,'models/relative.bin'));
 });
+
+test('relative recognizer stores and fallback tokenizer contents share the actual recognition root',t=>{
+ const toolRoot=path.resolve(__dirname,'..'),dir=fs.mkdtempSync(path.join(toolRoot,'.speech-identity-'));
+ t.after(()=>fs.rmSync(dir,{recursive:true,force:true}));
+ const names=['NAROVA_HOME','HF_HOME','HF_HUB_CACHE','HUGGINGFACE_HUB_CACHE','NAROVA_WHISPER_MODEL','XDG_CACHE_HOME','NAROVA_SPEECH_TEST_HOME'];
+ const old=Object.fromEntries(names.map(k=>[k,process.env[k]]));for(const k of names)delete process.env[k];
+ t.after(()=>{for(const[k,v]of Object.entries(old)){if(v==null)delete process.env[k];else process.env[k]=v;}});
+ const relative=path.relative(toolRoot,dir);process.env.NAROVA_HOME=relative;process.env.HF_HOME=relative;
+ const model=path.join(dir,'models/ggml-tiny.en.bin');fs.mkdirSync(path.dirname(model));fs.writeFileSync(model,'cpp weights');
+ const config={speech:{check:'warn',retakes:1,engine:'whisper-cpp'}};
+ const before=audioFingerprint(config);fs.appendFileSync(model,'actual replacement');assert.notEqual(audioFingerprint(config),before);
+ function snapshot(cache,repo){
+  const root=path.join(cache,'models--'+repo.replaceAll('/','--')),revision='c'.repeat(40),s=path.join(root,'snapshots',revision);
+  fs.mkdirSync(s,{recursive:true});fs.mkdirSync(path.join(root,'refs'));fs.writeFileSync(path.join(root,'refs/main'),revision);return s;
+ }
+ const converted=snapshot(path.join(dir,'hub'),'Systran/faster-whisper-tiny.en');fs.writeFileSync(path.join(converted,'model.bin'),'model');fs.writeFileSync(path.join(converted,'tokenizer.json'),'tokenizer');
+ config.speech={check:'warn',retakes:1,engine:'faster-whisper',model:'tiny.en'};
+ const cached=audioFingerprint(config);fs.appendFileSync(path.join(converted,'model.bin'),'new weights');assert.notEqual(audioFingerprint(config),cached);
+ process.env.HF_HUB_CACHE=path.join(relative,'custom-hub');
+ const override=snapshot(path.join(dir,'custom-hub'),'Systran/faster-whisper-tiny.en');fs.writeFileSync(path.join(override,'model.bin'),'override weights');fs.writeFileSync(path.join(override,'tokenizer.json'),'override tokenizer');
+ const changed=audioFingerprint(config);fs.appendFileSync(path.join(override,'model.bin'),'changed');assert.notEqual(audioFingerprint(config),changed);
+ const overrideFile=path.join(override,'model.bin');
+ process.env.NAROVA_SPEECH_TEST_HOME=dir;
+ for(const value of ['$NAROVA_SPEECH_TEST_HOME/custom-hub','${NAROVA_SPEECH_TEST_HOME}/custom-hub',path.join('~',path.relative(os.homedir(),path.join(dir,'custom-hub'))) ]){
+  process.env.HF_HUB_CACHE=value;
+  const previous=audioFingerprint(config);fs.appendFileSync(overrideFile,'changed');assert.notEqual(audioFingerprint(config),previous,value);
+ }
+ process.env.HF_HUB_CACHE=path.join(relative,'custom-hub');
+ const local=path.join(dir,'local-converted');fs.mkdirSync(local);fs.writeFileSync(path.join(local,'model.bin'),'local weights');config.speech.model=local;
+ for(const repo of ['openai/whisper-tiny.en','openai/whisper-tiny']){
+  // Rust tokenizer fallback uses HF_HOME/hub despite HF_HUB_CACHE override.
+  const fallback=snapshot(path.join(dir,'hub'),repo),tokenizer=path.join(fallback,'tokenizer.json');fs.writeFileSync(tokenizer,'fallback tokenizer');
+  const previous=audioFingerprint(config);fs.appendFileSync(tokenizer,'replacement');assert.notEqual(audioFingerprint(config),previous);
+ }
+ fs.writeFileSync(path.join(local,'tokenizer.json'),'locally bound tokenizer');
+ const bound=audioFingerprint(config);fs.appendFileSync(path.join(dir,'hub/models--openai--whisper-tiny.en/snapshots','c'.repeat(40),'tokenizer.json'),'unused change');assert.equal(audioFingerprint(config),bound,'unused fallback must not invalidate a locally bound tokenizer');
+ config.speech.retakes=0;const zero=audioFingerprint(config);fs.appendFileSync(path.join(local,'model.bin'),'other weights');assert.equal(audioFingerprint(config),zero);
+});

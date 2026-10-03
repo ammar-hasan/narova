@@ -4,6 +4,7 @@ const fs = require('fs');
 const path = require('path');
 const os = require('os');
 const crypto = require('crypto');
+const RECOGNITION_ROOT = path.resolve(__dirname, '..');
 
 function fileDigest(file) {
   const hash = crypto.createHash('sha256');
@@ -57,16 +58,37 @@ Object.assign(FW_REPOS, {
   turbo: 'mobiuslabsgmbh/faster-whisper-large-v3-turbo',
 });
 
-function cachedSnapshot(model) {
+// Match huggingface_hub's POSIX expanduser-then-expandvars order. The Rust
+// tokenizer client deliberately keeps its raw HF_HOME semantics separately.
+function pythonCachePath(value) {
+  const match = value.match(/^~([^/]*)(?=\/|$)/);
+  if (match) {
+    let home;
+    if (!match[1]) home = os.homedir();
+    else {
+      const user = os.userInfo();
+      if (match[1] === user.username) home = user.homedir;
+      else {
+        try { home = fs.readFileSync('/etc/passwd', 'utf8').split('\n').find(line => line.split(':')[0] === match[1])?.split(':')[5]; } catch {}
+      }
+    }
+    if (home) value = home + value.slice(match[0].length);
+  }
+  return value.replace(/\$(\w+|\{[^}]*\})/g, (all, key) => process.env[key.startsWith('{') ? key.slice(1, -1) : key] ?? all);
+}
+
+function cachedSnapshot(model, cacheRoot, tokenizerOnly = false) {
   const repo = FW_REPOS[model] || (model.includes('/') ? model : null);
   if (!repo) return { unavailable: 'unknown model identifier' };
-  const hfHome = process.env.HF_HOME || path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'huggingface');
-  const cache = process.env.HF_HUB_CACHE || process.env.HUGGINGFACE_HUB_CACHE || path.join(hfHome, 'hub');
+  const hfHome = pythonCachePath(process.env.HF_HOME || path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'huggingface'));
+  const cache = path.resolve(RECOGNITION_ROOT, cacheRoot || pythonCachePath(process.env.HF_HUB_CACHE || process.env.HUGGINGFACE_HUB_CACHE || path.join(hfHome, 'hub')));
   const dir = path.join(cache, `models--${repo.replaceAll('/', '--')}`);
   try {
     const revision = fs.readFileSync(path.join(dir, 'refs', 'main'), 'utf8').trim();
     if (!/^[a-f0-9]{40,64}$/i.test(revision)) return { unavailable: 'invalid local model revision' };
-    return { repo, revision, ...resourceIdentity(path.join(dir, 'snapshots', revision)) };
+    const snapshot = path.join(dir, 'snapshots', revision);
+    return { repo, revision, tokenizerBound: fs.existsSync(path.join(snapshot, 'tokenizer.json')),
+      ...resourceIdentity(tokenizerOnly ? path.join(snapshot, 'tokenizer.json') : snapshot) };
   } catch (error) { return { repo, unavailable: error.code || error.message }; }
 }
 
@@ -82,10 +104,22 @@ function selectionIdentity(config) {
   }
   if (engine === 'auto' || engine === 'faster-whisper') {
     const local = model && path.resolve(__dirname, '..', model);
+    let fallbackTokenizer = local && fs.existsSync(local) && !fs.existsSync(path.join(local, 'tokenizer.json'));
     if (!local || !fs.existsSync(local)) {
       // Default choice depends on turn language; bind both possible defaults
       // without importing the recognizer or changing sentence-cache identity.
-      for (const name of model ? [model] : ['tiny.en', 'tiny']) resources[`fasterWhisper:${name}`] = cachedSnapshot(name);
+      for (const name of model ? [model] : ['tiny.en', 'tiny']) {
+        const snapshot = cachedSnapshot(name);
+        resources[`fasterWhisper:${name}`] = snapshot;
+        if (!snapshot.tokenizerBound) fallbackTokenizer = true;
+      }
+    }
+    if (fallbackTokenizer) {
+      // Tokenizers' Rust Hub client uses HF_HOME/hub (not the Python Hub
+      // cache override or XDG_CACHE_HOME). Actual model capability chooses
+      // English/multilingual after loading; bind both without loading it here.
+      const cache = path.join(process.env.HF_HOME || path.join(os.homedir(), '.cache', 'huggingface'), 'hub');
+      for (const name of ['openai/whisper-tiny.en', 'openai/whisper-tiny']) resources[`tokenizer:${name}`] = cachedSnapshot(name, cache, true);
     }
   }
   if (engine === 'auto' || engine === 'whisper-cpp') {
@@ -93,7 +127,7 @@ function selectionIdentity(config) {
     const direct = path.resolve(__dirname, '..', selected);
     let file;
     try { if (fs.statSync(direct).isFile()) file = direct; } catch {}
-    file ||= path.resolve(process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'), 'models', selected);
+    file ||= path.resolve(RECOGNITION_ROOT, process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'), 'models', selected);
     resources.whisperCpp = resourceIdentity(file);
   }
   return { retakes: config.speech.retakes, engine, model, resources };
