@@ -9,7 +9,7 @@ const { spawnSync, execFileSync } = require('child_process');
 const { resolveConfig } = require('../src/schema');
 const { compile } = require('../src/manifest');
 const { configFromManifest } = require('../src/pipeline');
-const { audioFingerprint } = require('../src/audio-fingerprint');
+const { audioFingerprint, narrationContextDigest, timingsFingerprint } = require('../src/audio-fingerprint');
 const cli = path.resolve(__dirname, '../bin/narova.js');
 const python = execFileSync('which', ['python3'], {encoding:'utf8'}).trim();
 const raw = () => ({ title:'Speech', renderer:'no-browser', size:{w:320,h:180}, voices:{a:{speaker:'fixture'}}, scenes:[{id:'one',visual:{type:'group',children:[]},vo:[{who:'a',text:'Count that effort.',lang:'en'}]}] });
@@ -77,6 +77,15 @@ class WhisperModel:
  const failed=run(['build','--reuse'],dir,env);assert.equal(failed.process.status,1,failed.process.stderr);assert.equal(failed.result.success,false);assert.deepEqual(fs.readFileSync(video),bytes);
  assert.ok(failed.result.artifacts.some(a=>a.role==='speech-check'));assert.ok(!failed.result.artifacts.some(a=>a.role==='video'));
  assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'out/speech-check.json'))).counts.mismatch,1);
+ assert.ok(failed.result.diagnostics.some(d=>d.code==='operation.failed' && d.subject==='scene one turn 0' && /mismatch/.test(d.message)));
+ assert.deepEqual(failed.result.data.speechFailure.turns,[{sceneId:'one',turn:0,status:'mismatch'}]);
+ const sceneAudio=path.join(dir,'out/audio/01.wav');
+ for(const corrupt of [false,true]){
+  if(corrupt)fs.writeFileSync(sceneAudio,'undecodable fixture');else fs.unlinkSync(sceneAudio);
+  const missing=run(['build','--reuse'],dir,env);assert.equal(missing.process.status,1,missing.process.stderr);
+  assert.deepEqual(missing.result.data.speechFailure.turns,[{sceneId:'one',turn:0,status:'unavailable'}]);
+  assert.ok(missing.result.artifacts.some(a=>a.role==='speech-check'));assert.ok(!missing.result.artifacts.some(a=>a.role==='video'));assert.deepEqual(fs.readFileSync(video),bytes);
+ }
 });
 
 
@@ -89,7 +98,90 @@ test('external narration fail policy stops before speech runtime or finished-vid
   const failed=run([command],dir,env);assert.equal(failed.process.status,1,failed.process.stderr);
   assert.match(failed.process.stderr,/speech.check=fail/);assert.equal(fs.readFileSync(video,'utf8'),'previous video');
   assert.ok(failed.result.artifacts.some(a=>a.role==='speech-check'));
+  assert.ok(failed.result.diagnostics.some(d=>d.subject==='scene one turn 0' && /unavailable/.test(d.message)));
+  assert.deepEqual(failed.result.data.speechFailure.turns,[{sceneId:'one',turn:0,status:'unavailable'}]);
   assert.equal(JSON.parse(fs.readFileSync(path.join(dir,'out/speech-check.json'))).counts.unavailable,1);
  }
  assert.ok(!fs.existsSync(path.join(dir,'home')));
+});
+
+
+test('local recognizer byte changes invalidate selection reuse while ordinary sentence inputs stay stable',t=>{
+ const dir=temp(t), priorEnv={NAROVA_HOME:process.env.NAROVA_HOME,NAROVA_WHISPER_MODEL:process.env.NAROVA_WHISPER_MODEL};
+ process.env.NAROVA_HOME=path.join(dir,'home');delete process.env.NAROVA_WHISPER_MODEL;
+ t.after(()=>{for(const [k,v] of Object.entries(priorEnv)){if(v==null)delete process.env[k];else process.env[k]=v;}});
+ const model=path.join(dir,'model.bin'),snapshot=path.join(dir,'snapshot');fs.mkdirSync(snapshot);
+ const blob=path.join(dir,'model-blob');fs.writeFileSync(blob,'first snapshot weights');fs.symlinkSync(blob,path.join(snapshot,'model.bin'));fs.writeFileSync(path.join(snapshot,'config.json'),'{}');
+ const stored=path.join(process.env.NAROVA_HOME,'models','ggml-tiny.en.bin');fs.mkdirSync(path.dirname(stored),{recursive:true});fs.writeFileSync(stored,'first stored weights');
+ const ordinary=resolveConfig(raw(),{},dir),baseline=audioFingerprint(ordinary),context= narrationContextDigest(ordinary);
+ const config=resolveConfig({...raw(),speech:{check:'warn',retakes:1,engine:'whisper-cpp',model}},{},dir);
+ const out=path.join(dir,'out');fs.mkdirSync(path.join(out,'audio'),{recursive:true});fs.writeFileSync(path.join(out,'audio/full.wav'),'fixture audio');fs.writeFileSync(path.join(out,'timings.json'),'{}');
+ const {resolveReuse}=require('../src/pipeline');
+ function replacement(file,options){
+  config.speech={check:'warn',retakes:1,...options};fs.writeFileSync(file,'first weights');
+  const previous=[audioFingerprint(config),narrationContextDigest(config)];
+  fs.writeFileSync(path.join(out,'.audio-fingerprint'),previous[0]);fs.writeFileSync(path.join(out,'.timings-fingerprint'),timingsFingerprint(config));
+  assert.equal(resolveReuse(config,out,true,()=>{}),true);
+  fs.writeFileSync(file,'other weights');
+  assert.notEqual(audioFingerprint(config),previous[0]);assert.notEqual(narrationContextDigest(config),previous[1]);
+  assert.equal(resolveReuse(config,out,true,()=>{}),false,'new recognizer bytes must allow fresh candidate selection');
+  config.speech.retakes=0;assert.equal(audioFingerprint(config),baseline);assert.equal(narrationContextDigest(config),context);
+ }
+ replacement(model,{engine:'whisper-cpp',model});
+ replacement(blob,{engine:'faster-whisper',model:snapshot});
+ replacement(stored,{engine:'whisper-cpp',model:'ggml-tiny.en.bin'});
+ replacement(stored,{engine:'whisper-cpp'});
+ process.env.NAROVA_WHISPER_MODEL=model;replacement(model,{engine:'whisper-cpp'});delete process.env.NAROVA_WHISPER_MODEL;
+ config.align={engine:'faster-whisper',model:snapshot};replacement(blob,{});
+ config.speech={check:'warn',retakes:1,engine:'faster-whisper',model:snapshot};
+ const before=audioFingerprint(config);fs.writeFileSync(path.join(snapshot,'config.json'),'new tokenizer settings');assert.notEqual(audioFingerprint(config),before);
+ const checked=audioFingerprint(config);fs.utimesSync(blob,new Date(0),new Date(0));assert.equal(audioFingerprint(config),checked,'mtime-only changes are not new recognition contents');
+});
+
+test('speech failure diagnostics are structured and redacted; prior committed delivery members remain reported',t=>{
+ const dir=temp(t),p=raw();p.speech={check:'fail'};p.variants=[{id:'later',sceneOverrides:{one:{vo:[{who:'a',text:'Later line.',lang:'en'}]}}}];
+ fs.writeFileSync(path.join(dir,'reel.config.json'),JSON.stringify(p));
+ const helper=path.join(dir,'python-fixture');
+ fs.writeFileSync(helper,`#!${python}\nimport sys,json,pathlib,os\nif '-c' in sys.argv: print('fixture');sys.exit(0)\nout=pathlib.Path(sys.argv[sys.argv.index('--out')+1])\nrow={'sceneId':'one','scene':1,'turn':0,'who':'a','status':'unavailable','reason':'fixture '+os.environ['FIXTURE_API_KEY'],'transcript':None,'differences':[]}\n(out/'speech-check.json').write_text(json.dumps({'schema':'narova.speech-check/1','complete':False,'turns':[row]}))\nprint('speech fixture unavailable')\nsys.exit(1)\n`);fs.chmodSync(helper,0o700);
+ const preload=path.join(dir,'preload.js');
+ fs.writeFileSync(preload,`const fs=require('fs'),path=require('path');const pipeline=require(${JSON.stringify(path.resolve(__dirname,'../src/pipeline'))});let count=0;const synth=pipeline.synth;pipeline.build=(config,opts)=>{fs.mkdirSync(opts.out,{recursive:true});if(count++){synth(opts.out,{...opts,config});throw new Error('unexpected synth success');}const mp4=path.join(opts.out,'video.mp4');fs.writeFileSync(mp4,'prior committed member');return {mp4,renderer:'fixture'};};`);
+ const secret='disposable-fixture-credential';
+ const r=spawnSync(process.execPath,['--require',preload,cli,'build','--variants','--json'],{cwd:dir,encoding:'utf8',env:{...process.env,NAROVA_HOME:path.join(dir,'home'),NAROVA_PYTHON:helper,FIXTURE_API_KEY:secret},timeout:30000});
+ assert.equal(r.status,1,r.stderr);const result=JSON.parse(r.stdout);
+ assert.deepEqual(result.data.speechFailure.turns,[{sceneId:'one',turn:0,status:'unavailable'}]);
+ const diag=result.diagnostics.find(d=>d.subject==='scene one turn 0');assert.ok(diag);assert.match(diag.message,/unavailable/);assert.match(diag.message,/REDACTED/i);assert.ok(!r.stdout.includes(secret));assert.ok(!r.stderr.includes(secret));
+ const videos=result.artifacts.filter(a=>a.role==='video');assert.equal(videos.length,1);assert.equal(fs.readFileSync(videos[0].path,'utf8'),'prior committed member');
+ assert.ok(result.artifacts.some(a=>a.role==='speech-check'));
+});
+
+
+test('cached recognizer aliases, Hub IDs and defaults bind current snapshot and tokenizer bytes without acquisition',t=>{
+ const dir=temp(t),names=['HF_HOME','HF_HUB_CACHE','HUGGINGFACE_HUB_CACHE','NAROVA_WHISPER_MODEL'];
+ const old=Object.fromEntries(names.map(k=>[k,process.env[k]]));for(const k of names)delete process.env[k];process.env.HF_HOME=dir;
+ t.after(()=>{for(const [k,v]of Object.entries(old)){if(v==null)delete process.env[k];else process.env[k]=v;}});
+ const config=resolveConfig({...raw(),speech:{check:'warn',retakes:1,engine:'faster-whisper',model:'tiny.en'}},{},dir);
+ const revision='a'.repeat(40), repo=path.join(dir,'hub/models--Systran--faster-whisper-tiny.en'),snapshot=path.join(repo,'snapshots',revision);
+ const missing=audioFingerprint(config);fs.mkdirSync(snapshot,{recursive:true});fs.mkdirSync(path.join(repo,'refs'));fs.writeFileSync(path.join(repo,'refs/main'),revision);fs.writeFileSync(path.join(snapshot,'model.bin'),'weights');fs.writeFileSync(path.join(snapshot,'tokenizer.json'),'tokenizer');
+ const acquired=audioFingerprint(config);assert.notEqual(acquired,missing);
+ for(const model of ['tiny.en','Systran/faster-whisper-tiny.en',null]){
+  if(model)config.speech.model=model;else delete config.speech.model;
+  const before=audioFingerprint(config);fs.appendFileSync(path.join(snapshot,'model.bin'),'replaced');assert.notEqual(audioFingerprint(config),before);
+  const weights=audioFingerprint(config);fs.appendFileSync(path.join(snapshot,'tokenizer.json'),'changed');assert.notEqual(audioFingerprint(config),weights);
+ }
+ config.speech.model='tiny.en';const before=audioFingerprint(config),next='b'.repeat(40);
+ fs.mkdirSync(path.join(repo,'snapshots',next));fs.writeFileSync(path.join(repo,'snapshots',next,'model.bin'),'new revision');fs.writeFileSync(path.join(repo,'refs/main'),next);assert.notEqual(audioFingerprint(config),before);
+ config.speech.retakes=0;const plain=audioFingerprint(config);fs.appendFileSync(path.join(repo,'snapshots',next,'model.bin'),'other');assert.equal(audioFingerprint(config),plain);
+ assert.ok(!fs.existsSync(path.join(dir,'hub/models--Systran--faster-whisper-tiny')),'default snapshot lookup must not acquire missing models');
+});
+
+test('advisory recognition resolves relative environment model paths from the synthesis directory',t=>{
+ const dir=temp(t),helper=path.join(dir,'python-fixture'),envNames=['NAROVA_PYTHON','NAROVA_WHISPER_MODEL'];
+ const prior=Object.fromEntries(envNames.map(k=>[k,process.env[k]]));t.after(()=>{for(const[k,v]of Object.entries(prior)){if(v==null)delete process.env[k];else process.env[k]=v;}});
+ process.env.NAROVA_PYTHON=helper;process.env.NAROVA_WHISPER_MODEL='models/relative.bin';
+ fs.writeFileSync(helper,`#!${python}\nimport json,os\nprint(json.dumps({'schema':'narova.speech-check/1','turns':[],'counts':{'match':0,'mismatch':0,'unavailable':0},'modelResolved':os.path.abspath(os.environ['NAROVA_WHISPER_MODEL'])}))\n`);fs.chmodSync(helper,0o700);
+ const config=resolveConfig({...raw(),speech:{check:'warn',retakes:1,engine:'whisper-cpp'}},{},dir);
+ const out=path.join(dir,'out');fs.mkdirSync(out);fs.writeFileSync(path.join(out,'.audio-fingerprint'),audioFingerprint(config));
+ const report=require('../src/speech-check').reviewSpeech(config,out);
+ assert.equal(report.modelResolved,path.resolve(__dirname,'../models/relative.bin'));
+ assert.notEqual(report.modelResolved,path.join(dir,'models/relative.bin'));
 });

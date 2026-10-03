@@ -27,7 +27,7 @@ function reviewSpeech(config, outDir) {
     fs.writeFileSync(narrationFile, JSON.stringify(narration(config)));
     const args = ['-m', 'narova_tts.speech_check', '--review', outDir, '--config', configFile, '--narration', narrationFile];
     const turns = config.scenes.reduce((n, s) => n + (s.vo || []).length, 0);
-    const r = spawnSync(findPython(config.projectDir), args, { encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: Math.max(150000, turns * 125000),
+    const r = spawnSync(findPython(config.projectDir), args, { cwd: TOOL_ROOT, encoding: 'utf8', maxBuffer: 16 * 1024 * 1024, timeout: Math.max(150000, turns * 125000),
       env: { ...process.env, PYTHONDONTWRITEBYTECODE: '1', PYTHONPATH: path.join(TOOL_ROOT, 'py') + (process.env.PYTHONPATH ? path.delimiter + process.env.PYTHONPATH : '') } });
     if (r.stderr) process.stderr.write(machine.redact(r.stderr));
     if (r.error || r.status !== 0) throw new Error(`speech review failed: ${r.error?.message || 'recognizer helper failed; verify optional speech dependencies'}`);
@@ -36,4 +36,16 @@ function reviewSpeech(config, outDir) {
     return result;
   } finally { fs.rmSync(dir, { recursive: true, force: true }); }
 }
-module.exports = { reviewSpeech, formatTurn };
+// Called only for a produced report on a failed synth/build. Diagnostics use
+// the same registered/redacted terminal boundary as all other machine errors.
+function failureDiagnostics(report) {
+  if (report?.schema !== 'narova.speech-check/1' || !Array.isArray(report.turns)) return;
+  const turns = [];
+  for (const row of report.turns) {
+    if (!['mismatch', 'unavailable'].includes(row?.status) || typeof row.sceneId !== 'string' || !Number.isInteger(row.turn) || row.turn < 0) continue;
+    turns.push({sceneId:row.sceneId,turn:row.turn,status:row.status});
+    machine.diag('error', 'operation.failed', formatTurn(row), `scene ${row.sceneId} turn ${row.turn}`);
+  }
+  if (turns.length) machine.data({speechFailure:{turns}});
+}
+module.exports = { reviewSpeech, formatTurn, failureDiagnostics };

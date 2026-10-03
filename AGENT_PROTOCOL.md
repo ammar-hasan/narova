@@ -59,7 +59,13 @@ even for non-matches and produces no artifacts; conflicting review modes exit 2.
 Authored `speech.check` applies to synthesis/build, including reuse. A `fail`
 policy stops on mismatch or unavailable evidence with exit 1 (operation failure),
 before composition/render. A produced `speech-check.json` uses artifact role
-`speech-check`; an unsuccessful gate does not claim a finished-video artifact.
+`speech-check`. Terminal `operation.failed` diagnostics identify each affected
+scene, zero-based turn and mismatch/unavailable status. Stable machine fields
+also appear in `data.speechFailure.turns`, ordered objects containing
+`sceneId` (string), `turn` (nonnegative integer), and `status`
+(`mismatch` or `unavailable`); human messages are not a parsing contract. An unsuccessful gate
+does not claim a finished-video artifact for the failing member; videos already
+committed by earlier delivery members remain reported.
 The previous finished video remains available. Explicit bounded `speech.retakes`
 records attempted/selected nonce and source hashes without changing authoring
 text or take values. Review does not apply this policy or generate retakes.

@@ -34,13 +34,15 @@ def digest(file):
 def _cardinal_and(raw, boundaries, i, last, scale):
     if last not in ('hundred', 'scale') or i+1 >= len(raw) or raw[i+1].casefold() not in {*_UNITS, *_TENS, 'a'}:
         return False
-    # A second hundred group cannot extend an existing hundred group, but it
-    # can be the lower part of a thousand/million/etc. cardinal.
-    if last == 'hundred' and i+2 < len(raw) and raw[i+2].casefold() == 'hundred':
+    # An article must introduce an actual cardinal, not lexical 'a few'.
+    if boundaries[i+1] or raw[i+1].casefold() == 'zero': return False
+    if raw[i+1].casefold() == 'a' and (last != 'scale' or i+2 >= len(raw) or boundaries[i+2] or raw[i+2].casefold() not in {'hundred', *_SCALES}):
         return False
     for j in range(i+1, len(raw)):
         if boundaries[j]: break
         word = raw[j].casefold()
+        # Another hundred group is a separate number, including twelve hundred.
+        if word == 'hundred' and last == 'hundred': return False
         if word in _SCALES: return _SCALES[word] < scale
         if word not in {*_UNITS, *_TENS, 'hundred', 'and', 'a'}: break
     return True
@@ -63,9 +65,10 @@ def _tokens(text):
                 article = w == 'a' and last in (None, 'scale') and i+1 < len(raw) and not boundaries[i+1] and raw[i+1].casefold() in {'hundred', *_SCALES}
                 if w in _UNITS or w in _TENS or article:
                     value = 1 if article else _UNITS.get(w, _TENS.get(w))
+                    if value == 0 and last is not None: break
                     if last in ('unit', 'teen') or (last == 'tens' and value >= 10): break
                     group += value; last = 'tens' if w in _TENS else ('teen' if value >= 10 else 'unit')
-                elif w == 'hundred' and group in range(1, 10) and last == 'unit':
+                elif w == 'hundred' and 1 <= group < 100 and last in ('unit', 'teen', 'tens'):
                     group *= 100; last = 'hundred'
                 elif w in _SCALES and group and _SCALES[w] < scale:
                     scale = _SCALES[w]; total += group * scale; group = 0; last = 'scale'

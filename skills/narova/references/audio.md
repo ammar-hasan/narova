@@ -273,7 +273,10 @@ Omitting `check` keeps ordinary build behavior. Retakes default to zero; a
 positive budget requires `check` and synthesized narration. Only mismatched
 turns get new takes, using the next `take` nonce for every sentence in that turn.
 The first matching candidate is selected. Unavailable recognition and provider
-errors do not trigger further retakes. Exhaustion selects the last candidate in
+errors do not trigger further retakes. If recognition becomes unavailable,
+`warn` retains the latest complete synthesized candidate and its nonce/history;
+`fail` stops before publishing that candidate. Exhaustion selects the last
+candidate in
 `warn` mode; `fail` stops with the previous finished video preserved. Explicit
 retakes can invoke any selected speech provider, including a hosted provider.
 Narova records the selected nonce, candidate history and hashes in
@@ -296,6 +299,15 @@ without bound sentence/scene evidence need a fresh synthesis before review.
 External narration and native clip audio have unavailable synthesized-turn
 evidence; nonzero retakes are rejected for those sources. Speech review itself
 remains advisory even when `check: 'fail'` is configured.
+
+An explicit check requires current sentence-take records to bind recognition to
+the audio. Missing or stale records are unavailable and cannot pass `fail`.
+With a positive retake budget, replacing a selected local model's bytes at the
+same path (including the local snapshot behind a cached model name) invalidates
+whole-build selection reuse so the authored search can run
+again. Unaffected sentence cache entries remain reusable. Comparison recognizes
+compound hundred forms (for example, twelve hundred equals 1200) while retaining
+lexical conjunctions such as “a hundred and a few more.”
 
 ## Chatterbox Multilingual v3
 

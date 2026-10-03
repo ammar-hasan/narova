@@ -33,6 +33,29 @@ class Comparison(unittest.TestCase):
             with self.subTest(a=a): self.assertEqual(speech.compare(a,b)['status'],'match')
         for a,b in [('one five','6'),('one five','15'),('1,2,3','123'),('one thousand and two thousand','3000'),('twenty, one','21'),('twenty; one','21'),('twenty. One.','21'),('twenty، one','21'),('twenty、one','21'),('twenty؛ one','21'),('123456789012345678901234567890','123456789012345678901234567891'),('twenty cats','21 cats'),('one and two','3'),('hello',''),('blue box','red box')]:
             with self.subTest(a=a): self.assertEqual(speech.compare(a,b)['status'],'mismatch')
+    def test_cardinal_conjunctions_and_compound_hundreds(self):
+        for expected, observed in [('We sold a hundred and a few more.', 'We sold 100 a few more.'),
+                                   ('one hundred and twelve hundred', '1300'),
+                                   ('a hundred and a million', '100 a million'),
+                                   ('twenty zero cameras', '20 cameras'),
+                                   ('one thousand zero cameras', '1000 cameras'),
+                                   ('one hundred and zero', '100'),
+                                   ('twelve hundred, one', '1201'),
+                                   ('twenty one hundred hundred', '210000')]:
+            with self.subTest(expected=expected):
+                self.assertEqual(speech.compare(expected, observed)['status'], 'mismatch')
+        edits = speech.compare('We sold a hundred and a few more.', 'We sold 100 a few more.')['differences']
+        self.assertEqual(edits, [{'kind':'dropped','expected':['and'],'observed':[]}])
+        for expected, observed in [('twelve hundred samples','1200 samples'),
+                                   ('nineteen hundred copies','1900 copies'),
+                                   ('twelve hundred and fifty','1250'),
+                                   ('nineteen hundred ninety nine','1999'),
+                                   ('twenty one hundred','2100'),
+                                   ('a thousand and a hundred','1100'),
+                                   ('one hundred and a few more','100 and a few more')]:
+            with self.subTest(expected=expected):
+                self.assertEqual(speech.compare(expected, observed)['status'], 'match')
+
     def test_unavailable_is_not_match_or_empty_success(self):
         with tempfile.TemporaryDirectory() as d:
             wav=Path(d)/'a.wav';wav.write_bytes(b'audio')
@@ -200,10 +223,65 @@ class TurnChecks(unittest.TestCase):
         with self.assertRaisesRegex(RuntimeError,'speech.check=fail'):
             self.run_pipeline('native-fail',{'check':'fail'})
         self.assertEqual(json.loads((self.root/'native-fail/speech-check.json').read_text())['counts']['unavailable'],2)
+    def test_unavailable_retake_retains_latest_complete_warn_candidate(self):
+        self.scenes[0]['segments'][0]['text'] = 'Count that effort. Keep every word.'
+        self.scenes[0]['segments'][0]['take'] = 7
+        def observed(text): return {'transcript':text,'engine':'fixture','model':'fixture'}
+        outcomes = [observed('That effort. Keep every word.'), RuntimeError('recognizer unavailable'), observed('Keep this line.')]
+        with mock.patch.object(speech,'transcribe',side_effect=outcomes) as asr:
+            out,voice,_ = self.run_pipeline('unknown-retake', {'check':'warn','retakes':2})
+        self.assertEqual(asr.call_count,3,'unused remaining budget must not run')
+        self.assertEqual(len(voice.calls),5,'both sentences retaken once, neighbor once')
+        row=json.loads((out/'speech-check.json').read_text())['turns'][0]
+        self.assertEqual((row['status'],row['selectedTake']),('unavailable',8))
+        self.assertEqual([(a['take'],a['status']) for a in row['attempts']],[(7,'mismatch'),(8,'unavailable')])
+        takes=json.loads((out/'audio/takes.json').read_text())
+        self.assertEqual([t.get('take',0) for t in takes],[8,8,0])
+        for take in takes[:2]:
+            self.assertEqual(take['speechAttempts'],row['attempts'])
+            self.assertEqual(take['sha256'],hashlib.sha256((out/take['file']).read_bytes()).hexdigest())
+        # A read-only review reconstructs exactly the selected audio and history.
+        with mock.patch.object(speech,'transcribe',side_effect=[observed('Count that effort. Keep every word.'),observed('Keep this line.')]):
+            reviewed=speech.review(self.scenes,self.config,out)['turns'][0]
+        self.assertEqual(reviewed['audioSha256'],row['audioSha256'])
+        self.assertEqual(reviewed['selectedTake'],8)
+        self.assertEqual(reviewed['attempts'],row['attempts'])
+        for retake in (False,True):
+            label='unknown-fail-'+str(retake);failed=self.root/label;failed.mkdir()
+            (failed/'video.mp4').write_bytes(b'prior finished video')
+            # A fail at either the initial candidate or a complete retake must
+            # stop before publishing that turn and never invoke the neighbor.
+            outcomes=([observed('That effort. Keep every word.')] if retake else [])+[RuntimeError('recognizer unavailable')]
+            with mock.patch.object(speech,'transcribe',side_effect=outcomes) as asr:
+                with self.assertRaisesRegex(RuntimeError,'speech.check=fail'):
+                    self.run_pipeline(label,{'check':'fail','retakes':2})
+            self.assertEqual(asr.call_count,2 if retake else 1)
+            self.assertEqual((failed/'video.mp4').read_bytes(),b'prior finished video')
+            self.assertFalse((failed/'audio/takes.json').exists())
+            self.assertFalse((failed/'audio/sentences/01_000.wav').exists())
+            row=json.loads((failed/'speech-check.json').read_text())['turns'][0]
+            self.assertEqual(row['selectedTake'],8 if retake else 7)
+            self.assertEqual(row['status'],'unavailable')
+
+    def test_missing_take_records_cannot_pass_explicit_fail_reuse(self):
+        out,_,_=self.run_pipeline('missing-records')
+        (out/'audio/takes.json').unlink()
+        (out/'video.mp4').write_bytes(b'prior finished video')
+        with mock.patch.object(speech,'transcribe',side_effect=AssertionError('unbound audio must not reach ASR')):
+            with self.assertRaisesRegex(RuntimeError,'speech.check=fail'):
+                self.run_pipeline('missing-records',{'check':'fail'},reuse=True)
+        self.assertEqual((out/'video.mp4').read_bytes(),b'prior finished video')
+        self.assertEqual(json.loads((out/'speech-check.json').read_text())['counts']['unavailable'],2)
+
     def test_tampered_scene_or_sentence_cannot_pass_reuse(self):
         out,_,_=self.run_pipeline('bound')
-        (out/'audio/01.wav').write_bytes(b'changed scene')
-        with self.assertRaises(Exception): self.run_pipeline('bound',{'check':'fail'},reuse=True)
+        for missing in (True,False):
+            if missing: (out/'audio/01.wav').unlink()
+            else: (out/'audio/01.wav').write_bytes(b'changed scene')
+            with mock.patch.object(speech,'transcribe',side_effect=AssertionError('unbound scene must not reach ASR')):
+                with self.assertRaisesRegex(RuntimeError,'speech.check=fail'):
+                    self.run_pipeline('bound',{'check':'fail'},reuse=True)
+            self.assertEqual(json.loads((out/'speech-check.json').read_text())['counts']['unavailable'],2)
         # Restore output from sentence cache, then tamper only a sentence.
         out,_,_=self.run_pipeline('bound')
         (out/'audio/sentences/01_000.wav').write_bytes(b'changed sentence')

@@ -387,18 +387,19 @@ def run(narration_path: Path, config_path: Path, out_dir: Path,
     if reuse and timings_path.exists():
         # Skip synth, but STILL rescale each scene to its existing (post-loudnorm) wav.
         print("reuse — skipping synth, rescaling timings to existing audio", flush=True)
+        # Binding failures become unavailable speech evidence before a missing
+        # or corrupt scene can fail the ordinary timing probe.
+        if (config.get('speech') or {}).get('check'):
+            from .speech_check import review, write_report, enforce
+            checked = review(scenes, config, out_dir)
+            write_report(out_dir, checked['turns'], complete=True)
+            enforce(checked['turns'], config)
         timings = json.loads(timings_path.read_text())
         for s in scenes:
             wav = audio_dir / f"{s['n']:02d}.wav"
             rescale_timings(timings[s["id"]], probe(wav))
     else:
         timings = _synthesize(scenes, config, timing, audio_dir, tmp, default_backend)
-
-    if reuse and (config.get('speech') or {}).get('check'):
-        from .speech_check import review, write_report, enforce
-        checked = review(scenes, config, out_dir)
-        write_report(out_dir, checked['turns'], complete=True)
-        enforce(checked['turns'], config)
 
     # Forced alignment replaces estimated word times with measured ones. Runs on
     # the reuse path too (config.align may change without the text changing).

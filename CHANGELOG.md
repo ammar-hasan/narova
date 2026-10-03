@@ -13,6 +13,11 @@ versions follow [Semantic Versioning](https://semver.org/).
   only mismatched turns advance their take nonce, with selection history, current
   audio verification on reuse and preservation of prior video on failure.
   Optional local recognition stays separate from synthesis and alignment.
+  Local model byte replacement invalidates positive-budget selection reuse;
+  unavailable recognition keeps the latest complete warn candidate. Compound
+  hundred forms normalize while lexical conjunctions remain differences. Machine
+  failure diagnostics identify affected turns and retain earlier completed
+  delivery-member video receipts.
 
 ## [0.52.0] - 2026-10-03
 

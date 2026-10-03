@@ -7,6 +7,7 @@
 const fs = require('fs');
 const crypto = require('crypto');
 const { stableStringify } = require('./providers');
+const { selectionIdentity } = require('./speech-selection-identity');
 
 function sha256(input) {
   return crypto.createHash('sha256').update(input, 'utf8').digest('hex');
@@ -82,11 +83,7 @@ function audioFingerprint(config) {
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
     ...(config.speech?.deterministicTakes === false ? { deterministicTakes: false } : {}),
-    ...(config.speech?.check && config.speech?.retakes > 0 ? { speechSelection: {
-      retakes: config.speech.retakes,
-      engine: config.speech.engine || config.align?.engine || 'auto',
-      model: config.speech.model || config.align?.model || process.env.NAROVA_WHISPER_MODEL || null,
-    } } : {}),
+    ...(config.speech?.check && config.speech?.retakes > 0 ? { speechSelection: selectionIdentity(config) } : {}),
     pipeline: 5,
   }));
 }
@@ -131,11 +128,7 @@ function narrationContextDigest(config) {
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
     ...(config.speech?.deterministicTakes === false ? { deterministicTakes: false } : {}),
-    ...(config.speech?.check && config.speech?.retakes > 0 ? { speechSelection: {
-      retakes: config.speech.retakes,
-      engine: config.speech.engine || config.align?.engine || 'auto',
-      model: config.speech.model || config.align?.model || process.env.NAROVA_WHISPER_MODEL || null,
-    } } : {}),
+    ...(config.speech?.check && config.speech?.retakes > 0 ? { speechSelection: selectionIdentity(config) } : {}),
     pipeline: 5,
   }));
 }

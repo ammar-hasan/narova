@@ -277,7 +277,10 @@ function unavailableSpeech(config, outDir, reason, log) {
   fs.writeFileSync(file, JSON.stringify({schema:'narova.speech-check/1',complete:true,turns,counts:{match:0,mismatch:0,unavailable:turns.length},uncertainty:'ASR transcript differences are evidence, not proof of a speech error.'},null,2));
   machine.artifact(file, 'speech-check');
   for (const row of turns) log(require('./speech-check').formatTurn(row));
-  if (config.speech.check === 'fail' && turns.length) throw new Error('speech.check=fail: speech evidence unavailable for external narration');
+  if (config.speech.check === 'fail' && turns.length) {
+    require('./speech-check').failureDiagnostics({schema:'narova.speech-check/1',turns});
+    throw new Error('speech.check=fail: speech evidence unavailable for external narration');
+  }
 }
 
 function synth(outDir, opts = {}) {
@@ -314,6 +317,9 @@ function synth(outDir, opts = {}) {
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
   if (fs.existsSync(speechReport) && opts.config?.speech?.check) machine.artifact(speechReport, 'speech-check');
   if (r.status !== 0) {
+    if (opts.config?.speech?.check && fs.existsSync(speechReport)) {
+      try { require('./speech-check').failureDiagnostics(JSON.parse(fs.readFileSync(speechReport, 'utf8'))); } catch {}
+    }
     const reason = fs.existsSync(speechReport) && opts.config?.speech?.check
       ? ' — speech verification failed; inspect speech-check.json' : '';
     throw new Error(`synth (narova_tts) exited ${r.status}${reason}`);
