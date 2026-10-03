@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.52.0"
-checksum: 447845c97c1f6de8be1ecfb7d710614011ad4037138991b0241bd8bbbdbec4e3
+  version: "0.53.0"
+checksum: 1d5962dcb84676d312a2eb1cf435ee4898c43cc3922b82ca0028438cf6cbc792
 ---
 # narova — video from scene scripts
 
@@ -100,7 +100,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.52.0"
+narova_required="@narova/narova@0.53.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
