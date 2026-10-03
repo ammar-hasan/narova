@@ -689,8 +689,8 @@ def _synthesize_with_router(
                 row['sources'] = [{k:r[k] for k in ('file','sha256','cacheKey')} for r in take_records if r['sceneId']==s['id'] and r['ti']==row['turn']]
         print(f"scene {nn} [{s['id']:>9}] {timings[s['id']]['dur']:5.1f}s  "
               f"turns={''.join(t['who'] for t in s['segments'])}", flush=True)
-    # NAR-018-070: advisory take-identity evidence. Never required by any
-    # gate; regenerable by re-synthesis.
+    # NAR-018-070: ordinary take evidence is advisory and regenerable.
+    # Explicit speech checks require current records to bind selected audio.
     (audio_dir / "takes.json").write_text(
         json.dumps(take_records, ensure_ascii=False, indent=1) + "\n")
     if (config.get('speech') or {}).get('check'):
