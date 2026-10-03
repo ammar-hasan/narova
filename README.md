@@ -453,6 +453,7 @@ the config.
 | `xtts`  | higher | slow | `narova-setup --xtts` | ~1.9GB model, 58 speakers |
 | `qwen`  | high | slow | `narova-setup --qwen` | ~1.2GB model, Apache 2.0, 9 speakers |
 | `chatterbox` | voice cloning | slowest | `narova-setup --chatterbox` | `speaker` = absolute path to a 10–20s recording; own venv, ~1GB model |
+| `pockettts` (unreleased) | listening unverified | model/machine dependent | `narova-setup --pockettts` | local CPU, own Python 3.12 runtime, 27 presets, seven languages; cloning needs full-model access |
 
 ```bash
 narova providers add <provider-manifest.json>
@@ -832,3 +833,29 @@ text plus occurrence. `narova voice-cache export/import` carries selected senten
 WAVs for matching keyless builds. See the [audio guide](skills/narova/references/audio.md).
 The [ElevenLabs companion guide](skills/narova-elevenlabs/references/current-offerings.md)
 covers v4/v4 turbo, phrasing context and optional hosted MCP authoring.
+
+
+### Pocket TTS (unreleased)
+
+[Pocket TTS](skills/narova/references/pockettts.md) is a built-in optional local
+CPU backend alongside Piper, XTTS, Qwen and Chatterbox. It offers 27 presets,
+seven languages, reference cloning and saved voice states. Run
+`narova-setup --pockettts`, then select `backend: 'pockettts'` per voice or
+`--backend pockettts`. No separate skill or provider registration is required.
+Setup uses an isolated Python 3.12 environment and leaves other backends intact.
+Use the matching source checkout until a CLI release includes this feature.
+Full-model access is required for cloning; it never silently switches to presets.
+
+`narova voices list --backend pockettts` and `narova pockettts catalog` need no
+Pocket runtime or downloads. `narova pockettts doctor` explicitly checks the
+selected model; `narova pockettts export-voice --speaker alba --output alba.safetensors`
+saves a compatible state. Narova retains timing, captions, processing and rendering.
+Model helpers show progress and default to a 120-second deadline; set
+`NAROVA_POCKETTTS_TIMEOUT` for slower acquisition. Failed exports preserve the
+existing state file, and catalog metadata identifies preview models.
+
+Pocket and external voices can declare
+`providerFiles: { voiceState: 'assets/voice.safetensors' }`. Core resolves and
+hashes files and inspects the Pocket runtime profile before reuse; manifests and
+sentence identities carry that evidence. See the
+[Pocket configuration guide](skills/narova/references/pockettts.md).

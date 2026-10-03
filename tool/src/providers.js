@@ -233,7 +233,7 @@ function addProvider(filePath, opts = {}) {
 }
 
 function getProvider(name, protocol = null) {
-  if (!isProviderName(name)) return null;
+  if (!isProviderName(name) || isBuiltinBackend(name)) return null;
   const file = providerPath(name);
   if (!fs.existsSync(file)) return null;
   let raw;
@@ -263,6 +263,13 @@ const providerKind = manifest => manifest ? (PROVIDER_KINDS[manifest.protocol] |
 function removeProvider(name) {
   if (!isProviderName(name)) {
     throw new Error(`provider name must match ${NAME_RE}`);
+  }
+  // A name may become built-in after an older adapter was registered. Such
+  // stale entries cannot route workers, but explicit cleanup must still work
+  // without parsing/launching an obsolete (possibly unavailable) manifest.
+  if (isBuiltinBackend(name) && fs.existsSync(providerPath(name))) {
+    fs.unlinkSync(providerPath(name));
+    return { name };
   }
   const manifest = getProvider(name);
   if (!manifest) throw new Error(`provider ${JSON.stringify(name)} is not registered`);

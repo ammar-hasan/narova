@@ -1,0 +1,6 @@
+# CPU profile verified with Python 3.12. Dependencies stay outside Narova core.
+pocket-tts[audio]==3.3.0
+torch==2.10.0
+numpy==2.5.3
+soundfile==0.14.0
+huggingface-hub==1.33.0

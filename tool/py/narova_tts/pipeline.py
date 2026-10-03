@@ -322,12 +322,15 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
     # External providers are identified by their registered protocol and
     # implementation version. providerOptions is opaque to Narova, but sorted
     # JSON makes semantically identical objects hash identically.
-    if kind is not None and kind not in BUILTIN_BACKENDS:
+    if kind == "pockettts" or (kind is not None and kind not in BUILTIN_BACKENDS):
         parts.append(f"protocol={v.get('providerProtocol', '')}")
         parts.append(f"providerVersion={v.get('providerVersion', '')}")
         parts.append("providerOptions=" + json.dumps(
             v.get("providerOptions", {}), sort_keys=True,
             separators=(",", ":"), ensure_ascii=False))
+        if v.get("providerFileInputs"):
+            parts.append("providerFileInputs=" + json.dumps(
+                v["providerFileInputs"], sort_keys=True, separators=(",", ":")))
     if v.get("gainDb") is not None:
         parts.append(f"gainDb={v['gainDb']}")
     return "|".join(parts)

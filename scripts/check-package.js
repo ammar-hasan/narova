@@ -30,7 +30,7 @@ if (forbidden.length) {
 if (report.unpackedSize > 10 * 1024 * 1024) {
   throw new Error(`npm package is unexpectedly large: ${report.unpackedSize} unpacked bytes`);
 }
-for (const required of ['LICENSE', 'README.md', 'AGENT_PROTOCOL.md', 'bin/narova.js', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py']) {
+for (const required of ['LICENSE', 'README.md', 'AGENT_PROTOCOL.md', 'bin/narova.js', 'setup.sh', 'uninstall.sh', 'src/pipeline.js', 'py/narova_tts/pipeline.py', 'py/narova_tts/pockettts_worker.py', 'py/narova_tts/pockettts_run.py', 'py/narova_tts/pockettts_catalog.json', 'py/requirements-pockettts.txt']) {
   if (!names.includes(required)) throw new Error(`npm package is missing required standalone tool file: ${required}`);
 }
 const rootProtocol = fs.readFileSync(path.join(root, 'AGENT_PROTOCOL.md'), 'utf8');

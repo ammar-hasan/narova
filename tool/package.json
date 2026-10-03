@@ -1,7 +1,7 @@
 {
   "name": "@narova/narova",
   "version": "0.51.0",
-  "description": "Open video production system for humans and agents — local-first CLI for directable, reproducible video: scene scripts, deterministic rendering, local speech, word-synced captions, product walkthroughs, AI clips, revisions, and provenance.",
+  "description": "Open video production system for humans and agents \u2014 local-first CLI for directable, reproducible video: scene scripts, deterministic rendering, local speech, word-synced captions, product walkthroughs, AI clips, revisions, and provenance.",
   "keywords": [
     "video",
     "video-production",
@@ -56,7 +56,8 @@
     "uninstall.sh",
     "py/*.py",
     "py/*.txt",
-    "py/narova_tts/*.py"
+    "py/narova_tts/*.py",
+    "py/narova_tts/*.json"
   ],
   "engines": {
     "node": ">=18"

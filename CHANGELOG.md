@@ -6,6 +6,24 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- Built-in optional `pockettts` backend for Pocket TTS 3.3.0 local CPU speech, installed with `narova-setup --pockettts` without registration:
+  27 presets, seven released languages, explicit full/preset model selection,
+  reference cloning, provenance-bound saved states, generation controls and
+  opt-in quantization. Raw audio stays under Narova's timing/processing ownership.
+  Bundled catalog/model-doctor/state-export helpers and current installed runtime
+  profiles protect reuse without an external registry.
+- Pocket and external voice `providerFiles`: current file hashes are resolved before
+  cache reuse, preserved in manifests, checked by the worker and included in
+  whole-build/shared/sentence identities. Archives reject out-of-project inputs.
+
+### Fixed
+- Pocket local files require core-owned `providerFiles` bindings before reuse;
+  setup verifies the effective isolated environment before installing packages.
+- Pocket `maxTokens` is accepted as a validated numeric control, catalog models
+  identify previews, and model doctor/export have configurable deadlines and
+  progress. Failed or timed-out exports preserve existing state files.
+
 ## [0.51.0] - 2026-10-02
 
 ### Added

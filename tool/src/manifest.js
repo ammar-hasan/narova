@@ -401,6 +401,8 @@ function compileVoices(voices) {
       ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
       ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
+      ...(v.providerFiles ? { providerFiles: v.providerFiles } : {}),
+      ...(v.providerFileInputs ? { providerFileInputs: v.providerFileInputs } : {}),
       ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     };
   }

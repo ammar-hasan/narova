@@ -50,7 +50,13 @@ try {
   if (!run(bin('narova'), ['--help']).stdout.includes('narova <command>')) {
     throw new Error('packed CLI help is missing its command heading');
   }
-  run(bin('narova-setup'), ['--help']);
+  if (!run(bin('narova-setup'), ['--help']).stdout.includes('--pockettts')) throw new Error('packed Pocket setup option missing');
+  const pocketCatalog = JSON.parse(run(bin('narova'), ['pockettts', 'catalog']).stdout);
+  if (pocketCatalog.voices.length !== 27 || Object.keys(pocketCatalog.models).length !== 18) throw new Error('packed Pocket catalog incomplete');
+  if (Object.keys(pocketCatalog.languages).length !== 7 || !Object.values(pocketCatalog.models).some(model => model.preview)
+      || Object.values(pocketCatalog.models).some(model => model.preview !== (model.layers === 24))) throw new Error('packed Pocket discovery lost language routes or preview labels');
+  const pocketVoices = run(bin('narova'), ['voices', 'list', '--backend', 'pockettts'], { env: { NAROVA_POCKETTTS_VENV: path.join(scratch, 'absent-pocket') } }).stdout;
+  if (pocketVoices.trim().split('\n').length !== 27 || !pocketVoices.includes('alba')) throw new Error('packed Pocket presets require a runtime');
   run(bin('narova-uninstall'), ['--help']);
 
   const project = path.join(scratch, 'project');

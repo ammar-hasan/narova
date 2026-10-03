@@ -172,6 +172,25 @@ class TestExternalProviderResolutionAndCache(unittest.TestCase):
             sentence_cache_key("fake", voice_cache_speaker(changed, "a", "fake"), "Hello.", 1.0),
         )
 
+    def test_bound_files_reach_worker_and_invalidate_sentence_cache(self):
+        with tempfile.TemporaryDirectory() as d:
+            capture = Path(d) / 'request.json'
+            binding = {'path': str(Path(d) / 'state'), 'sha256': 'a' * 64}
+            voice = {'backend': 'fake', 'speaker': 'voice-a',
+                     'providerOptions': {'capture': str(capture)},
+                     'providerFileInputs': {'voiceState': binding}}
+            router = build_backends({'a': voice}, 'piper', provider_loader=lambda _: provider())
+            try:
+                router['a'].synthesize('a', 'Hello.', Path(d) / 'out.wav')
+                request = json.loads(capture.read_text())
+                self.assertEqual(request['options']['voiceState'], binding)
+                identity = voice_cache_speaker(voice, 'a', 'fake')
+                changed = {**voice, 'providerFileInputs': {'voiceState': {**binding, 'sha256': 'b' * 64}}}
+                self.assertNotEqual(sentence_cache_key('fake', identity, 'Hello.', 1),
+                    sentence_cache_key('fake', voice_cache_speaker(changed, 'a', 'fake'), 'Hello.', 1))
+            finally:
+                router['a'].close()
+
     def test_secret_values_never_enter_cache_identity(self):
         voice = {
             "backend": "fake",

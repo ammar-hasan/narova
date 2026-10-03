@@ -183,6 +183,7 @@ function operationName(cmd, positionals, flags = {}) {
     branch: ['save', 'compare', 'list', 'set', 'show'],
     history: ['list', 'annotate', 'compare'],
     providers: ['add', 'list', 'remove', 'doctor'],
+    pockettts: ['catalog', 'doctor', 'export-voice'],
     'voice-cache': ['export', 'import'],
     renderers: ['list', 'doctor'],
     voices: ['list', 'get'],
@@ -207,7 +208,7 @@ const PUBLIC_COMMANDS = new Set([
   'walkthrough', 'plan', 'provenance', 'diff', 'history', 'release', 'branch',
   'render', 'synth', 'compose', 'captions', 'review', 'shots', 'build', 'preview',
   'renderers', 'voices', 'providers', 'voice', 'doctor', 'karaoke', 'retime',
-  'generate', 'voice-cache',
+  'generate', 'voice-cache', 'pockettts',
 ]);
 
 function preDispatchOperation(argv) {
@@ -230,9 +231,9 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity']);
+const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows', 'speaker', 'reference']);
 
 function validateInvocationFlags(flags, cmd) {
   if (flags.continuity != null && cmd !== 'generate') invocationError('--continuity is only valid with narova generate');
@@ -661,6 +662,10 @@ Commands:
                               generative intent (prompt/model/params) survives as editable source.
   demo                 first video in one command: readiness + a built-in demo
                        project through the full pipeline -> narova-demo/out/video.mp4
+  pockettts catalog    list released Pocket models, voices and languages
+  pockettts doctor [--speaker <id>] [--model <id>]  explicitly check model/voice readiness
+  pockettts export-voice --output <file> [--speaker <id>] [--reference <file>]
+                       export a compatible saved Pocket voice state
   doctor               check ffmpeg, ffprobe, python venv, agent-browser, npx hyperframes
 
 Commands find the project from the current folder OR any parent folder, so
@@ -2568,6 +2573,32 @@ async function main() {
       return;
     }
 
+    case 'pockettts': {
+      const sub = positionals[1] || 'catalog';
+      if (!['catalog', 'doctor', 'export-voice'].includes(sub) || positionals.length > 2) usageError('usage: narova pockettts catalog|doctor|export-voice [--speaker <id>] [--model <id>] [--reference <file>] [--output <file>] [--quantize] [--voice-cloning] [--truncate-reference]');
+      const pocket = require('../src/pockettts');
+      if (sub === 'catalog') {
+        console.log(JSON.stringify(pocket.catalog, null, 2));
+        mSetData(pocket.catalog);
+        return;
+      }
+      if (sub === 'export-voice' && !flags.output) usageError('Pocket export-voice requires --output <file>');
+      if (!fs.existsSync(pocket.pocketPython())) throw new Error('Pocket runtime not installed — run narova-setup --pockettts (Python 3.12)');
+      const args = [];
+      for (const name of ['speaker', 'model', 'reference']) {
+        if (flags[name] != null) args.push(`--${name}`, name === 'reference' ? path.resolve(String(flags[name])) : String(flags[name]));
+      }
+      for (const name of ['quantize', 'voice-cloning', 'truncate-reference']) if (flags[name]) args.push(`--${name}`);
+      const helperOptions = { diagnostic: text => process.stderr.write(machine.isActive() ? machine.redact(text) : text) };
+      const result = sub === 'export-voice'
+        ? await pocket.exportPocketVoice(String(flags.output), args, helperOptions)
+        : await pocket.runPocketHelper(sub, args, helperOptions);
+      console.log(JSON.stringify(result, null, 2));
+      mSetData(result);
+      if (sub === 'export-voice') mArtifact(path.resolve(String(flags.output)), 'pockettts-voice-state');
+      return;
+    }
+
     case 'voices': {
       const sub = positionals[1] || 'list';
       if (!['list', 'get'].includes(sub)) usageError('usage: narova voices list|get [voice]');
@@ -2575,6 +2606,12 @@ async function main() {
       if (machine.isActive() && flags.backend) {
         const external = getSpeechProvider(String(flags.backend));
         if (external) registerProviderSecrets(external);
+      }
+      if (sub === 'list' && flags.backend === 'pockettts') {
+        const voices = require('../src/pockettts').catalog.voices;
+        for (const voice of voices) console.log(voice);
+        mSetData({ subcommand: sub, backend: 'pockettts', voices });
+        return;
       }
       const py = findPython(flags.project || '.');
       const args = ['-m', 'narova_tts', 'voices', sub, ...positionals.slice(2)];

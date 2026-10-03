@@ -773,6 +773,8 @@ function configFromManifest(manifest, resolvedConfig) {
       ...(v.providerProtocol ? { providerProtocol: v.providerProtocol } : {}),
       ...(v.providerVersion ? { providerVersion: v.providerVersion } : {}),
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
+      ...(v.providerFiles ? { providerFiles: v.providerFiles } : {}),
+      ...(v.providerFileInputs ? { providerFileInputs: v.providerFileInputs } : {}),
       ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     }])),
     theme: { ...(m.theme || {}), accent: m.theme?.accent, bg: m.theme?.bg },
