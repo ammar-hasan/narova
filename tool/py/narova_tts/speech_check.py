@@ -50,7 +50,11 @@ def _cardinal_and(raw, boundaries, i, last, scale):
 
 def _tokens(text):
     text = unicodedata.normalize("NFKC", text)
-    matches = list(re.finditer(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|[^\W\d_]+(?:['’][^\W\d_]+)?", text, re.UNICODE))
+    # Python's word class omits combining marks, including meaningful vowels
+    # and tones. Retain the marks present in this text inside lexical tokens.
+    marks = ''.join(sorted({c for c in text if unicodedata.category(c).startswith('M')}))
+    word = r"[^\W\d_]" if not marks else r"(?:[^\W\d_]|[" + re.escape(marks) + "])"
+    matches = list(re.finditer(r"\d{1,3}(?:,\d{3})+(?:\.\d+)?|\d+(?:\.\d+)?|" + word + r"+(?:['’]" + word + r"+)?", text, re.UNICODE))
     raw = [m.group() for m in matches]
     boundaries = [bool(i and any(unicodedata.category(c).startswith('P') and unicodedata.category(c) != 'Pd' and c not in "'’_" for c in text[matches[i-1].end():m.start()])) for i,m in enumerate(matches)]
     result, i = [], 0

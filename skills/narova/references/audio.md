@@ -307,7 +307,9 @@ same path (including the local snapshot behind a cached model name) invalidates
 whole-build selection reuse so the authored search can run
 again. Unaffected sentence cache entries remain reusable. Comparison recognizes
 compound hundred forms (for example, twelve hundred equals 1200) while retaining
-lexical conjunctions such as “a hundred and a few more.”
+lexical conjunctions such as “a hundred and a few more.” Meaningful Unicode
+vowels and tones remain lexical differences. Broken optional tokenizer links
+still retain readable model hashes and bind any tokenizer fallback.
 
 ## Chatterbox Multilingual v3
 

@@ -17,6 +17,10 @@ function fileDigest(file) {
   } finally { fs.closeSync(fd); }
 }
 
+function isFile(file) {
+  try { return fs.statSync(file).isFile(); } catch { return false; }
+}
+
 function resourceIdentity(file) {
   try {
     const stat = fs.statSync(file);
@@ -32,9 +36,14 @@ function resourceIdentity(file) {
       try {
         for (const name of fs.readdirSync(dir).sort()) {
           const absolute = path.join(dir, name), relative = prefix + name;
-          const item = fs.statSync(absolute);
-          if (item.isDirectory()) scan(absolute, relative + '/');
-          else if (item.isFile()) entries.push([relative, fileDigest(absolute)]);
+          try {
+            const item = fs.statSync(absolute);
+            if (item.isDirectory()) scan(absolute, relative + '/');
+            else if (item.isFile()) entries.push([relative, fileDigest(absolute)]);
+          } catch (error) {
+            // Optional broken snapshot links do not hide readable weights.
+            entries.push([relative, {unavailable: error.code || error.message}]);
+          }
         }
       } finally { ancestors.delete(real); }
     }
@@ -87,7 +96,7 @@ function cachedSnapshot(model, cacheRoot, tokenizerOnly = false) {
     const revision = fs.readFileSync(path.join(dir, 'refs', 'main'), 'utf8').trim();
     if (!/^[a-f0-9]{40,64}$/i.test(revision)) return { unavailable: 'invalid local model revision' };
     const snapshot = path.join(dir, 'snapshots', revision);
-    return { repo, revision, tokenizerBound: fs.existsSync(path.join(snapshot, 'tokenizer.json')),
+    return { repo, revision, tokenizerBound: isFile(path.join(snapshot, 'tokenizer.json')),
       ...resourceIdentity(tokenizerOnly ? path.join(snapshot, 'tokenizer.json') : snapshot) };
   } catch (error) { return { repo, unavailable: error.code || error.message }; }
 }
@@ -104,7 +113,7 @@ function selectionIdentity(config) {
   }
   if (engine === 'auto' || engine === 'faster-whisper') {
     const local = model && path.resolve(__dirname, '..', model);
-    let fallbackTokenizer = local && fs.existsSync(local) && !fs.existsSync(path.join(local, 'tokenizer.json'));
+    let fallbackTokenizer = local && fs.existsSync(local) && !isFile(path.join(local, 'tokenizer.json'));
     if (!local || !fs.existsSync(local)) {
       // Default choice depends on turn language; bind both possible defaults
       // without importing the recognizer or changing sentence-cache identity.

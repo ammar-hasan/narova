@@ -56,6 +56,16 @@ class Comparison(unittest.TestCase):
             with self.subTest(expected=expected):
                 self.assertEqual(speech.compare(expected, observed)['status'], 'match')
 
+    def test_multilingual_vowels_and_tones_remain_lexical_differences(self):
+        for expected, observed in [('दिन','दान'),('कला','काली'),('দিন','দান'),('ก่า','ก้า'),('عَلَم','عِلْم')]:
+            with self.subTest(expected=expected):
+                result=speech.compare(expected,observed)
+                self.assertEqual(result['status'],'mismatch')
+                self.assertEqual(result['differences'][0]['kind'],'replaced')
+                self.assertEqual(speech.compare(expected,expected)['status'],'match')
+        self.assertEqual(speech.compare('café','cafe\u0301')['status'],'match')
+        self.assertEqual(speech.compare('दि न','दिन')['status'],'match')
+
     def test_unavailable_is_not_match_or_empty_success(self):
         with tempfile.TemporaryDirectory() as d:
             wav=Path(d)/'a.wav';wav.write_bytes(b'audio')

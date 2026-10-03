@@ -221,5 +221,11 @@ test('relative recognizer stores and fallback tokenizer contents share the actua
  }
  fs.writeFileSync(path.join(local,'tokenizer.json'),'locally bound tokenizer');
  const bound=audioFingerprint(config);fs.appendFileSync(path.join(dir,'hub/models--openai--whisper-tiny.en/snapshots','c'.repeat(40),'tokenizer.json'),'unused change');assert.equal(audioFingerprint(config),bound,'unused fallback must not invalidate a locally bound tokenizer');
+ fs.unlinkSync(path.join(local,'tokenizer.json'));fs.symlinkSync(path.join(dir,'missing-tokenizer'),path.join(local,'tokenizer.json'));
+ const broken=audioFingerprint(config);fs.appendFileSync(path.join(local,'model.bin'),'changed readable weights');assert.notEqual(audioFingerprint(config),broken,'broken optional tokenizer must not discard readable model identity');
+ const fallbackFile=path.join(dir,'hub/models--openai--whisper-tiny.en/snapshots','c'.repeat(40),'tokenizer.json');
+ const previous=audioFingerprint(config);fs.appendFileSync(fallbackFile,'changed fallback');assert.notEqual(audioFingerprint(config),previous,'dangling tokenizer uses the bound fallback');
+ fs.unlinkSync(path.join(local,'tokenizer.json'));fs.mkdirSync(path.join(local,'tokenizer.json'));
+ const directory=audioFingerprint(config);fs.appendFileSync(fallbackFile,'other fallback');assert.notEqual(audioFingerprint(config),directory,'a tokenizer directory is not a bound tokenizer file');
  config.speech.retakes=0;const zero=audioFingerprint(config);fs.appendFileSync(path.join(local,'model.bin'),'other weights');assert.equal(audioFingerprint(config),zero);
 });
