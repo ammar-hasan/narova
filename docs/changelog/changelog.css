@@ -40,13 +40,13 @@
   border-right: 1px solid var(--line);
   padding-right: 24px;
 }
-.rel-version {
+.rel-version, .rel-label {
   font-family: var(--mono);
   font-size: 19px;
   font-weight: 700;
   color: var(--lime);
 }
-.rel-version.unreleased {
+.rel-version.unreleased, .rel-label {
   background: linear-gradient(92deg, var(--lime), var(--cyan), var(--pink));
   -webkit-background-clip: text; background-clip: text;
   -webkit-text-fill-color: transparent; color: transparent;

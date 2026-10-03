@@ -271,7 +271,17 @@ function resolveReuse(config, outDir, requested, log = console.log) {
   return true;
 }
 
+function unavailableSpeech(config, outDir, reason, log) {
+  const turns = config.scenes.flatMap((s,i) => (s.vo || []).map((t,turn) => ({scene:i+1,sceneId:s.id,turn,who:t.who,expectedText:t.text,status:'unavailable',transcript:null,differences:[],reason})));
+  const file = path.join(outDir, 'speech-check.json');
+  fs.writeFileSync(file, JSON.stringify({schema:'narova.speech-check/1',complete:true,turns,counts:{match:0,mismatch:0,unavailable:turns.length},uncertainty:'ASR transcript differences are evidence, not proof of a speech error.'},null,2));
+  machine.artifact(file, 'speech-check');
+  for (const row of turns) log(require('./speech-check').formatTurn(row));
+  if (config.speech.check === 'fail' && turns.length) throw new Error('speech.check=fail: speech evidence unavailable for external narration');
+}
+
 function synth(outDir, opts = {}) {
+  if (opts.config?.narrationSource && opts.config?.speech?.check === 'fail') unavailableSpeech(opts.config, outDir, 'speech check requires synthesized sentence takes; external narration is not retaken', opts.log || console.log);
   if (!opts.python) ensureVenv(opts.projectDir, opts.log);
   const py = opts.python || findPython(opts.projectDir);
   const args = ['-m', 'narova_tts',
@@ -292,6 +302,8 @@ function synth(outDir, opts = {}) {
       try { fs.unlinkSync(path.join(outDir, name)); } catch {}
     }
   }
+  const speechReport = path.join(outDir, 'speech-check.json');
+  if (opts.config?.speech?.check) fs.rmSync(speechReport, { force: true });
   const r = spawnSync(py, args, {
     ...(machineActive()
       ? { encoding: 'utf8', stdio: MACHINE_CHILD_STDIO, maxBuffer: 64 * 1024 * 1024 }
@@ -300,7 +312,12 @@ function synth(outDir, opts = {}) {
   });
   replayMachineChild(r);
   if (r.error) throw new Error(`synth failed to launch (${py}): ${r.error.message}`);
-  if (r.status !== 0) throw new Error(`synth (narova_tts) exited ${r.status}`);
+  if (fs.existsSync(speechReport) && opts.config?.speech?.check) machine.artifact(speechReport, 'speech-check');
+  if (r.status !== 0) {
+    const reason = fs.existsSync(speechReport) && opts.config?.speech?.check
+      ? ' — speech verification failed; inspect speech-check.json' : '';
+    throw new Error(`synth (narova_tts) exited ${r.status}${reason}`);
+  }
   const timings = path.join(outDir, 'timings.json');
   if (!fs.existsSync(timings)) throw new Error(`synth produced no timings.json in ${outDir}`);
   const finalConfig = opts.config || JSON.parse(fs.readFileSync(path.join(outDir, 'config.resolved.json'), 'utf8'));
@@ -343,6 +360,7 @@ function build(config, opts = {}) {
   };
 
   if (hasExternalNarration) {
+    if (config.speech?.check) unavailableSpeech(config, outDir, 'speech check requires synthesized sentence takes; external narration is not retaken', log);
     log('[1/3] synth (skip — external narration)');
     stageInputs(writeStageInputs(config, outDir));
     // Copy external narration into the output.
@@ -806,6 +824,7 @@ function configFromManifest(manifest, resolvedConfig) {
     markers: m.markers || original.markers || {},
     imports: resolvedConfig ? (resolvedConfig.imports || {}) : (m.importSources || {}),
     align: m.align || false,
+    speech: { ...(m.speech || original.speech || {}) },
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
     sfx: (m.audio?.sfx || []).map(s => ({ ...s })),
     mix: m.audio?.mix || null,

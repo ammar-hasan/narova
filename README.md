@@ -835,6 +835,16 @@ The [ElevenLabs companion guide](skills/narova-elevenlabs/references/current-off
 covers v4/v4 turbo, phrasing context and optional hosted MCP authoring.
 
 
+### Script-to-speech checks
+
+`narova review --speech` reports per-turn transcripts and dropped, added or
+replaced words from existing synthesized takes. Optional root
+`speech: { check: 'warn', retakes: 1 }` checks builds and re-synthesizes only
+mismatched turns with the next take nonce. Use `check: 'fail'` to stop before
+rendering when speech differs or recognition is unavailable. Review remains
+advisory and read-only; optional local ASR tools are required. Transcripts can
+mishear, so audition flagged turns. See the [speech check guide](skills/narova/references/audio.md#check-synthesized-speech-against-the-script).
+
 ### Pocket TTS
 
 [Pocket TTS](skills/narova/references/pockettts.md) is a built-in optional local

@@ -32,6 +32,7 @@ function audioFingerprint(config) {
     fp.gainDb = v.gainDb != null ? v.gainDb : 0;
     fp.lang = v.lang || '';
     fp.instruct = v.instruct || '';
+    if (v.vary) fp.vary = true;
     fp.exaggeration = v.exaggeration != null ? v.exaggeration : 1.0;
     fp.cfg_weight = v.cfg_weight != null ? v.cfg_weight : 0.7;
     fp.providerProtocol = v.providerProtocol || '';
@@ -51,6 +52,7 @@ function audioFingerprint(config) {
         ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
         lang: turn.lang || '',
         pauseAfter: turn.pauseAfter || 0,
+        ...(turn.take != null ? { take: turn.take } : {}),
       });
     }
   }
@@ -79,6 +81,12 @@ function audioFingerprint(config) {
     lead: timing.lead != null ? timing.lead : 0.16,
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
+    ...(config.speech?.deterministicTakes === false ? { deterministicTakes: false } : {}),
+    ...(config.speech?.check && config.speech?.retakes > 0 ? { speechSelection: {
+      retakes: config.speech.retakes,
+      engine: config.speech.engine || config.align?.engine || 'auto',
+      model: config.speech.model || config.align?.model || process.env.NAROVA_WHISPER_MODEL || null,
+    } } : {}),
     pipeline: 5,
   }));
 }
@@ -104,6 +112,7 @@ function narrationContextDigest(config) {
     fp.gainDb = v.gainDb != null ? v.gainDb : 0;
     fp.lang = v.lang || '';
     fp.instruct = v.instruct || '';
+    if (v.vary) fp.vary = true;
     fp.exaggeration = v.exaggeration != null ? v.exaggeration : 1.0;
     fp.cfg_weight = v.cfg_weight != null ? v.cfg_weight : 0.7;
     fp.providerProtocol = v.providerProtocol || '';
@@ -121,6 +130,12 @@ function narrationContextDigest(config) {
     lead: timing.lead != null ? timing.lead : 0.16,
     tail: timing.tail != null ? timing.tail : 0.58,
     backend: Object.values(voices)[0]?.backend || 'piper',
+    ...(config.speech?.deterministicTakes === false ? { deterministicTakes: false } : {}),
+    ...(config.speech?.check && config.speech?.retakes > 0 ? { speechSelection: {
+      retakes: config.speech.retakes,
+      engine: config.speech.engine || config.align?.engine || 'auto',
+      model: config.speech.model || config.align?.model || process.env.NAROVA_WHISPER_MODEL || null,
+    } } : {}),
     pipeline: 5,
   }));
 }

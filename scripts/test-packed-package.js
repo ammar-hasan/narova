@@ -66,6 +66,15 @@ try {
     throw new Error(`packed CLI scaffold did not check cleanly:\n${checked.stdout}`);
   }
 
+  const speech = JSON.parse(run(bin('narova'), ['review', '--speech', '--project', project, '--json']).stdout);
+  if (!speech.success || speech.operation !== 'review' || speech.data.mode !== 'speech'
+      || !speech.data.counts.unavailable || speech.artifacts.length) {
+    throw new Error('packed speech review did not expose advisory unavailable evidence without synthesis');
+  }
+  for (const file of ['src/speech-check.js', 'py/narova_tts/speech_check.py']) {
+    if (!(report.files || []).some(entry => entry.path === file)) throw new Error(`packed speech review is missing ${file}`);
+  }
+
   // Simulate a compatible install where the PDF optional is unavailable. PDF
   // intake must fail locally and explicitly, without runtime acquisition or
   // partial evidence. (Some npm versions retain nested optionals even with

@@ -44,6 +44,26 @@ Consumers must ignore unknown fields. Within schema major version 1, fields may
 only be added: existing fields and meanings will not be removed, retyped, or
 repurposed. A breaking change uses a new schema identity and is documented here.
 
+## Speech evidence and authored checks
+
+`review --speech --json` returns `data.mode: "speech"`,
+`data.schema: "narova.speech-check/1"`, ordered `turns`, and `counts` for
+`match`, `mismatch` and `unavailable`. Each turn identifies scene, zero-based
+turn, voice and expected text; recognized turns include transcript, comparison
+profile, language, engine/model, audio digests, selected take and ordered
+`differences: [{ kind, expected: string[], observed: string[] }]`.
+Missing or stale audio and recognizer failures include an unavailable reason.
+Recognition is uncertain evidence. This advisory read-only operation exits 0
+even for non-matches and produces no artifacts; conflicting review modes exit 2.
+
+Authored `speech.check` applies to synthesis/build, including reuse. A `fail`
+policy stops on mismatch or unavailable evidence with exit 1 (operation failure),
+before composition/render. A produced `speech-check.json` uses artifact role
+`speech-check`; an unsuccessful gate does not claim a finished-video artifact.
+The previous finished video remains available. Explicit bounded `speech.retakes`
+records attempted/selected nonce and source hashes without changing authoring
+text or take values. Review does not apply this policy or generate retakes.
+
 ## Exit status
 
 | Code | Class | Meaning |

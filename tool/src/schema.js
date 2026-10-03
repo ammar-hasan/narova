@@ -1317,13 +1317,20 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     });
   }
 
-  // Speech: determinism surface for narration takes (NAR-018-071).
+  // Speech verification and explicit bounded retake delegation.
   if (raw.speech != null) {
-    if (typeof raw.speech !== 'object' || Array.isArray(raw.speech)) {
-      errs.push('config.speech: expected an object like { deterministicTakes }');
-    } else if (raw.speech.deterministicTakes != null
-        && typeof raw.speech.deterministicTakes !== 'boolean') {
-      errs.push('config.speech.deterministicTakes: must be a boolean');
+    const speech = raw.speech;
+    if (typeof speech !== 'object' || Array.isArray(speech)) errs.push('config.speech: expected an object');
+    else {
+      if (speech.deterministicTakes !== undefined && typeof speech.deterministicTakes !== 'boolean') errs.push('config.speech.deterministicTakes: must be a boolean');
+      if (speech.check !== undefined && !['warn', 'fail'].includes(speech.check)) errs.push('config.speech.check: expected warn|fail');
+      if (speech.retakes !== undefined && (!Number.isInteger(speech.retakes) || speech.retakes < 0 || speech.retakes > 10)) errs.push('config.speech.retakes: expected an integer 0..10');
+      if (speech.retakes > 0) {
+        if (!['warn', 'fail'].includes(speech.check)) errs.push('config.speech.retakes: nonzero retakes require speech.check');
+        if (raw.narration || scenes.some(s => s.clipAudio?.authority === 'native')) errs.push('config.speech.retakes: requires synthesized narration; native/external audio cannot be retaken');
+      }
+      if (speech.engine !== undefined && !ALIGN_ENGINES.has(speech.engine)) errs.push('config.speech.engine: expected auto|faster-whisper|whisper-cpp');
+      if (speech.model !== undefined && (typeof speech.model !== 'string' || !speech.model.trim())) errs.push('config.speech.model: expected a non-empty model identifier or local path');
     }
   }
 
@@ -1450,6 +1457,8 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     }
   }
 
+  if (raw.speech?.retakes > 0 && scenes.some(s => (s.vo || []).some(t => t.take != null && (!Number.isSafeInteger(t.take) || t.take > Number.MAX_SAFE_INTEGER - raw.speech.retakes)))) errs.push('config.speech.retakes: take nonce must allow safe integer increments');
+
   const walkthroughs = resolveWalkthroughs(raw.walkthroughs, scenes, baseDir, ID_RE, errs);
 
   // Named time markers: author-defined anchors on the global project timeline,
@@ -1503,6 +1512,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
 
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
+  if (speech.model && (speech.model.startsWith('.') || path.isAbsolute(speech.model) || fs.existsSync(path.resolve(baseDir, speech.model)))) speech.model = path.resolve(baseDir, speech.model);
   const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, mix, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
