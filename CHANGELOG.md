@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.52.0] - 2026-10-03
+
 ### Added
 - Built-in optional `pockettts` backend for Pocket TTS 3.3.0 local CPU speech, installed with `narova-setup --pockettts` without registration:
   27 presets, seven released languages, explicit full/preset model selection,

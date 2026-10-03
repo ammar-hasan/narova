@@ -53,7 +53,7 @@ access and uses the existing FFmpeg requirement.
 
 - `$NAROVA_POCKETTTS_VENV` — isolated Pocket runtime (default
   `~/.narova/venv-pockettts`), installed explicitly with `narova-setup --pockettts`
-  using Python 3.12; no core dependency change (unreleased).
+  using Python 3.12; no core dependency change.
 - `$NAROVA_POCKETTTS_OFFLINE=1` — require already acquired Pocket resources.
   Ordinary doctor probes packages only; `narova pockettts doctor` loads models.
 - `$NAROVA_POCKETTTS_TIMEOUT` — model doctor/export deadline in positive finite
@@ -68,7 +68,7 @@ access and uses the existing FFmpeg requirement.
 - xtts: ~1.9GB model (`narova-setup --xtts` first; `COQUI_TOS_AGREED=1` if asked).
 - qwen: ~1.2GB model (`narova-setup --qwen` first).
 - chatterbox: separate venv + ~1GB model (`narova-setup --chatterbox` first).
-- pockettts (unreleased): selected models/preset conditioning on explicit model doctor
+- pockettts: selected models/preset conditioning on explicit model doctor
   or first synth; setup installs packages only. Full cloning weights may need gated
   access; see [Pocket guide](pockettts.md).
 - HyperFrames CLI: fetched by npx on the first doctor / build / preview.

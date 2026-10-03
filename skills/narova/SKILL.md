@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.51.0"
-checksum: aebcd3944be95fa00a8a11e179827518ebf75c5636586a23db4f0bf9fc0244f7
+  version: "0.52.0"
+checksum: 447845c97c1f6de8be1ecfb7d710614011ad4037138991b0241bd8bbbdbec4e3
 ---
 # narova — video from scene scripts
 
@@ -100,7 +100,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.51.0"
+narova_required="@narova/narova@0.52.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -174,7 +174,7 @@ Gemini speech and Veo video generation, and `narova-xiaomi` provides Xiaomi MiMo
 speech (preset voices, voice design, and voice cloning). See
 `references/cli.md` §providers.
 
-Pocket TTS is a built-in optional local backend (unreleased), alongside Qwen,
+Pocket TTS is a built-in optional local backend, alongside Qwen,
 XTTS and Chatterbox. Install its isolated runtime with `narova-setup --pockettts`
 (Python 3.12), then select `backend: 'pockettts'`; no companion registration.
 `narova voices list --backend pockettts` lists presets without downloads;

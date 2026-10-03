@@ -367,7 +367,7 @@ match. Matching ignores case and surrounding Unicode punctuation; missing or
 ambiguous tokens fail rather than guess. Numeric word indices remain supported.
 
 
-## Optional Pocket TTS and provider files (unreleased)
+## Optional Pocket TTS and provider files
 
 The built-in `pockettts` backend uses an optional isolated CPU runtime. Run
 `narova-setup --pockettts`; no separate skill or registration is needed. It exposes
@@ -383,5 +383,4 @@ safe option identifiers and cannot overlap options or reserved `seed`.
 Resolved `providerFileInputs` evidence is recomputed from current bytes before
 reuse, preserved in manifests, and passed as `{ path, sha256 }` option values.
 Workers verify it before use. Project archives reject dependencies outside the
-project and retain existing archive size limits. The current released CLI 0.51.0
-predates these bindings; use the matching source checkout until release.
+project and retain existing archive size limits. Pocket and provider-file bindings are included in Narova 0.52.0 and later.

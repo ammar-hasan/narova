@@ -644,7 +644,7 @@ The complete 3D surface above remains available without it.
   word takes that color.
 - **Voices**: piper uses ONNX voice names (`en_US-ryan-high`). xtts has 58
   named speakers (`Damien Black`). qwen has 9 (`Ryan`, `Serena`).
-  pockettts (unreleased) has 27 presets (e.g. `alba`, `marius`, `estelle`) and
+  pockettts has 27 presets (e.g. `alba`, `marius`, `estelle`) and
   seven language families; use `providerOptions` for controls and `providerFiles`
   for reference audio/saved states. See [Pocket authoring](pockettts.md).
   Voice cloning (xtts): `speaker` may instead be an ABSOLUTE path to a short
