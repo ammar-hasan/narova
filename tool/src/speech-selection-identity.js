@@ -89,8 +89,8 @@ function pythonCachePath(value) {
 function cachedSnapshot(model, cacheRoot, tokenizerOnly = false) {
   const repo = FW_REPOS[model] || (model.includes('/') ? model : null);
   if (!repo) return { unavailable: 'unknown model identifier' };
-  const hfHome = pythonCachePath(process.env.HF_HOME || path.join(process.env.XDG_CACHE_HOME || path.join(os.homedir(), '.cache'), 'huggingface'));
-  const cache = path.resolve(RECOGNITION_ROOT, cacheRoot || pythonCachePath(process.env.HF_HUB_CACHE || process.env.HUGGINGFACE_HUB_CACHE || path.join(hfHome, 'hub')));
+  const hfHome = pythonCachePath(process.env.HF_HOME ?? path.join(process.env.XDG_CACHE_HOME ?? path.join(os.homedir(), '.cache'), 'huggingface'));
+  const cache = path.resolve(RECOGNITION_ROOT, cacheRoot ?? pythonCachePath(process.env.HF_HUB_CACHE ?? process.env.HUGGINGFACE_HUB_CACHE ?? path.join(hfHome, 'hub')));
   const dir = path.join(cache, `models--${repo.replaceAll('/', '--')}`);
   try {
     const revision = fs.readFileSync(path.join(dir, 'refs', 'main'), 'utf8').trim();
@@ -127,7 +127,7 @@ function selectionIdentity(config) {
       // Tokenizers' Rust Hub client uses HF_HOME/hub (not the Python Hub
       // cache override or XDG_CACHE_HOME). Actual model capability chooses
       // English/multilingual after loading; bind both without loading it here.
-      const cache = path.join(process.env.HF_HOME || path.join(os.homedir(), '.cache', 'huggingface'), 'hub');
+      const cache = path.join(process.env.HF_HOME ?? path.join(os.homedir(), '.cache', 'huggingface'), 'hub');
       for (const name of ['openai/whisper-tiny.en', 'openai/whisper-tiny']) resources[`tokenizer:${name}`] = cachedSnapshot(name, cache, true);
     }
   }
@@ -136,7 +136,7 @@ function selectionIdentity(config) {
     const direct = path.resolve(__dirname, '..', selected);
     let file;
     try { if (fs.statSync(direct).isFile()) file = direct; } catch {}
-    file ||= path.resolve(RECOGNITION_ROOT, process.env.NAROVA_HOME || path.join(os.homedir(), '.narova'), 'models', selected);
+    file ||= path.resolve(RECOGNITION_ROOT, process.env.NAROVA_HOME ?? path.join(os.homedir(), '.narova'), 'models', selected);
     resources.whisperCpp = resourceIdentity(file);
   }
   return { retakes: config.speech.retakes, engine, model, resources };

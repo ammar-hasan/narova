@@ -229,3 +229,24 @@ test('relative recognizer stores and fallback tokenizer contents share the actua
  const directory=audioFingerprint(config);fs.appendFileSync(fallbackFile,'other fallback');assert.notEqual(audioFingerprint(config),directory,'a tokenizer directory is not a bound tokenizer file');
  config.speech.retakes=0;const zero=audioFingerprint(config);fs.appendFileSync(path.join(local,'model.bin'),'other weights');assert.equal(audioFingerprint(config),zero);
 });
+
+
+test('empty environment cache roots retain getenv semantics for recognizer model identity',t=>{
+ const root=path.resolve(__dirname,'..'),dir=temp(t),unique=path.basename(dir),names=['NAROVA_HOME','HF_HOME','HF_HUB_CACHE','HUGGINGFACE_HUB_CACHE','XDG_CACHE_HOME','NAROVA_WHISPER_MODEL'];
+ const old=Object.fromEntries(names.map(k=>[k,process.env[k]]));t.after(()=>{for(const[k,v]of Object.entries(old)){if(v==null)delete process.env[k];else process.env[k]=v;}});
+ const created=new Set(),owned=[];
+ function mkdir(d){if(!fs.existsSync(d)){mkdir(path.dirname(d));fs.mkdirSync(d);created.add(d);}}
+ t.after(()=>{for(const d of owned)fs.rmSync(d,{recursive:true,force:true});for(const d of [...created].reverse()){try{fs.rmdirSync(d);}catch{}}});
+ let index=0;
+ for(const[key,suffix]of [['HF_HUB_CACHE',''],['HUGGINGFACE_HUB_CACHE',''],['HF_HOME','hub'],['XDG_CACHE_HOME','huggingface/hub']]){
+  for(const k of names)delete process.env[k];process.env[key]='';
+  const repo=`fixture/${unique}-${index++}`,base=path.join(root,suffix,'models--'+repo.replaceAll('/','--')),revision='d'.repeat(40),snapshot=path.join(base,'snapshots',revision);
+  mkdir(snapshot);mkdir(path.join(base,'refs'));owned.push(base);fs.writeFileSync(path.join(base,'refs/main'),revision);fs.writeFileSync(path.join(snapshot,'tokenizer.json'),'tokenizer');const model=path.join(snapshot,'model.bin');fs.writeFileSync(model,'weights');
+  const config={speech:{check:'warn',retakes:1,engine:'faster-whisper',model:repo}};
+  const previous=audioFingerprint(config);fs.appendFileSync(model,'replacement');assert.notEqual(audioFingerprint(config),previous,key);
+ }
+ for(const k of names)delete process.env[k];process.env.NAROVA_HOME='';
+ const models=path.join(root,'models');mkdir(models);const model=path.join(models,unique+'.bin');owned.push(model);fs.writeFileSync(model,'cpp model');
+ const config={speech:{check:'warn',retakes:1,engine:'whisper-cpp',model:path.basename(model)}};
+ const before=audioFingerprint(config);fs.appendFileSync(model,'replacement');assert.notEqual(audioFingerprint(config),before,'empty NAROVA_HOME');
+});
