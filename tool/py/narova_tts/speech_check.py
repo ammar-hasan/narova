@@ -164,6 +164,13 @@ def _bounded_run(command, timeout, *, own_group=True):
             if own_group:
                 try: os.killpg(child.pid, signal.SIGKILL)
                 except ProcessLookupError: pass
+                except PermissionError:
+                    # A denied cleanup of an exited process group must not
+                    # replace the result/output-limit error of an exited
+                    # recognizer with that cleanup error. Active denial is real.
+                    if child.poll() is None:
+                        child.kill(); child.wait()
+                        raise
             elif child.poll() is None: child.kill()
             child.wait()
 

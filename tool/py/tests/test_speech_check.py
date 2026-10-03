@@ -78,6 +78,13 @@ class Comparison(unittest.TestCase):
             self.assertFalse(marker.exists(),'deadline must terminate owned recognizer descendants')
         result=speech._bounded_run([sys.executable,'-c','print("ok")'],2)
         self.assertEqual(result.stdout,'ok\n')
+        def exited_child(command, **kwargs):
+            kwargs['stdout'].write(b'x'*1100000)
+            return mock.Mock(pid=999999, returncode=0, poll=mock.Mock(return_value=0), wait=mock.Mock(return_value=0))
+        with mock.patch.object(speech.subprocess,'Popen',side_effect=exited_child), mock.patch.object(speech.os,'killpg',side_effect=PermissionError('exited group')):
+            with self.assertRaisesRegex(RuntimeError,'output exceeds'):
+                speech._bounded_run(['fixture recognizer'],2)
+
     def test_recognizer_selection_is_independent_and_language_aware(self):
         self.assertEqual(speech.options({'align':{'engine':'whisper-cpp','model':'old'},'speech':{'engine':'faster-whisper','model':'new'}},'fr-FR'),{'engine':'faster-whisper','model':'new','language':'fr'})
         class EnglishOnly:
