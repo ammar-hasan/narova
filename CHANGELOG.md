@@ -6,6 +6,20 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.54.0] - 2026-10-05
+
+### Added
+- Optional series authoring for courses, daily vlogs and drama: an explicit episode
+  catalog, shared defaults, selected resources, authoring context and incoming state.
+- Frozen episode bindings keep independently built videos on their selected shared
+  revision. Inspect and compare changes, explicitly adopt or restore revisions,
+  and hand off outgoing state without silently updating other episodes.
+- Selected resource closures participate in normal rendering and cache identities;
+  packed/opened episodes and detached standalone projects retain their inputs
+  without requiring the original series workspace.
+- Series CLI commands and authoring guidance expose membership and retained evidence;
+  authoring context does not imply an automated semantic continuity assessment.
+
 ## [0.53.0] - 2026-10-03
 
 ### Added
@@ -2354,7 +2368,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.53.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.54.0...HEAD
+[0.54.0]: https://github.com/ammar-hasan/narova/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/ammar-hasan/narova/compare/v0.52.0...v0.53.0
 [0.48.0]: https://github.com/ammar-hasan/narova/compare/v0.47.0...v0.48.0
 [0.47.0]: https://github.com/ammar-hasan/narova/compare/v0.46.0...v0.47.0
