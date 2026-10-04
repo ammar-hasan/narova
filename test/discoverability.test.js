@@ -13,7 +13,7 @@ const changelogUrl = `${homeUrl}changelog/`;
 const exploreUrl = `${homeUrl}explore/`;
 const npmUrl = 'https://www.npmjs.com/package/@narova/narova';
 const skillUrl = 'https://skills.sh/ammar-hasan/narova';
-const siteModifiedDate = '2026-10-03';
+const siteModifiedDate = '2026-10-05';
 const expectedKeywords = [
   'video',
   'video-production',
