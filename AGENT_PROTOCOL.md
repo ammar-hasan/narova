@@ -314,3 +314,21 @@ within `narova.result/1`.
 
 Every step terminates in one envelope. Free-form progress is never the final
 result and is never part of the machine contract.
+
+## Series
+
+All `series` actions use operation `series`, with `data.action` equal to
+`init`, `inspect`, `bind`, `compare`, `adopt`, `restore`, `handoff` or `detach`.
+Init reports file and seriesId. Catalog inspection reports ordered episodes and
+projectStatus (`planned`, `missing`, `available`). Bound inspection reports
+selected identities/context/resources and effective status (`available` for
+data-only source or `unavailable` when executable source was not evaluated).
+Membership results report project, seriesId, episodeId, revision and committed.
+Compare reports from/to revisions, runtime.changedDefaults/changedFiles/voiceOrderChanged,
+contextChanged, origins and explicit unavailable planning/effective facts.
+Adopt includes that report under changes. Handoff reports authored value and
+sha256 without advancing any catalog. Detach reports target, provenance IDs,
+revision and committed. Ordinary usage/operation failure exits apply.
+
+Series operations do not execute project code, providers or rendering. A packed
+binding is source-portable; subsequent execution keeps ordinary prerequisites.

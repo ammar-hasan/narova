@@ -54,7 +54,16 @@ function hashProviderFile(file) {
 
 function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (!raw || typeof raw !== 'object') throw new Error('config: expected an object');
+  const seriesInput = require('./series').applyBinding(raw, baseDir);
+  raw = seriesInput.raw;
+  const seriesBinding = seriesInput.provenance;
   const errs = [];
+  let localResources = [];
+  try { localResources = require('./local-resources').resolveLocalResources(raw.localResources, baseDir); }
+  catch (error) { errs.push(error.message); }
+  let localResourceDependencies = {};
+  try { localResourceDependencies = require('./local-resources').resolveResourceDependencies(raw.localResourceDependencies, localResources); }
+  catch (error) { errs.push(error.message); }
   function validateTurnPresentation(turn, at, suppliedPerformance = false) {
     if (!turn || typeof turn !== 'object') return;
     if (turn.pauseAfter != null && (typeof turn.pauseAfter !== 'number' || !Number.isFinite(turn.pauseAfter) || turn.pauseAfter < 0)) errs.push(`${at}.pauseAfter: expected non-negative finite seconds`);
@@ -98,7 +107,10 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   if (cssRef) {
     const cssPath = path.resolve(baseDir, cssRef);
     if (!fs.existsSync(cssPath)) errs.push(`config.theme.css: file not found: ${cssPath}`);
-    else themeCss = fs.readFileSync(cssPath, 'utf8');
+    else {
+      themeCss = fs.readFileSync(cssPath, 'utf8');
+      if (localResources.includes(cssRef)) themeCss = require('./local-resources').rebaseSource(themeCss, cssRef);
+    }
   }
   const themeMode = mode ?? 'dark';
   if (themeMode !== 'dark' && themeMode !== 'light') {
@@ -171,7 +183,8 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
       return null;
     }
     try {
-      const contents = fs.readFileSync(resolved, 'utf8');
+      let contents = fs.readFileSync(resolved, 'utf8');
+      if (localResources.includes(ref)) contents = require('./local-resources').rebaseSource(contents, ref);
       return { contents, resolvedPath: resolved };
     } catch (e) {
       errs.push(`${label}: cannot read file: ${e.message}`);
@@ -269,6 +282,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     const at = `config.voices.${id}`;
     // Resolved metadata is evidence, never an authored source of identity.
     delete v.providerFileInputs;
+    delete v.providerDependencyInputs;
     // Per-voice gain trim in dB — works for all backends.
     if (v.gainDb != null && (typeof v.gainDb !== 'number' || !Number.isFinite(v.gainDb)
         || v.gainDb < -24 || v.gainDb > 24)) {
@@ -346,6 +360,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
           try {
             if (!fs.statSync(file).isFile()) throw new Error('not a regular file');
             v.providerFileInputs[name] = { path: file, sha256: hashProviderFile(file) };
+            const relative = path.relative(path.resolve(baseDir), file).split(path.sep).join('/');
+            const dependencies = require('./local-resources').dependencyInputs(relative, localResourceDependencies, baseDir);
+            if (Object.keys(dependencies).length) {
+              v.providerDependencyInputs ||= {};
+              v.providerDependencyInputs[name] = dependencies;
+            }
           } catch (error) { errs.push(`${field}: cannot read local file ${file}: ${error.message}`); }
         }
       }
@@ -1100,6 +1120,10 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     if (typeof c !== 'object' || Array.isArray(c)) {
       errs.push('config.captions: expected an object like { preset, emphasis, maxWords } or false to disable');
     } else {
+      if (c.enabled != null) {
+        if (typeof c.enabled !== 'boolean') errs.push('config.captions.enabled: expected a boolean');
+        else captionsEnabled = c.enabled;
+      }
       if (c.preset != null) {
         if (!CAPTION_PRESETS.has(c.preset)) {
           errs.push(`config.captions.preset: unknown preset ${JSON.stringify(c.preset)} (${[...CAPTION_PRESETS].join('|')})`);
@@ -1513,7 +1537,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
   if (speech.model && (speech.model.startsWith('.') || path.isAbsolute(speech.model) || fs.existsSync(path.resolve(baseDir, speech.model)))) speech.model = path.resolve(baseDir, speech.model);
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, mix, captions, captionsEnabled, align, variants, variant, series, narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, ...(localResources.includes(cssRef) ? { themeCssFile: cssRef } : {}), choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, mix, captions, captionsEnabled, align, variants, variant, series, ...(seriesBinding ? { seriesBinding } : {}), ...(localResources.length ? { localResources } : {}), ...(Object.keys(localResourceDependencies).length ? { localResourceDependencies } : {}), narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

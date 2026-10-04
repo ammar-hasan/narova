@@ -44,6 +44,17 @@ test('manifest and reconstructable config retain authored dependencies and curre
   assert.deepEqual(manifest.voices.a.providerFileInputs, config.voices.a.providerFileInputs);
   assert.deepEqual(configFromManifest(manifest).voices.a.providerFiles, raw.voices.a.providerFiles);
 }));
+
+test('authored dependency identities are replaced with current declared bytes', () => fixture((dir, raw) => {
+  fs.mkdirSync(path.join(dir, 'voice'));
+  fs.writeFileSync(path.join(dir, 'voice/profile.json'), '{}'); fs.writeFileSync(path.join(dir, 'voice/sample.wav'), 'sample');
+  raw.voices.a.providerFiles.voiceState = 'voice/profile.json';
+  raw.voices.a.providerDependencyInputs = { voiceState: { 'voice/sample.wav': 'a'.repeat(64) } };
+  raw.localResources = ['voice/profile.json', 'voice/sample.wav'];
+  raw.localResourceDependencies = { 'voice/profile.json': ['voice/sample.wav'] };
+  const resolved = resolveConfig(raw, {}, dir);
+  assert.equal(resolved.voices.a.providerDependencyInputs.voiceState['voice/sample.wav'], crypto.createHash('sha256').update('sample').digest('hex'));
+}));
 test('invalid file inputs fail before reuse with precise field errors', () => fixture((dir, raw) => {
   for (const [files, expected] of [[null, /expected an object/], [[], /expected an object/], [{ voiceState: 'missing' }, /cannot read/],
     [{ voiceState: '.' }, /regular file/], [{ voiceState: 'https:\/\/example.com/state' }, /local file/],

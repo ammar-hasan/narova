@@ -177,7 +177,7 @@ function writeStageInputs(config, outDir) {
   // invalidate a previously reviewed creative proof via this projection.
   const {
     assetsDir: _assetsDir, provenance: _provenance, assertions: _assertions,
-    sceneState: _sceneState, ...serializableConfig
+    sceneState: _sceneState, seriesBinding: _seriesBinding, localResources: _localResources, localResourceDependencies: _localResourceDependencies, ...serializableConfig
   } = config;
   fs.writeFileSync(path.join(outDir, 'config.resolved.json'), JSON.stringify(serializableConfig, null, 2));
   return {
@@ -336,6 +336,7 @@ function synth(outDir, opts = {}) {
 /* ---- full build: synth -> compose -> selected local renderer ---------------- */
 
 function build(config, opts = {}) {
+  require('./series').assertBoundConfig(config);
   const outDir = path.resolve(opts.out || 'out');
   ensureDir(outDir);
   const log = opts.log || console.log;
@@ -799,12 +800,14 @@ function configFromManifest(manifest, resolvedConfig) {
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
       ...(v.providerFiles ? { providerFiles: v.providerFiles } : {}),
       ...(v.providerFileInputs ? { providerFileInputs: v.providerFileInputs } : {}),
+      ...(v.providerDependencyInputs ? { providerDependencyInputs: v.providerDependencyInputs } : {}),
       ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     }])),
     theme: { ...(m.theme || {}), accent: m.theme?.accent, bg: m.theme?.bg },
     mode: m.theme?.mode || 'dark',
     chrome: m.chrome || {},
     themeCss: m.theme?.css || '',
+    ...(m.themeCssFile ? { themeCssFile: m.themeCssFile } : {}),
     choreography: m.choreography || '',
     timing: m.timing || {},
     scenes: (m.scenes || []).map((s, i) => ({
@@ -844,6 +847,10 @@ function configFromManifest(manifest, resolvedConfig) {
     })),
     variant: m.variant || null,
     series: m.series || null,
+    ...(m.seriesBinding ? { seriesBinding: m.seriesBinding } : {}),
+    ...(m.localResources?.length ? { localResources: m.localResources } : {}),
+    ...(m.localResourceDependencies ? { localResourceDependencies: m.localResourceDependencies } : {}),
+    ...(m.sceneFileRefs ? { sceneFileRefs: m.sceneFileRefs } : {}),
     walkthroughs: resolvedConfig ? resolvedConfig.walkthroughs : (m.walkthroughs || {}),
     characters: resolvedConfig ? resolvedConfig.characters : {},
     // Preserve resolved filesystem paths from the original config.

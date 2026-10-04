@@ -127,9 +127,9 @@ function composeDoc(config, size, data, css) {
     const overlay = s.captions !== false && karaoke.overlayForScene ? karaoke.overlayForScene(start, dur, 0, s.vo) : '';
     let body = String(s.body || '');
     if (s._threeModuleContents) {
-      body = threeModuleSceneBody(s, sceneData, size.w, size.h) + (body || '');
+      body = threeModuleSceneBody(s, sceneData, size.w, size.h, config.localResources || []) + (body || '');
     } else if (s.three) {
-      body = threeSceneBody(s, sceneData, size.w, size.h) + (body || '');
+      body = threeSceneBody(s, sceneData, size.w, size.h, config.localResources || []) + (body || '');
     }
     return { ...s, body: body + overlay };
   });
@@ -364,9 +364,9 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   const scLocal = { start: 0, dur: sceneDur, turns: sceneTurns, sentences: localSentences, markers: localMarkers, groups: sceneGroups };
   let body = String(s.body || '');
   if (s._threeModuleContents) {
-    body = threeModuleSceneBody(s, scLocal, size.w, size.h) + (body || '');
+    body = threeModuleSceneBody(s, scLocal, size.w, size.h, config.localResources || []) + (body || '');
   } else if (s.three) {
-    body = threeSceneBody(s, scLocal, size.w, size.h) + (body || '');
+    body = threeSceneBody(s, scLocal, size.w, size.h, config.localResources || []) + (body || '');
   }
   body += karaokeOverlay;
   const nsBody = namespaceIds(body, s.id);

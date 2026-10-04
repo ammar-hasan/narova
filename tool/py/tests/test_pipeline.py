@@ -3,6 +3,7 @@
 Run: PYTHONPATH=py python3 -m unittest discover -s py/tests -v
 (no heavy TTS deps needed — backends import lazily)."""
 import json
+import hashlib
 import shutil
 import tempfile
 import unittest
@@ -292,6 +293,69 @@ class TestSynthSentenceCache(unittest.TestCase):
         synth_sentence(be, "a", "Hello.", self.tmp, self.tmp / "out.wav", 1.12)
         self.assertEqual(be.calls, 1)
         self.assertFalse((self.tmp / "cache").exists())
+
+    def test_provider_dependency_change_misses_existing_sentence_cache(self):
+        be = _FakeBackend()
+        voice = {"backend": "external", "speaker": "voice",
+                 "providerFileInputs": {"profile": {"path": "profile.json", "sha256": "a" * 64}},
+                 "providerDependencyInputs": {"profile": {"voice/sample.wav": "b" * 64}}}
+        first = sentence_cache_key("external", voice_cache_speaker(voice, "a"), "Hello.", 1.12)
+        synth_sentence(be, "a", "Hello.", self.tmp, self.tmp / "first.wav", 1.12, cache_key=first)
+        voice["providerDependencyInputs"]["profile"]["voice/sample.wav"] = "c" * 64
+        second = sentence_cache_key("external", voice_cache_speaker(voice, "a"), "Hello.", 1.12)
+        self.assertNotEqual(first, second)
+        synth_sentence(be, "a", "Hello.", self.tmp, self.tmp / "second.wav", 1.12, cache_key=second)
+        synth_sentence(be, "a", "Hello.", self.tmp, self.tmp / "reused.wav", 1.12, cache_key=second)
+        self.assertEqual(be.calls, 2)
+
+
+class TestProviderDependencies(unittest.TestCase):
+    def fixture(self, root):
+        sample = root / "voice/sample.wav"
+        sample.parent.mkdir()
+        sample.write_bytes(b"voice sample")
+        return {"projectDir": str(root), "voices": {"a": {
+            "providerFileInputs": {"profile": {"path": str(root / "voice/profile.json"), "sha256": "a" * 64}},
+            "providerDependencyInputs": {"profile": {"voice/sample.wav": hashlib.sha256(sample.read_bytes()).hexdigest()}}}}}
+
+    def test_verified_current_dependencies_are_accepted(self):
+        with tempfile.TemporaryDirectory() as directory:
+            pipeline.validate_provider_dependencies(self.fixture(Path(directory)))
+
+    def test_stale_dependencies_fail_before_whole_audio_reuse(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.fixture(root)
+            (root / "voice/sample.wav").write_bytes(b"changed")
+            config_path = root / "config.json"
+            config_path.write_text(json.dumps(config))
+            narration = root / "narration.json"
+            narration.write_text("[]")
+            out = root / "out"
+            out.mkdir()
+            timings = out / "timings.json"
+            timings.write_text("cached timings")
+            with self.assertRaisesRegex(ValueError, "changed since resolution"):
+                pipeline.run(narration, config_path, out, reuse=True)
+            self.assertEqual(timings.read_text(), "cached timings")
+            self.assertFalse((out / "audio").exists())
+
+    def test_invalid_missing_and_symlink_dependencies_fail(self):
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            config = self.fixture(root)
+            inputs = config["voices"]["a"]["providerDependencyInputs"]
+            for file, digest, expected in [("../escape.wav", "a" * 64, "path/digest"),
+                                           ("voice/missing.wav", "a" * 64, "missing"),
+                                           ("voice/sample.wav", "A" * 64, "path/digest")]:
+                with self.subTest(file=file, digest=digest):
+                    inputs["profile"] = {file: digest}
+                    with self.assertRaisesRegex(ValueError, expected):
+                        pipeline.validate_provider_dependencies(config)
+            (root / "linked").symlink_to(root / "voice", target_is_directory=True)
+            inputs["profile"] = {"linked/sample.wav": hashlib.sha256(b"voice sample").hexdigest()}
+            with self.assertRaisesRegex(ValueError, "symlink"):
+                pipeline.validate_provider_dependencies(config)
 
 
 class TestVoiceCacheSpeaker(unittest.TestCase):

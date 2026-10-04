@@ -215,12 +215,15 @@ const TEXTURE_MAPS = ['map', 'normalMap', 'roughnessMap', 'metalnessMap', 'emiss
 
 /* Generate loading code for texture maps on an object. Textures are loaded
  * before frame 0 through the `_pending` promise gating, same as glTF models. */
-function textureLoadJs(varName, obj) {
+function resourceUrl(src, localResources) {
+  return localResources.includes(src) ? src : `assets/${path.basename(src)}`;
+}
+function textureLoadJs(varName, obj, localResources) {
   let code = '';
   for (const mapType of TEXTURE_MAPS) {
     const src = obj[mapType];
     if (!src || typeof src !== 'string') continue;
-    const assetPath = `assets/${path.basename(src)}`;
+    const assetPath = resourceUrl(src, localResources);
     code += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(assetPath)},function(_tex){`;
     if (mapType === 'map' || mapType === 'emissiveMap') code += `_tex.colorSpace=THREE.SRGBColorSpace;`;
     code += `${varName}.material.${mapType}=_tex;`;
@@ -250,7 +253,7 @@ function collectTextureAssets(input) {
   return [...paths];
 }
 
-function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers) {
+function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers, localResources = []) {
   const cam = three.camera || {};
   const fov = cam.fov || 45;
   const near = cam.near || 0.1;
@@ -349,7 +352,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
   // prefiltered PMREM, and sets it as scene.environment for PBR materials.
   if (three.envMap) {
     const envCfg = typeof three.envMap === 'string' ? { src: three.envMap } : three.envMap;
-    const envSrc = `assets/${path.basename(envCfg.src)}`;
+    const envSrc = resourceUrl(envCfg.src, localResources);
     const envIntensity = envCfg.intensity != null ? envCfg.intensity : 1;
     const envLoader = /\.hdr$/i.test(envCfg.src) ? 'HDRLoader' : 'TextureLoader';
     js += `_pending.push(new Promise(function(_res){new THREE.${envLoader}().load(${esc(envSrc)},function(_tex){`;
@@ -427,9 +430,10 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
       js += `${name}.position.set(${pos[0]},${pos[1]},${pos[2]});`;
       js += `${name}.rotation.set(${rot[0]},${rot[1]},${rot[2]});${objectScaleJs(name, obj)}`;
       js += `S.add(${name});`;
-      const assetSrc = `assets/${path.basename(obj.src)}`;
+      const assetSrc = resourceUrl(obj.src, localResources);
+      const assetBase = localResources.includes(obj.src) ? path.posix.dirname(assetSrc) + '/' : assetSrc;
       js += `_pending.push(fetch(${esc(assetSrc)}).then(function(r){if(!r.ok)throw new Error('gltf '+${esc(assetSrc)}+' '+r.status);return r.arrayBuffer();}).then(function(buf){`;
-      js += `return new THREE.GLTFLoader().parseAsync(buf,${esc(assetSrc)}).then(function(g){`;
+      js += `return new THREE.GLTFLoader().parseAsync(buf,${esc(assetBase)}).then(function(g){`;
       js += `${name}.add(g.scene);`;
       if (obj.playAnimations) {
         js += `if(g.animations&&g.animations.length){var ${name}Mixer=new THREE.AnimationMixer(${name});`;
@@ -461,7 +465,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
         if (child.castShadow) js += `${cname}.castShadow=true;`;
         if (child.receiveShadow) js += `${cname}.receiveShadow=true;`;
         js += `${name}.add(${cname});`;
-        js += textureLoadJs(cname, child);
+        js += textureLoadJs(cname, child, localResources);
         js += animationTweens(cname, child, sceneStart, turns, markers);
       });
       js += animationTweens(name, obj, sceneStart, turns, markers);
@@ -481,7 +485,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
       if (obj.castShadow) js += `${name}.castShadow=true;`;
       if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
       js += `S.add(${name});`;
-      js += textureLoadJs(name, obj);
+      js += textureLoadJs(name, obj, localResources);
       js += animationTweens(name, obj, sceneStart, turns, markers);
     } else if (obj.type === 'particles') {
       const count = obj.count || 100;
@@ -500,7 +504,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
       js += `${name}Geo.setAttribute('position',new THREE.BufferAttribute(_pPos,3));`;
       js += `var ${name}Mat=new THREE.PointsMaterial({color:${esc(pcolor)},size:${psize},transparent:${popacity < 1 ? 'true' : 'false'},opacity:${popacity},blending:THREE.AdditiveBlending,depthWrite:false});`;
       if (obj.texture) {
-        const texPath = `assets/${path.basename(obj.texture)}`;
+        const texPath = resourceUrl(obj.texture, localResources);
         js += `_pending.push(new Promise(function(_res){new THREE.TextureLoader().load(${esc(texPath)},function(_tex){${name}Mat.map=_tex;${name}Mat.needsUpdate=true;_res();},undefined,function(){_res();});}));`;
       }
       js += `var ${name}=new THREE.Points(${name}Geo,${name}Mat);`;
@@ -520,7 +524,7 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
       if (obj.castShadow) js += `${name}.castShadow=true;`;
       if (obj.receiveShadow) js += `${name}.receiveShadow=true;`;
       js += `S.add(${name});`;
-      js += textureLoadJs(name, obj);
+      js += textureLoadJs(name, obj, localResources);
       js += animationTweens(name, obj, sceneStart, turns, markers);
     }
   });
@@ -539,10 +543,10 @@ function threeSetupJs(sceneId, three, sceneStart, sceneDur, w, h, turns, markers
   return js;
 }
 
-function threeSceneBody(scene, scData, w, h) {
+function threeSceneBody(scene, scData, w, h, localResources = []) {
   const turns = scData.turns || [];
   const canvas = `<canvas id="three-${scene.id}" class="narova-three-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>`;
-  const setup = threeSetupJs(scene.id, scene.three, scData.start, scData.dur, w, h, turns, scData.markers || {})
+  const setup = threeSetupJs(scene.id, scene.three, scData.start, scData.dur, w, h, turns, scData.markers || {}, localResources)
     .replace(/<\/script/gi, '<\\/script');
   return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
 }
@@ -579,7 +583,7 @@ function threeSceneBody(scene, scData, w, h) {
  * Optional `scene.three` config (camera, toneMapping, fog, background, envMap,
  * lights) is still honored as the shell so authors can mix declarative setup
  * with raw code. If `scene.three` is absent, neutral defaults are used. */
-function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur, w, h, turns, markers, cueData) {
+function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur, w, h, turns, markers, cueData, localResources = []) {
   const cfg = three || {};
   const cam = cfg.camera || {};
   const fov = cam.fov || 45;
@@ -645,7 +649,7 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   js += `function assets(name){return 'assets/'+name;}`;
   if (cfg.envMap) {
     const envCfg = typeof cfg.envMap === 'string' ? { src: cfg.envMap } : cfg.envMap;
-    const envSrc = `assets/${path.basename(envCfg.src)}`;
+    const envSrc = resourceUrl(envCfg.src, localResources);
     const envIntensity = envCfg.intensity != null ? envCfg.intensity : 1;
     const envLoader = /\.hdr$/i.test(envCfg.src) ? 'HDRLoader' : 'TextureLoader';
     js += `pending.push(new Promise(function(_res){new THREE.${envLoader}().load(${esc(envSrc)},function(_tex){`;
@@ -686,7 +690,7 @@ function threeModuleSetupJs(sceneId, three, moduleContents, sceneStart, sceneDur
   return js;
 }
 
-function threeModuleSceneBody(scene, scData, w, h) {
+function threeModuleSceneBody(scene, scData, w, h, localResources = []) {
   const turns = scData.turns || [];
   const groups = scData.groups || [];
   const seenSentences = new Set();
@@ -698,7 +702,7 @@ function threeModuleSceneBody(scene, scData, w, h) {
     for (const word of (g.words || [])) words.push({ w: word.w, t0: word.t0 || 0, t1: word.t1 || 0 });
   }
   const canvas = `<canvas id="three-${scene.id}" class="narova-three-canvas" style="position:absolute;inset:0;width:100%;height:100%;pointer-events:none"></canvas>`;
-  const setup = threeModuleSetupJs(scene.id, scene.three, scene._threeModuleContents, scData.start, scData.dur, w, h, turns, scData.markers || {}, { sentences, words })
+  const setup = threeModuleSetupJs(scene.id, scene.three, scene._threeModuleContents, scData.start, scData.dur, w, h, turns, scData.markers || {}, { sentences, words }, localResources)
     .replace(/<\/script/gi, '<\\/script');
   return `<div class="narova-three-scene" style="position:absolute;inset:0">${canvas}<script>${setup}</script></div>`;
 }

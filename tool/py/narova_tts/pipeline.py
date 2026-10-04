@@ -332,6 +332,9 @@ def voice_cache_speaker(v: dict, who: str, effective_backend: str | None = None)
         if v.get("providerFileInputs"):
             parts.append("providerFileInputs=" + json.dumps(
                 v["providerFileInputs"], sort_keys=True, separators=(",", ":")))
+        if v.get("providerDependencyInputs"):
+            parts.append("providerDependencyInputs=" + json.dumps(
+                v["providerDependencyInputs"], sort_keys=True, separators=(",", ":")))
     if v.get("gainDb") is not None:
         parts.append(f"gainDb={v['gainDb']}")
     return "|".join(parts)
@@ -369,10 +372,46 @@ def synth_sentence(backend, who: str, text: str, tmp: Path, out: Path, tempo: fl
 
 # ---- main pipeline ------------------------------------------------------------
 
+def validate_provider_dependencies(config: dict) -> None:
+    for who, voice in config.get("voices", {}).items():
+        inputs = voice.get("providerDependencyInputs", {})
+        if not isinstance(inputs, dict):
+            raise ValueError(f"voice {who!r}: invalid provider dependency identity")
+        if not inputs:
+            continue
+        root = Path(config.get("projectDir", "."))
+        if root.is_symlink() or not root.is_dir():
+            raise ValueError(f"voice {who!r}: provider dependency project is unavailable")
+        for option, files in inputs.items():
+            if option not in voice.get("providerFileInputs", {}) or not isinstance(files, dict):
+                raise ValueError(f"voice {who!r}: invalid provider dependency {option!r}")
+            for file, expected in files.items():
+                parts = file.split("/") if isinstance(file, str) else []
+                if (not parts or any(part in {"", ".", ".."} for part in parts)
+                        or "\\" in file or ":" in file
+                        or not isinstance(expected, str) or len(expected) != 64
+                        or any(c not in "0123456789abcdef" for c in expected)):
+                    raise ValueError(f"voice {who!r}: invalid provider dependency path/digest")
+                current = root
+                for part in parts:
+                    current = current / part
+                    if current.is_symlink():
+                        raise ValueError(f"voice {who!r}: symlink provider dependency {file!r}")
+                if not current.is_file():
+                    raise ValueError(f"voice {who!r}: missing provider dependency {file!r}")
+                h = hashlib.sha256()
+                with current.open("rb") as source:
+                    while chunk := source.read(65536):
+                        h.update(chunk)
+                if h.hexdigest() != expected:
+                    raise ValueError(f"voice {who!r}: provider dependency {file!r} changed since resolution")
+
+
 def run(narration_path: Path, config_path: Path, out_dir: Path,
         default_backend: str = "piper", reuse: bool = False) -> dict[str, Any]:
     scenes = json.loads(narration_path.read_text())
     config = json.loads(config_path.read_text())
+    validate_provider_dependencies(config)
     # The JS resolver serializes unset keys as null (e.g. tempo) — a plain merge
     # would let None clobber the defaults and crash float() below.
     timing = {**TIMING_DEFAULTS,

@@ -233,9 +233,10 @@ function preDispatchOperation(argv) {
 
 const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'speech', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
-const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows', 'speaker', 'reference']);
+const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows', 'speaker', 'reference', 'id', 'title', 'episode', 'resources', 'context', 'incoming']);
 
 function validateInvocationFlags(flags, cmd) {
+  for (const name of ['id', 'title', 'episode', 'resources', 'context', 'incoming']) if (flags[name] != null && cmd !== 'series') invocationError(`--${name} is only valid with narova series`);
   if (flags.continuity != null && cmd !== 'generate') invocationError('--continuity is only valid with narova generate');
   if (flags['no-continuity'] && cmd !== 'generate') invocationError('--no-continuity is only valid with narova generate');
   if (flags.continuity != null && flags['no-continuity']) invocationError('--continuity and --no-continuity cannot be used together');
@@ -611,6 +612,8 @@ Commands:
   branch list|show     inspect saved proof directions and their rationale
   voice-cache export --out <build-dir> --dir <new-bundle-dir>  save portable sentence WAVs
   voice-cache import --dir <bundle-dir> [--overwrite]         validate and restore sentences
+  series init|inspect|bind|compare|adopt|restore|handoff|detach
+                       shared defaults/resources and frozen episode context
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> selected renderer project + captions
   captions             (re)write out/captions.srt + out/captions.vtt from out/timings.json
@@ -870,6 +873,46 @@ async function main() {
         }
         throw err;
       }
+      return;
+    }
+
+    case 'series': {
+      const series = require('../src/series');
+      const action = positionals[1], input = positionals[2];
+      mData({ action });
+      if (positionals.length > 3) invocationError('series accepts at most one source, revision or target argument');
+      const project = flags.project || process.cwd();
+      const selection = Object.fromEntries(['resources', 'context', 'incoming'].filter(k => flags[k] !== undefined).map(k => [k, flags[k]]));
+      let result;
+      switch (action) {
+        case 'init':
+          if (!input || !flags.id || positionals.length > 3) invocationError('usage: narova series init <directory> --id <id> [--title <text>]');
+          result = series.init(input, flags.id, flags.title); break;
+        case 'inspect':
+          if (input && flags.project) invocationError('series inspect accepts either a source or --project');
+          result = input ? series.inspectSource(input) : series.inspectProject(project); break;
+        case 'bind':
+          if (!input || !flags.episode) invocationError('usage: narova series bind <source> --episode <id> [--project <directory>]');
+          result = series.bind(input, flags.episode, { ...selection, project: flags.project }); break;
+        case 'compare': case 'adopt':
+          if (!input) invocationError(`usage: narova series ${action} <source> --project <directory>`);
+          result = series[action](input, project, selection); break;
+        case 'restore':
+          if (!input) invocationError('usage: narova series restore <revision> --project <directory>');
+          result = series.restore(input, project); break;
+        case 'handoff':
+          if (!input) invocationError('usage: narova series handoff <JSON file> --project <directory>');
+          result = series.handoff(input, project); break;
+        case 'detach':
+          if (!input) invocationError('usage: narova series detach <new directory> --project <directory>');
+          result = series.detach(project, input); mArtifact(result.target, 'project'); break;
+        default: invocationError('usage: narova series init|inspect|bind|compare|adopt|restore|handoff|detach');
+      }
+      if (result.project && ['bind', 'adopt', 'restore'].includes(action)) mArtifact(path.join(result.project, series.CURRENT), 'series-binding');
+      if (action === 'init') mArtifact(result.file, 'authoring-source');
+      if (action === 'handoff') mArtifact(path.join(project, 'series-handoff.json'), 'authoring-source');
+      mSetData({ action, ...result });
+      console.log(JSON.stringify(result, null, 2));
       return;
     }
 

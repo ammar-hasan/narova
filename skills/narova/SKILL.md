@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.53.0"
-checksum: 1d5962dcb84676d312a2eb1cf435ee4898c43cc3922b82ca0028438cf6cbc792
+checksum: ec7890bffcc9e65015e113a77cb5630606c8b6b2b7e07d94d44f9702de0b0f20
 ---
 # narova — video from scene scripts
 
@@ -180,6 +180,14 @@ XTTS and Chatterbox. Install its isolated runtime with `narova-setup --pockettts
 `narova voices list --backend pockettts` lists presets without downloads;
 `narova pockettts catalog|doctor|export-voice` supports model discovery, explicit
 readiness and saved conditioning. See `references/pockettts.md`.
+
+For courses, daily vlogs, drama and other multi-video productions, use explicit
+series authoring when episodes share defaults, resources or authored context.
+Read [series authoring](references/series.md) for the data-only catalog, selected
+frozen bindings, deterministic voice order, inspection, adoption/restoration,
+authored handoffs and standalone detach. Keep each episode's script and proof
+local. Never read mutable parent defaults implicitly, infer story progression,
+or treat a series pilot as another episode's approval.
 
 For AI-generated shots, the project may define a small optional `continuity`
 block with named characters, objects, places, or other creator-owned entities.

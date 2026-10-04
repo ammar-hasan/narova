@@ -93,6 +93,7 @@ function compose(config, outDir) {
   ensureDir(hfDir);
   const assetsDir = ensureDir(path.join(hfDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
+  require('../local-resources').copyLocalResources(config, hfDir);
   // Three.js is vendored in the tool (r185, esbuild-bundled global script) —
   // copy it into the render project so HyperFrames never hits a CDN.
   if (hasThreeScenes(config)) {
@@ -228,6 +229,7 @@ function composeSceneProject(config, outDir, sceneIdx) {
   if (!fs.existsSync(hfDir)) throw new Error(`composeSceneProject: full compose not found at ${hfDir} — run compose first`);
   const spanDir = path.join(hfDir, 'spans', `scene-${scene.id}`);
   ensureDir(spanDir);
+  require('../local-resources').copyLocalResources(config, spanDir);
 
   // Create trimmed audio for just this scene's time window.
   const audioSrc = fs.existsSync(path.join(outDir, 'audio', 'mix.wav'))
@@ -286,7 +288,7 @@ function buildFontFaces(config) {
   (config.scenes || []).forEach(s => { if (s.visual) visit(s.visual); });
   if (!refs.size) return '';
   return [...refs].map(([family, file]) =>
-    `@font-face{font-family:"${family}";src:url("assets/${path.basename(file)}")}`).join('\n');
+    `@font-face{font-family:"${family}";src:url("${config.localResources?.includes(file) ? file : `assets/${path.basename(file)}`}")}`).join('\n');
 }
 
 module.exports = { compose, composeSceneProject, buildFontFaces, slug };
