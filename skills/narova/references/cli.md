@@ -273,3 +273,9 @@ operations may acquire model resources. They emit progress every five seconds
 and default to a 120-second deadline (`NAROVA_POCKETTTS_TIMEOUT`, falling back
 to `NAROVA_PROVIDER_TIMEOUT`); failed exports preserve existing output.
 See [Pocket controls](pockettts.md).
+
+## Series authoring
+
+`series init|inspect|bind|compare|adopt|restore|handoff|detach` manages explicit
+shared authoring for independent episode projects. Each supports `--json`;
+see [series data, selection and recovery](series.md) for exact arguments.

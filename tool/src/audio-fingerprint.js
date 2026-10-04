@@ -40,6 +40,7 @@ function audioFingerprint(config) {
     fp.providerVersion = v.providerVersion || '';
     fp.providerOptions = v.providerOptions || {};
     if (v.providerFileInputs) fp.providerFileInputs = v.providerFileInputs;
+    if (v.providerDependencyInputs) fp.providerDependencyInputs = v.providerDependencyInputs;
     fp.surroundingText = v.providerCapabilities?.surroundingText === true;
     entries.push(fp);
   }
@@ -116,6 +117,7 @@ function narrationContextDigest(config) {
     fp.providerVersion = v.providerVersion || '';
     fp.providerOptions = v.providerOptions || {};
     if (v.providerFileInputs) fp.providerFileInputs = v.providerFileInputs;
+    if (v.providerDependencyInputs) fp.providerDependencyInputs = v.providerDependencyInputs;
     fp.surroundingText = v.providerCapabilities?.surroundingText === true;
     entries.push(fp);
   }

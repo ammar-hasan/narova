@@ -47,7 +47,7 @@ function hashConfig(config) {
   // revision identity, so they must not enter the execution fingerprint.
   const {
     assetsDir: _a, provenance: _provenance, assertions: _assertions,
-    sceneState: _sceneState, projectDir = '.', ...serializable
+    sceneState: _sceneState, seriesBinding: _seriesBinding, localResources: _localResources, localResourceDependencies: _localResourceDependencies, projectDir = '.', ...serializable
   } = config;
   // Resolved action-policy paths are absolute so the capture adapter can use
   // them from any working directory. Keep the config fingerprint portable:
@@ -115,6 +115,11 @@ function buildHashes(config, projectDir) {
       const rel = path.relative(pd, resolved) || u;
       h[`globalasset:${rel}`] = hashFile(resolved);
     }
+    const globalRefs = Object.fromEntries(Object.entries(h).filter(([key]) => key.startsWith('globalasset:')).map(([key, hash]) => [key.slice('globalasset:'.length), hash]));
+    if (config.themeCssFile) globalRefs[config.themeCssFile] = hashFile(path.resolve(pd, config.themeCssFile));
+    for (const imported of Object.values(config.imports || {})) if (/\.css$/i.test(imported.file || '') && config.localResourceDependencies?.[imported.file]) globalRefs[imported.file] = hashFile(path.resolve(pd, imported.file));
+    require('./local-resources').expandResourceRefs(globalRefs, config.localResourceDependencies || {}, pd);
+    for (const [file, hash] of Object.entries(globalRefs)) h[`globalasset:${file}`] = hash;
     if (unresolvedCssRef) h['globalasset:__all__'] = assetTreeHash(config, projectDir);
   }
   // Project choreography: inlined into the composition like theme.css, so an
@@ -150,6 +155,17 @@ function buildHashes(config, projectDir) {
       } catch {}
     }
     walk(assetsRoot, '');
+  }
+  if (config.localResources?.length) {
+    const selected = new Set(config.localResources);
+    let conservative = !!config.choreography || Object.values(config.imports || {}).some(i => /\.(?:js|mjs|cjs)$/i.test(i.file));
+    for (const [index, scene] of config.scenes.entries()) {
+      const roots = (config.sceneFileRefs || []).filter(ref => ref.sceneIndex === index && config.localResourceDependencies?.[ref.file]).map(ref => ref.file);
+      const refs = sceneAssetRefs(scene, pd, config.assetsDir, config.localResourceDependencies, roots);
+      for (const [file, hash] of Object.entries(refs.refs)) if (selected.has(file)) h[`localresource:${file}`] = hash;
+      if (refs.unresolved || scene._scriptFileContents || scene._threeModuleContents || scene._choreographyFileContents || /<script\b/i.test(scene.body || '')) conservative = true;
+    }
+    if (conservative) h['localresource:__conservative__'] = assetTreeHash(config, projectDir);
   }
   // Bed / sfx / clip files — hash by relative path (portable). Bed/SFX are
   // audio-only inputs: they never enter the per-scene pixel context, but they
@@ -272,7 +288,7 @@ function compile(config, opts = {}) {
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
     walkthroughs: compileWalkthroughs(walkthroughs, projectDir),
-    scenes: compileScenes(scenes || [], projectDir, config.assetsDir),
+    scenes: compileScenes(scenes || [], projectDir, config.assetsDir, config.localResourceDependencies, config.sceneFileRefs),
     // Whole non-audio asset tree hash: the conservative dependency cover for
     // scenes that embed executable JavaScript or carry an unresolved local
     // asset reference, and for whole-video cache mode (project JS can load any
@@ -280,6 +296,11 @@ function compile(config, opts = {}) {
     assetTreeHash: assetTreeHash(config, projectDir),
     variants: compileVariants(variants || []),
     series: series || null,
+    ...(config.seriesBinding ? { seriesBinding: config.seriesBinding } : {}),
+    ...(config.localResources?.length ? { localResources: config.localResources } : {}),
+    ...(config.localResourceDependencies ? { localResourceDependencies: config.localResourceDependencies } : {}),
+    ...(config.localResources?.length && config.sceneFileRefs?.length ? { sceneFileRefs: config.sceneFileRefs } : {}),
+    ...(config.themeCssFile ? { themeCssFile: config.themeCssFile } : {}),
     variant: variant || null,
     includePatterns: includePatterns !== false,
     safeLayout: safeLayout === true,
@@ -329,6 +350,10 @@ function collectAssets(config, projectDir) {
       try { entry.size = fs.statSync(abs).size; } catch {}
     }
     assets.push(entry);
+  }
+  for (const file of config.localResources || []) {
+    const ext = path.extname(file).toLowerCase();
+    add(/\.(?:wav|mp3|ogg|flac|m4a)$/.test(ext) ? 'audio' : 'file', file);
   }
   // Explicit pipeline assets (bed, sfx, clip).
   if (config.bed) add('audio', config.bed.file);
@@ -404,15 +429,17 @@ function compileVoices(voices) {
       ...(v.providerOptions ? { providerOptions: v.providerOptions } : {}),
       ...(v.providerFiles ? { providerFiles: v.providerFiles } : {}),
       ...(v.providerFileInputs ? { providerFileInputs: v.providerFileInputs } : {}),
+      ...(v.providerDependencyInputs ? { providerDependencyInputs: v.providerDependencyInputs } : {}),
       ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     };
   }
   return out;
 }
 
-function compileScenes(scenes, projectDir, assetsDir) {
+function compileScenes(scenes, projectDir, assetsDir, dependencies, sceneFileRefs = []) {
   return (scenes || []).map((s, i) => {
-    const assetRefs = sceneAssetRefs(s, projectDir, assetsDir);
+    const roots = sceneFileRefs.filter(ref => ref.sceneIndex === i && dependencies?.[ref.file]).map(ref => ref.file);
+    const assetRefs = sceneAssetRefs(s, projectDir, assetsDir, dependencies, roots);
     return {
     id:         s.id,
     ...(s.captions != null ? { captions: s.captions } : {}),
@@ -483,7 +510,7 @@ function compileScenes(scenes, projectDir, assetsDir) {
  * marks the scene as having an unresolved asset dependency, so the scene cache
  * falls back conservatively to the whole asset tree instead of silently
  * tracking a null hash (an edit would otherwise never invalidate it). */
-function sceneAssetRefs(scene, projectDir, assetsDir) {
+function sceneAssetRefs(scene, projectDir, assetsDir, dependencies = {}, roots = []) {
   const refs = {};
   let unresolved = false;
   let htmlMountResolved = 0; // resolved refs that came from an `assets/` mention
@@ -518,6 +545,7 @@ function sceneAssetRefs(scene, projectDir, assetsDir) {
     if (fromHtml && t.includes('assets/')) htmlMountResolved++;
   };
   if (scene && scene.clip) add(scene.clip, false);
+  for (const file of roots) add(file, false);
   const html = [scene && scene.body, scene && scene._cssFileContents].filter(Boolean).join('\n');
   const urlRe = /url\(\s*("([^"]*)"|'([^']*)'|([^)\s]+))\s*\)/gi;
   let mm;
@@ -564,6 +592,7 @@ function sceneAssetRefs(scene, projectDir, assetsDir) {
     for (const c of (node.children || [])) visitVisual(c);
   };
   visitVisual(scene && scene.visual);
+  require('./local-resources').expandResourceRefs(refs, dependencies || {}, pd);
   return { refs, unresolved };
 }
 
@@ -929,11 +958,12 @@ function write(m, outPath) {
   fs.writeFileSync(outPath, JSON.stringify(m, null, 2));
 }
 
-/* Toolchain versions are recorded evidence, not execution or identity inputs
+/* Toolchain versions and advisory series provenance are recorded evidence, not execution or identity inputs
  * (NAR-014-048). Return a detached projection for consumers that calculate
  * freshness, proof, revision, or plan identities. */
 function withoutToolchainVersionEvidence(manifest) {
   const projected = JSON.parse(JSON.stringify(manifest));
+  delete projected.seriesBinding;
   if (projected.renderer && typeof projected.renderer === 'object') {
     delete projected.renderer.providerVersion;
   }

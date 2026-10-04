@@ -268,6 +268,8 @@ async function save(manifestPath, name, opts = {}) {
 
   const outDir = path.dirname(manifestPath);
   const saved = ['manifest.json'];
+  let seriesRevision = null;
+  let snapshotRaw = null;
 
   const resolvedOverrides = opts.resolvedOverrides && typeof opts.resolvedOverrides === 'object'
     ? opts.resolvedOverrides : {};
@@ -326,6 +328,20 @@ async function save(manifestPath, name, opts = {}) {
         }
       }
     }
+    // The selected series closure is authoring source, not a live-parent link.
+    // Keep it outside optional reference discovery: corrupt selected material
+    // must reject the snapshot rather than becoming a best-effort omission.
+    const series = require('./series');
+    const binding = series.readBinding(projectDir);
+    if (binding) {
+      for (const ref of [series.MEMBERSHIP, series.BINDING, ...binding.files.map(e => series.FILES + e.path)]) {
+        const dest = path.join(releaseDir, ref);
+        fs.mkdirSync(path.dirname(dest), { recursive: true });
+        fs.copyFileSync(path.join(projectDir, ref), dest);
+        saved.push(ref);
+      }
+    }
+    if (binding) seriesRevision = binding.revision;
     // theme.css
     const themeFile = path.join(projectDir, 'theme.css');
     if (fs.existsSync(themeFile)) {
@@ -381,6 +397,7 @@ async function save(manifestPath, name, opts = {}) {
         const { loadConfigFile } = require('./config');
         const raw = opts.configSource && opts.configSource.raw
           ? opts.configSource.raw : await loadConfigFile(configFile);
+        snapshotRaw = raw;
         const snapshotRef = ref => {
           if (typeof ref !== 'string' || !ref.trim() || /^(?:https?:)?\/\//i.test(ref) || path.isAbsolute(ref)) return;
           const refPath = path.resolve(projectDir, ref);
@@ -390,6 +407,7 @@ async function save(manifestPath, name, opts = {}) {
           fs.copyFileSync(refPath, dest);
           if (!saved.includes(ref)) saved.push(ref);
         };
+        for (const ref of require('./local-resources').resolveLocalResources(raw.localResources, projectDir)) snapshotRef(ref);
         const sceneRefKeys = ['bodyFile', 'cssFile', 'choreographyFile', 'scriptFile',
           'threeFile', 'threeModule', 'elementsFile', 'visualFile'];
         if (raw && Array.isArray(raw.scenes)) {
@@ -461,6 +479,29 @@ async function save(manifestPath, name, opts = {}) {
   try {
     if (branchRevision(name) !== expectedRevision) {
       throw new Error(`release "${safeName}" changed while this snapshot was being saved`);
+    }
+    if (seriesRevision) {
+      const retained = require('./series').readBinding(releaseDir);
+      if (!retained || retained.revision !== seriesRevision) throw new Error('series binding changed during source snapshot; retry after resolving the project');
+      const reviewed = JSON.parse(manifestSrc);
+      if (!reviewed.seriesBinding) throw new Error('series inputs were added after the manifest was resolved; resolve the project again before saving');
+      if (reviewed.seriesBinding.revision !== retained.revision) {
+        if (!snapshotRaw) throw new Error('cannot verify changed series inputs without the episode source; resolve the project again before saving');
+        const resolved = require('./schema').resolveConfig(snapshotRaw, resolvedOverrides, releaseDir);
+        const { buildHashes, hashConfig } = require('./manifest');
+        const hashes = buildHashes(resolved, releaseDir);
+        // Runtime paths in the retained source resolve under the staging root.
+        // Compare their original project identities without altering the bytes
+        // used to derive file hashes. Advisory-only revisions may still save.
+        const originalPaths = value => {
+          if (typeof value === 'string' && path.isAbsolute(value) && isInside(releaseDir, value)) return path.join(projectDir, path.relative(releaseDir, value));
+          if (Array.isArray(value)) return value.map(originalPaths);
+          if (value && typeof value === 'object') return Object.fromEntries(Object.entries(value).map(([key, child]) => [key, originalPaths(child)]));
+          return value;
+        };
+        hashes.config = hashConfig(originalPaths(resolved));
+        if (require('./series').canonical(hashes) !== require('./series').canonical(reviewed.hashes)) throw new Error('series runtime inputs changed after the manifest was resolved; resolve the project and refresh its proof before saving');
+      }
     }
     if (fs.existsSync(finalReleaseDir)) rmDir(finalReleaseDir);
     const oldBranchDir = branchDir(name);

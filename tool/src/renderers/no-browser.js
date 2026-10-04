@@ -131,6 +131,7 @@ function compose(config, outDir) {
   const noBrowserDir = ensureDir(path.join(outDir, `no-browser-${slug(config.title)}`));
   const assetsDir = ensureDir(path.join(noBrowserDir, 'assets'));
   if (config.assetsDir) fs.cpSync(config.assetsDir, assetsDir, { recursive: true });
+  require('../local-resources').copyLocalResources(config, noBrowserDir);
 
   const scenes = config.scenes.map(scene => {
     let clip = null;

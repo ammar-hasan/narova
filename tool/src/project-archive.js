@@ -139,6 +139,8 @@ function collectProjectFiles(projectDir, opts = {}) {
   if (configNames.length !== 1) {
     throw new Error(`project must contain exactly one root config (${CANDIDATES.join('|')})`);
   }
+  const seriesBinding = require('./series').readBinding(root);
+  const seriesMembers = seriesBinding ? new Set(['.narova-series/current/binding.json', ...seriesBinding.files.map(e => '.narova-series/current/files/' + e.path)]) : null;
   const secrets = opts.scanSecrets === false ? [] : secretValues(opts.env);
   const files = [];
   function visit(dir, prefix = '') {
@@ -147,6 +149,8 @@ function collectProjectFiles(projectDir, opts = {}) {
     for (const entry of entries) {
       const rel = prefix ? `${prefix}/${entry.name}` : entry.name;
       if (excludedName(EXCLUDED_DIRS, entry.name)) continue;
+      if (prefix === '.narova-series' && entry.name !== 'current') continue;
+      if (seriesMembers && rel.startsWith('.narova-series/current/') && !entry.isDirectory() && !seriesMembers.has(rel)) continue;
       if (entry.isSymbolicLink()) throw new Error(`project contains a symbolic link: ${rel}`);
       if (entry.isDirectory()) {
         visit(path.join(dir, entry.name), rel);
@@ -513,6 +517,7 @@ function rawProjectReferences(raw) {
   const add = (value, label) => {
     if (typeof value === 'string' && value.trim()) refs.push({ value, label });
   };
+  for (const [index, file] of ((raw && raw.localResources) || []).entries()) add(file, `config.localResources[${index}]`);
   add(raw && raw.theme && raw.theme.css, 'config.theme.css');
   add(raw && raw.choreography, 'config.choreography');
   const bed = raw && (raw.bed || raw.music);
@@ -769,6 +774,7 @@ function assertPortableReferences(root, raw, config, selectedPaths) {
 }
 
 function assertEntryDependencyClosure(entries) {
+  const seriesBinding = require('./series').verifyArchive(entries);
   const byName = new Map(entries.map(entry => [safeMemberPath(entry.path), entry.data]));
   const configs = CANDIDATES.filter(name => byName.has(name));
   if (configs.length !== 1) throw new Error(`project must contain exactly one root config (${CANDIDATES.join('|')})`);
@@ -827,6 +833,12 @@ function assertEntryDependencyClosure(entries) {
         throw new Error(`config.walkthroughs.${id} contains a machine-local file URL and cannot be shared`);
       }
     }
+    if (seriesBinding) {
+      const { mergeDefaults } = require('./series-defaults');
+      const { runtime } = require('./series');
+      const shared = runtime(seriesBinding);
+      raw = mergeDefaults(raw, shared.defaults, shared.voiceOrder, shared.files, shared.dependencies).raw;
+    }
     const resolved = { ...raw };
     if (raw.theme && typeof raw.theme.css === 'string') {
       const themePath = resolveReference({ value: raw.theme.css, label: 'config.theme.css', baseDir: '' });
@@ -837,16 +849,22 @@ function assertEntryDependencyClosure(entries) {
       const parseSceneJson = (field, targetField) => {
         if (typeof scene[field] !== 'string') return;
         const memberPath = resolveReference({ value: scene[field], label: `config.scenes[${index}].${field}`, baseDir: '' });
-        try { copy[targetField] = JSON.parse(decodeUtf8(byName.get(memberPath), `config.scenes[${index}].${field}`)); }
+        try {
+          let contents = decodeUtf8(byName.get(memberPath), `config.scenes[${index}].${field}`);
+          if (raw.localResources?.includes(memberPath)) contents = require('./local-resources').rebaseSource(contents, memberPath);
+          copy[targetField] = JSON.parse(contents);
+        }
         catch (error) { throw new Error(`config.scenes[${index}].${field} is invalid JSON: ${error.message}`); }
       };
       if (typeof scene.bodyFile === 'string') {
         const bodyPath = resolveReference({ value: scene.bodyFile, label: `config.scenes[${index}].bodyFile`, baseDir: '' });
         copy.body = decodeUtf8(byName.get(bodyPath), `config.scenes[${index}].bodyFile`);
+        if (raw.localResources?.includes(bodyPath)) copy.body = require('./local-resources').rebaseSource(copy.body, bodyPath);
       }
       if (typeof scene.cssFile === 'string') {
         const cssPath = resolveReference({ value: scene.cssFile, label: `config.scenes[${index}].cssFile`, baseDir: '' });
         copy._cssFileContents = decodeUtf8(byName.get(cssPath), `config.scenes[${index}].cssFile`);
+        if (raw.localResources?.includes(cssPath)) copy._cssFileContents = require('./local-resources').rebaseSource(copy._cssFileContents, cssPath);
       }
       parseSceneJson('threeFile', 'three');
       parseSceneJson('elementsFile', 'elements');
@@ -922,6 +940,7 @@ function isFreshnessExcluded(rel) {
 }
 
 function isArchiveStateExcluded(rel) {
+  if (rel.startsWith('.narova-series/') && !rel.startsWith('.narova-series/current/')) return true;
   const parts = rel.split('/');
   const base = parts[parts.length - 1];
   return parts.some(part => excludedName(EXCLUDED_DIRS, part))
@@ -1027,35 +1046,50 @@ function publishEntries(entries, target, opts = {}) {
   const destination = path.resolve(target);
   const parent = path.dirname(destination);
   fs.mkdirSync(parent, { recursive: true });
-  if (fs.existsSync(destination) && !opts.overwrite) throw new Error(`target already exists: ${destination} (pass --overwrite to replace it)`);
-  const stage = fs.mkdtempSync(path.join(parent, `.${path.basename(destination)}.stage-`));
-  let backup = null;
+  const lock = path.join(parent, `.${path.basename(destination)}.publish-lock`);
+  try { fs.mkdirSync(lock); }
+  catch (error) { if (error.code === 'EEXIST') throw new Error(`target publication is busy; inspect ${lock} before recovering an abandoned lock`); throw error; }
+  let stage = null, backup = null, reserved = null;
   try {
+    if (fs.existsSync(destination) && !opts.overwrite) throw new Error(`target already exists: ${destination} (pass --overwrite to replace it)`);
+    stage = fs.mkdtempSync(path.join(parent, `.${path.basename(destination)}.stage-`));
     for (const entry of entries) {
       const rel = safeMemberPath(entry.path);
       const out = path.join(stage, ...rel.split('/'));
-      const relative = path.relative(stage, out);
-      if (relative.startsWith('..') || path.isAbsolute(relative)) throw new Error(`member escapes target: ${rel}`);
       fs.mkdirSync(path.dirname(out), { recursive: true });
       fs.writeFileSync(out, entry.data, { mode: 0o644 });
     }
-    if (fs.existsSync(destination)) {
+    if (!opts.overwrite) {
+      // Exclusive mkdir reserves a fresh name after staging. Rename replaces
+      // only our empty reservation; a competing populated directory is never
+      // moved aside or deleted. Cooperating publishers share the parent lock.
+      try { fs.mkdirSync(destination); }
+      catch (error) { if (error.code === 'EEXIST') throw new Error(`target already exists: ${destination}`); throw error; }
+      reserved = fs.lstatSync(destination);
+    } else if (fs.existsSync(destination)) {
       backup = `${destination}.backup-${process.pid}-${Date.now()}`;
       fs.renameSync(destination, backup);
     }
     fs.renameSync(stage, destination);
-    if (backup) {
-      try { fs.rmSync(backup, { recursive: true, force: true }); }
-      catch { /* publication is already committed; retain the recoverable backup */ }
-    }
+    stage = null;
+    if (backup) { try { fs.rmSync(backup, { recursive: true, force: true }); } catch { /* committed; keep recoverable backup */ } }
+    return destination;
   } catch (error) {
-    try { fs.rmSync(stage, { recursive: true, force: true }); } catch {}
+    if (stage) { try { fs.rmSync(stage, { recursive: true, force: true }); } catch {} }
+    if (reserved) {
+      try {
+        const current = fs.lstatSync(destination);
+        if (current.dev === reserved.dev && current.ino === reserved.ino) fs.rmdirSync(destination);
+      } catch (recovery) {
+        if (recovery.code !== 'ENOENT') error.message += `; reserved target cleanup failed (${recovery.message}); inspect ${destination}`;
+      }
+    }
     if (backup && !fs.existsSync(destination)) {
-      try { fs.renameSync(backup, destination); } catch {}
+      try { fs.renameSync(backup, destination); }
+      catch (recovery) { error.message += `; rollback failed (${recovery.message}); recover ${backup}`; }
     }
     throw error;
-  }
-  return destination;
+  } finally { try { fs.rmdirSync(lock); } catch {} }
 }
 
 function openArchive(file, target, opts = {}) {
@@ -1215,5 +1249,7 @@ module.exports = {
   FORMAT, MANIFEST_PATH, REMIX_PATH, NORMALIZED_TIME,
   MAX_MEMBER_BYTES, MAX_TOTAL_BYTES, MAX_FETCH_BYTES, MAX_MANIFEST_BYTES, MAX_ARCHIVE_BYTES, FETCH_TIMEOUT_MS,
   collectProjectFiles, zipStored, parseZip, readArchiveBytes,
+  safeMemberPath, assertPortablePaths, cssReferences, markupReferences,
+  assertSourceTargetSeparate, assertEntryDependencyClosure, assertAssetClosure, publishEntries,
   packProject, inspectArchive, openArchive, remix, trustNotice,
 };

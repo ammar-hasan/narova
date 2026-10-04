@@ -625,6 +625,27 @@ artifact. Free-form expectations remain creator-owned prose; only explicit
 `observe` probes are mechanically compared. Assertions do not change rendering,
 cache identity, proof validity, or release eligibility.
 
+### Multi-video series
+
+Courses, vlogs and drama can share voices, characters, theme/caption defaults,
+selected local resources and creator-owned context. Episodes stay independent:
+each retains its selected shared bytes, and later edits affect only explicit
+adopters. Catalog relationships and authored handoffs never force render order.
+
+```bash
+narova series init course --id astronomy --title "Astronomy course"
+# Edit course/series.config.json and author independent episode projects.
+narova series bind course --episode lesson_02 --context audience,vocabulary
+narova series inspect --project course/episodes/lesson_02 --json
+narova series compare course --project course/episodes/lesson_02
+narova series adopt course --project course/episodes/lesson_02
+```
+
+See [series authoring](skills/narova/references/series.md) for the data format,
+resource selection, voice order, removals, continuity, revision restoration,
+portable episode exchange and fresh standalone detachment. Legacy `series:
+{part,total}` remains separate display metadata.
+
 ### Narrated-series controls
 
 Keep optional alignment settings in the project with
