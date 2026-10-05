@@ -175,15 +175,15 @@ mishear, so audition flagged turns. See the [speech check guide](https://github.
 
 Courses, daily vlogs and drama can share selected defaults, resources and authored
 context while each episode owns its script, scenes, assets and evidence. Create
-and catalog the episode, then explicitly `narova series bind` before its first
-`build`. Bind copies the chosen shared files into a frozen episode snapshot;
-build reads that snapshot and stages it for rendering. It does not automatically
-bind or refresh shared sources. Use `series adopt` to choose a newer revision.
-For fresh whole-series CI builds, commit source material and per-episode selection
-recipes, then bind inside each fresh job; ignore membership and binding copies
-together. To pin an episode to an older shared revision, commit its membership
-and complete current binding instead, and let CI build that snapshot.
-
+and catalog the episode, then run `narova series build <source> --episode <id>`.
+It copies selected shared inputs and builds that episode in one command. Later
+calls retain the saved version; `--update-shared` refreshes only that episode
+before building. Ordinary `build` still uses an existing binding without refresh.
+CI chooses episodes independently. Track originals and selection recipes, then
+use the combined command in a fresh checkout; ignore membership/binding copies
+together. Commit both membership and complete current binding/files to retain
+an older episode selection. Reused CI workspaces require an explicit update to
+pick up changed shared originals.
 
 Mix shared fonts, stylesheets or images with local files and episode overrides.
 Theme/caption properties merge by key; same-ID local voice/character records

@@ -317,7 +317,7 @@ result and is never part of the machine contract.
 
 ## Series
 
-All `series` actions use operation `series`, with `data.action` equal to
+Data-only `series` actions use operation `series`, with `data.action` equal to
 `init`, `inspect`, `bind`, `compare`, `adopt`, `restore`, `handoff` or `detach`.
 Init reports file and seriesId. Catalog inspection reports ordered episodes and
 projectStatus (`planned`, `missing`, `available`). Bound inspection reports
@@ -330,10 +330,25 @@ Adopt includes that report under changes. Handoff reports authored value and
 sha256 without advancing any catalog. Detach reports target, provenance IDs,
 revision and committed. Ordinary usage/operation failure exits apply.
 
-Bind/adopt retain selected shared bytes in the episode before building; restore
-uses verified local binding history. Build does not bind or refresh from a live
-series source. Composition stages the retained files as ordinary renderer inputs
-alongside episode-owned assets; verified reuse may skip that staging.
+`series build` uses operation `series build` and `data.action: "build"`.
+`data.series` reports `action` (`bind`, `adopt`, `retained`), absolute `project`,
+`seriesId`, `episodeId`, `revision` and Boolean `committed`; adoption also includes
+its ordinary `changes` report. First use binds before production; repeated calls
+keep verified inputs, with `--update-shared` explicitly adopting before building.
+Ordinary build results appear alongside `series`, including `builds` for variants.
+A published preparation registers its `series-binding` artifact immediately;
+those facts/artifacts remain if later build/release checks fail. Retained reuse
+reports `committed: false` and no newly committed binding artifact.
 
-Series operations do not execute project code, providers or rendering. A packed
-binding is source-portable; subsequent execution keeps ordinary prerequisites.
+Bind/adopt and combined preparation copy selected bytes into the episode.
+Composition stages retained files alongside episode-owned assets; verified reuse
+may skip staging. Ordinary `build` never binds or adopts a live source. Combined
+build accepts ordinary build flags except `--config` and keeps their exit/gate/
+provider behavior. Invalid identity/options/selectors fail before publication;
+corrupt bindings are not silently repaired. A later build failure does not roll
+back a committed preparation.
+
+Data-only series operations and combined preparation do not execute project code,
+providers or rendering. Combined production then executes the ordinary build
+with its authored-code trust boundary. Source portability keeps ordinary runtime,
+provider and model prerequisites; no sibling builds or scheduler are implied.

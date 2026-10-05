@@ -177,6 +177,7 @@ function operationName(cmd, positionals, flags = {}) {
   if (flags.version) return 'version';
   if (!cmd || cmd === 'help' || cmd === '-h' || flags.help || flags.h) return 'help';
   const two = {
+    series: ['build'],
     assets: ['import', 'download', 'providers', 'search', 'acquire', 'list', 'untrack', 'verify', 'credits'],
     walkthrough: ['explore', 'capture', 'status'],
     release: ['save', 'list', 'restore', 'remove'],
@@ -231,11 +232,15 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'speech', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
+const BOOL_FLAGS = new Set(['update-shared', 'reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'speech', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows', 'speaker', 'reference', 'id', 'title', 'episode', 'resources', 'context', 'incoming']);
 
-function validateInvocationFlags(flags, cmd) {
+function validateInvocationFlags(flags, cmd, positionals) {
+  const seriesBuild = cmd === 'series' && positionals[1] === 'build';
+  if (flags['update-shared'] && !seriesBuild) invocationError('--update-shared is only valid with narova series build');
+  if (seriesBuild && flags.config != null) invocationError('series build uses the episode root config; --config is not supported');
+  if ((cmd === 'build' || seriesBuild) && flags.variant && flags.variants) invocationError('--variant and --variants are mutually exclusive — pick one');
   for (const name of ['id', 'title', 'episode', 'resources', 'context', 'incoming']) if (flags[name] != null && cmd !== 'series') invocationError(`--${name} is only valid with narova series`);
   if (flags.continuity != null && cmd !== 'generate') invocationError('--continuity is only valid with narova generate');
   if (flags['no-continuity'] && cmd !== 'generate') invocationError('--no-continuity is only valid with narova generate');
@@ -312,6 +317,7 @@ function parseArgs(argv) {
         if (!BOOL_FLAGS.has(key) && !BOOL_OR_VALUE.has(key) && !VALUE_FLAGS.has(key)) {
           throw new Error(`unknown option --${key}`);
         }
+        if (key === 'update-shared' && a.slice(eq + 1) !== 'true') throw new Error('--update-shared accepts a bare flag or =true');
         flags[key] = BOOL_FLAGS.has(key) && !BOOL_OR_VALUE.has(key) ? true : a.slice(eq + 1); continue;
       }
       const key = a.slice(2);
@@ -612,6 +618,8 @@ Commands:
   branch list|show     inspect saved proof directions and their rationale
   voice-cache export --out <build-dir> --dir <new-bundle-dir>  save portable sentence WAVs
   voice-cache import --dir <bundle-dir> [--overwrite]         validate and restore sentences
+  series build <source> --episode <id>  prepare shared inputs + build one episode
+                         --update-shared adopts current inputs before building
   series init|inspect|bind|compare|adopt|restore|handoff|detach
                        shared defaults/resources and frozen episode context
   synth                Python TTS -> out/audio/*, out/timings.json
@@ -779,10 +787,10 @@ async function main() {
     if (jsonRequested) machine.emitUsageEnvelope(preDispatchOperation(argv), error.message);
     process.exit(machine.EXIT.usage);
   }
-  const cmd = positionals[0];
+  let cmd = positionals[0];
   if (flags.json) machine.begin(operationName(cmd, positionals, flags));
   const helpRequested = !cmd || cmd === 'help' || cmd === '-h' || flags.help || flags.h;
-  if (!flags.version && !helpRequested) validateInvocationFlags(flags, cmd);
+  if (!flags.version && !helpRequested) validateInvocationFlags(flags, cmd, positionals);
   substrateGuard();
 
   if (flags.version) {
@@ -809,6 +817,29 @@ async function main() {
     console.log(actionHelp || HELP);
     return;
   }
+
+  let seriesPreparation;
+  if (cmd === 'series' && positionals[1] === 'build') {
+    if (positionals.length !== 3 || !flags.episode) invocationError('usage: narova series build <source> --episode <id> [--project <directory>] [--update-shared]');
+    const series = require('../src/series');
+    const selection = Object.fromEntries(['resources', 'context', 'incoming'].filter(k => flags[k] !== undefined).map(k => [k, flags[k]]));
+    mData({ action: 'build' });
+    seriesPreparation = series.prepareBuild(positionals[2], flags.episode, {
+      ...selection, project: flags.project, updateShared: flags['update-shared'],
+    });
+    flags.project = seriesPreparation.project;
+    mData({ series: seriesPreparation });
+    if (seriesPreparation.committed) mArtifact(path.join(flags.project, series.CURRENT), 'series-binding');
+    console.log(`series ${seriesPreparation.action}: ${seriesPreparation.seriesId}/${seriesPreparation.episodeId} @ ${seriesPreparation.revision}`);
+    cmd = 'build';
+  }
+  const verifyPreparedConfig = config => {
+    if (seriesPreparation && (config.seriesBinding?.revision !== seriesPreparation.revision
+        || config.seriesBinding?.series.id !== seriesPreparation.seriesId
+        || config.seriesBinding?.episode.id !== seriesPreparation.episodeId)) {
+      throw new Error('series build: binding changed after preparation; inspect the episode and retry');
+    }
+  };
 
   switch (cmd) {
     case 'init': {
@@ -2366,9 +2397,6 @@ async function main() {
     }
 
     case 'build': {
-      if (flags.variant && flags.variants) {
-        usageError('--variant and --variants are mutually exclusive — pick one');
-      }
       const buildArtifacts = (built, out) => {
         if (!built) return;
         if (built.mp4) mArtifact(built.mp4, 'video');
@@ -2408,6 +2436,8 @@ async function main() {
           id: v.id,
           config: resolveConfig(fresh(), { ...overridesFrom(flags), variant: v.id }, dir),
         }));
+        verifyPreparedConfig(base);
+        for (const variant of variantConfigs) verifyPreparedConfig(variant.config);
         registerConfigProviderSecrets(base, flags.backend);
         for (const variant of variantConfigs) registerConfigProviderSecrets(variant.config, flags.backend);
         // Preflight every deliverable before rendering any of them. A broken
@@ -2441,11 +2471,12 @@ async function main() {
             verifyMotionIfRequested(builtVariant, flags);
           }
         }
-        mSetData({ builds: builtResults });
+        mSetData({ ...(seriesPreparation ? { action: 'build', series: seriesPreparation } : {}), builds: builtResults });
         if (base.renderer === 'hyperframes') await refreshPreviewIfLive(out);
         return;
       }
       const { config, projectDir } = await loadResolved(flags);
+      verifyPreparedConfig(config);
       const out = outDirOf(flags, projectDir);
       if (flags.release) {
         const candidates = [];
@@ -2500,6 +2531,7 @@ async function main() {
       });
       buildArtifacts(built, out);
       mSetData({
+        ...(seriesPreparation ? { action: 'build', series: seriesPreparation } : {}),
         mp4: built.mp4,
         seconds: built.seconds,
         renderer: built.renderer,

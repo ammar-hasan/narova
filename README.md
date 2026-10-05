@@ -631,17 +631,16 @@ Courses, vlogs and drama can share voices, characters, theme/caption defaults,
 selected local resources and creator-owned context. Episodes stay independent:
 each retains its selected shared bytes, and later edits affect only explicit
 adopters. Catalog relationships and authored handoffs never force render order.
-Bind after creating the episode and its catalog entry, before its first build:
-`series bind` copies the selected shared sources into a frozen episode snapshot;
-`build` consumes that snapshot with the episode's own script and assets. Build
-stages retained files for rendering without refreshing them from the live series.
-Use `series adopt` explicitly when choosing a newer shared revision.
-For whole-series CI rebuilds, keep the source catalog/shared files, episode
-sources and per-episode selections in Git, then bind each episode in the fresh
-job before building; derived binding copies need not be committed. Alternatively,
-commit membership plus the complete frozen binding to preserve an older shared
-revision and have CI build it unchanged. The guide explains both Git policies.
-
+Create/catalog the episode, then use `narova series build <source> --episode <id>`
+to copy its selected shared inputs and build in one command. Later builds keep
+that saved revision; `--update-shared` explicitly adopts current inputs and builds
+only that episode. Local files and overrides stay its own. Ordinary `build` also
+consumes a saved binding without reading the live series.
+CI selects episodes independently: track shared originals, episode sources and
+selection recipes, then run the combined command after checkout. Derived copies
+need not be committed; ignore membership and binding together. To preserve an
+older shared revision, commit membership plus the complete current binding/files.
+In a reused workspace, request `--update-shared` to pick up current originals.
 
 An episode can mix shared fonts, CSS and images with local footage/assets and
 local overrides. Theme/caption properties merge by key; a matching local
@@ -653,10 +652,10 @@ carry mode/tokens, not stylesheet files. See the guide's worked mixed example.
 ```bash
 narova series init course --id astronomy --title "Astronomy course"
 # Edit course/series.config.json and author independent episode projects.
-narova series bind course --episode lesson_02 --context audience,vocabulary
+narova series build course --episode lesson_02 --context audience,vocabulary --reuse
 narova series inspect --project course/episodes/lesson_02 --json
 narova series compare course --project course/episodes/lesson_02
-narova series adopt course --project course/episodes/lesson_02
+narova series build course --episode lesson_02 --update-shared --reuse
 ```
 
 See [series authoring](skills/narova/references/series.md) for the data format,

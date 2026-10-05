@@ -59,6 +59,7 @@ absent optional keys are reported as skips.
 | `narova review --audio-levels --windows '<JSON>' [--audio <file>]` | measure an ordered non-empty JSON array of `{ "label", "start", "end" }` windows over one exact artifact. Labels remain caller identifiers; short/gated-out windows retain available peak/sample facts and mark gated facts unavailable. Duplicate labels and malformed intervals fail plainly. | bounded local decode per window |
 | `narova review --audio-levels --mix-map` | join project-order bed/SFX declarations, source digests, authored gains/fades/anchors, resolved global windows, and achieved facts over the corresponding interval of `out/audio/mix.wav`. Every achieved row describes the total overlapping mix, never an isolated source or a claim about audibility, clarity, masking, or balance. | bounded local decode per declaration |
 | `narova review --audio-levels --delivered [file] [--member <stream-index>]` | directly decode the selected encoded/muxed audio member (default artifact `out/video.mp4`). A sole member or unique default is selected explicitly; otherwise choose its container stream index. The receipt binds the container digest, member facts, and selection basis and never copies intermediate WAV facts. | bounded local decode |
+| `narova series build <source> --episode <id> [--update-shared]` | prepare selected shared inputs and build one episode; repeats retain its saved revision | same as selected episode build |
 | `narova build` | synth + compose + selected local renderer → `out/video.mp4` (+ captions). Variants and deliverables work with both providers. | synth cost + local render |
 | `narova preview` | HyperFrames: compose and open Studio. No-browser: render `out/preview-no-browser.mp4` at draft quality. | Studio until Ctrl-C, or local draft render |
 | `narova preview --detach` | compose, keep Studio alive, print URL + PID + log. If one is already running it is restarted on the new build (same port) — Studio does not hot-reload. | until `preview --stop` |
@@ -276,15 +277,20 @@ See [Pocket controls](pockettts.md).
 
 ## Series authoring
 
-`series init|inspect|bind|compare|adopt|restore|handoff|detach` manages explicit
-shared authoring for independent episode projects. Each supports `--json`;
-see [series data, selection and recovery](series.md) for exact arguments.
-Create/catalog an episode, then bind it once before its first build. Bind copies
-selected shared sources into the episode's frozen binding; build consumes those
-retained inputs alongside local authoring and stages renderer files as needed.
-Build never automatically binds or adopts the current series. Use explicit
-adoption for a new revision. The guide includes mixed local/shared files,
-font/CSS application and exact property-versus-whole-record override rules.
-For fresh CI authoring, bind after checkout with tracked per-episode selections;
-for a committed frozen binding, build without rebinding. Membership and retained
-files are committed or ignored together. See [CI/Git policies](series.md#ci-builds-and-git-tracking).
+`narova series build <source> --episode <id> [--project <directory>]` prepares
+selected shared inputs and builds one episode in the same invocation. Initial
+calls bind; later calls verify and keep the retained selection. Use
+`--update-shared` to adopt current inputs and build only that episode. Existing
+`--resources`, `--context`, `--incoming` selectors are explicit; repeats must match
+unless updating, and empty update selectors clear choices. Ordinary build options
+work except `--config`; this command uses the episode root config. `--json`
+reports operation `series build`, preparation facts and ordinary build results.
+Preparation remains committed if later production fails.
+
+`series init|inspect|bind|compare|adopt|restore|handoff|detach` remains available
+for separate data-only authoring/inspection. Ordinary `build` never automatically
+binds or adopts. See [series data, fonts/overrides and recovery](series.md).
+CI selects episodes independently. Fresh jobs can derive copies from tracked
+originals/recipes; frozen projects track membership and complete retained files
+as a pair. Reused workspaces need an explicit update to refresh shared inputs.
+See [CI/Git policies](series.md#ci-builds-and-git-tracking).
