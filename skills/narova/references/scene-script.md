@@ -768,6 +768,15 @@ Put durable visual source beside the config in `assets/` (or set top-level
 .hero{background-image:url("assets/hero.webp")}
 ```
 
+Series-bound episodes can use their own `assets/` and retained shared files in
+the same scene. Shared fonts and stylesheets are declared/selected resources;
+apply `.narova-series/current/files/...` through `theme.css`, scene references
+or `style.fontFile` as appropriate. Shared theme mode/tokens merge with local
+values, but `defaults.theme.css` is unsupported. Binding/adoption copies shared
+source bytes before a build; composition stages retained inputs, without reading
+the current series. See the [mixed font/CSS example](series.md#shared-fonts-and-custom-css)
+and [bind/build lifecycle](series.md#when-sharing-happens-bind-build-and-adopt).
+
 Prefer an inline SVG for simple marks and local files for photos or fonts.
 Use a `data:` URI only for a genuinely small asset. Do not base64-pack large
 images or fonts into `theme.css`; it makes the source hard to inspect and

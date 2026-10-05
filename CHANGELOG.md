@@ -6,6 +6,11 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Changed
+- Clarified series binding/adoption copies versus build-time renderer staging,
+  mixed shared/episode-owned assets and overrides, and explicit local font/CSS
+  selection and application across public guides, overviews and website.
+
 ## [0.54.0] - 2026-10-05
 
 ### Added

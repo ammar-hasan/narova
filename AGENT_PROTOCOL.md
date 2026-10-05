@@ -330,5 +330,10 @@ Adopt includes that report under changes. Handoff reports authored value and
 sha256 without advancing any catalog. Detach reports target, provenance IDs,
 revision and committed. Ordinary usage/operation failure exits apply.
 
+Bind/adopt retain selected shared bytes in the episode before building; restore
+uses verified local binding history. Build does not bind or refresh from a live
+series source. Composition stages the retained files as ordinary renderer inputs
+alongside episode-owned assets; verified reuse may skip that staging.
+
 Series operations do not execute project code, providers or rendering. A packed
 binding is source-portable; subsequent execution keeps ordinary prerequisites.
