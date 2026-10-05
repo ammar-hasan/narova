@@ -5,6 +5,101 @@ independent projects. Courses can share a teacher and terminology; vlogs can
 share a host, visual package and music; drama can share cast references and
 explicit story state. Each episode owns its script, scenes, timing and evidence.
 
+## When sharing happens: bind, build and adopt
+
+Author the series catalog and create the episode project first. Then explicitly
+bind that episode before its first build. The creator or authoring agent runs
+`series bind`; `build` does not infer membership or bind automatically.
+
+| Step | What happens | Where the shared files come from |
+|---|---|---|
+| `series init` | Create a series source to edit; no episode or video is produced. | No shared file copy. |
+| `series bind` | Select shared material and copy its verified files into the episode's frozen binding. | The authored series source and selected dependency closure. |
+| `build` | Resolve shared defaults plus episode values, then synthesize/compose/render as needed. | The episode's retained binding, not the current series source. |
+| `series adopt` | Explicitly replace one episode's binding with a selected current source revision, preserving its local authoring. | The selected series source; prior binding remains restorable. |
+| `series restore` | Restore an exact retained binding revision. | Verified local binding history. |
+
+There are two distinct copying steps. Binding/adoption copies selected shared
+sources into `.narova-series/current/files/` **before building**. Composition
+stages those already retained files into the generated renderer project alongside
+ordinary episode assets. That build-time staging does not fetch the latest
+series files or update the binding, and a verified build reuse may skip it.
+Editing or deleting the live series cannot silently alter an already bound
+video. Repeated builds use its chosen revision until explicit adoption/restoration.
+
+An episode owns its script, scenes, timing, local assets, creative brief and
+proofs. It can use a few shared resources and a few of its own, override selected
+shared defaults, or leave a resource unused. Selecting a resource retains it;
+ordinary scene/font/theme/music references determine how it is applied.
+
+Separating selection from production makes an episode's shared revision
+inspectable before rendering and keeps older episodes reproducible after the
+series changes. Invalid selected files fail before expensive work. It is not
+an extra approval gate: CI can run bind and build consecutively in one script.
+For pipelines that always rebuild every episode from the current commit, the
+main value is explicit input selection and an attributed failure point rather
+than preserving an older revision.
+
+## CI builds and Git tracking
+
+Choose the policy for your production. A fresh CI binding and a committed frozen
+binding are both supported, but they deliberately select different source state.
+
+| CI policy | Commit to Git | CI step before `build` |
+|---|---|---|
+| Rebuild the series from each checked-out commit | Series catalog/shared files, episode configs/local assets/evidence, and a tracked per-episode selection recipe (CI script). | In the fresh checkout, explicitly `series bind` each episode selected for the job. |
+| Keep an episode on its previously selected shared revision | Episode sources plus `series-membership.json`, `.narova-series/current/binding.json`, and all selected `current/files/` bytes. | Build the committed binding; no automatic bind/adopt. |
+
+For CI that rebuilds the whole series upon changes, bind **inside each fresh CI
+job after checkout and prerequisite setup, immediately before that episode's
+build**. Run this sequence for every episode your pipeline chooses to produce.
+Narova does not provide a whole-series batch build or an automatic changed-episode
+scheduler. Keep each episode's `--resources`, `--context` and `--incoming` choices
+in the tracked CI script; these selections are not inferred from asset filenames
+or the catalog. Shared defaults apply through the binding; local overrides remain
+in each episode's committed config.
+
+```sh
+# Fresh checkout: catalog, shared sources and episode authoring are present.
+# No prior binding is committed in this policy. Prerequisites are already ready.
+narova series bind course --episode orbits \
+  --resources orbit_diagram,brand_style --context audience,vocabulary \
+  --incoming after_intro
+narova build --project course/episodes/orbits --reuse
+```
+
+The copy occurs at bind, using shared files from that same checkout. Build then
+stages the retained copies for the renderer. A later Git commit with changed
+shared sources produces new bindings when this pipeline runs; an already bound
+local episode does not change automatically. Different CI jobs can retain
+different resource selections without modifying the source series.
+
+In this fresh-binding policy, ignore the **pair** of managed outputs, for example
+in a repository-wide `.gitignore`:
+
+```gitignore
+**/.narova-series/
+**/series-membership.json
+**/out/
+```
+
+Do not commit membership alone while ignoring its binding/files: resolution
+reports an incomplete binding rather than silently rebuilding it. `--reuse`
+controls ordinary verified build reuse, not series refresh; a fresh checkout
+without a cache builds normally. Pin the intended CLI/runtime versions and keep
+ordinary renderer/media/provider/model prerequisites ready for CI.
+
+For the frozen-episode policy, do not apply those two binding ignore patterns.
+Commit membership and the complete current binding together. Binding history is
+needed only if you want those older revisions available for explicit `restore`.
+CI can build a frozen episode without its original live series workspace; ordinary
+execution prerequisites still apply. To update it, deliberately `series adopt`,
+inspect the changes, then commit the new binding and selected files. Local
+scripts/assets/overrides survive adoption. Do not run `series bind` over an
+existing binding; it reports that the project is already bound.
+
+## Create and bind a series
+
 Create the source, then edit its data-only catalog and shared material:
 
 ```sh
@@ -26,7 +121,12 @@ narova init course/episodes/orbits
   },
   "resources": {
     "orbit_diagram": { "file": "media/orbit.svg" },
-    "opening": { "file": "media/opening.mp4" }
+    "opening": { "file": "media/opening.mp4" },
+    "brand_style": {
+      "file": "styles/brand.css",
+      "dependencies": ["fonts/BrandDisplay.ttf"]
+    },
+    "brand_font": { "file": "fonts/BrandDisplay.ttf" }
   },
   "context": {
     "audience": { "text": "Beginners; define each new term." },
@@ -83,6 +183,156 @@ Inspection reports each resource's `retainedFile`, such as
 ordinary `visual.src`, `bodyFile`, `clip`, music, providerFiles or import fields.
 No intro, outro, music or scene is inserted automatically. Inlined selected
 HTML/CSS and declarative visual documents preserve source-relative references.
+
+## Mix shared and episode-owned material
+
+One possible layout after binding (folder names outside managed binding paths
+are author choices; membership comes from the catalog and command):
+
+```text
+course/
+├── series.config.json
+├── media/orbit.svg                  # shared source
+├── styles/brand.css                 # shared stylesheet source
+├── fonts/BrandDisplay.ttf           # shared font source
+└── episodes/orbits/
+    ├── reel.config.json             # episode script and explicit overrides
+    ├── creative-brief.md            # this episode's evidence/approval
+    ├── assets/orbit.svg             # this episode's own image
+    ├── series-membership.json       # managed explicit association
+    └── .narova-series/
+        └── current/
+            ├── binding.json        # frozen defaults, selection and identities
+            └── files/              # actual copied selected bytes
+                ├── media/orbit.svg
+                ├── styles/brand.css
+                └── fonts/BrandDisplay.ttf
+```
+
+The shared and local `orbit.svg` files do not overwrite each other. Use
+`.narova-series/current/files/media/orbit.svg` for the retained shared image and
+`assets/orbit.svg` for the episode-owned image. Matching filenames do not imply
+replacement. Another episode keeps its own selection and overrides.
+
+### Shared fonts and custom CSS
+
+Shared `defaults.theme` supports mode and tokens, including font-family tokens
+such as `sans`/`mono`; it does **not** accept `css`. A family name does not carry
+font bytes. Declare local font files and custom stylesheets as resources, select
+them, and apply their retained paths through ordinary episode authoring.
+Custom CSS uses the HyperFrames renderer; portable visual-tree text uses the
+explicit `style.fontFile`/`style.fontFamily` settings described below.
+
+Create the shared `fonts/BrandDisplay.ttf` file and `styles/brand.css` from the
+catalog above. The stylesheet references its own source-relative font path:
+
+```css
+@font-face {
+  font-family: "Brand Display";
+  src: url("../fonts/BrandDisplay.ttf") format("truetype");
+}
+.episode-title { color: var(--accent); }
+```
+
+`brand_style.dependencies` lists that font's path relative to the series root;
+the selected stylesheet's relative URL is preserved when composed. Include the
+complete transitive closure of any additional local imports/images/fonts. A
+missing selected file or undeclared dependency fails binding/adoption.
+
+For an already bound episode, select the diagram and stylesheet explicitly:
+
+```sh
+narova series adopt course --project course/episodes/orbits \
+  --resources orbit_diagram,brand_style
+```
+
+For the first binding, use `series bind course --episode orbits` with the same
+`--resources` list. A font included as the stylesheet's declared dependency is
+copied with it; it does not also need a separate selection. `brand_font` enables
+independent selection when a portable text node uses the font without the CSS.
+
+This complete `course/episodes/orbits/reel.config.json` uses a shared font/image,
+a local image and episode-specific theme/caption/voice values:
+
+```json
+{
+  "title": "Orbits",
+  "renderer": "hyperframes",
+  "size": { "w": 320, "h": 180 },
+  "voices": {
+    "teacher": { "backend": "piper", "speaker": "en_US-ryan-medium", "label": "Episode host" }
+  },
+  "theme": {
+    "accent": "#d97706",
+    "sans": "Brand Display,sans-serif",
+    "css": ".narova-series/current/files/styles/brand.css"
+  },
+  "captions": { "plate": false },
+  "scenes": [
+    {
+      "id": "diagram",
+      "dur": 2,
+      "vo": [],
+      "body": "<h1 class=\"episode-title\">Orbits</h1><img src=\".narova-series/current/files/media/orbit.svg\" alt=\"Shared diagram\"><img src=\"assets/orbit.svg\" alt=\"Episode diagram\">"
+    }
+  ]
+}
+```
+
+Use an available font file and voice suited to the workspace. The example is a
+silent scene; adding narration retains the ordinary selected-backend/runtime/
+model prerequisites. Set the episode's own creative brief
+and proofs as required by its actual work. Then run the ordinary `build`.
+
+To add episode-only CSS while retaining shared styles, point the episode's
+`theme.css` at an episode-owned `theme.css` beside its config. Import the retained
+shared stylesheet from that file, then author the local rules:
+
+```css
+@import url(".narova-series/current/files/styles/brand.css");
+.episode-title { border-bottom: 2px solid var(--accent); }
+```
+
+Shared and local styles follow ordinary CSS ordering/specificity; Narova does
+not merge stylesheet source files as theme-token objects. An episode-only font
+can likewise live in `assets/fonts/` and be explicitly referenced by that
+scene's `style.fontFile` or the episode's own `@font-face` rule.
+
+For portable visual-tree text, select `brand_font` and apply the retained file:
+
+```json
+{
+  "type": "text",
+  "text": "Orbits",
+  "style": {
+    "fontFamily": "Brand Display",
+    "fontFile": ".narova-series/current/files/fonts/BrandDisplay.ttf"
+  }
+}
+```
+
+This is a `scene.visual` node, usable with `no-browser` or HyperFrames; see
+[renderer authoring](renderers.md). Keeping the stylesheet/font in the library
+does not apply it to an episode; a font-family name alone does not bundle or
+verify the local font bytes.
+
+### Override and removal rules
+
+| Episode authoring | Effective result |
+|---|---|
+| Omit a shared voice/character ID | Inherit that record. |
+| Author the same voice/character ID | Replace the entire shared record, retaining its slot; provide all needed local settings. |
+| Add a new voice/character ID | Keep shared records and add the episode-owned one; new voices append. |
+| Set one theme token or caption property | That episode value wins; other shared properties remain inherited. |
+| Set Boolean `captions` | Replace inherited caption settings. |
+| Reference an episode-owned file | Use its ordinary episode-relative path; it does not replace a similarly named shared file. |
+| Remove a supported inherited member | Use the explicit `seriesOverrides.remove` declaration below. |
+
+In the example, orange `accent` overrides the shared accent, `plate: false`
+coexists with inherited `maxWords: 6`, and the local `teacher` is a complete voice
+record replacement. Local values survive adoption; a newly adopted shared value
+does not displace an explicit episode override. Editing this episode does not
+rewrite the shared source or another episode.
 
 Precedence is product defaults, shared defaults, episode values, then ordinary
 operation/variant selections. A local voice/character record replaces the

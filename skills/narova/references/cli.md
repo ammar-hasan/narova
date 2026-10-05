@@ -279,3 +279,12 @@ See [Pocket controls](pockettts.md).
 `series init|inspect|bind|compare|adopt|restore|handoff|detach` manages explicit
 shared authoring for independent episode projects. Each supports `--json`;
 see [series data, selection and recovery](series.md) for exact arguments.
+Create/catalog an episode, then bind it once before its first build. Bind copies
+selected shared sources into the episode's frozen binding; build consumes those
+retained inputs alongside local authoring and stages renderer files as needed.
+Build never automatically binds or adopts the current series. Use explicit
+adoption for a new revision. The guide includes mixed local/shared files,
+font/CSS application and exact property-versus-whole-record override rules.
+For fresh CI authoring, bind after checkout with tracked per-episode selections;
+for a committed frozen binding, build without rebinding. Membership and retained
+files are committed or ignored together. See [CI/Git policies](series.md#ci-builds-and-git-tracking).

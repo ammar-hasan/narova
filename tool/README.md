@@ -171,6 +171,28 @@ retake budget starts fresh selection while reusing eligible sentence audio. Revi
 advisory and read-only; optional local ASR tools are required. Transcripts can
 mishear, so audition flagged turns. See the [speech check guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/audio.md#check-synthesized-speech-against-the-script).
 
+## Multi-video series
+
+Courses, daily vlogs and drama can share selected defaults, resources and authored
+context while each episode owns its script, scenes, assets and evidence. Create
+and catalog the episode, then explicitly `narova series bind` before its first
+`build`. Bind copies the chosen shared files into a frozen episode snapshot;
+build reads that snapshot and stages it for rendering. It does not automatically
+bind or refresh shared sources. Use `series adopt` to choose a newer revision.
+For fresh whole-series CI builds, commit source material and per-episode selection
+recipes, then bind inside each fresh job; ignore membership and binding copies
+together. To pin an episode to an older shared revision, commit its membership
+and complete current binding instead, and let CI build that snapshot.
+
+
+Mix shared fonts, stylesheets or images with local files and episode overrides.
+Theme/caption properties merge by key; same-ID local voice/character records
+replace whole shared records. Fonts/CSS are selected resources applied through
+ordinary episode references, while shared theme defaults contain mode/tokens.
+See the [series guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md)
+for copying stages, a mixed-assets/font/CSS example, explicit removals and
+portable episode exchange. Installing this package does not install the skill.
+
 ## Portable speech and narration controls
 
 `narova voice-cache export --out out --dir speech-cache` saves selected completed
