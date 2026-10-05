@@ -664,6 +664,8 @@ test('check and release accept exact retained SVG/font/CSS refs with local asset
   const result = run(['check', '--release', '--project', f.project, '--json']);
   assert.equal(result.status, 3, result.stderr);
   assert.match(result.stderr + result.stdout, /unselected.svg/);
+  assert.match(result.stderr + result.stdout, /series build --update-shared --resources/);
+  assert.doesNotMatch(result.stderr + result.stdout, /must live under project assets/);
 });
 
 test('checking reverifies changed or missing retained resources after resolution', t => {

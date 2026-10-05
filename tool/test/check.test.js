@@ -1564,3 +1564,14 @@ test('declared ordinary resources pass asset checks but missing/escaping/symlink
   const linked = run({ ...config, localResources: ['shared/link.svg'] }, { release: true });
   assert.equal(linked.ok, false); assert.match(linked.lines.join('\n'), /symlink/);
 });
+
+
+test('unprepared retained references explain the first series build instead of relocating assets', () => {
+  const config = base([{ id: 's', dur: 1, vo: [], body: '<img src=".narova-series/current/files/media/logo.svg">' }]);
+  for (const release of [false, true]) {
+    const result = run(config, { release });
+    assert.equal(result.ok, !release);
+    assert.match(result.lines.join('\n'), /prepare this episode with series build/);
+    assert.doesNotMatch(result.lines.join('\n'), /must live under project assets/);
+  }
+});

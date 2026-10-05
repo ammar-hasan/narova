@@ -423,6 +423,15 @@ function inspectAssetRef(ref, config, at, warnings, opts = {}) {
   }
   // Explicit resources have already passed contained regular-file validation.
   if ((config.localResources || []).includes(ref.split(/[?#]/, 1)[0])) return;
+  if (ref.startsWith('.narova-series/current/files/')) {
+    const recovery = config.seriesBinding
+      ? 'select it explicitly with series build --update-shared --resources <names> before checking'
+      : 'select its resource and prepare this episode with series build before checking';
+    const message = `${at}: unselected retained asset "${ref}" — ${recovery}`;
+    if (release && errors) errors.push(message);
+    else warnings.push(message);
+    return;
+  }
   if (!ref.startsWith('assets/')) {
     if (release && errors) errors.push(`${at}: local asset "${ref}" must live under project assets/ and be referenced as assets/...`);
     else warnings.push(`${at}: local asset "${ref}" must live under project assets/ and be referenced as assets/...`);
@@ -596,7 +605,7 @@ function releaseGateCode(message) {
   if (m.includes('3D scene has no camera')) return 'gate.release.scene-camera-missing';
   if (m.startsWith('walkthrough "')) return 'gate.release.walkthrough-stale';
   if (m.startsWith('theme.css: remote url()') || m.startsWith('remote asset:')) return 'gate.release.remote-asset';
-  if (m.includes('must live under project assets/')) return 'gate.release.asset-location';
+  if (m.includes('must live under project assets/') || m.includes('unselected retained asset')) return 'gate.release.asset-location';
   if (m.includes('has no assets directory')) return 'gate.release.assets-dir-missing';
   if (m.includes('escapes project assets/')) return 'gate.release.asset-path-escape';
   if (m.includes('asset not found')) return 'gate.release.asset-missing';

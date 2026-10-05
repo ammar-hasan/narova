@@ -50,7 +50,11 @@ Open `course/episodes/intro/out/video.mp4`: shared green logo on the left,
 episode-owned blue image on the right. Practice has no binding or output yet.
 `logo` is the catalog resource name; `media/logo.svg` is its source file. Selecting
 it copies the file into Intro; the scene's `src` uses that saved copy. Creating
-the catalog alone does not copy files or insert scenes.
+the catalog alone does not copy files or insert scenes. Before the first build,
+a standalone `check` can report an unprepared retained reference: run the shown
+`series build` to select and copy it. After binding, an unselected reference needs
+an explicit resource-selection update; a corrupt saved file needs restoration
+or explicit adoption. Keep using the documented retained path.
 
 Change the green fill in `course/media/logo.svg`, then compare these commands:
 
