@@ -914,3 +914,22 @@ test('CLI version matches the standalone package version', () => {
   assert.equal(r.status, 0, '--version must exit clean');
   assert.equal(r.stdout.trim(), packageVersion);
 });
+
+test('series family/action help explains saved-input workflow without evaluating a project', () => {
+  const project = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-series-help-'));
+  try {
+    fs.writeFileSync(path.join(project, 'reel.config.cjs'), 'throw new Error("help evaluated project");');
+    const family = run(['series', '--help', '--project', project]);
+    assert.equal(family.status, 0, family.stderr);
+    assert.match(family.stdout, /usage: narova series <action>/);
+    assert.match(family.stdout, /Repeat keeps/); assert.match(family.stdout, /--update-shared/);
+    assert.match(family.stdout, /selecting files retains/); assert.match(family.stdout, /--reuse/);
+    for (const action of ['init','build','inspect','bind','compare','adopt','restore','handoff','detach']) {
+      const result = run(['series', action, '--help', '--project', project]);
+      assert.equal(result.status, 0, result.stderr);
+      assert.match(result.stdout, new RegExp('usage: narova series ' + action));
+      assert.equal(result.stdout.includes('Usage: narova'), false);
+    }
+    assert.deepEqual(fs.readdirSync(project), ['reel.config.cjs']);
+  } finally { fs.rmSync(project, { recursive: true, force: true }); }
+});

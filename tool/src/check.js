@@ -421,6 +421,8 @@ function inspectAssetRef(ref, config, at, warnings, opts = {}) {
     }
     return;
   }
+  // Explicit resources have already passed contained regular-file validation.
+  if ((config.localResources || []).includes(ref.split(/[?#]/, 1)[0])) return;
   if (!ref.startsWith('assets/')) {
     if (release && errors) errors.push(`${at}: local asset "${ref}" must live under project assets/ and be referenced as assets/...`);
     else warnings.push(`${at}: local asset "${ref}" must live under project assets/ and be referenced as assets/...`);
@@ -640,6 +642,14 @@ function check(config, opts = {}) {
     return release ? errors.push(full) : warnings.push(full);
   };
   const releaseIssue = (msg) => errors.push(msg);
+
+  // Reverify managed inputs at checking time, including a bound revision's hashes.
+  try {
+    require('./series').assertBoundConfig(config);
+    require('./local-resources').resolveLocalResources(config.localResources, config.projectDir || '.');
+  } catch (error) {
+    hardErrors.push(error.message);
+  }
 
   // Compile the exact generated browser contexts without running author code.
   // Syntax is a correctness boundary in every check mode, not a creative gate.

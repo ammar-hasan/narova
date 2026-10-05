@@ -742,10 +742,62 @@ Options:
 /* Action-scoped help (NAR-009-036): for grouped command families with
  * distinct per-action usage, `narova <group> <action> --help` prints that
  * action's usage and the options it accepts. A group without an action (or
- * an action without usage text) falls back to the global HELP. */
+ * an action without usage text) falls back to family help if defined, then HELP. */
 const ASSET_METADATA_FLAGS = `  --origin <mode> --provider <name> --item-id <id> --source-page <url>
   --license <id> --license-url <url> --creator <name> --attribution <text>`;
+const SERIES_SELECTION_HELP = `  --resources <name,...> --context <name,...> --incoming <state-id>
+  Names select catalog entries; selecting files retains them, scene/font/CSS references apply them.`;
+const SERIES_HELP = `usage: narova series <action> [options]
+
+Start a series: narova series init course --id course --title "My course"
+Create independent episode projects and catalog their project paths.
+Build one: narova series build course --episode intro --resources logo
+Repeat keeps that episode's saved shared inputs, even after shared originals change.
+Update one: narova series build course --episode intro --update-shared
+Local overrides/assets stay local; siblings are never built or updated.
+--reuse controls audio/video reuse; it does not update shared inputs.
+${SERIES_SELECTION_HELP}
+
+Actions:
+  init       create a data-only series catalog
+  build      prepare shared inputs and build one episode
+  inspect    read a catalog or episode's saved inputs
+  bind       prepare an unbound episode without rendering
+  compare    inspect current source differences without updating
+  adopt      update one episode without rendering
+  restore    restore one retained revision without rendering
+  handoff    record authored outgoing context
+  detach     copy an episode into a new standalone directory
+Use narova series <action> --help for usage.
+Complete two-episode starter:
+  https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md#start-with-two-episodes`;
 const ACTION_HELP = {
+  series: {
+    init: 'usage: narova series init <directory> --id <id> [--title <text>] [--json]',
+    build: `usage: narova series build <source> --episode <id> [--project <directory>] [--update-shared] [--json]
+${SERIES_SELECTION_HELP}
+  First build retains selected inputs; repeats keep the saved revision.
+  --update-shared adopts current shared inputs for only this episode before building.
+  Omitted update selectors keep choices; --resources= --context= --incoming= clear them.
+  --reuse reuses matching audio/video; it does not refresh shared inputs.
+  Build options include --renderer <id> --fps <number> --quality draft|standard|high
+  --variant <id> --all-variants --release (see narova --help for ordinary build options).
+  --config is not supported: use the selected episode's root config.
+  Committed shared inputs survive a later build failure; fix the failure and retry.`,
+    inspect: 'usage: narova series inspect [<source> | --project <directory>] [--json]',
+    bind: `usage: narova series bind <source> --episode <id> [--project <directory>] [--json]
+${SERIES_SELECTION_HELP}
+  Prepare an unbound episode without rendering; use adopt for a bound episode.`,
+    compare: `usage: narova series compare <source> [--project <directory>] [--json]
+${SERIES_SELECTION_HELP}
+  Read proposed runtime/context differences without updating or rendering.`,
+    adopt: `usage: narova series adopt <source> [--project <directory>] [--json]
+${SERIES_SELECTION_HELP}
+  Update shared inputs without rendering; omitted selectors keep current choices.`,
+    restore: 'usage: narova series restore <revision> [--project <directory>] [--json]',
+    handoff: 'usage: narova series handoff <JSON file> [--project <directory>] [--json]',
+    detach: 'usage: narova series detach <new directory> [--project <directory>] [--json]',
+  },
   assets: {
     import: `usage: narova assets import <file> [metadata options]\n${ASSET_METADATA_FLAGS}`,
     download: `usage: narova assets download <url> --output <project-relative path> [metadata options]\n${ASSET_METADATA_FLAGS}`,
@@ -814,7 +866,7 @@ async function main() {
   }
   if ((flags.help || flags.h) && cmd !== 'demo') {
     const actionHelp = ACTION_HELP[cmd] && ACTION_HELP[cmd][positionals[1]];
-    console.log(actionHelp || HELP);
+    console.log(actionHelp || (cmd === 'series' ? SERIES_HELP : HELP));
     return;
   }
 

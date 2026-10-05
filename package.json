@@ -33,6 +33,7 @@
     "version": "node scripts/sync-version.js",
     "test:series-build": "node scripts/test-series-build.js",
     "test:series-production": "node scripts/test-series-production.js",
-    "test:series-browser": "node scripts/test-series-browser.js"
+    "test:series-browser": "node scripts/test-series-browser.js",
+    "test:series-quickstart": "node scripts/test-series-quickstart.js"
   }
 }

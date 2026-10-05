@@ -5,15 +5,81 @@ independent projects. Courses can share a teacher and terminology; vlogs can
 share a host, visual package and music; drama can share cast references and
 explicit story state. Each episode owns its script, scenes, timing and evidence.
 
+## Start with two episodes
+
+Use a ready Narova CLI, Node.js and the no-browser runtime. Start in an empty
+working directory. This silent example needs no speech model, font download or
+API key. It creates two independent lesson projects with one shared logo and a
+local image in each. Run the complete block:
+
+```sh
+narova series init course --id course --title "My course"
+node <<'NODE'
+const fs = require('node:fs');
+const write = (file, value) => {
+  fs.mkdirSync(require('node:path').dirname(file), { recursive: true });
+  fs.writeFileSync(file, typeof value === 'string' ? value : JSON.stringify(value, null, 2));
+};
+const svg = color => `<svg xmlns="http://www.w3.org/2000/svg" width="60" height="60"><rect width="60" height="60" fill="${color}"/></svg>`;
+write('course/media/logo.svg', svg('#00aa66'));
+write('course/series.config.json', {
+  format: 'narova.series/1', id: 'course', title: 'My course',
+  resources: { logo: { file: 'media/logo.svg' } },
+  episodes: ['intro', 'practice'].map(id => ({ id, title: id, project: `episodes/${id}` }))
+});
+for (const id of ['intro', 'practice']) {
+  write(`course/episodes/${id}/assets/local.svg`, svg('#0066ff'));
+  write(`course/episodes/${id}/reel.config.json`, {
+    title: id, renderer: 'no-browser', size: { w: 320, h: 180 }, captions: false,
+    scenes: [{ id: 'lesson', dur: 1, vo: [], visual: {
+      type: 'group', style: { width: 320, height: 180, background: '#ffffff' },
+      children: [
+        { type: 'svg', src: '.narova-series/current/files/media/logo.svg',
+          style: { x: 30, y: 60, width: 60, height: 60 } },
+        { type: 'svg', src: 'assets/local.svg',
+          style: { x: 230, y: 60, width: 60, height: 60 } }
+      ]
+    } }]
+  });
+}
+NODE
+narova series build course --episode intro --resources logo
+```
+
+Open `course/episodes/intro/out/video.mp4`: shared green logo on the left,
+episode-owned blue image on the right. Practice has no binding or output yet.
+`logo` is the catalog resource name; `media/logo.svg` is its source file. Selecting
+it copies the file into Intro; the scene's `src` uses that saved copy. Creating
+the catalog alone does not copy files or insert scenes.
+
+Change the green fill in `course/media/logo.svg`, then compare these commands:
+
+```sh
+# Keeps Intro's saved green logo, even though the original has changed.
+narova series build course --episode intro --reuse
+# Builds Practice for the first time using the changed shared original.
+narova series build course --episode practice --resources logo
+# Intentionally updates only Intro; its local blue image stays unchanged.
+narova series build course --episode intro --update-shared --reuse
+```
+
+`--reuse` can speed up unchanged production; it never refreshes shared inputs.
+No separate bind step is needed for this workflow. For CI, track the source files
+and each episode's resource selection recipe; choose whether copies are derived
+or frozen in [CI builds and Git tracking](#ci-builds-and-git-tracking).
+
+Fonts and CSS are optional. A font name alone does not copy a font file, and
+selecting a stylesheet alone does not apply it. Use the explicit file references
+in [Mix shared and episode-owned material](#mix-shared-and-episode-owned-material)
+when you need them. Context, incoming state and history below are optional too.
+
 ## Build one episode
 
 Create the episode project and its catalog entry, then prepare and build it in
 one command:
 
 ```sh
-narova series build course --episode orbits \
-  --resources orbit_diagram,brand_style --context audience,vocabulary \
-  --incoming after_intro --reuse
+narova series build course --episode intro --resources logo
 ```
 
 The first call copies and verifies the chosen shared files into the episode's
@@ -23,7 +89,7 @@ order; changing selectors requires `--update-shared`.
 
 ```sh
 # Refresh only this episode, keeping its current named selections.
-narova series build course --episode orbits --update-shared --reuse
+narova series build course --episode intro --update-shared --reuse
 ```
 
 Omitted update selectors retain existing choices; `--resources=`, `--context=`
@@ -79,9 +145,7 @@ tracked script. After checkout and ordinary runtime/provider/model setup, run
 one command for each selected episode:
 
 ```sh
-narova series build course --episode orbits \
-  --resources orbit_diagram,brand_style --context audience,vocabulary \
-  --incoming after_intro --reuse
+narova series build course --episode intro --resources logo --reuse
 ```
 
 | Policy | Commit to Git | Build the selected episode |
@@ -112,9 +176,10 @@ and commit its new binding/files. Advanced `series compare` and `series adopt`
 remain available for separate review before rendering; `series bind` rejects an
 already bound project.
 
-## Create a series and build an episode
+## Optional defaults, context and continuity
 
-Create the source, then edit its data-only catalog and shared material:
+Use a separate empty working directory for this larger example. Create the
+source, then edit its data-only catalog and shared material:
 
 ```sh
 narova series init course --id astronomy --title "Astronomy course"

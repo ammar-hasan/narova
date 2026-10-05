@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.54.0"
-checksum: 19157bcc6dc77c0f56c738bce248764ce6c365eccaa20b4fb0cde034c14c6163
+checksum: 6428ce64c9e7c2102aa83f776ddb8021176e6058ac0a365aa8f55992ca95accc
 ---
 # narova — video from scene scripts
 
@@ -183,7 +183,8 @@ readiness and saved conditioning. See `references/pockettts.md`.
 
 For courses, daily vlogs, drama and other multi-video productions, use explicit
 series authoring when episodes share defaults, resources or authored context.
-Read [series authoring](references/series.md) for the data-only catalog, selected
+Start with the [complete two-episode example](references/series.md#start-with-two-episodes)
+and `narova series --help`. Read [series authoring](references/series.md) for the data-only catalog, selected
 frozen bindings, combined `series build <source> --episode <id>`, deterministic
 voice order, inspection, adoption/restoration,
 authored handoffs and standalone detach. Keep each episode's script and proof

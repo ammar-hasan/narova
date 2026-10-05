@@ -277,6 +277,13 @@ See [Pocket controls](pockettts.md).
 
 ## Series authoring
 
+`narova series --help` gives focused family help. `narova series <action> --help`
+lists that action's usage without preparing files or evaluating project sources.
+Start with the [complete silent two-episode example](series.md#start-with-two-episodes)
+before optional context, incoming state, fonts and CSS.
+Verified declared local resource references, including retained series files,
+pass ordinary and release checking without moving them into `assets/`.
+
 `narova series build <source> --episode <id> [--project <directory>]` prepares
 selected shared inputs and builds one episode in the same invocation. Initial
 calls bind; later calls verify and keep the retained selection. Use

@@ -1545,3 +1545,22 @@ test('critique (not default check) notes a seed-honoring instruct backend with n
   const piper = runCritique(base(scenes), { profile: 'narration' }).results;
   assert.ok(!piper.some(r => r.includes('honors delivery direction')), piper.join('\n'));
 });
+
+test('declared ordinary resources pass asset checks but missing/escaping/symlink declarations fail', t => {
+  const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'narova-check-resource-'));
+  t.after(() => fs.rmSync(dir, { recursive: true, force: true }));
+  fs.mkdirSync(path.join(dir, 'shared'));
+  fs.writeFileSync(path.join(dir, 'shared/logo.svg'), '<svg/>');
+  const config = { ...base([{ id: 's', dur: 1, vo: [], body: '<img src="shared/logo.svg">' }]),
+    projectDir: dir, localResources: ['shared/logo.svg'] };
+  for (const release of [false, true]) {
+    const result = run(config, { release }); assert.equal(result.ok, true, result.lines.join('\n'));
+    assert.equal(result.lines.some(l => l.includes('must live under project assets/')), false);
+  }
+  for (const ref of ['shared/missing.svg', '../escape.svg']) {
+    const result = run({ ...config, localResources: [ref] }); assert.equal(result.ok, false, result.lines.join('\n'));
+  }
+  fs.symlinkSync(path.join(dir, 'shared/logo.svg'), path.join(dir, 'shared/link.svg'));
+  const linked = run({ ...config, localResources: ['shared/link.svg'] }, { release: true });
+  assert.equal(linked.ok, false); assert.match(linked.lines.join('\n'), /symlink/);
+});
