@@ -636,3 +636,44 @@ test('combined CLI builds base and variants with the same prepared revision', t 
   const traces = fs.readFileSync(runner.trace, 'utf8').trim().split('\n').map(JSON.parse);
   assert.equal(traces.length, 2); assert.equal(traces[0].revision, traces[1].revision); assert.equal(traces[1].variant, 'alternate');
 });
+
+test('check and release accept exact retained SVG/font/CSS refs with local assets', t => {
+  const f = fixture(t, { resources: ['logo', 'font', 'style'] });
+  f.source.resources.font = { file: 'fonts/title.ttf' };
+  f.source.resources.style = { file: 'styles/brand.css', dependencies: ['media/logo.svg'] };
+  save(path.join(f.root, 'fonts/title.ttf'), Buffer.from('fixture font'));
+  save(path.join(f.root, 'styles/brand.css'), '.logo{background:url(../media/logo.svg)}');
+  save(path.join(f.project, 'assets/local.svg'), '<svg/>');
+  f.raw.theme = { css: series.FILES + 'styles/brand.css' };
+  f.raw.scenes[0].body = `<img src="${series.FILES}media/logo.svg#logo"><img src="assets/local.svg">`;
+  f.raw.scenes[0].visual = { type: 'group', children: [
+    { type: 'svg', src: series.FILES + 'media/logo.svg' },
+    { type: 'text', text: 'Title', style: { fontFile: series.FILES + 'fonts/title.ttf' } },
+  ] };
+  save(f.sourceFile, f.source); save(f.configFile, f.raw); f.bound();
+  for (const release of [false, true]) {
+    const diagnostics = [], original = console.log; console.log = () => {};
+    try { assert.equal(require('../src/check').check(f.resolved(), { release, diagnostics }), true); }
+    finally { console.log = original; }
+    assert.equal(diagnostics.some(d => d.code === 'gate.release.asset-location'), false, JSON.stringify(diagnostics));
+  }
+  // A nearby unselected file is not whitelisted by the retained directory name.
+  save(path.join(f.project, series.FILES, 'media/unselected.svg'), '<svg/>');
+  f.raw.scenes[0].body += `<img src="${series.FILES}media/unselected.svg">`;
+  save(f.configFile, f.raw);
+  const result = run(['check', '--release', '--project', f.project, '--json']);
+  assert.equal(result.status, 3, result.stderr);
+  assert.match(result.stderr + result.stdout, /unselected.svg/);
+  assert.match(result.stderr + result.stdout, /series build --update-shared --resources/);
+  assert.doesNotMatch(result.stderr + result.stdout, /must live under project assets/);
+});
+
+test('checking reverifies changed or missing retained resources after resolution', t => {
+  const f = fixture(t, { resources: ['logo'] }); f.bound();
+  const config = f.resolved();
+  const original = console.log; console.log = () => {}; t.after(() => { console.log = original; });
+  save(path.join(f.project, series.FILES, 'media/logo.svg'), '<svg>changed</svg>');
+  assert.equal(require('../src/check').check(config), false);
+  fs.rmSync(path.join(f.project, series.FILES, 'media/logo.svg'));
+  assert.equal(require('../src/check').check(config, { release: true }), false);
+});

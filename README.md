@@ -649,19 +649,24 @@ are selected resources with explicit episode references; shared theme defaults
 carry mode/tokens, not stylesheet files. See the guide's worked mixed example.
 
 
+Start with the [complete two-episode example](skills/narova/references/series.md#start-with-two-episodes).
+It needs a ready CLI/no-browser runtime and uses shared/local SVGs without voices,
+fonts, CSS or continuity settings. The ordinary workflow is:
+
 ```bash
-narova series init course --id astronomy --title "Astronomy course"
-# Edit course/series.config.json and author independent episode projects.
-narova series build course --episode lesson_02 --context audience,vocabulary --reuse
-narova series inspect --project course/episodes/lesson_02 --json
-narova series compare course --project course/episodes/lesson_02
-narova series build course --episode lesson_02 --update-shared --reuse
+# After creating the catalog and episode files in the example:
+narova series build course --episode intro --resources logo
+# Repeat with the same saved shared inputs.
+narova series build course --episode intro --reuse
+# Deliberately pick up edited shared originals for Intro only.
+narova series build course --episode intro --update-shared --reuse
+narova series --help
 ```
 
-See [series authoring](skills/narova/references/series.md) for the data format,
-resource selection, voice order, removals, continuity, revision restoration,
-portable episode exchange and fresh standalone detachment. Legacy `series:
-{part,total}` remains separate display metadata.
+`logo` selects a catalog resource; the episode's scene reference applies the
+retained file. See [series authoring](skills/narova/references/series.md) for
+optional fonts/CSS, voice order, removals, continuity, restoration, exchange and
+standalone detachment. Legacy `series: {part,total}` remains display metadata.
 
 ### Narrated-series controls
 

@@ -12,7 +12,14 @@ versions follow [Semantic Versioning](https://semver.org/).
   `--update-shared` explicitly refreshes only that episode. Preparation receipts
   remain visible if later production fails; CI/Git and skill guidance updated.
 
+### Fixed
+- Correctness/release checking accepts verified declared local resources,
+  including retained series images/fonts/CSS, without misleading `assets/` warnings.
+  Missing, unsafe or corrupt resources remain rejected.
+
 ### Changed
+- Added focused series family/action help and a complete silent two-episode
+  starter before optional context, state, fonts and CSS guidance.
 - Clarified series binding/adoption copies versus build-time renderer staging,
   mixed shared/episode-owned assets and overrides, and explicit local font/CSS
   selection and application across public guides, overviews and website.

@@ -173,6 +173,11 @@ mishear, so audition flagged turns. See the [speech check guide](https://github.
 
 ## Multi-video series
 
+Start with the [complete two-episode example](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md#start-with-two-episodes)
+using a ready no-browser runtime. It demonstrates a shared logo alongside each
+episode's own asset without speech, fonts, CSS or continuity setup.
+`narova series --help` explains the workflow; action help lists its options.
+
 Courses, daily vlogs and drama can share selected defaults, resources and authored
 context while each episode owns its script, scenes, assets and evidence. Create
 and catalog the episode, then run `narova series build <source> --episode <id>`.
