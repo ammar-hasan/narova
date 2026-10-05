@@ -255,13 +255,14 @@
           authoring context and state. Each episode retains its chosen revision, so updating the
           series does not silently change earlier videos. Inspect changes, adopt them deliberately,
           hand off state, or detach a portable standalone project.</p>
-        <p>Bind once after creating the episode: Narova copies selected shared sources into its
-          snapshot. Build uses that snapshot with the episode's own script and assets, preparing
-          retained files for rendering without refreshing from the series. Mix shared fonts or
-          stylesheets with local assets and overrides; adopting a new shared revision is explicit.</p>
-        <p>For series-wide CI rebuilds, bind each episode from the checked-out shared sources before
-          building. Or commit complete frozen bindings to keep selected episodes on earlier revisions.
-          The guide explains which files to track for either workflow.</p>
+        <p>Build one episode with <code>narova series build &lt;source&gt; --episode &lt;id&gt;</code>:
+          Narova prepares selected shared files on first use, then renders with the episode's
+          own script and assets. Later calls keep its saved revision; <code>--update-shared</code>
+          explicitly refreshes and builds only that episode. Mix shared fonts/stylesheets with
+          local files and overrides.</p>
+        <p>CI chooses episodes independently. Fresh jobs can derive shared copies from tracked
+          originals and selection recipes, or build committed complete frozen bindings.
+          Reused workspaces need an explicit update to pick up changed shared originals.</p>
         <p><a href="https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md" data-hover>Read the series workflow →</a></p>
       </article>
 

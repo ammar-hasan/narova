@@ -15,7 +15,7 @@ license: Apache-2.0
 metadata:
   author: ammar-hasan
   version: "0.54.0"
-checksum: 7ec2bd1e66c915703c2485ae1d74b53420b93f348b6780672ae0264f52216729
+checksum: 19157bcc6dc77c0f56c738bce248764ce6c365eccaa20b4fb0cde034c14c6163
 ---
 # narova — video from scene scripts
 
@@ -184,9 +184,12 @@ readiness and saved conditioning. See `references/pockettts.md`.
 For courses, daily vlogs, drama and other multi-video productions, use explicit
 series authoring when episodes share defaults, resources or authored context.
 Read [series authoring](references/series.md) for the data-only catalog, selected
-frozen bindings, deterministic voice order, inspection, adoption/restoration,
+frozen bindings, combined `series build <source> --episode <id>`, deterministic
+voice order, inspection, adoption/restoration,
 authored handoffs and standalone detach. Keep each episode's script and proof
-local. Never read mutable parent defaults implicitly, infer story progression,
+local. The combined command prepares first-use inputs and keeps retained ones
+unless `--update-shared` is explicit. Never read mutable parent defaults
+implicitly, infer story progression,
 or treat a series pilot as another episode's approval.
 
 For AI-generated shots, the project may define a small optional `continuity`

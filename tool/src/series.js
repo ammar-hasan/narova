@@ -531,6 +531,32 @@ function bind(input, episodeId, options = {}) {
   if (raw) { const r = runtime(snap.binding); mergeDefaults(raw, r.defaults, r.voiceOrder, r.files, r.dependencies); }
   return publish(root, snap, true);
 }
+// Preparation stays data-only. The CLI runs the ordinary build after this
+// scoped authoring operation, retaining its receipt if production later fails.
+function prepareBuild(input, episodeId, options = {}) {
+  id(episodeId, 'episode');
+  const loaded = source(input);
+  const episode = loaded.raw.episodes.find(entry => entry.id === episodeId);
+  if (!episode) fail('episode', `unknown catalog episode ${episodeId}`);
+  const target = options.project || (episode.project && catalogProject(loaded.root, episode.project, `episodes.${episodeId}.project`));
+  if (!target) fail('project', `episode ${episodeId} has no project; author it and supply --project`);
+  const root = projectRoot(target), current = readBinding(root);
+  if (!current) return { action: 'bind', ...bind(input, episodeId, { ...options, project: root }) };
+  if (current.series.id !== loaded.raw.id || current.episode.id !== episodeId) {
+    fail('build', 'series or episode identity does not match the target binding; select the correct project or detach first');
+  }
+  if (options.updateShared) return { action: 'adopt', ...adopt(input, root, options) };
+  const selection = selectors(options, current.selection);
+  for (const key of ['resources', 'context']) {
+    if (new Set(selection[key]).size !== selection[key].length) fail(key, 'expected unique names');
+    if (canonical([...selection[key]].sort()) !== canonical([...current.selection[key]].sort())) {
+      fail('build', `changed --${key} selection requires --update-shared`);
+    }
+  }
+  if (selection.incoming !== current.selection.incoming) fail('build', 'changed --incoming selection requires --update-shared');
+  return { action: 'retained', project: root, seriesId: current.series.id,
+    episodeId, revision: current.revision, committed: false };
+}
 function compare(input, directory, options = {}) {
   const root = projectRoot(directory), current = readBinding(root);
   if (!current) fail('compare', 'project has no binding');
@@ -620,4 +646,4 @@ function detach(directory, target) {
   return { target: published, seriesId: binding.series.id, episodeId: binding.episode.id, revision: binding.revision, committed: true };
 }
 
-module.exports = { FORMAT, BINDING_FORMAT, MEMBERSHIP, BINDING, FILES, CURRENT, HOME, canonical, digest, validateSource, validateBinding, readBinding, applyBinding, assertBoundConfig, init, bind, inspectSource, inspectProject, runtime, compare, adopt, restore, handoff, detach, verifyArchive };
+module.exports = { FORMAT, BINDING_FORMAT, MEMBERSHIP, BINDING, FILES, CURRENT, HOME, canonical, digest, validateSource, validateBinding, readBinding, applyBinding, assertBoundConfig, init, bind, prepareBuild, inspectSource, inspectProject, runtime, compare, adopt, restore, handoff, detach, verifyArchive };

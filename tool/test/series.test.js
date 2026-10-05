@@ -527,3 +527,112 @@ test('release snapshots reject runtime binding drift but accept advisory and ove
   save(manifest, compile(f.resolved())); save(path.join(f.root, 'media/logo.svg'), '<svg>unused change</svg>'); series.adopt(f.sourceFile, f.project);
   assert.ok(await releases.save(manifest, 'unused-resource', options));
 });
+
+
+// The CLI fixture intercepts only expensive production. Real config resolution,
+// publication, selection validation and machine failure/receipt paths execute.
+function buildRunner(f, { fail = false } = {}) {
+  const trace = path.join(f.root, 'build-trace.jsonl');
+  const hook = path.join(f.root, 'build-hook.cjs');
+  save(hook, `const fs = require('fs');
+const pipeline = require(${JSON.stringify(path.resolve(__dirname, '../src/pipeline'))});
+pipeline.build = (config, options) => {
+  fs.appendFileSync(${JSON.stringify(trace)}, JSON.stringify({ title: config.title, accent: config.theme.accent, revision: config.seriesBinding.revision, projectDir: options.projectDir, reuse: options.reuse, renderer: options.renderer, fps: options.fps, variant: config.variant }) + '\\n');
+  ${fail ? "throw new Error('fixture production failure');" : 'return { seconds: 1, renderer: config.renderer };'}
+};
+`);
+  return { trace, run: args => spawnSync(process.execPath, ['--require', hook, BIN, ...args, '--json'], { encoding: 'utf8', env: { ...process.env, NAROVA_FIRST_RUN: '0' } }) };
+}
+
+test('combined preparation initially binds, preserves local overrides and keeps repeated selectors frozen', t => {
+  const f = fixture(t); f.raw.theme = { bg: '#123456' }; save(f.configFile, f.raw);
+  const first = series.prepareBuild(f.sourceFile, 'second', { resources: 'logo', context: 'vocabulary', incoming: 'after_first' });
+  assert.equal(first.action, 'bind'); assert.equal(first.committed, true); assert.equal(f.resolved().theme.bg, '#123456');
+  const before = fs.readFileSync(f.configFile); const binding = fs.readFileSync(path.join(f.project, series.BINDING));
+  f.source.defaults.theme.accent = '#ff0000'; save(f.sourceFile, f.source); fs.unlinkSync(path.join(f.root, 'media/logo.svg'));
+  const repeat = series.prepareBuild(f.sourceFile, 'second', { resources: 'logo', context: 'vocabulary', incoming: 'after_first' });
+  assert.equal(repeat.action, 'retained'); assert.equal(repeat.committed, false); assert.equal(repeat.revision, first.revision);
+  assert.equal(f.resolved().theme.accent, '#abcdef'); assert.deepEqual(fs.readFileSync(f.configFile), before); assert.deepEqual(fs.readFileSync(path.join(f.project, series.BINDING)), binding);
+});
+
+test('combined preparation updates only on request, retains selections/history and accepts update on first use', t => {
+  const f = fixture(t); const first = series.prepareBuild(f.root, 'second', { resources: 'logo', context: 'vocabulary', updateShared: true });
+  assert.equal(first.action, 'bind'); f.source.defaults.theme.accent = '#00ff00'; save(f.sourceFile, f.source);
+  const next = series.prepareBuild(f.root, 'second', { updateShared: true });
+  assert.equal(next.action, 'adopt'); assert.equal(next.committed, true); assert.notEqual(next.revision, first.revision);
+  assert.deepEqual(series.readBinding(f.project).selection.resources, ['logo']); assert.equal(f.resolved().theme.accent, '#00ff00');
+  assert.equal(fs.existsSync(path.join(f.project, series.HOME, 'history', first.revision, 'binding.json')), true);
+  series.prepareBuild(f.root, 'second', { updateShared: true, resources: '', context: '', incoming: '' });
+  assert.deepEqual(series.readBinding(f.project).selection, { resources: [], context: [], incoming: null });
+});
+
+test('combined preparation rejects identity changes, selector drift, duplicate selectors and corrupt retained files', t => {
+  const f = fixture(t, { resources: ['logo'], context: ['vocabulary'], incoming: 'after_first' }); f.bound();
+  const binding = fs.readFileSync(path.join(f.project, series.BINDING));
+  for (const options of [{ resources: '' }, { resources: 'logo,logo' }, { context: '' }, { incoming: '' }, { resources: 'unused' }]) {
+    assert.throws(() => series.prepareBuild(f.root, 'second', options), /update-shared|unique names|unknown selection/);
+    assert.deepEqual(fs.readFileSync(path.join(f.project, series.BINDING)), binding);
+  }
+  assert.throws(() => series.prepareBuild(f.root, 'second', { resources: 'unused' }), /--update-shared/);
+  assert.throws(() => series.prepareBuild(f.root, 'first', { project: f.project, updateShared: true }), /identity/);
+  f.source.id = 'different'; save(f.sourceFile, f.source);
+  assert.throws(() => series.prepareBuild(f.root, 'second', { updateShared: true }), /identity/);
+  f.source.id = 'course'; save(f.sourceFile, f.source);
+  save(path.join(f.project, series.FILES, 'media/logo.svg'), 'corrupt');
+  assert.throws(() => series.prepareBuild(f.root, 'second'), /identity|changed|corrupt/);
+  assert.throws(() => series.prepareBuild(f.root, 'second', { updateShared: true }), /identity|changed|corrupt/);
+});
+
+test('combined repeated selection treats list order as irrelevant and never evaluates sibling projects', t => {
+  const f = fixture(t); f.source.resources.other = { file: 'media/other.svg' }; save(path.join(f.root, 'media/other.svg'), '<svg/>');
+  f.source.context.other = { text: 'Other context' }; f.source.episodes[0].project = 'episodes/first';
+  const sentinel = path.join(f.root, 'sibling-executed');
+  save(path.join(f.root, 'episodes/first/reel.config.cjs'), `require('fs').writeFileSync(${JSON.stringify(sentinel)}, 'wrong'); throw new Error('sibling must not load');`);
+  save(f.sourceFile, f.source); series.prepareBuild(f.root, 'second', { resources: 'logo,other', context: 'vocabulary,other' });
+  const repeat = series.prepareBuild(f.root, 'second', { resources: 'other,logo', context: 'other,vocabulary' });
+  assert.equal(repeat.action, 'retained'); assert.equal(fs.existsSync(sentinel), false);
+  assert.equal(fs.existsSync(path.join(f.root, 'episodes/first', series.MEMBERSHIP)), false);
+});
+
+test('combined CLI dispatches ordinary build options and emits one preparation/build result', t => {
+  const f = fixture(t); const runner = buildRunner(f);
+  const result = runner.run(['series', 'build', f.root, '--episode', 'second', '--resources', 'logo', '--reuse', '--renderer', 'no-browser', '--fps', '24']);
+  assert.equal(result.status, 0, result.stderr); const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.operation, 'series build'); assert.equal(envelope.data.action, 'build'); assert.equal(envelope.data.series.action, 'bind'); assert.equal(envelope.data.series.committed, true);
+  assert.equal(envelope.data.renderer, 'no-browser'); assert.equal(envelope.artifacts.filter(a => a.role === 'series-binding').length, 1);
+  const trace = JSON.parse(fs.readFileSync(runner.trace, 'utf8').trim());
+  assert.equal(trace.projectDir, f.project); assert.equal(trace.reuse, true); assert.equal(trace.fps, '24'); assert.equal(trace.renderer, 'no-browser');
+  const repeat = runner.run(['series', 'build', f.root, '--episode', 'second', '--resources', 'logo']);
+  assert.equal(repeat.status, 0, repeat.stderr); const repeated = JSON.parse(repeat.stdout);
+  assert.equal(repeated.data.series.action, 'retained'); assert.equal(repeated.artifacts.some(a => a.role === 'series-binding'), false);
+});
+
+test('combined CLI failures retain committed preparation facts and never claim a video', t => {
+  const f = fixture(t); const runner = buildRunner(f, { fail: true });
+  const result = runner.run(['series', 'build', f.root, '--episode', 'second', '--resources', 'logo']);
+  assert.equal(result.status, 1, result.stderr); const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.operation, 'series build'); assert.equal(envelope.success, false); assert.equal(envelope.data.series.action, 'bind');
+  assert.equal(envelope.data.series.committed, true); assert.equal(envelope.artifacts.filter(a => a.role === 'series-binding').length, 1);
+  assert.equal(envelope.artifacts.some(a => a.role === 'video'), false); assert.equal(series.readBinding(f.project).revision, envelope.data.series.revision);
+});
+
+test('combined CLI usage errors precede binding, config execution and expensive production', t => {
+  const f = fixture(t); const runner = buildRunner(f);
+  for (const tail of [[], ['--episode', 'second', '--variant', 'a', '--variants'], ['--episode', 'second', '--config', f.configFile], ['--episode', 'second', '--renderer', 'invalid'], ['--episode', 'second', 'extra'], ['--episode', 'second', '--update-shared=false']]) {
+    const result = runner.run(['series', 'build', f.root, ...tail]);
+    assert.equal(result.status, 2, result.stderr); assert.equal(JSON.parse(result.stdout).operation, 'series build');
+    assert.equal(fs.existsSync(path.join(f.project, series.MEMBERSHIP)), false); assert.equal(fs.existsSync(runner.trace), false);
+  }
+  for (const args of [['build', '--project', f.project, '--update-shared'], ['series', 'bind', f.root, '--episode', 'second', '--update-shared']]) {
+    const result = runner.run(args); assert.equal(result.status, 2, result.stderr); assert.match(result.stderr, /only valid with narova series build/);
+  }
+});
+
+test('combined CLI builds base and variants with the same prepared revision', t => {
+  const f = fixture(t); f.raw.variants = [{ id: 'alternate', title: 'Alternate' }]; save(f.configFile, f.raw); const runner = buildRunner(f);
+  const result = runner.run(['series', 'build', f.root, '--episode', 'second', '--variants']);
+  assert.equal(result.status, 0, result.stderr); const envelope = JSON.parse(result.stdout);
+  assert.equal(envelope.data.series.action, 'bind'); assert.equal(envelope.data.builds.length, 2);
+  const traces = fs.readFileSync(runner.trace, 'utf8').trim().split('\n').map(JSON.parse);
+  assert.equal(traces.length, 2); assert.equal(traces[0].revision, traces[1].revision); assert.equal(traces[1].variant, 'alternate');
+});

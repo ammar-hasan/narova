@@ -6,6 +6,12 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+### Added
+- `narova series build <source> --episode <id>` prepares selected shared inputs
+  and builds one episode in one command. Repeats retain saved inputs;
+  `--update-shared` explicitly refreshes only that episode. Preparation receipts
+  remain visible if later production fails; CI/Git and skill guidance updated.
+
 ### Changed
 - Clarified series binding/adoption copies versus build-time renderer staging,
   mixed shared/episode-owned assets and overrides, and explicit local font/CSS
