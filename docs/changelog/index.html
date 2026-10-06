@@ -67,15 +67,15 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-label">Unreleased</span>
-        <span class="rel-date">In development</span>
+        <span class="rel-version" data-narova-version>0.55.0</span>
+        <span class="rel-date">2026-10-06</span>
       </div>
       <div class="rel-body">
         <h4><span class="tag added">Added</span></h4>
         <ul><li><strong>One-command episode builds.</strong> <code>narova series build</code> prepares shared inputs and builds one selected episode. Repeats keep retained inputs; <code>--update-shared</code> explicitly refreshes it. Committed preparation receipts survive later production failure.</li></ul>
         <h4><span class="tag fixed">Fixed</span></h4>
         <ul><li>Checking accepts verified declared local resources, including retained images/fonts/CSS,
-          without misleading assets/ warnings. Missing, unsafe and corrupt resources remain rejected.</li></ul>
+          without misleading assets/ warnings. Missing, unsafe and corrupt resources remain rejected; unprepared/unselected references point to preparation or explicit selection update.</li></ul>
         <h4><span class="tag changed">Changed</span></h4>
         <ul>
           <li>Focused series help and a complete silent two-episode starter before optional setup.</li>
@@ -86,7 +86,7 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.54.0</span>
+        <span class="rel-version">0.54.0</span>
         <span class="rel-date">2026-10-05</span>
       </div>
       <div class="rel-body">

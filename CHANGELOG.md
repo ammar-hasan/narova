@@ -6,6 +6,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.55.0] - 2026-10-06
+
 ### Added
 - `narova series build <source> --episode <id>` prepares selected shared inputs
   and builds one episode in one command. Repeats retain saved inputs;
@@ -15,7 +17,8 @@ versions follow [Semantic Versioning](https://semver.org/).
 ### Fixed
 - Correctness/release checking accepts verified declared local resources,
   including retained series images/fonts/CSS, without misleading `assets/` warnings.
-  Missing, unsafe or corrupt resources remain rejected.
+  Missing, unsafe or corrupt resources remain rejected. Unprepared or unselected
+  retained references point to first preparation or explicit selection update.
 
 ### Changed
 - Added focused series family/action help and a complete silent two-episode
@@ -2386,7 +2389,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.54.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.55.0...HEAD
+[0.55.0]: https://github.com/ammar-hasan/narova/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/ammar-hasan/narova/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/ammar-hasan/narova/compare/v0.52.0...v0.53.0
 [0.48.0]: https://github.com/ammar-hasan/narova/compare/v0.47.0...v0.48.0
