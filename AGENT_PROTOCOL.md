@@ -1,6 +1,6 @@
 # Narova agent protocol
 
-Narova release: **0.55.1**
+Narova release: **0.56.0**
 Machine schema: **`narova.result/1`**
 
 This is the shipped machine-interface guide for agents and integrations. It is
@@ -352,3 +352,20 @@ Data-only series operations and combined preparation do not execute project code
 providers or rendering. Combined production then executes the ordinary build
 with its authored-code trust boundary. Source portability keeps ordinary runtime,
 provider and model prerequisites; no sibling builds or scheduler are implied.
+
+### Durable series pins
+
+`narova series pin <source> --episode <id> [--from-bound] --json` reports
+operation `series pin`. Data includes `action: "pin"`, `seriesId`, `episodeId`,
+`revision`, catalog `file`, `store`, `selection` and Boolean `committed`.
+Successful publication registers authoring-source and series-store artifacts.
+Pin creation never renders, executes episode code or changes its binding.
+`--from-bound` verifies its existing selection and rejects selector flags.
+
+Catalog entries accept an unpinned `shared` selector recipe or
+`shared: {revision}`. The latter selects a verified stored binding and full
+payload closure; stored selected defaults/files replace live shared reads.
+Inspection exposes pin availability/reason. A prepared revision differing from
+the catalog pin requires an explicit update; updates adopt the verified pin.
+A corrupt selected store fails before production or reuse and never falls back
+to originals or working files. Exported episodes keep self-contained bytes.

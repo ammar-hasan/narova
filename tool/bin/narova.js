@@ -177,7 +177,7 @@ function operationName(cmd, positionals, flags = {}) {
   if (flags.version) return 'version';
   if (!cmd || cmd === 'help' || cmd === '-h' || flags.help || flags.h) return 'help';
   const two = {
-    series: ['build'],
+    series: ['build', 'pin'],
     assets: ['import', 'download', 'providers', 'search', 'acquire', 'list', 'untrack', 'verify', 'credits'],
     walkthrough: ['explore', 'capture', 'status'],
     release: ['save', 'list', 'restore', 'remove'],
@@ -232,12 +232,13 @@ function preDispatchOperation(argv) {
   return operationName(cmd, positionals);
 }
 
-const BOOL_FLAGS = new Set(['update-shared', 'reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'speech', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
+const BOOL_FLAGS = new Set(['from-bound', 'update-shared', 'reuse', 'force', 'detach', 'stop', 'help', 'h', 'version', 'variants', 'safe-area-guides', 'overwrite', 'inspect', 'strict', 'release', 'apply', 'plan', 'repair', 'motion', 'beats', 'proof', 'verify-motion', 'json', 'coverage', 'contact-sheet', 'takes', 'speech', 'companion', 'creative-identity', 'audio-levels', 'mix-map', 'no-continuity', 'quantize', 'voice-cloning', 'truncate-reference']);
 const BOOL_OR_VALUE = new Set(['deliverables', 'critique', 'silences', 'companion', 'delivered']);
 const VALUE_FLAGS = new Set(['at', 'attribution', 'backend', 'config', 'continuity', 'creator', 'dir', 'duration', 'engine', 'excerpt', 'format', 'fps', 'item-id', 'judge-assertion', 'kind', 'license', 'license-url', 'limit', 'max-words', 'member', 'model', 'new-project', 'origin', 'out', 'output', 'pack', 'pages', 'parent', 'platform', 'port', 'profile', 'project', 'provider', 'quality', 'rationale', 'regenerate', 'renderer', 'repair-branch', 'scene', 'size', 'source-page', 'status', 'tempo', 'transcript', 'variant', 'video', 'voice-a', 'voice-b', 'audio', 'interval', 'windows', 'speaker', 'reference', 'id', 'title', 'episode', 'resources', 'context', 'incoming']);
 
 function validateInvocationFlags(flags, cmd, positionals) {
   const seriesBuild = cmd === 'series' && positionals[1] === 'build';
+  if (flags['from-bound'] && !(cmd === 'series' && positionals[1] === 'pin')) invocationError('--from-bound is only valid with narova series pin');
   if (flags['update-shared'] && !seriesBuild) invocationError('--update-shared is only valid with narova series build');
   if (seriesBuild && flags.config != null) invocationError('series build uses the episode root config; --config is not supported');
   if ((cmd === 'build' || seriesBuild) && flags.variant && flags.variants) invocationError('--variant and --variants are mutually exclusive — pick one');
@@ -620,7 +621,7 @@ Commands:
   voice-cache import --dir <bundle-dir> [--overwrite]         validate and restore sentences
   series build <source> --episode <id>  prepare shared inputs + build one episode
                          --update-shared adopts current inputs before building
-  series init|inspect|bind|compare|adopt|restore|handoff|detach
+  series init|inspect|pin|bind|compare|adopt|restore|handoff|detach
                        shared defaults/resources and frozen episode context
   synth                Python TTS -> out/audio/*, out/timings.json
   compose              timings + audio -> selected renderer project + captions
@@ -759,6 +760,7 @@ Local overrides/assets stay local; siblings are never built or updated.
 ${SERIES_SELECTION_HELP}
 
 Actions:
+  pin        save one episode selection once in the series store and catalog
   init       create a data-only series catalog
   build      prepare shared inputs and build one episode
   inspect    read a catalog or episode's saved inputs
@@ -773,11 +775,18 @@ Complete two-episode starter:
   https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md#start-with-two-episodes`;
 const ACTION_HELP = {
   series: {
+    pin: `usage: narova series pin <source> --episode <id> [--from-bound] [--project <directory>] [--json]
+${SERIES_SELECTION_HELP}
+  Save current shared inputs and record the exact catalog pin; no episode is built.
+  --from-bound saves the existing verified binding instead; omit selection flags.
+  Commit the catalog and .narova-series-store; per-episode copies can be ignored.
+  Repin explicitly for a new look, then use series build --update-shared in a reused workspace.`,
     init: 'usage: narova series init <directory> --id <id> [--title <text>] [--json]',
     build: `usage: narova series build <source> --episode <id> [--project <directory>] [--update-shared] [--json]
 ${SERIES_SELECTION_HELP}
   First build retains selected inputs; repeats keep the saved revision.
-  --update-shared adopts current shared inputs for only this episode before building.
+  --update-shared adopts the catalog pin if present, otherwise current shared inputs.
+  A catalog pin is verified before every build; changing it needs an explicit update.
   Omitted update selectors keep choices; --resources= --context= --incoming= clear them.
   --reuse reuses matching audio/video; it does not refresh shared inputs.
   Build options include --renderer <id> --fps <number> --quality draft|standard|high
@@ -974,6 +983,9 @@ async function main() {
         case 'inspect':
           if (input && flags.project) invocationError('series inspect accepts either a source or --project');
           result = input ? series.inspectSource(input) : series.inspectProject(project); break;
+        case 'pin':
+          if (!input || !flags.episode) invocationError('usage: narova series pin <source> --episode <id> [--from-bound]');
+          result = series.pin(input, flags.episode, { ...selection, project: flags.project, fromBound: flags['from-bound'] }); break;
         case 'bind':
           if (!input || !flags.episode) invocationError('usage: narova series bind <source> --episode <id> [--project <directory>]');
           result = series.bind(input, flags.episode, { ...selection, project: flags.project }); break;
@@ -989,10 +1001,11 @@ async function main() {
         case 'detach':
           if (!input) invocationError('usage: narova series detach <new directory> --project <directory>');
           result = series.detach(project, input); mArtifact(result.target, 'project'); break;
-        default: invocationError('usage: narova series init|inspect|bind|compare|adopt|restore|handoff|detach');
+        default: invocationError('usage: narova series init|inspect|pin|bind|compare|adopt|restore|handoff|detach');
       }
       if (result.project && ['bind', 'adopt', 'restore'].includes(action)) mArtifact(path.join(result.project, series.CURRENT), 'series-binding');
-      if (action === 'init') mArtifact(result.file, 'authoring-source');
+      if (action === 'pin') mArtifact(result.store, 'series-store');
+      if (['init', 'pin'].includes(action)) mArtifact(result.file, 'authoring-source');
       if (action === 'handoff') mArtifact(path.join(project, 'series-handoff.json'), 'authoring-source');
       mSetData({ action, ...result });
       console.log(JSON.stringify(result, null, 2));

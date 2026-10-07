@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.55.1"
-checksum: 2622efefb0c744e39591d202df42ca8a6745fa8dd240189c60b91b1383d2f80b
+  version: "0.56.0"
+checksum: 21d8197da523a302a10b25b5eb2e2ae986d6e4e6b743640c93a45d2f99e98719
 ---
 # narova — video from scene scripts
 
@@ -100,7 +100,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.55.1"
+narova_required="@narova/narova@0.56.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -185,7 +185,8 @@ For courses, daily vlogs, drama and other multi-video productions, use explicit
 series authoring when episodes share defaults, resources or authored context.
 Start with the [complete two-episode example](references/series.md#start-with-two-episodes)
 and `narova series --help`. Read [series authoring](references/series.md) for the data-only catalog, selected
-frozen bindings, combined `series build <source> --episode <id>`, deterministic
+frozen bindings, combined `series build <source> --episode <id>`, explicit
+`series pin` with one committed shared store for fresh CI checkouts, deterministic
 voice order, inspection, adoption/restoration,
 authored handoffs and standalone detach. Keep each episode's script and proof
 local. The combined command prepares first-use inputs and keeps retained ones
