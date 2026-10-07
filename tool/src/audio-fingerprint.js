@@ -52,6 +52,7 @@ function audioFingerprint(config) {
         who: turn.who,
         text: turn.text,
         ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
+        spokenSentences: require('./pronunciation').changedSpeech(turn, config.voices?.[turn.who]?.backend, config.pronounce),
         lang: turn.lang || '',
         pauseAfter: turn.pauseAfter || 0,
         ...(turn.take != null ? { take: turn.take } : {}),

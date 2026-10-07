@@ -8,11 +8,11 @@ function mergeDefaults(raw, defaults, voiceOrder, files = [], dependencies = {})
   const control = raw.seriesOverrides === undefined ? {} : raw.seriesOverrides;
   if (!record(control) || Object.keys(control).some(k => k !== 'remove')) throw new Error('seriesOverrides: expected only remove');
   const removals = control.remove === undefined ? {} : control.remove;
-  if (!record(removals) || Object.keys(removals).some(k => !['voices', 'characters', 'theme', 'captions'].includes(k))) throw new Error('seriesOverrides.remove: unknown field');
+  if (!record(removals) || Object.keys(removals).some(k => !['voices', 'characters', 'theme', 'captions', 'pronounce'].includes(k))) throw new Error('seriesOverrides.remove: unknown field');
   const origins = {};
   const result = { ...raw };
   delete result.seriesOverrides;
-  for (const field of ['voices', 'characters', 'theme', 'captions']) {
+  for (const field of ['voices', 'characters', 'theme', 'captions', 'pronounce']) {
     const inherited = defaults[field];
     const local = raw[field];
     const remove = removals[field] === undefined ? [] : removals[field];
@@ -24,7 +24,7 @@ function mergeDefaults(raw, defaults, voiceOrder, files = [], dependencies = {})
       result[field] = local === true ? {} : false; origins[field] = { '*': 'episode' }; continue;
     }
     if (inherited === undefined && !remove.length) continue;
-    if (local !== undefined && !record(local)) {
+    if (local !== undefined && (!record(local) || (field === 'pronounce' && ![Object.prototype, null].includes(Object.getPrototypeOf(local))))) {
       // Ordinary schema owns diagnostics for malformed local values.
       result[field] = local; origins[field] = { '*': 'episode' }; continue;
     }

@@ -46,6 +46,16 @@ function hashFile(filePath) {
   }
 }
 
+// Retain authored dictionaries in manifests, but identify their consumed inputs.
+function executionManifest(manifest) {
+  if (manifest.pronounce === undefined) return manifest;
+  const { pronounce, ...result } = manifest;
+  result.scenes = (manifest.scenes || []).map(scene => ({ ...scene,
+    vo: (scene.vo || []).map(turn => ({ ...turn, spokenSentences: require('./pronunciation').changedSpeech(turn, manifest.voices?.[turn.who]?.backend, pronounce) })),
+  }));
+  return result;
+}
+
 /* Authored-state identity. Compiled manifest minus volatile timestamps
  * (project.created, environment.compiled), plus the build options that
  * affect output identity (renderer selection, backend override, frame rate,
@@ -53,7 +63,7 @@ function hashFile(filePath) {
  * authored state + identical options always yield the same identity. */
 function stateIdentity(config, opts = {}) {
   const manifest = compile(config, { toolVersion: require('../package.json').version });
-  const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(manifest), (k, v) =>
+  const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(executionManifest(manifest)), (k, v) =>
     ((k === 'created' || k === 'compiled')) ? undefined : v));
   return sha256(JSON.stringify({
     manifest: stable,
@@ -70,7 +80,7 @@ function stateIdentity(config, opts = {}) {
  * volatile timestamps stripped). This is the measured build's canonical
  * artifact identity — distinct from stateIdentity, which is authored. */
 function manifestIdentity(manifest) {
-  const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(manifest), (k, v) =>
+  const stable = JSON.parse(JSON.stringify(withoutToolchainVersionEvidence(executionManifest(manifest)), (k, v) =>
     ((k === 'created' || k === 'compiled')) ? undefined : v));
   // mergeTimings records when synthesis completed. That observation is useful
   // provenance, but it cannot be an audiovisual identity input: an unchanged
@@ -83,10 +93,11 @@ function manifestIdentity(manifest) {
  * synthesis-text/take — everything scene-scoped that drives speech. Shared
  * with the recorded sceneIdentities entries so two revisions classify from
  * the records alone (NAR-007-035). */
-function narrationDigest(scene) {
+function narrationDigest(scene, config = {}) {
   const turns = (scene.vo || []).map(turn => ({
     who: turn.who,
     text: turn.text,
+    spoken: require('./pronunciation').changedSpeech(turn, config.voices?.[turn.who]?.backend, config.pronounce),
     ...(turn.lang ? { lang: turn.lang } : {}),
     ...(turn.synthesisText ? { synthesisText: turn.synthesisText } : {}),
     ...(turn.take != null ? { take: turn.take } : {}),
@@ -108,7 +119,7 @@ function sceneProjection(manifest, sentenceCountsByScene = null) {
   return (manifest.scenes || []).map(s => ({
     id: s.id,
     digest: s.hash || null,                 // full authored content identity
-    narration: narrationDigest(s),          // speech-side identity
+    narration: narrationDigest(s, manifest),          // speech-side identity
     silentDur: s.dur || null,               // authored silent duration
     minDur: s.minDur ?? null,               // authored duration floor (NAR-007-052)
     duration: s.duration || null,           // measured (records only)
@@ -375,7 +386,7 @@ function recordRevision({
     const identities = scenes.map(s => ({
       id: s.id,
       digest: s.hash || null,
-      narration: narrationDigest(s),
+      narration: narrationDigest(s, manifest),
       silentDur: s.dur || null,
       minDur: s.minDur ?? null,
       duration: s.duration || null,

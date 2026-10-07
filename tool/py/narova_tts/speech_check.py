@@ -227,14 +227,57 @@ def transcribe(file, opts):
     return json.loads(r.stdout)
 
 
-def assess(file, expected, config, lang=None):
+def compare_pronunciation(spoken, transcript, pairs=()):
+    direct = compare(spoken, transcript)
+    if not pairs or direct['status'] == 'match': return direct
+    tokens = _tokens(transcript)
+    def signature(items):
+        # The ordinary profile joins letter-only spans; numbers remain separate.
+        out = []
+        for item in items:
+            value = item['value']
+            if out and not any(c.isdigit() for c in value + out[-1]): out[-1] += value
+            else: out.append(value)
+        return tuple(out)
+    def letters(items):
+        text = ''.join(w for item in items for w in item['words']).casefold().replace('’', '').replace("'", '')
+        return None if any(c.isdigit() for c in text) else text
+    def span_text(items):
+        return ' '.join((',' if i and item['separatorBefore'] else '') + ' '.join(item['words']) for i, item in enumerate(items))
+    aliases = []
+    for clean, replacement in pairs:
+        for source, target in ((replacement, replacement), (clean, replacement)):
+            parts = _tokens(source)
+            if parts: aliases.append((signature(parts), letters(parts), source, target))
+    out, i = [], 0
+    max_span = max((max(sum(len(v) for v in key), len(raw or '')) for key, raw, _, _ in aliases), default=0)
+    while i < len(tokens):
+        candidates = []
+        for end in range(i+1, min(len(tokens), i+max_span)+1):
+            sig = signature(tokens[i:end])
+            raw = letters(tokens[i:end])
+            for key, original_letters, source, target in aliases:
+                if (sig == key or (raw is not None and raw == original_letters)) and compare(source, span_text(tokens[i:end]))['status'] == 'match':
+                    candidates.append((end, target))
+        match = max(candidates, key=lambda c: c[0], default=None)
+        if tokens[i]['separatorBefore']: out.append(',')
+        if match:
+            out.append(match[1]); i = match[0]
+        else:
+            out.extend(tokens[i]['words']); i += 1
+    return compare(spoken, ' '.join(out))
+
+
+def assess(file, expected, config, lang=None, spoken=None, pronunciation_pairs=()):
     result = {'expectedText': expected, 'audioSha256': digest(file), 'comparison': PROFILE, 'language': lang, 'transcript': None, 'differences': []}
+    if spoken is not None and spoken != expected:
+        result['spokenText'] = spoken
     try:
         if config.get('narrationSource'): raise ValueError('speech check requires synthesized sentence takes; external narration is not retaken')
         observed = transcribe(file, options(config, lang))
         if not isinstance(observed.get('transcript'), str): raise ValueError('recognizer returned invalid transcript')
         result.update(observed)
-        result.update(compare(expected, observed['transcript']))
+        result.update(compare_pronunciation(spoken if spoken is not None else expected, observed['transcript'], pronunciation_pairs))
     except Exception as exc: result.update(status='unavailable', reason=str(exc))
     return result
 
@@ -271,6 +314,7 @@ def review(scenes, config, out):
     except Exception:
         records = []; index_error = 'sentence take index is unreadable or invalid; synthesize first'
     rows = []
+    from .pronunciation import sentence_pairs, expected as pronunciation_expected
     from .pipeline import sentences, concat, make_silence, TIMING_DEFAULTS, BUILTIN_BACKENDS, sentence_cache_key, voice_cache_speaker, derived_seed, effective_take
     with tempfile.TemporaryDirectory(prefix='narova-speech-review-') as d:
         tmp = Path(d); gap = tmp/'gap.wav'
@@ -280,6 +324,8 @@ def review(scenes, config, out):
             cursor = 0
             for ti, turn in enumerate(scene['segments']):
                 row = {'sceneId': scene['id'], 'scene': scene['n'], 'turn': ti, 'who': turn['who'], 'expectedText': turn['text'], 'status': 'unavailable', 'transcript': None, 'differences': []}
+                spoken, pronunciation_pairs = pronunciation_expected(turn, config.get('pronounce'), config.get('voices', {}).get(turn['who'], {}).get('backend', 'piper'))
+                if spoken != turn['text']: row['spokenText'] = spoken
                 count = len(sentences(turn['text'])); needed = list(range(cursor, cursor+count)); cursor += count
                 try:
                     if (scene.get('clipAudio') or {}).get('authority') == 'native' or config.get('narrationSource'): raise ValueError('speech review requires synthesized sentence takes')
@@ -298,8 +344,7 @@ def review(scenes, config, out):
                         if history is not None and not _valid_history(history, take.get('take', 0)): raise ValueError('invalid selection history; synthesize first')
                         kind = voice.get('backend') or take.get('backend')
                         if not isinstance(kind, str) or take.get('backend') != kind: raise ValueError('inconsistent sentence backend')
-                        synth_sents = sentences(turn['synthesisText']) if kind not in BUILTIN_BACKENDS and turn.get('synthesisText') else clean_sents
-                        if len(synth_sents) != len(clean_sents): synth_sents = clean_sents
+                        synth_sents = [s for s, _ in sentence_pairs(turn, kind, config.get('pronounce'))]
                         if take.get('text') != synth_sents[k]: raise ValueError('sentence synthesis text does not bind current turn')
                         language = turn.get('lang') or voice.get('lang')
                         if take.get('lang') != language: raise ValueError('inconsistent sentence language')
@@ -317,7 +362,7 @@ def review(scenes, config, out):
                     if any(take.get('take', 0) != selected for _,take in chosen): raise ValueError('mixed selected nonces in one turn; synthesize first')
                     history = chosen[0][1].get('speechAttempts')
                     if any(take.get('speechAttempts') != history for _,take in chosen): raise ValueError('contradictory sentence selection histories; synthesize first')
-                    if history is not None and (history[0]['take'] != (effective_take(turn.get('take')) or 0) or any(a['expectedText'] != turn['text'] for a in history)): raise ValueError('selection history does not bind authored starting nonce/text')
+                    if history is not None and (history[0]['take'] != (effective_take(turn.get('take')) or 0) or any(a['expectedText'] != turn['text'] or a.get('spokenText', a['expectedText']) != spoken for a in history)): raise ValueError('selection history does not bind authored starting nonce/text')
                     if history is not None and any(a.get('sceneId') != scene['id'] or type(a.get('scene')) is not int or a['scene'] != scene['n'] or type(a.get('turn')) is not int or a['turn'] != ti or a.get('who') != turn['who'] for a in history): raise ValueError('selection history identifies another scene/turn/voice')
                     if selected < (effective_take(turn.get('take')) or 0) or (selected != (effective_take(turn.get('take')) or 0) and history is None): raise ValueError('selected retake history is missing or inconsistent; synthesize first')
                     scene_file = out/'audio'/f"{scene['n']:02d}.wav"
@@ -334,7 +379,7 @@ def review(scenes, config, out):
                         if pieces: pieces.append(gap)
                         pieces.append(file)
                     wav = tmp/'turn.wav'; concat(pieces, wav, tmp)
-                    row.update(assess(wav, turn['text'], config, turn.get('lang') or config.get('voices',{}).get(turn['who'],{}).get('lang')))
+                    row.update(assess(wav, turn['text'], config, turn.get('lang') or config.get('voices',{}).get(turn['who'],{}).get('lang'), spoken, pronunciation_pairs))
                     row['sources'] = [{'file':take['file'],'sha256':take['sha256'],'cacheKey':take['cacheKey']} for _,take in chosen]
                     row['selectedTake'] = chosen[0][1].get('take', 0)
                     history = chosen[0][1].get('speechAttempts')

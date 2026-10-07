@@ -136,7 +136,8 @@ function plan(fromManifestPath, toConfig, opts = {}) {
   }
 
   // Scene-level diffs
-  const sceneChanges = diffScenes(from.scenes || [], to.scenes || []);
+  const withSpeech = m => (m.scenes || []).map(s => ({ ...s, vo: (s.vo || []).map(t => ({ ...t, _spoken: require('./pronunciation').spokenSentences(t, m.voices?.[t.who]?.backend, m.pronounce) })) }));
+  const sceneChanges = diffScenes(withSpeech(from), withSpeech(to));
   let hasVoChange = false;
   let hasVisualChange = false;
   let hasStructureChange = false;
@@ -278,8 +279,8 @@ function diffScenes(fromScenes, toScenes) {
       toIndex: t.index,
     };
     if (f.id !== t.id) entry.idChanged = true;
-    const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText, pauseAfter: v.pauseAfter || 0 })));
-    const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText, pauseAfter: v.pauseAfter || 0 })));
+    const fvo = JSON.stringify((f.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText, spoken: v._spoken, pauseAfter: v.pauseAfter || 0 })));
+    const tvo = JSON.stringify((t.vo || []).map(v => ({ who: v.who, text: v.text, lang: v.lang, synthesisText: v.synthesisText, spoken: v._spoken, pauseAfter: v.pauseAfter || 0 })));
     if (fvo !== tvo) entry.voChanged = true;
     if (f.body !== t.body) entry.bodyChanged = true;
     if (JSON.stringify(f.visual) !== JSON.stringify(t.visual)) entry.visualChanged = true;
