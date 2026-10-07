@@ -8,6 +8,7 @@ const { mergeDefaults } = require('./series-defaults');
 const FORMAT = 'narova.series/1';
 const BINDING_FORMAT = 'narova.series-binding/1';
 const HOME = '.narova-series';
+const STORE = '.narova-series-store';
 const MEMBERSHIP = 'series-membership.json';
 const CURRENT = `${HOME}/current`;
 const BINDING = `${CURRENT}/binding.json`;
@@ -167,12 +168,22 @@ function validateSource(raw) {
   if (!Array.isArray(episodes)) fail('episodes', 'expected an ordered array');
   const byId = new Map();
   for (const [i, episode] of episodes.entries()) {
-    keys(episode, ['id', 'title', 'project', 'group', 'relationships'], `episodes[${i}]`);
+    keys(episode, ['id', 'title', 'project', 'group', 'relationships', 'shared'], `episodes[${i}]`);
     id(episode.id, `episodes[${i}].id`); text(episode.title, `episodes[${i}].title`);
     if (byId.has(episode.id)) fail('episodes', `duplicate episode ${episode.id}`);
     byId.set(episode.id, episode);
     if (episode.project !== undefined) portable(episode.project, `episodes.${episode.id}.project`);
     if (episode.group !== undefined) text(episode.group, `episodes.${episode.id}.group`);
+    if (episode.shared !== undefined) {
+      const label = `episodes.${episode.id}.shared`, shared = episode.shared;
+      keys(shared, ['revision', 'resources', 'context', 'incoming'], label);
+      if (own(shared, 'revision')) {
+        if (typeof shared.revision !== 'string' || !HASH.test(shared.revision) || Object.keys(shared).length !== 1) fail(label, 'a pin requires only an exact revision SHA-256');
+      } else {
+        for (const key of ['resources', 'context']) if (shared[key] !== undefined) names(shared[key], raw[key] || {}, `${label}.${key}`);
+        if (shared.incoming !== undefined && shared.incoming !== null && !own(raw.states || {}, id(shared.incoming, `${label}.incoming`))) fail(label, 'unknown incoming state');
+      }
+    }
   }
   const visiting = new Set(), seen = new Set();
   function visit(name) {
@@ -245,6 +256,129 @@ function verifyResourceClosures(resources, entries) {
     return entry;
   }));
 }
+function assertSelection(options, selected, message) {
+  const requested = selectors(options, selected);
+  for (const key of ['resources', 'context']) {
+    if (new Set(requested[key]).size !== requested[key].length) fail(key, 'expected unique names');
+    if (canonical([...requested[key]].sort()) !== canonical([...selected[key]].sort())) fail('selection', message);
+  }
+  if (requested.incoming !== selected.incoming) fail('selection', message);
+}
+function storedSnapshot(loaded, episodeId) {
+  const episode = loaded.raw.episodes.find(e => e.id === episodeId);
+  const revision = episode?.shared?.revision;
+  if (typeof revision !== 'string' || !HASH.test(revision)) fail('pin', 'episode has no exact catalog pin');
+  try {
+    const binding = validateBinding(readJson(regular(loaded.root, `${STORE}/bindings/${revision}.json`, `pin ${revision}`)));
+    if (binding.revision !== revision || binding.series.id !== loaded.raw.id || binding.episode.id !== episodeId) fail('pin', `revision ${revision} does not match the catalog series/episode; restore the correct pin`);
+    const members = new Map(binding.files.map(entry => [entry.path, entry]));
+    const entries = verifyEntries(binding, file => {
+      const member = members.get(file);
+      const absolute = regular(loaded.root, `${STORE}/files/${member.sha256}`, `pin ${revision} member ${file}`);
+      if (fs.statSync(absolute).size !== member.bytes) fail(file, `pin ${revision} stored byte count mismatch; restore the committed store`);
+      return fs.readFileSync(absolute);
+    });
+    return { binding, entries };
+  } catch (error) {
+    fail(`pin ${revision}`, `${error.message}; restore the committed catalog/store`);
+  }
+}
+function storeDirectory(root, relative) {
+  portable(relative, 'store');
+  let directory = root;
+  if (fs.lstatSync(root).isSymbolicLink()) fail('store', 'symlink root is not permitted');
+  for (const part of relative.split('/')) {
+    directory = path.join(directory, part);
+    try { fs.mkdirSync(directory); } catch (error) { if (error.code !== 'EEXIST') throw error; }
+    const stat = fs.lstatSync(directory);
+    if (stat.isSymbolicLink() || !stat.isDirectory()) fail('store', `expected contained directory ${relative}`);
+  }
+  return directory;
+}
+function admitObject(root, relative, data) {
+  storeDirectory(root, path.posix.dirname(relative));
+  const destination = path.join(root, relative);
+  const verify = () => {
+    const file = regular(root, relative, 'store admission');
+    if (fs.statSync(file).size !== data.length || !fs.readFileSync(file).equals(data)) fail('store', `existing object differs at ${relative}; restore the committed store`);
+  };
+  if (fs.existsSync(destination)) { verify(); return; }
+  const temp = path.join(root, STORE, `.object-${crypto.randomBytes(12).toString('hex')}`);
+  try {
+    fs.writeFileSync(temp, data, { flag: 'wx' });
+    try { fs.linkSync(temp, destination); } catch (error) { if (error.code !== 'EEXIST') throw error; }
+    verify();
+  } finally { try { fs.unlinkSync(temp); } catch {} }
+}
+function pin(input, episodeId, options = {}) {
+  id(episodeId, 'episode');
+  const loaded = source(input), before = fs.readFileSync(loaded.file);
+  // Preserve the author's catalog fields, changing only the selected entry.
+  const document = parse(before, loaded.file);
+  if (canonical(validateSource(document)) !== canonical(loaded.raw)) fail('pin', 'catalog changed while reading; inspect and retry');
+  const episode = loaded.raw.episodes.find(e => e.id === episodeId);
+  if (!episode) fail('episode', `unknown catalog episode ${episodeId}`);
+  if (options.project && !options.fromBound) fail('pin', '--project is only used with --from-bound');
+  let snap;
+  if (options.fromBound) {
+    if (['resources', 'context', 'incoming'].some(k => options[k] !== undefined)) fail('pin', '--from-bound cannot replace the retained selection; omit selection flags');
+    const target = options.project || (episode.project && catalogProject(loaded.root, episode.project, `episodes.${episodeId}.project`));
+    if (!target) fail('pin', 'episode has no project; supply --project for --from-bound');
+    const binding = readBinding(projectRoot(target));
+    if (!binding || binding.series.id !== loaded.raw.id || binding.episode.id !== episodeId) fail('pin', 'existing binding does not match catalog series/episode');
+    snap = { binding, entries: verifyEntries(binding, file => fs.readFileSync(regular(target, FILES + file, file))) };
+  } else {
+    const prior = episode.shared?.revision ? storedSnapshot(loaded, episodeId).binding.selection : episode.shared;
+    snap = snapshot(input, episodeId, options, prior, true, loaded);
+  }
+  const store = storeDirectory(loaded.root, STORE), lock = path.join(store, 'lock');
+  try { fs.mkdirSync(lock); } catch (error) { if (error.code === 'EEXIST') fail('pin', `busy store mutation; inspect ${lock} before recovery`); throw error; }
+  let stagedCatalog, capturedCatalog, displaced = false, committed = false, restored = false;
+  try {
+    validateBinding(snap.binding);
+    for (const entry of snap.entries) {
+      if (entry.data.length !== entry.bytes || sha(entry.data) !== entry.sha256) fail(entry.path, 'selected content changed before store admission');
+      admitObject(loaded.root, `${STORE}/files/${entry.sha256}`, entry.data);
+    }
+    const relative = `${STORE}/bindings/${snap.binding.revision}.json`;
+    if (fs.existsSync(path.join(loaded.root, relative))) {
+      const stored = validateBinding(readJson(regular(loaded.root, relative, 'stored snapshot')));
+      if (canonical(stored) !== canonical(snap.binding)) fail('pin', 'stored revision identity conflict');
+    } else admitObject(loaded.root, relative, Buffer.from(`${JSON.stringify(snap.binding, null, 2)}\n`));
+    const catalogEpisode = document.episodes.find(e => e.id === episodeId);
+    catalogEpisode.shared = { revision: snap.binding.revision };
+    const next = validateSource(document);
+    storedSnapshot({ ...loaded, raw: next }, episodeId);
+    const data = Buffer.from(`${JSON.stringify(document, null, 2)}\n`);
+    if (data.length > JSON_LIMIT) fail('pin', 'catalog exceeds 2 MiB after pin creation');
+    stagedCatalog = path.join(loaded.root, `.catalog-pin-${crypto.randomBytes(12).toString('hex')}.json`);
+    fs.writeFileSync(stagedCatalog, data, { flag: 'wx', mode: fs.statSync(loaded.file).mode & 0o777 });
+    regular(loaded.root, path.basename(loaded.file), 'catalog publication');
+    capturedCatalog = path.join(loaded.root, `.catalog-pin-backup-${crypto.randomBytes(12).toString('hex')}.json`);
+    // Capture the current pathname before checking its bytes. Publication uses
+    // an exclusive link, so a newly created catalog can never be overwritten.
+    fs.renameSync(loaded.file, capturedCatalog);
+    displaced = true;
+    regular(loaded.root, path.basename(capturedCatalog), 'captured catalog');
+    if (!fs.readFileSync(capturedCatalog).equals(before)) fail('pin', 'catalog changed during pinning; inspect and retry');
+    try { fs.linkSync(stagedCatalog, loaded.file); }
+    catch (error) { if (error.code === 'EEXIST') fail('pin', 'catalog changed during publication; inspect and retry'); throw error; }
+    committed = true;
+    return { seriesId: loaded.raw.id, episodeId, revision: snap.binding.revision,
+      file: loaded.file, store, selection: snap.binding.selection, committed: true };
+  } catch (error) {
+    if (displaced && !committed) {
+      try { fs.linkSync(capturedCatalog, loaded.file); restored = true; }
+      catch (recovery) { error.message += `; catalog restoration could not publish without replacing another file (${recovery.message}); preserve recovery material ${capturedCatalog}`; }
+    }
+    throw error;
+  } finally {
+    if (stagedCatalog) { try { fs.unlinkSync(stagedCatalog); } catch {} }
+    if (capturedCatalog && (committed || restored)) { try { fs.unlinkSync(capturedCatalog); } catch {} }
+    try { fs.rmdirSync(lock); } catch {}
+  }
+}
+
 function catalogProject(root, relative, label) {
   let current = root;
   for (const part of relative.split('/')) {
@@ -256,11 +390,16 @@ function catalogProject(root, relative, label) {
   }
   return current;
 }
-function snapshot(input, episodeId, options = {}, prior) {
-  const loaded = source(input), raw = loaded.raw;
+function snapshot(input, episodeId, options = {}, prior, captureLive = false, observedSource) {
+  const loaded = observedSource || source(input), raw = loaded.raw;
   const episode = raw.episodes.find(e => e.id === episodeId);
   if (!episode) fail('episode', `unknown catalog episode ${episodeId}`);
-  const selection = selectors(options, prior);
+  if (episode.shared?.revision && !captureLive) {
+    const snap = storedSnapshot(loaded, episodeId);
+    assertSelection(options, snap.binding.selection, 'pinned selectors differ; repin the catalog episode explicitly');
+    return { ...snap, project: options.project ? path.resolve(options.project) : (episode.project && catalogProject(loaded.root, episode.project, `episodes.${episode.id}.project`)) };
+  }
+  const selection = selectors(options, prior || episode.shared);
   names(selection.resources, raw.resources, 'resources'); names(selection.context, raw.context, 'context');
   if (selection.incoming !== null && !own(raw.states, id(selection.incoming, 'incoming'))) fail('incoming', `unknown state ${selection.incoming}`);
   const required = new Set(selection.resources);
@@ -296,6 +435,7 @@ function snapshot(input, episodeId, options = {}, prior) {
     incoming: value ? { id: selection.incoming, value, sha256: digest(value) } : null,
     files: entries.map(({ path: file, bytes, sha256, role }) => ({ path: file, bytes, sha256, role })) };
   delete binding.episode.project;
+  delete binding.episode.shared;
   binding.revision = digest(binding);
   if (Buffer.byteLength(JSON.stringify(binding)) > JSON_LIMIT) fail('binding', 'selected data exceeds 2 MiB');
   const catalogLocation = episode.project ? catalogProject(loaded.root, episode.project, `episodes.${episode.id}.project`) : null;
@@ -430,7 +570,12 @@ function inspectSource(input) {
     if (e.project) {
       status = catalogProject(loaded.root, e.project, `episodes.${e.id}.project`) ? 'available' : 'missing';
     }
-    return { ...e, projectStatus: status };
+    let pin;
+    if (e.shared?.revision) {
+      try { const snap = storedSnapshot(loaded, e.id); pin = { revision: snap.binding.revision, available: true, selection: snap.binding.selection }; }
+      catch (error) { pin = { revision: e.shared.revision, available: false, reason: error.message }; }
+    }
+    return { ...e, projectStatus: status, ...(pin ? { pin } : {}) };
   }) };
 }
 function differences(root, before, after) {
@@ -541,6 +686,11 @@ function prepareBuild(input, episodeId, options = {}) {
   const target = options.project || (episode.project && catalogProject(loaded.root, episode.project, `episodes.${episodeId}.project`));
   if (!target) fail('project', `episode ${episodeId} has no project; author it and supply --project`);
   const root = projectRoot(target), current = readBinding(root);
+  if (episode.shared?.revision) {
+    const snap = storedSnapshot(loaded, episodeId);
+    assertSelection(options, snap.binding.selection, 'pinned selectors differ; repin the catalog episode explicitly');
+    if (current && current.revision !== snap.binding.revision && !options.updateShared) fail('build', 'prepared revision differs from catalog pin; use --update-shared to adopt the verified pin');
+  }
   if (!current) return { action: 'bind', ...bind(input, episodeId, { ...options, project: root }) };
   if (current.series.id !== loaded.raw.id || current.episode.id !== episodeId) {
     fail('build', 'series or episode identity does not match the target binding; select the correct project or detach first');
@@ -646,4 +796,4 @@ function detach(directory, target) {
   return { target: published, seriesId: binding.series.id, episodeId: binding.episode.id, revision: binding.revision, committed: true };
 }
 
-module.exports = { FORMAT, BINDING_FORMAT, MEMBERSHIP, BINDING, FILES, CURRENT, HOME, canonical, digest, validateSource, validateBinding, readBinding, applyBinding, assertBoundConfig, init, bind, prepareBuild, inspectSource, inspectProject, runtime, compare, adopt, restore, handoff, detach, verifyArchive };
+module.exports = { STORE, pin, FORMAT, BINDING_FORMAT, MEMBERSHIP, BINDING, FILES, CURRENT, HOME, canonical, digest, validateSource, validateBinding, readBinding, applyBinding, assertBoundConfig, init, bind, prepareBuild, inspectSource, inspectProject, runtime, compare, adopt, restore, handoff, detach, verifyArchive };

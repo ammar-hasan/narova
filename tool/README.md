@@ -173,6 +173,13 @@ mishear, so audition flagged turns. See the [speech check guide](https://github.
 
 ## Multi-video series
 
+To preserve different shared revisions in fresh CI checkouts, run
+`narova series pin <source> --episode <id>`. Commit the catalog pin and complete
+`.narova-series-store/`; each distinct selected file version is retained once,
+including declared fonts and CSS/image dependencies. Episode working copies
+can be ignored together. `--from-bound` migrates an existing verified binding;
+repinning and updating are explicit. See the [pinning guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md#pin-shared-inputs-once-for-a-fresh-ci-checkout).
+
 Start with the [complete two-episode example](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/series.md#start-with-two-episodes)
 using a ready no-browser runtime. It demonstrates a shared logo alongside each
 episode's own asset without speech, fonts, CSS or continuity setup.

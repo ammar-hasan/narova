@@ -119,12 +119,13 @@ preparation action/revision and any committed binding even when rendering fails.
 | First `series build` | Retain selected files in the episode, then build it. |
 | Repeated `series build` | Verify and use the retained selection; no refresh from live shared files. |
 | `series build --update-shared` | Adopt selected current inputs, retain previous revision history, then build one episode. |
+| `series pin` | Retain the chosen closure once in the series store and save the catalog pin; do not change or build episode bindings. |
 | `series bind` / `series adopt` | Prepare or update an episode separately, without building. |
 | Ordinary `build` | Consume the existing binding; never infer membership or adopt the live series. |
 | `series restore` | Restore exact verified retained history, without building. |
 
 There are two copying boundaries. Initial binding or adoption copies selected
-shared source bytes into `.narova-series/current/files/`. Composition then stages
+shared source bytes (or verified catalog-pinned store bytes) into `.narova-series/current/files/`. Composition then stages
 those retained files into the generated renderer project alongside local assets;
 verified build reuse may skip this staging. Editing shared originals alone does
 not change a bound episode. Selected fonts/CSS keep their declared dependency
@@ -137,14 +138,15 @@ ordinary scene/font/theme/music references determine how it is applied.
 
 Separate bind/adopt remains useful for inspecting a selection before rendering
 or deliberately preserving an older shared version. A CI job that prepares and
-builds together can use the combined command directly. Git already preserves
+builds together can use the combined command directly. With a catalog pin,
+preparation uses its verified stored bytes; updates adopt that pin. Git already preserves
 source versions; retained episode versions let episodes use different shared
 revisions within the same checkout.
 
 ## CI builds and Git tracking
 
 CI chooses which episodes to produce; Narova does not schedule changed episodes
-or require a whole-series rebuild. Keep each episode's selection recipe in a
+or require a whole-series rebuild. Keep each episode's selection recipe in its catalog `shared` record or a
 tracked script. After checkout and ordinary runtime/provider/model setup, run
 one command for each selected episode:
 
@@ -155,6 +157,7 @@ narova series build course --episode intro --resources logo --reuse
 | Policy | Commit to Git | Build the selected episode |
 |---|---|---|
 | Use shared sources from the checked-out commit | Catalog/shared originals, episode sources/assets/evidence and per-episode selection recipe. | In a fresh checkout, `series build` prepares and builds in one call. |
+| Preserve pinned revisions with one series store | Catalog episode pins, complete `.narova-series-store/`, originals and episode sources/assets/evidence. Ignore episode membership/current files together. | `series build` verifies the pinned closure and prepares disposable episode files. |
 | Preserve an episode's chosen shared revision | Episode sources, `series-membership.json`, current `binding.json` and all selected `current/files/` bytes. | `series build` keeps those inputs; ordinary `build` also works without the live series source. |
 
 For checkout-derived selections, copies need not be committed. Ignore membership
@@ -173,12 +176,114 @@ use `--update-shared` when that job deliberately wants current shared sources.
 A fresh checkout without a cache builds normally. Pin the intended CLI/runtime
 versions and keep ordinary execution prerequisites ready.
 
-For frozen episodes, commit the complete membership/current-binding/files pair
+For retained files stored in each episode, commit the complete membership/current-binding/files pair
 and omit those two ignore patterns. History is optional unless you want local
 `series restore`. Refresh one episode with `series build --update-shared`, inspect
 and commit its new binding/files. Advanced `series compare` and `series adopt`
 remain available for separate review before rendering; `series bind` rejects an
 already bound project.
+
+## Pin shared inputs once for a fresh CI checkout
+
+A published daily brief can keep its old look while later days use a new one.
+Use a catalog pin when you want that behavior without tracking shared file
+copies in every episode. The pin saves the whole selected shared set: defaults,
+resource declarations and dependency bytes, selected context and incoming state.
+It is a revision of that selection, not just the stylesheet's hash.
+
+For an existing catalog episode, select and pin current shared sources without
+building or changing its working binding:
+
+```sh
+narova series pin course --episode intro --resources brand_style
+```
+
+Narova retains each distinct file content once under the series root's
+`.narova-series-store/` and writes the pin into that episode's catalog entry:
+
+```json
+{
+  "id": "intro",
+  "title": "Introduction",
+  "project": "episodes/intro",
+  "shared": { "revision": "<exact revision SHA-256 printed by series pin>" }
+}
+```
+
+The placeholder is explanatory; the command writes the actual digest for you.
+Selected CSS keeps its source-relative paths, and its declared fonts, imports
+and images are pinned too. Unchanged fonts share the same stored bytes across
+new stylesheet versions. Live originals remain editable; rebuilding a pinned
+episode reads the store, never silently substitutes current originals.
+
+Commit the catalog, the complete `.narova-series-store/` and ordinary shared/
+episode authoring sources. The episode membership/current files are generated
+materialization for this workflow and can be ignored together using the patterns
+above. Do not ignore the series store: it is retained authoring state, not a
+build cache. In a fresh checkout, including a shallow CI checkout:
+
+```sh
+narova series build course --episode intro --reuse
+```
+
+No Git history fetch, extra pin flags or per-episode retained payload commits
+are needed. Copies still appear locally during preparation and rendering; the
+pin and series store are the reproducible source of truth. Git already stores
+identical file contents once internally, so fewer tracked paths/checkout copies
+are the clear benefit, rather than a guaranteed repository-size reduction.
+
+When the live look changes, pin a later episode using the same resource names.
+Published episodes keep their older pins. To deliberately update one pinned
+episode, repin it, inspect its catalog change, then update its working binding:
+
+```sh
+# Omitted selectors keep this episode's prior catalog-selected names.
+narova series pin course --episode intro
+narova series build course --episode intro --update-shared --reuse
+```
+
+Pinning does not build or mutate any episode binding. A reused workspace whose
+binding differs from the catalog pin needs `--update-shared`; a fresh checkout
+prepares the pin directly. For a pinned episode, `--update-shared` adopts the
+catalog pin, rather than refreshing from mutable originals. Changed selection
+flags require repinning; flags repeating the pinned selection are accepted.
+The pin does not support editing just one resource's saved hash inside a shared
+snapshot. Choose the new complete selection explicitly, then pin it.
+
+Migrate an already-frozen episode without adopting today's live shared bytes:
+
+```sh
+narova series pin course --episode intro --from-bound
+```
+
+This verifies and stores its existing binding. Omit selection flags; optional
+`--project` explicitly chooses its existing project. After verifying and
+committing the catalog/store, you can stop tracking the episode membership and
+current files together. Keep that old revision available until the migration
+is committed; pinning does not delete it or rewrite your Git tracking.
+
+A missing/corrupt selected store member fails before production or reuse, even
+when a working binding or live original exists. Restore the verified committed
+store; no live fallback or automatic repair occurs. Missing unselected store
+objects do not affect this episode. `series inspect course --json` reports pin
+availability and reason without preparing or executing projects.
+
+An unpinned catalog entry can also save a selection recipe:
+
+```json
+"shared": { "resources": ["brand_style"], "context": ["audience"], "incoming": "after_intro" }
+```
+
+Initial preparation uses omitted selectors from this recipe; explicit flags
+replace the corresponding initial selectors. Existing bindings keep their
+saved choices by default. A pinned `shared` record contains only `revision`;
+its recipe is part of the verified stored snapshot. Pinning still selects files;
+ordinary episode CSS/font/scene references decide how they are used.
+
+Pack/open/remix and detach include the selected ordinary binding/bytes, so the
+exported episode remains self-contained without the series store. Runtime,
+provider, creative-evidence and explicit membership requirements stay ordinary.
+No automatic store cleanup, sibling scheduling or story advancement is added.
 
 ## Optional defaults, context and continuity
 
@@ -513,3 +618,11 @@ It also verifies real external-worker WAV cache invalidation in an isolated
 temporary provider registry. `npm run test:series-browser` checks retained glTF
 buffers and source-relative module imports through archive/open and detach,
 using the ordinary HyperFrames/FFmpeg prerequisites and checking rendered pixels.
+
+`npm run test:series-pins` proves old/new look cohorts from an actual shallow Git
+checkout, corruption-before-reuse, explicit repinning/update and archive/open/
+detach after deleting both series stores. It uses ready HyperFrames/FFmpeg and
+three local font fixtures (`NAROVA_PINS_FONT_DIR`), plus an independent browser
+readback driver (`NAROVA_CSS_BROWSER_MODULE`/`NAROVA_CSS_BROWSER_PATH`). It
+measures MP4 pixels, loaded faces and fetched image bytes, without speech, model
+acquisition, paid providers or global installation.

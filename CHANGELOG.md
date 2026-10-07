@@ -6,6 +6,21 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.56.0] - 2026-10-07
+
+### Added
+- `narova series pin` saves a selected shared revision in one content-addressed
+  series store and records its catalog pin. Fresh CI checkouts rebuild old/new
+  episodes without committed per-episode shared payloads or Git history.
+- Catalog selection recipes and pin availability inspection; `--from-bound`
+  migrates verified frozen bindings without adopting live originals.
+
+### Changed
+- Pinned preparation verifies the full dependency closure before production;
+  explicit updates adopt catalog pins. Shared fonts reuse stored byte versions,
+  and archive/open/detach remain self-contained. CI, tracking and migration
+  guidance now distinguishes the retained store from disposable episode files.
+
 ## [0.55.1] - 2026-10-07
 
 ### Fixed
