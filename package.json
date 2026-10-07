@@ -1,6 +1,6 @@
 {
   "name": "narova-repo",
-  "version": "0.55.0",
+  "version": "0.55.1",
   "description": "Development workspace for the standalone Narova CLI and its separate agent skills.",
   "private": true,
   "type": "commonjs",
@@ -34,6 +34,7 @@
     "test:series-build": "node scripts/test-series-build.js",
     "test:series-production": "node scripts/test-series-production.js",
     "test:series-browser": "node scripts/test-series-browser.js",
-    "test:series-quickstart": "node scripts/test-series-quickstart.js"
+    "test:series-quickstart": "node scripts/test-series-quickstart.js",
+    "test:series-css": "node scripts/test-series-css.js"
   }
 }

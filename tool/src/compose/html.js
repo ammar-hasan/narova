@@ -224,7 +224,7 @@ function composeDoc(config, size, data, css) {
   <meta name="viewport" content="width=${size.w}, height=${size.h}">
   <title>${title}</title>
   <script src="assets/gsap.min.js"></script>${threeScripts}
-  <link rel="stylesheet" href="style.css">${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
+  <link rel="stylesheet" href="style.css">${(config.stylesheets || []).map(file => '\n  <link rel="stylesheet" href="' + escapeHtml(file) + '">').join('')}${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
 </head>
 <body>
 <div id="root" data-composition-id="main" data-start="0"
@@ -438,7 +438,7 @@ function composeSceneDoc(config, sceneIdx, size, data, css) {
   <meta name="viewport" content="width=${size.w}, height=${size.h}">
   <title>${title} / ${s.id}</title>
   <script src="assets/gsap.min.js"></script>${threeScripts}
-  <link rel="stylesheet" href="style.css">${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
+  <link rel="stylesheet" href="style.css">${(config.stylesheets || []).map(file => '\n  <link rel="stylesheet" href="' + escapeHtml(file) + '">').join('')}${karaokeCss ? '\n  <style>' + karaokeCss + '</style>' : ''}
 </head>
 <body>
 <div id="root" data-composition-id="main" data-start="0"

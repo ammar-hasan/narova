@@ -588,7 +588,12 @@ The complete 3D surface above remains available without it.
   (gold highlight advancing word by word on a dark pill at the bottom).
   Format: `[{ start, end, text, words: [{ text, start, end }] }]`.
   See [audio.md](audio.md) §External narration.
-- If `theme.css` is set, the file must exist.
+- If `theme.css` is set, the file must exist. Browser composition preserves each
+  authored stylesheet separately: base styles, theme, scene `cssFile` sources in
+  scene order, then configured CSS imports in declaration order. Scene CSS has
+  ordinary global selectors. Leading imports remain valid in full and isolated
+  renders; keep them before your own rules. Shared imports and their font/image
+  dependencies must be selected explicitly; see `series.md` for a mixed example.
 - Legacy per-scene `caption` is ignored. `dur` remains required for silent and
   native-audio scenes; synthesized voiced scenes use measured audio plus
   optional `minDur`.

@@ -227,11 +227,13 @@ test('scene.cssFile is applied to composed output (full + isolated) and hashed',
     }));
 
     const full = compose(cfg, out);
-    const fullCss = fs.readFileSync(path.join(full.dir, 'style.css'), 'utf8');
-    assert.match(fullCss, /#ff00aa/, 'scene cssFile contents land in the composed stylesheet');
+    const fullCss = fs.readFileSync(path.join(full.dir, 'author-scene-1.css'), 'utf8');
+    assert.match(fs.readFileSync(path.join(full.dir, 'index.html'), 'utf8'), /href="author-scene-1.css"/);
+    assert.match(fullCss, /#ff00aa/, 'scene cssFile contents land in a linked author stylesheet');
 
     const span = composeSceneProject(cfg, out, 1);
-    const spanCss = fs.readFileSync(path.join(span.dir, 'style.css'), 'utf8');
+    const spanCss = fs.readFileSync(path.join(span.dir, 'author-scene-1.css'), 'utf8');
+    assert.match(fs.readFileSync(path.join(span.dir, 'index.html'), 'utf8'), /href="author-scene-1.css"/);
     assert.match(spanCss, /#ff00aa/, 'isolated span also sees its scene cssFile');
 
     // The scene hash must include cssFile contents (so an edit invalidates it).

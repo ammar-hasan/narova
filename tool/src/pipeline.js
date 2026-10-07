@@ -778,6 +778,9 @@ function configFromManifest(manifest, resolvedConfig) {
   if (!manifest) return null;
   const m = manifest;
   const original = resolvedConfig || {};
+  // The manifest stores author CSS and mode alongside theme tokens. Keep those
+  // directives out of token CSS, just as initial schema resolution does.
+  const { css: _themeCss, mode: _themeMode, ...themeTokens } = m.theme || {};
   return {
     // Start from the complete validated authoring surface. The enriched
     // manifest then wins for canonical/timing-bearing fields below. This keeps
@@ -803,7 +806,7 @@ function configFromManifest(manifest, resolvedConfig) {
       ...(v.providerDependencyInputs ? { providerDependencyInputs: v.providerDependencyInputs } : {}),
       ...(v.providerCapabilities ? { providerCapabilities: v.providerCapabilities } : {}),
     }])),
-    theme: { ...(m.theme || {}), accent: m.theme?.accent, bg: m.theme?.bg },
+    theme: { ...themeTokens, accent: m.theme?.accent, bg: m.theme?.bg },
     mode: m.theme?.mode || 'dark',
     chrome: m.chrome || {},
     themeCss: m.theme?.css || '',

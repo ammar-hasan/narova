@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.55.1] - 2026-10-07
+
+### Fixed
+- Shared stylesheet imports now apply alongside episode-owned CSS, including
+  retained fonts and images. Author stylesheets preserve valid import/layer
+  preambles and ordinary cascade order in full and isolated browser rendering.
+- Globally applicable scene CSS and declared dependencies participate in shared
+  browser cache identity, preventing stale styles after a stylesheet edit.
+
+### Changed
+- Clarified shared/local CSS ordering, dependency selection and scene CSS scope
+  in the public authoring and series guides, with native styling regression proof.
+
 ## [0.55.0] - 2026-10-06
 
 ### Added
@@ -2389,7 +2402,8 @@ wrong."
 
 - Initial release: a script-to-narrated-kinetic-video toolkit.
 
-[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.55.0...HEAD
+[Unreleased]: https://github.com/ammar-hasan/narova/compare/v0.55.1...HEAD
+[0.55.1]: https://github.com/ammar-hasan/narova/compare/v0.55.0...v0.55.1
 [0.55.0]: https://github.com/ammar-hasan/narova/compare/v0.54.0...v0.55.0
 [0.54.0]: https://github.com/ammar-hasan/narova/compare/v0.53.0...v0.54.0
 [0.53.0]: https://github.com/ammar-hasan/narova/compare/v0.52.0...v0.53.0

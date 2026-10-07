@@ -377,7 +377,18 @@ shared stylesheet from that file, then author the local rules:
 ```
 
 Shared and local styles follow ordinary CSS ordering/specificity; Narova does
-not merge stylesheet source files as theme-token objects. An episode-only font
+not merge stylesheet source files as theme-token objects. Each authored CSS
+source remains a separate stylesheet, so its leading `@import` stays valid.
+Generated base styles load first, then the theme stylesheet, scene `cssFile`
+sources in scene order, and configured CSS imports in declaration order.
+Scene CSS uses ordinary global selectors; placing a file on a scene does not
+scope its rules. Full and isolated rendering use the same ordered styles.
+Select the shared stylesheet **and its font/image/import dependencies** before
+building; imports apply retained files but do not select or copy extra files.
+Local rules after the shared import can override shared rules at equal cascade
+priority. CSS layers, specificity and `!important` still follow browser rules.
+Keep `@import` before your own ordinary rules; Narova does not fix invalid CSS.
+An episode-only font
 can likewise live in `assets/fonts/` and be explicitly referenced by that
 scene's `style.fontFile` or the episode's own `@font-face` rule.
 

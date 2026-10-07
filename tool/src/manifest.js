@@ -82,41 +82,66 @@ function buildHashes(config, projectDir) {
   // asset tree global (any asset edit invalidates all scenes).
   const pd = projectDir || '.';
   const adCss = config.assetsDir ? path.resolve(pd, config.assetsDir) : path.join(pd, 'assets');
-  let globalCss = [config.themeCss || '', ...(config.imports
+  // Scene CSS is not selector-scoped: it participates in every browser scene's
+  // cascade, in the same order as theme and configured CSS imports.
+  const stylesheetSources = [config.themeCss || '', ...(config.renderer === 'no-browser' ? [] : (config.scenes || []).map(s => s._cssFileContents || '')), ...(config.imports
     ? Object.values(config.imports).map(i => (i && /\.css$/i.test(i.file || '') ? i.contents || '' : ''))
-    : [])].filter(Boolean).join('\n');
+    : [])].filter(Boolean);
+  let globalCss = stylesheetSources.join('\n');
   let unresolvedCssRef = false;
+  const cssImportRefs = {};
+  const cssFileCandidates = ref => {
+    const local = ref.replace(/^\.\//, '');
+    // Match the renderer mounts: assets/ names the copied assets tree; other
+    // URLs name project-root resources. An assets-tree shadow is not the file
+    // the browser loads for a selected resource outside that mount.
+    return local.startsWith('assets/')
+      ? [path.resolve(adCss, local.slice('assets/'.length)), path.resolve(pd, local)]
+      : [path.resolve(pd, local), path.resolve(adCss, local)];
+  };
   const cssImportRe = /@import\s+(?:url\(\s*)?["']?([^"')\s]+)["']?\s*\)?/gi;
   for (let depth = 0; depth < 8; depth++) {
     cssImportRe.lastIndex = 0;
     const imp = cssImportRe.exec(globalCss);
     if (!imp) break;
-    const ref = imp[1].trim();
+    const ref = imp[1].trim().split(/[?#]/)[0];
     if (/^(data:|https?:|\/\/)/i.test(ref)) break; // external import: not hashable here
     let impFile = null;
-    for (const c of [path.resolve(adCss, ref.startsWith('assets/') ? ref.slice('assets/'.length) : ref), path.resolve(pd, ref)]) {
+    for (const c of cssFileCandidates(ref)) {
       if (fs.existsSync(c) && fs.statSync(c).isFile()) { impFile = c; break; }
     }
     if (!impFile) { unresolvedCssRef = true; break; } // cannot close the import → conservative
-    globalCss = globalCss.replace(imp[0], fs.readFileSync(impFile, 'utf8'));
+    cssImportRefs[path.relative(pd, impFile)] = hashFile(impFile);
+    let importedCss = fs.readFileSync(impFile, 'utf8');
+    try {
+      // The browser loads this file at its declared URL; nested imports and
+      // url() resources remain relative to that stylesheet, not the episode.
+      importedCss = require('./local-resources').rebaseSource(importedCss, ref);
+    } catch {
+      unresolvedCssRef = true; // retain legacy inputs; do not claim closed reuse
+    }
+    globalCss = globalCss.replace(imp[0], importedCss);
   }
+  if (/@import\b/i.test(globalCss)) unresolvedCssRef = true;
   if (globalCss) {
-    h.themeCss = sha256(globalCss);
+    // Sheet boundaries affect CSS parsing, even when concatenated text agrees.
+    h.themeCss = sha256(JSON.stringify(stylesheetSources) + '\n' + globalCss);
     const urlRe = /url\(\s*("([^"]*)"|'([^']*)'|([^)\s]+))\s*\)/gi;
     let mm;
     while ((mm = urlRe.exec(globalCss))) {
       const u = (mm[2] || mm[3] || mm[4] || '').trim();
       if (!u || /^(data:|https?:|\/\/|#)/i.test(u)) continue;
       let resolved = null;
-      for (const c of [path.resolve(adCss, u.startsWith('assets/') ? u.slice('assets/'.length) : u), path.resolve(pd, u)]) {
+      for (const c of cssFileCandidates(u.split(/[?#]/)[0])) {
         if (fs.existsSync(c) && fs.statSync(c).isFile()) { resolved = c; break; }
       }
       if (resolved == null) { unresolvedCssRef = true; continue; }
       const rel = path.relative(pd, resolved) || u;
       h[`globalasset:${rel}`] = hashFile(resolved);
     }
-    const globalRefs = Object.fromEntries(Object.entries(h).filter(([key]) => key.startsWith('globalasset:')).map(([key, hash]) => [key.slice('globalasset:'.length), hash]));
+    const globalRefs = { ...cssImportRefs, ...Object.fromEntries(Object.entries(h).filter(([key]) => key.startsWith('globalasset:')).map(([key, hash]) => [key.slice('globalasset:'.length), hash])) };
     if (config.themeCssFile) globalRefs[config.themeCssFile] = hashFile(path.resolve(pd, config.themeCssFile));
+    for (const ref of config.sceneFileRefs || []) if (config.renderer !== 'no-browser' && ref.key === 'cssFile' && config.localResourceDependencies?.[ref.file]) globalRefs[ref.file] = hashFile(path.resolve(pd, ref.file));
     for (const imported of Object.values(config.imports || {})) if (/\.css$/i.test(imported.file || '') && config.localResourceDependencies?.[imported.file]) globalRefs[imported.file] = hashFile(path.resolve(pd, imported.file));
     require('./local-resources').expandResourceRefs(globalRefs, config.localResourceDependencies || {}, pd);
     for (const [file, hash] of Object.entries(globalRefs)) h[`globalasset:${file}`] = hash;
