@@ -837,6 +837,7 @@ function configFromManifest(manifest, resolvedConfig) {
     imports: resolvedConfig ? (resolvedConfig.imports || {}) : (m.importSources || {}),
     align: m.align || false,
     speech: { ...(m.speech || original.speech || {}) },
+    ...(m.pronounce !== undefined ? { pronounce: { ...m.pronounce } } : {}),
     bed: m.audio?.bed ? { file: m.audio.bed.file, volume: m.audio.bed.volume } : null,
     sfx: (m.audio?.sfx || []).map(s => ({ ...s })),
     mix: m.audio?.mix || null,

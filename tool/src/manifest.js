@@ -46,9 +46,12 @@ function hashConfig(config) {
   // affect synthesis, composition, rendering, creative-proof validity, or
   // revision identity, so they must not enter the execution fingerprint.
   const {
-    assetsDir: _a, provenance: _provenance, assertions: _assertions,
+    pronounce: _pronounce, assetsDir: _a, provenance: _provenance, assertions: _assertions,
     sceneState: _sceneState, seriesBinding: _seriesBinding, localResources: _localResources, localResourceDependencies: _localResourceDependencies, projectDir = '.', ...serializable
   } = config;
+  if (config.pronounce) serializable.scenes = (config.scenes || []).map(scene => ({ ...scene,
+    vo: (scene.vo || []).map(turn => ({ ...turn, spokenSentences: require('./pronunciation').changedSpeech(turn, config.voices?.[turn.who]?.backend, config.pronounce) })),
+  }));
   // Resolved action-policy paths are absolute so the capture adapter can use
   // them from any working directory. Keep the config fingerprint portable:
   // moving an otherwise-identical project must not make every capture stale.
@@ -310,6 +313,7 @@ function compile(config, opts = {}) {
       ...Object.fromEntries(['color', 'activeColor', 'pastColor', 'plateColor'].filter(k => captions && captions[k] != null).map(k => [k, captions[k]])),
     },
     speech: { ...(config.speech || {}) },
+    ...(config.pronounce !== undefined ? { pronounce: { ...config.pronounce } } : {}),
     align: align === false ? null : (typeof align === 'object' ? align : { engine: 'auto' }),
     assets,
     walkthroughs: compileWalkthroughs(walkthroughs, projectDir),

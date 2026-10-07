@@ -6,6 +6,19 @@ versions follow [Semantic Versioning](https://semver.org/).
 
 ## [Unreleased]
 
+## [0.57.0] - 2026-10-07
+
+### Added
+- Explicit project and frozen series `pronounce` dictionaries change voice input
+  on every backend, including Pocket TTS, while captions, VTT/SRT and word cues
+  retain authored spellings. Episode entries override or explicitly remove shared keys.
+- Pronunciation-aware speech evidence exposes clean and spoken expectations,
+  accepts applied clean/spoken ASR spellings, and rejects stale sentence inputs.
+
+### Changed
+- Effective pronunciation participates in speech/timing and affected sentence
+  identities; empty or unused dictionaries preserve existing speech reuse.
+
 ## [0.56.0] - 2026-10-07
 
 ### Added

@@ -14,8 +14,8 @@ description: >
 license: Apache-2.0
 metadata:
   author: ammar-hasan
-  version: "0.56.0"
-checksum: 21d8197da523a302a10b25b5eb2e2ae986d6e4e6b743640c93a45d2f99e98719
+  version: "0.57.0"
+checksum: 1fdbec4c8e8b09fc6344fe2ee39d58b8b26eae0bce94127345f54df0b2bf69aa
 ---
 # narova — video from scene scripts
 
@@ -100,7 +100,7 @@ that matches this skill. Reuse a matching `narova` on `PATH` or at
 older, or newer. The npm package does not change skill files.
 
 ```bash
-narova_required="@narova/narova@0.56.0"
+narova_required="@narova/narova@0.57.0"
 narova_version="${narova_required##*@}"
 narova_bin=""
 
@@ -294,6 +294,8 @@ consequential external mutation.
    (or `provenance --json`) and `assets credits --format
    text|youtube|web|json`. These are read-only advisory projections, not legal
    clearance or release gates.
+
+For voice-only pronunciation, declare root `pronounce: { "CLAUDE.md": "Claude Em Dee" }` (or series `defaults.pronounce`). Captions/cues retain written text; see `references/audio.md` for literal matching, overrides and pronunciation-aware speech checks.
 
 ## Key gotchas
 

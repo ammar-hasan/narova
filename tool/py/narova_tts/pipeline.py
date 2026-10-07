@@ -22,6 +22,7 @@ from pathlib import Path
 from typing import Any
 
 from .align import align_scenes
+from .pronunciation import sentence_pairs, expected
 from .backends import BUILTIN_BACKENDS, build_backends, close_backends
 
 RATE = 22050          # output sample rate (Piper-native; XTTS is resampled to it)
@@ -615,24 +616,9 @@ def _synthesize_with_router(
             turns.append(round(clock, 3))
 
             backend_kind = voice_kind.get(who, default_backend)
-            is_external = backend_kind not in BUILTIN_BACKENDS
-            synth_text = turn.get("synthesisText") if is_external else None
-
-            if synth_text:
-                # External provider with separate synthesis text.
-                # Split both texts; use synth for TTS, text for caption words.
-                synth_sents = sentences(synth_text)
-                clean_sents = sentences(turn["text"])
-                if len(synth_sents) != len(clean_sents):
-                    print(f"[narova] scene {nn} turn {ti}: synthesisText sentence count"
-                          f" ({len(synth_sents)}) != text count ({len(clean_sents)})"
-                          f" — falling back to text-only for {who!r}", flush=True)
-                    synth_sents = clean_sents
-                sent_pairs = list(zip(synth_sents, clean_sents))
-            else:
-                # Local backend or no synthesisText: use text for everything.
-                clean_sents = sentences(turn["text"])
-                sent_pairs = [(s, s) for s in clean_sents]
+            sent_pairs = sentence_pairs(turn, backend_kind, config.get('pronounce'),
+                warn=lambda message: print(f"[narova] scene {nn} turn {ti}: {message} for {who!r}", flush=True))
+            spoken_text, pronunciation_pairs = expected(turn, config.get('pronounce'), backend_kind)
 
             with tempfile.TemporaryDirectory(prefix='speech-turn-', dir=tmp) as work:
                 stage = Path(work)
@@ -654,7 +640,7 @@ def _synthesize_with_router(
                         checked_pieces.append(item['audio'])
                     turn_audio = stage/'turn.wav'; concat(checked_pieces, turn_audio, stage)
                     from . import speech_check
-                    row = speech_check.assess(turn_audio, turn['text'], config, candidate[0]['lang'])
+                    row = speech_check.assess(turn_audio, turn['text'], config, candidate[0]['lang'], spoken_text, pronunciation_pairs)
                     row.update(scene=s['n'], sceneId=s['id'], turn=ti, who=who, selectedTake=candidate[0]['nonce'] or 0)
                     attempts.append({'take': row['selectedTake'], **row})
                     speech_check.write_report(audio_dir.parent, speech_rows + [{**row, 'attempts': list(attempts)}])

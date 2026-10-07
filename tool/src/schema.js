@@ -1529,6 +1529,12 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
     (scene.three.objects || []).forEach((obj, oi) => checkObjectMarkers(obj, `config.scenes[${si}].three.objects[${oi}]`));
   });
 
+  let pronounce;
+  if (raw.pronounce !== undefined) {
+    try { pronounce = require('./pronunciation').validatePronounce(raw.pronounce); }
+    catch (error) { errs.push(error.message); }
+  }
+
   if (errs.length) throw new Error('Invalid config:\n  - ' + errs.join('\n  - '));
 
   // Fill a fallback duration for any scene missing one (player uses audio dur once synthed).
@@ -1537,7 +1543,7 @@ function resolveConfig(raw, overrides = {}, baseDir = '.') {
   const speech = raw.speech != null && typeof raw.speech === 'object' && !Array.isArray(raw.speech)
     ? { ...raw.speech } : {};
   if (speech.model && (speech.model.startsWith('.') || path.isAbsolute(speech.model) || fs.existsSync(path.resolve(baseDir, speech.model)))) speech.model = path.resolve(baseDir, speech.model);
-  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, ...(localResources.includes(cssRef) ? { themeCssFile: cssRef } : {}), choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, mix, captions, captionsEnabled, align, variants, variant, series, ...(seriesBinding ? { seriesBinding } : {}), ...(localResources.length ? { localResources } : {}), ...(Object.keys(localResourceDependencies).length ? { localResourceDependencies } : {}), narrationSource, speech, imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
+  const resolved = { title, size, renderer, voices, characters, theme: themeTokens, mode: themeMode, chrome, themeCss, ...(localResources.includes(cssRef) ? { themeCssFile: cssRef } : {}), choreography, choreographyPath, timing, scenes, walkthroughs, assetsDir, projectDir: path.resolve(baseDir), platform: platformName, bed, sfx, mix, captions, captionsEnabled, align, variants, variant, series, ...(seriesBinding ? { seriesBinding } : {}), ...(localResources.length ? { localResources } : {}), ...(Object.keys(localResourceDependencies).length ? { localResourceDependencies } : {}), narrationSource, speech, ...(pronounce !== undefined ? { pronounce } : {}), imports, sceneFileRefs, includePatterns, safeLayout, _safeLayoutAuthored: safeLayoutAuthored, markers, provenance, assertions, sceneState };
 
   // Compile semantic elements into concrete render configs (three + body/visual).
   for (let i = 0; i < resolved.scenes.length; i++) {

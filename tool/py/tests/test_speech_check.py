@@ -148,6 +148,39 @@ class TurnChecks(unittest.TestCase):
             for p in patches:stack.enter_context(p)
             result=pipeline.run(out/'narration.json',out/'config.json',out,reuse=reuse)
         return out,voice,result
+    def test_external_pronunciation_evidence_uses_selected_synthesis_sentence(self):
+        self.config['voices']['a']['backend']='fixture'
+        self.config['pronounce']={'Nasa':'En Ay Ess Ay'}
+        self.scenes[0]['segments'][0].update(text='Read NASA.',synthesisText='Read Nasa.')
+        out,voice,_=self.run_pipeline('external-pronunciation',{'check':'fail'},['Read NASA.','Keep this line.'])
+        self.assertEqual(voice.calls[0][0],'Read En Ay Ess Ay.')
+        report=json.loads((out/'speech-check.json').read_text())
+        self.assertEqual(report['turns'][0]['spokenText'],'Read En Ay Ess Ay.')
+        with mock.patch.object(speech,'transcribe',side_effect=[{'transcript':t,'engine':'fixture','model':'fixture'} for t in ['Read N A S A.','Keep this line.']]):
+            self.assertEqual(speech.review(self.scenes,self.config,out)['counts']['match'],2)
+
+    def test_pronunciation_sends_spoken_text_keeps_clean_words_and_rejects_stale_review(self):
+        self.scenes[0]['segments'][0]['text']='Read CLAUDE.md. Keep CLAUDE.md.'
+        self.config['pronounce']={'CLAUDE.md':'Claude Em Dee'}
+        out,voice,_=self.run_pipeline('pronunciation',{'check':'fail'},['Read Claude MD. Keep Claude Em Dee.','Keep this line.'])
+        self.assertEqual([c[0] for c in voice.calls],['Read Claude Em Dee.','Keep Claude Em Dee.','Keep this line.'])
+        words=json.loads((out/'timings.json').read_text())['one']['words']
+        self.assertEqual([w['w'] for w in words],['Read','CLAUDE.md.','Keep','CLAUDE.md.','Keep','this','line.'])
+        report=json.loads((out/'speech-check.json').read_text())
+        self.assertEqual(report['turns'][0]['expectedText'],'Read CLAUDE.md. Keep CLAUDE.md.')
+        self.assertEqual(report['turns'][0]['spokenText'],'Read Claude Em Dee. Keep Claude Em Dee.')
+        self.assertEqual(report['counts']['match'],2)
+        _,voice,_=self.run_pipeline('pronunciation',{'check':'fail'},['Read Claude MD. Keep Claude MD.','Keep this line.'],reuse=True)
+        self.assertFalse(voice.calls)
+        self.config['pronounce']['CLAUDE.md']='Changed speech'
+        with mock.patch.object(speech,'transcribe',return_value={'transcript':'Keep this line.','engine':'fixture','model':'fixture'}):
+            checked=speech.review(self.scenes,self.config,out)
+        self.assertEqual(checked['turns'][0]['status'],'unavailable')
+        neighbor=(out/'audio/sentences/01_002.wav').read_bytes()
+        changed,voice,_=self.run_pipeline('changed-pronunciation')
+        self.assertEqual(len(voice.calls),2)
+        self.assertEqual((changed/'audio/sentences/01_002.wav').read_bytes(),neighbor)
+
     def test_retake_only_mismatch_selects_nonce_and_preserves_neighbor(self):
         original,voice,_=self.run_pipeline('original')
         neighbor=(original/'audio/sentences/01_001.wav').read_bytes()

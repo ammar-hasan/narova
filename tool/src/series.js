@@ -112,7 +112,8 @@ function defaultsFiles(defaults, visit) {
   return out;
 }
 function validateDefaults(value = {}) {
-  keys(value, ['voices', 'characters', 'theme', 'captions'], 'defaults');
+  keys(value, ['voices', 'characters', 'theme', 'captions', 'pronounce'], 'defaults');
+  if (value.pronounce !== undefined) require('./pronunciation').validatePronounce(value.pronounce, 'defaults.pronounce');
   for (const field of ['voices', 'characters']) {
     if (value[field] === undefined) continue;
     if (!object(value[field])) fail(`defaults.${field}`, 'expected a record map');
@@ -561,7 +562,7 @@ function inspectProject(directory) {
   const merged = raw ? mergeDefaults(raw, effective.defaults, effective.voiceOrder, effective.files, effective.dependencies) : null;
   const handoff = fs.existsSync(path.join(root, 'series-handoff.json')) ? readJson(path.join(root, 'series-handoff.json')) : null;
   return { ...binding, resources: Object.fromEntries(Object.entries(binding.resources).map(([name, entry]) => [name, { ...entry, retainedFile: FILES + entry.file, available: true }])),
-    effective: merged ? { status: 'available', defaults: Object.fromEntries(['voices', 'characters', 'theme', 'captions'].filter(k => merged.raw[k] !== undefined).map(k => [k, merged.raw[k]])), origins: merged.origins, removals: merged.removals } : { status: 'unavailable', reason: 'executable project source was not evaluated', defaults: effective.defaults, voiceOrder: binding.voiceOrder }, handoff };
+    effective: merged ? { status: 'available', defaults: Object.fromEntries(['voices', 'characters', 'theme', 'captions', 'pronounce'].filter(k => merged.raw[k] !== undefined).map(k => [k, merged.raw[k]])), origins: merged.origins, removals: merged.removals } : { status: 'unavailable', reason: 'executable project source was not evaluated', defaults: effective.defaults, voiceOrder: binding.voiceOrder }, handoff };
 }
 function inspectSource(input) {
   const loaded = source(input);
@@ -582,7 +583,7 @@ function differences(root, before, after) {
   const raw = dataProject(root);
   const effective = binding => { const r = runtime(binding); return mergeDefaults(raw || {}, r.defaults, r.voiceOrder, r.files, r.dependencies); };
   const old = effective(before), next = effective(after);
-  const fields = ['voices', 'characters', 'theme', 'captions'];
+  const fields = ['voices', 'characters', 'theme', 'captions', 'pronounce'];
   const changedDefaults = fields.filter(key => canonical(old.raw[key]) !== canonical(next.raw[key]));
   const voiceOrderChanged = canonical(Object.keys(old.raw.voices || {})) !== canonical(Object.keys(next.raw.voices || {}));
   const oldFiles = new Map(before.files.filter(e => e.role === 'resource').map(e => [e.path, e.sha256]));

@@ -915,3 +915,5 @@ Root `speech` retains `deterministicTakes` and optionally accepts `check`
 requires `check` and synthesized turns. The manifest preserves these settings.
 See [speech checks](audio.md#check-synthesized-speech-against-the-script) for
 selection, reuse and unavailable-evidence behavior.
+
+Root `pronounce` maps exact written terms to voice-only spellings on every backend; captions/cues retain turn `text`. See [pronunciation](audio.md#pronunciation-without-changing-captions) for matching, synthesisText precedence and speech-check evidence.

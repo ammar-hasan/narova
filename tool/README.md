@@ -214,3 +214,37 @@ restores it for matching keyless builds. Authored turns support `pauseAfter` and
 and final mix choices. Literal word/occurrence selectors work in choreography
 and SFX. See the [audio guide](https://github.com/ammar-hasan/narova/blob/main/skills/narova/references/audio.md)
 for validation, reuse and measured-delivery limits.
+
+
+## Pronunciation without changing captions
+
+Keep the real spelling in each turn's `text`. Add an explicit root dictionary
+for speech input on any backend, including Pocket TTS:
+
+```js
+pronounce: { 'CLAUDE.md': 'Claude Em Dee', 'Claude Code': 'Clawd Code' },
+```
+
+Captions, SRT/VTT and word cues retain `CLAUDE.md`; the voice receives `Claude Em
+Dee`. Matching is literal and case sensitive, outside letters, combining marks,
+numbers and underscores. The longest matching entry wins; replacements do not
+trigger other replacements. Clean sentences are split first, so replacements
+cannot change sentence/cue ownership or span sentence boundaries. Existing
+external-only `synthesisText` still selects the provider input first; the map
+then applies to its sentences (or clean text after a sentence-count fallback).
+Supplied external/native audio is unchanged. Empty/unused maps retain speech
+reuse; an effective change replaces affected sentence keys.
+
+A speech check records clean `expectedText` and changed `spokenText`, compares
+against the spoken form, and keeps the raw recognizer transcript. ASR may write
+an applied term as its clean spelling, such as `Claude MD`; only clean/spoken
+pairs actually applied to that turn are accepted as spelling equivalents.
+Recognition remains uncertain evidence; audition flagged turns. Alignment still
+uses clean caption tokens and may retain estimates when the spoken words differ.
+
+A series catalog can put the same dictionary in `defaults.pronounce`. Episodes
+inherit its frozen selection, override individual keys in their own `pronounce`,
+and remove an inherited literal key with
+`seriesOverrides: { remove: { pronounce: ['CLAUDE.md'] } }`. Empty episode maps
+inherit; removal is explicit. Repin/adopt to change existing episodes; detach
+retains the effective ordinary map. No runtime dictionary service is needed.

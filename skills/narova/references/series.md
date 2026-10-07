@@ -305,7 +305,8 @@ narova init course/episodes/orbits
   "defaults": {
     "voices": { "teacher": { "backend": "piper", "speaker": "en_US-amy-medium" } },
     "theme": { "accent": "#2ee6d6" },
-    "captions": { "maxWords": 6 }
+    "captions": { "maxWords": 6 },
+    "pronounce": { "CLAUDE.md": "Claude Em Dee" }
   },
   "resources": {
     "orbit_diagram": { "file": "media/orbit.svg" },
@@ -522,6 +523,7 @@ verify the local font bytes.
 | Omit a shared voice/character ID | Inherit that record. |
 | Author the same voice/character ID | Replace the entire shared record, retaining its slot; provide all needed local settings. |
 | Add a new voice/character ID | Keep shared records and add the episode-owned one; new voices append. |
+| Set one pronunciation entry | That literal episode entry wins; other shared entries remain inherited. |
 | Set one theme token or caption property | That episode value wins; other shared properties remain inherited. |
 | Set Boolean `captions` | Replace inherited caption settings. |
 | Reference an episode-owned file | Use its ordinary episode-relative path; it does not replace a similarly named shared file. |
@@ -626,3 +628,7 @@ three local font fixtures (`NAROVA_PINS_FONT_DIR`), plus an independent browser
 readback driver (`NAROVA_CSS_BROWSER_MODULE`/`NAROVA_CSS_BROWSER_PATH`). It
 measures MP4 pixels, loaded faces and fetched image bytes, without speech, model
 acquisition, paid providers or global installation.
+
+### Shared pronunciation
+
+`defaults.pronounce` is a literal voice-input dictionary, for example `{ "CLAUDE.md": "Claude Em Dee" }`. Episode `pronounce` overrides by literal key; `seriesOverrides.remove.pronounce` removes named inherited entries before local values apply. Empty local maps inherit. Stored pins freeze the map; adoption and standalone detach use the existing series lifecycle. Captions and word cues keep the written text. See [speech pronunciation](audio.md#pronunciation-without-changing-captions).
