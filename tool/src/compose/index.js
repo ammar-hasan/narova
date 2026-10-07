@@ -9,6 +9,7 @@ const { ensureDir, probe, sh } = require('../util');
 const { HYPERFRAMES_VERSION } = require('../hf');
 const { composeData } = require('./data');
 const { composeCss } = require('./css');
+const { authoredStylesheets, writeStylesheets } = require('./stylesheets');
 const { composeDoc, composeSceneDoc } = require('./html');
 const { collectModelAssets, collectTextureAssets, hasThreeScenes, THREE_IMPORT, THREE_MODULE_SRC } = require('./three');
 const { assertFreshCaptures } = require('../walkthrough');
@@ -56,28 +57,10 @@ function compose(config, outDir) {
   const data = composeData(config, timings, config.captionsEnabled !== false);
   preflightAuthorJavaScript(config, { data });
 
-  // Merge per-scene file-referenced CSS into the project. Authored JavaScript
-  // remains structured until html.js emits it so diagnostics retain its
-  // logical source and exact execution context.
-  let mergedExtraCss = config.themeCss || '';
-  for (const s of config.scenes) {
-    if (s._cssFileContents) mergedExtraCss += '\n/* scene-css:' + s.id + ' */\n' + s._cssFileContents;
-  }
-  // Append imported CSS. JavaScript imports are emitted from their structured
-  // source records by html.js.
-  if (config.imports) {
-    for (const [name, imported] of Object.entries(config.imports)) {
-      if (!imported || !imported.contents) continue;
-      const ext = path.extname(imported.file || '').toLowerCase();
-      if (ext === '.css') {
-        mergedExtraCss += '\n/* import:' + name + ' */\n' + imported.contents;
-      }
-      // .json, .html, .svg imports are available on the config object for
-      // scene body HTML and element references at authoring time.
-    }
-  }
-  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true, config.captions || {});
-  const composeConfig = { ...config, themeCss: mergedExtraCss };
+  const sheets = authoredStylesheets(config);
+  const fontCss = buildFontFaces(config);
+  const css = composeCss(config.theme || {}, config.voices, size, '', config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true, config.captions || {});
+  const composeConfig = { ...config, stylesheets: [...sheets.map(s => s.file), ...(fontCss ? ['visual-fonts.css'] : [])] };
   const html = composeDoc(composeConfig, size, data, css);
 
   const slugTitle = slug(config.title || 'narova');
@@ -158,10 +141,7 @@ function compose(config, outDir) {
     }
   }
   fs.writeFileSync(path.join(hfDir, 'index.html'), html);
-  fs.writeFileSync(path.join(hfDir, 'style.css'), css);
-  // Register visual-tree fonts so the browser shapes custom fontFile references.
-  const fontCss = buildFontFaces(config);
-  if (fontCss) fs.appendFileSync(path.join(hfDir, 'style.css'), '\n' + fontCss);
+  writeStylesheets(hfDir, css, sheets, fontCss);
   // Audio: the mixed track wins for both synthesized and custom narration;
   // otherwise use the custom narrator file, then synthesized full.wav.
   const mixWav = path.join(outDir, 'audio', 'mix.wav');
@@ -205,24 +185,13 @@ function composeSceneProject(config, outDir, sceneIdx) {
   if (!scData) throw new Error(`composeSceneProject: no data for scene "${scene.id}"`);
   preflightAuthorJavaScript(config, { data, sceneIndex: sceneIdx });
 
-  let mergedExtraCss = config.themeCss || '';
-  // Include this scene's cssFile so an isolated span sees the same styles the
-  // full render applies (the full compose merges every scene's cssFile into the
-  // shared style.css). Other scenes' cssFile is intentionally omitted — it
-  // cannot affect this scene's pixels and omitting it keeps the span faithful.
-  if (scene._cssFileContents) {
-    mergedExtraCss += '\n/* scene-css:' + scene.id + ' */\n' + scene._cssFileContents;
-  }
-  if (config.imports) {
-    for (const [name, imported] of Object.entries(config.imports)) {
-      if (!imported || !imported.contents) continue;
-      if ((imported.file || '').toLowerCase().endsWith('.css')) {
-        mergedExtraCss += '\n/* import:' + name + ' */\n' + imported.contents;
-      }
-    }
-  }
-  const css = composeCss(config.theme || {}, config.voices, size, mergedExtraCss, config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true, config.captions || {});
-  const sceneHtml = composeSceneDoc(config, sceneIdx, size, data, css);
+  // Scene CSS selectors are ordinary global CSS: keep the same ordered sources
+  // in full and isolated renders, even when declared on another scene.
+  const sheets = authoredStylesheets(config);
+  const fontCss = buildFontFaces(config);
+  const css = composeCss(config.theme || {}, config.voices, size, '', config.mode, config.captionsEnabled !== false, config.includePatterns !== false, config.safeLayout === true, config.captions || {});
+  const sceneConfig = { ...config, stylesheets: [...sheets.map(s => s.file), ...(fontCss ? ['visual-fonts.css'] : [])] };
+  const sceneHtml = composeSceneDoc(sceneConfig, sceneIdx, size, data, css);
 
   const slugTitle = slug(config.title || 'narova');
   const hfDir = path.join(outDir, `hf-${slugTitle}`);
@@ -248,8 +217,9 @@ function composeSceneProject(config, outDir, sceneIdx) {
 
   // Write scene project files
   fs.writeFileSync(path.join(spanDir, 'index.html'), sceneHtml);
-  // Link to shared assets (style.css, vendors, project assets)
-  for (const f of ['style.css', 'package.json']) {
+  writeStylesheets(spanDir, css, sheets, fontCss);
+  // Link to shared package metadata and vendor/project assets.
+  for (const f of ['package.json']) {
     const src = path.join(hfDir, f);
     if (fs.existsSync(src)) {
       try { fs.linkSync(src, path.join(spanDir, f)); } catch { fs.copyFileSync(src, path.join(spanDir, f)); }

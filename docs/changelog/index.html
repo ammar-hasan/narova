@@ -67,7 +67,23 @@
 
     <article class="release sr-title" data-hover>
       <div class="rel-rail">
-        <span class="rel-version" data-narova-version>0.55.0</span>
+        <span class="rel-version" data-narova-version>0.55.1</span>
+        <span class="rel-date">2026-10-07</span>
+      </div>
+      <div class="rel-body">
+        <h4><span class="tag fixed">Fixed</span></h4>
+        <ul>
+          <li><strong>Shared and local CSS together.</strong> Shared imports, fonts and images apply alongside episode rules. Valid stylesheet preambles and browser cascade order survive full and isolated rendering.</li>
+          <li>Globally applicable scene CSS and declared dependencies invalidate affected browser rendering caches when changed.</li>
+        </ul>
+        <h4><span class="tag changed">Changed</span></h4>
+        <ul><li>Public guides explain CSS ordering, dependency selection and global scene CSS scope, with native styling regression proof.</li></ul>
+      </div>
+    </article>
+
+    <article class="release sr-title" data-hover>
+      <div class="rel-rail">
+        <span class="rel-version">0.55.0</span>
         <span class="rel-date">2026-10-06</span>
       </div>
       <div class="rel-body">
